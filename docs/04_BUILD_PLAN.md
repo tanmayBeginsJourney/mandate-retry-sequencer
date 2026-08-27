@@ -65,7 +65,20 @@ model* of this world — `w3.Belief` is hand-built to match `w3.balance_trace`,
 same spend shape, same payday model. That makes every in-distribution
 comparison biased toward Bayes by construction, and it means we cannot claim
 the timing brain is a good choice without testing it where its assumptions are
-wrong. An ML baseline plus a **misspecification study** is therefore in scope,
+wrong.
+
+> **CORRECTION, 28 August 2026 — the paragraph above is overstated and the ML
+> study measured it.** The filter matches the functional *shape* of the world.
+> It does not match its *parameters*, and in one respect it cannot:
+> `BeliefPD.hyp` is a stride-3 grid `[0, 3, …, 27]`, so only **74%** of
+> customers have a representable true payday, and among the 38% not paid on
+> day 0 only **31.7%** do. `est_salary` is also wrong by ±30% by construction
+> and `est_spend` is a population rate. So in-distribution comparisons are
+> biased toward Bayes **less than this claimed**, and `ml_index` in fact beats
+> `solo_shared_pd` in world A by +4.03 pts (±2.00). Do not repeat "true
+> generative model" without this qualification. See `NOTES.md`, 28 August.
+
+An ML baseline plus a **misspecification study** is therefore in scope,
 and it is directly judged: "AI Judgment: whether AI tools, LLMs, or agents were
 applied appropriately instead of forcing unnecessary tech stacks."
 

@@ -823,3 +823,192 @@ mutant that must trip it or it reports VACUOUS.
 `04_BUILD_PLAN.md`, **after** the T9 reference was captured and committed, so
 it cannot have influenced the reference. It is in `COMPLIANT` so T1/T7/T8 prove
 it is Stage-0 clean, and deliberately not in `BELIEF_POLS` or `POOLED`.
+
+---
+
+## 2026-08-28 — ML baseline: RESULTS, and a premise this project got wrong
+
+**`ml_index` beats `solo_shared_pd` in world A by +4.03 pts (±2.00), significant.**
+That is the outcome the brief said to treat as a bug, and my own
+pre-registration said the same. I tried to kill it. It survived, and the reason
+it survived is the most important thing on this page.
+
+### Scoring the pre-registration. I got 2 of 7 right.
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| 1 | in-distribution, Bayes beats ML | **ML +4.03** (±2.00) SIG | **WRONG** |
+| 2 | `ml_index` beats `payday_wait` in-distribution | 86.18% vs 59.14% | right |
+| 3a | decay 0.20 / 0.70 -> Bayes wins | 0.20: +1.58 n.s. · 0.70: **ML +5.54** SIG | **WRONG** |
+| 3b | wider payday spread -> Bayes wins | **Bayes +4.14** SIG | right |
+| 3c | `irregular_frac=0.5` -> ML wins, this is where structure breaks | −0.06, **dead heat** | **WRONG** |
+| 3d | `topup_p=0.25` -> both degrade together | ML +2.26 SIG, and **neither degraded** | **WRONG** |
+| 4 | ML is out-of-distribution too and may degrade worse | ML degraded less in 4 of 5 shifts | **mostly wrong** |
+
+That is a bad scorecard and the errors were not random. They all flow from one
+premise I accepted without checking.
+
+### THE PREMISE WAS FALSE: the Bayes filter is NOT the true generative model
+
+`docs/04_BUILD_PLAN.md` says, and the task brief repeated, and I copied into my
+own pre-registration:
+
+> `w3.Belief` and `w3.BeliefPD` are hand-built to match `w3.balance_trace` --
+> same spend shape, same payday model. The Bayes filter is the TRUE GENERATIVE
+> MODEL of this world.
+
+**It matches the functional form. It does not match the parameters, and in one
+respect it cannot.**
+
+```
+BeliefPD.hyp (stride 3) = [0, 3, 6, 9, 12, 15, 18, 21, 24, 27]
+customers whose TRUE payday is representable          74.0%
+payday == 0 alone                                     62.0%
+among the 38% with a NON-ZERO payday, representable   31.7%
+```
+
+The payday posterior is a mixture over ten hypotheses on a stride-3 grid. A
+customer paid on day 7 has no correct component to converge to. For roughly a
+quarter of the population the filter is structurally incapable of representing
+the truth, and for two-thirds of the customers who are *not* paid on day 0 it
+is off by one or two days no matter how much evidence it sees.
+
+On top of that: `est_salary` is the true salary times U(0.7, 1.3), so ±30%
+wrong by construction; `est_spend` is a population rate, never the customer's
+own; the balance floor at zero is not modelled; and the world's hourly
+U(0.4, 1.6) spend jitter is approximated by a fixed 3-tap kernel.
+
+So the filter is **right in shape and coarse in parameters**. Calling it "the
+true generative model" overstated it, and that overstatement made the project
+look better than it was -- it implied the Bayes moat was near the ceiling of
+what is achievable in-world. It is not. `docs/04_BUILD_PLAN.md` has been
+corrected.
+
+### Four attempts to kill the result. All failed.
+
+**1. Candidate-day mismatch (the brief's prime suspect).** `ml_index` must
+score exactly the day set the belief branch scores, or it is a different policy
+and the comparison is void. Checked all 150 decision days at two horizons:
+`Belief.forecast(day, 12)`'s day list and `ml_index`'s reconstruction are
+**identical everywhere**.
+
+**2. Feature leak.** Both required checks pass -- shuffled-label AUC 0.459 and
+0.509 (a leak pushes *above* 0.5, not below), and the split is by POPULATION,
+so no customer and no world draw is shared. Then an ablation, because the
+shuffled-label check cannot detect a between-rows leak:
+
+```
+everything                              50 feats   AUC=0.9466
+no own_* history                        39 feats   AUC=0.9469
+no acc_* cross-merchant                 36 feats   AUC=0.9416
+no history at all                        9 feats   AUC=0.7417
+ONLY timing + amount                    10 feats   AUC=0.8089
+```
+
+The model's power lives in the observation history: strip it and AUC falls from
+0.947 to 0.742. If something static were carrying the answer, the bottom row
+would not have collapsed. The 0.809 from timing+amount alone is not suspicious
+either -- `tgt_phase_est_pay` is exactly what `payday_wait` uses, and
+`payday_wait` gets 59%.
+
+**3. The decay trap.** `spend_decay` must reach `w3.balance_trace` and never a
+belief, or the filter is correctly specified again and the shifted worlds
+measure nothing. Instrumented `hourly_spend_profile`: during a
+`spend_decay=0.70` run it is called 20 times with **0.70** (one per customer's
+balance trace) and 40 times with **0.42** (the beliefs, and `donor_bal`).
+`BeliefPD.prof` and `Belief.prof` both still equal `profile(0.42)`. And
+`spend_decay=None` and `spend_decay=0.42` give bit-identical results, so the
+parameterisation is inert by default -- T9 agrees.
+
+*(Noted, not fixed: `donor_bal` does not receive the shifted decay, so under a
+shifted world the placebo donor stays in world A. No placebo policy appears in
+this study, so no number here is affected. Flagged for whoever next touches the
+placebo arms.)*
+
+**4. So why does ML win? S1 has been telling us for two weeks.**
+
+| engine | ECE | monotone | top decile |
+|---|---|---|---|
+| Bayes filter (gate S1, red since handoff) | **0.091** | **False** | predicts 0.998, achieves 0.919 |
+| ML engine (held-out populations) | **0.037** | **True** | predicts 0.973, achieves 0.927 |
+
+The index policy is a pure function of the probabilities it is fed.
+`index_score` computes `value * (p_now - discount * p_later)`. Feed it better
+probabilities and it makes better decisions. **S1 has been red since the
+handoff saying the filter's probabilities are wrong, and this ablation is the
+first thing built that exploits it.** The result is not a bug in the ablation;
+it is the S1 failure finally being cashed out into points.
+
+That reframes S1. It has been carried as debt in `known_failures.txt`. It is
+not debt. It is the largest identified headroom in the system.
+
+### The table
+
+n=100, k=5, 8 populations, `payday_err=7`, 120-day horizon, paired 2 SE across
+populations. Both models fitted and tuned on world A only; **neither is
+retrained on any shifted world**, so under shift they are both out of
+distribution. 192 runs, **zero Stage 0 violations**.
+
+| world | `payday_wait` | `solo_shared_pd` | `ml_index` | `oracle` | ml − bayes |
+|---|---|---|---|---|---|
+| A: in-distribution | 59.14% | 82.16% | **86.18%** | 100.00% | **+4.03** ±2.00 SIG |
+| decay 0.20 (world only) | 75.19% | 92.03% | 93.60% | 100.00% | +1.58 ±1.58 n.s. |
+| decay 0.70 (world only) | 49.91% | 69.45% | **74.99%** | 99.97% | **+5.54** ±2.72 SIG |
+| payday spread 0.60→0.30 | 57.95% | **82.08%** | 77.94% | 100.00% | **−4.14** ±1.61 SIG |
+| `irregular_frac` 0.5 | 71.07% | 89.72% | 89.66% | 100.00% | −0.06 ±1.83 n.s. |
+| `topup_p` 0.25 | 69.77% | 85.02% | 87.28% | 100.00% | +2.26 ±1.14 SIG |
+
+**Read the absolute levels carefully: most of these shifts make the world
+EASIER, not harder.** Slower decay, irregular income and top-ups all leave more
+money in the account, and everything goes up. Only decay 0.70 is a harder
+world. "Degradation" is the wrong frame for four of the five rows; the
+`ml − bayes` column is the comparison that means anything.
+
+### The one row where Bayes wins is the interesting one
+
+**Wider payday dispersion is the only shift that hurts ML and leaves Bayes
+untouched** (82.08% vs world A's 82.16% -- statistically the same). That is the
+mechanism I predicted for 3b and it is the one prediction of the shifted set I
+got right, for the reason I gave in advance: the filter carries a *posterior*
+over payday and learns it online, so a less informative prior costs it almost
+nothing. The ML model has no posterior. It learned from world A that 62% of
+customers are paid on calendar day 0 -- `tgt_day_mod_cyc` is its 4th most-split
+feature -- and when that drops to 30% the learned prior is simply wrong.
+
+**Structure survives a changed population. A learned prior does not.** That is
+the honest case for the hybrid, and it is a better case than the one I
+pre-registered, because it comes with a named mechanism and a measured row
+rather than an intuition.
+
+### An asymmetry in ML's favour that I have to declare
+
+The ML model learned the population payday distribution from 800 customers. The
+Bayes filter was handed a hand-specified prior (`exp(-0.10 d)` around
+`est_payday`) that nobody fitted to the population. Both count as aggregate,
+non-identifying population knowledge -- governance Tier 2, which `solo_pop` and
+`solo_shared` are explicitly allowed -- so this is not cheating. But it is not
+a like-for-like contest of inference machinery either: **part of ML's +4.03 is
+that its priors were fitted and Bayes's were guessed.** Fitting the filter's
+payday prior to the population, and widening the stride-3 grid, are the two
+obvious things to try before concluding anything about Bayes-versus-ML.
+
+### Other caveats, stated because rule 2 requires them
+
+- **Off-policy, and it costs ML.** Training data comes from `explore`, so the
+  states are explore's, not `ml_index`'s. Deployed, `ml_index` visits states the
+  training set under-covers. Declared in advance; direction is against ML.
+- **These numbers are NOT gate-protected.** Every figure in this section comes
+  from `sim/ml_study.py`, not from the suite. Under the numbers rule now in
+  `CLAUDE.md` they may not go into `docs/`, the pitch or the architecture
+  document as they stand.
+- **One seed per population.** 8 populations, one run seed each.
+- **`ml_index` is an ablation, not a product policy.** It has no audit story and
+  no way to explain a decision, which the track explicitly asks for.
+
+### 2f (hybrid) NOT done, and why
+
+Feeding Bayes posterior summaries into the GBDT needs a training policy that
+carries a belief -- i.e. a third policy variant. `docs/04_BUILD_PLAN.md`
+authorises exactly two (`explore`, `ml_index`) and says so emphatically. Given
+what the table shows I think the hybrid is now the most valuable next
+experiment, but it needs a scope decision, not an assumption. Not started.

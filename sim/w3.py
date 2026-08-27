@@ -61,20 +61,38 @@ def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
     return pop
 
 
-def hourly_spend_profile(cycle_days):
-    """Front-loaded after payday, same exp(-0.42d) shape as sim4, per cycle."""
+DEFAULT_DECAY = 0.42
+
+
+def hourly_spend_profile(cycle_days, decay=DEFAULT_DECAY):
+    """Front-loaded after payday, same exp(-0.42d) shape as sim4, per cycle.
+
+    `decay` used to be the literal 0.42, hardcoded here. It is now a parameter
+    so the misspecification study can move the WORLD off it.
+
+    *** THE BELIEFS MUST NEVER BE GIVEN A SHIFTED VALUE. *** Both Belief and
+    BeliefPD call this with the default on purpose. The experiment asks what
+    happens when the filter's assumption about the world is wrong; handing the
+    filter the new value makes it correctly specified again and turns the whole
+    study into a no-op. Only balance_trace takes an override.
+    """
     d = np.arange(cycle_days)
-    w = np.exp(-0.42 * d)
+    w = np.exp(-decay * d)
     return w / w.sum()
 
 
-def balance_trace(c, rng):
-    """True balance at every hour. Salary lands at hour 0 of payday."""
+def balance_trace(c, rng, decay=None):
+    """True balance at every hour. Salary lands at hour 0 of payday.
+
+    `decay` shifts the WORLD's spend curve away from what the beliefs assume.
+    None means "unchanged", and every existing caller passes nothing, so this
+    is inert by default -- gate T9 confirms it.
+    """
     days, cyc = c["days"], c["cycle_days"]
     T = days * HOURS
     bal = np.zeros(T)
     b = c["salary"] * rng.uniform(0.0, 0.06)
-    prof = hourly_spend_profile(cyc)
+    prof = hourly_spend_profile(cyc, DEFAULT_DECAY if decay is None else decay)
     for d in range(days):
         phase = (d - c["payday"]) % cyc
         if c.get("irregular"):

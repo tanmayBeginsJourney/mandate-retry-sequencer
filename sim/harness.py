@@ -48,6 +48,7 @@ INFORMATION CONDITIONS (all use identical index maths; only information moves)
 import numpy as np
 from collections import defaultdict
 import w3
+import mlfeat
 from w3 import HOURS, PEAK, DECISION_HOUR, NPCI_MAX, Z9, TECH, OK
 
 POOLED = ("solo_shared", "solo_placebo", "portfolio", "myopic",
@@ -55,10 +56,10 @@ POOLED = ("solo_shared", "solo_placebo", "portfolio", "myopic",
 BELIEF_POLS = ("solo_naive", "solo_pop", "solo_shared", "solo_placebo",
                "portfolio", "myopic",
                "solo_pop_pd", "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
-COMPLIANT = ("baseline_legal", "payday_wait", "explore", "myopic",
-             "solo_naive", "solo_pop", "solo_shared", "solo_placebo",
-             "portfolio", "oracle", "solo_pop_pd", "solo_shared_pd",
-             "portfolio_pd", "solo_placebo_pd")
+COMPLIANT = ("baseline_legal", "payday_wait", "explore", "ml_index",
+             "myopic", "solo_naive", "solo_pop", "solo_shared",
+             "solo_placebo", "portfolio", "oracle", "solo_pop_pd",
+             "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
 
 P_TECH = 0.008          # technical declines <1% (NPCI CEO, via wire coverage)
 LOOKAHEAD_DAYS = 12
@@ -94,7 +95,8 @@ class Violations:
 def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
         topup_life=48, topup_mult=1.15, discount=0.92, payday_err=1,
         cap_override=None, collect_calib=False, mutate=None, pop_spend=0.80,
-        n_mandates_hint=None):
+        n_mandates_hint=None, collect_ml=False, ml_predict=None,
+        spend_decay=None):
     """
     `mutate` injects a deliberate defect, used only by the mutation tests:
       'cap'       -> attempt a 5th time in a cycle
@@ -104,6 +106,19 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
       'represent' -> re-present a Z9 decline under the old notification
       'leak_bal'  -> feed the belief the true balance
       'weak_oracle' -> restore the deferral bug found in the audit
+
+    `collect_ml` records one training row per dispatched attempt: the feature
+    vector as it was AT THE MOMENT OF THE DECISION, paired with the outcome.
+    Features are never reconstructed after the fact -- see sim/mlfeat.py.
+
+    `ml_predict` is a callable(list_of_feature_rows) -> probabilities, used by
+    the `ml_index` policy. The harness never imports a model library.
+
+    `spend_decay` overrides the WORLD's spend-curve decay (w3 default 0.42).
+    It is passed to w3.balance_trace ONLY, never to a belief: the whole point
+    of the misspecification study is that the filter keeps believing 0.42
+    while the world does something else. Passing it to the beliefs would make
+    the filter correctly specified again and the experiment a no-op.
     """
     rng = np.random.default_rng(seed)
     trng = np.random.default_rng(seed + 777)
@@ -116,6 +131,7 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
     cap = cap_override or cap_for(policy)
     V = Violations()
 
+    ml_rows = []
     cyc_due = cyc_got = 0
     ledger = defaultdict(int)      # (mandate identity, cycle) -> attempts.
                                    # Written only by the harness at dispatch.
@@ -128,7 +144,7 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
     rng.shuffle(donors)
 
     for ci, c in enumerate(pop):
-        bal = w3.balance_trace(c, rng)
+        bal = w3.balance_trace(c, rng, decay=spend_decay)
         donor_bal = w3.balance_trace(pop[donors[ci]], np.random.default_rng(seed + 31 * ci))
         topups = np.zeros(T + topup_lag + topup_life + 2)
 
@@ -143,6 +159,12 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                 pend=None,          # (notif_t, target_t, prev_code_ok)
                 prev_code=None, total_att=0, got_cycles=0))
         n_mand += len(mands)
+        # This customer's dispatched attempts, append-only. It physically
+        # cannot contain an attempt that has not happened yet, which is what
+        # makes the ML features leak-free by construction rather than by
+        # inspection. See sim/mlfeat.py.
+        hist = []
+        sum_amt = sum(m["amount"] for m in mands)
 
         pop_info = policy != "solo_naive"
         if policy in BELIEF_POLS:
@@ -236,6 +258,13 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
 
                 if collect_calib and id(m) in beliefs:
                     calib.append((beliefs[id(m)].p_success(m["amount"]), success))
+
+                if collect_ml and m.get("_mlf") is not None:
+                    ml_rows.append((m["_mlf"], 1 if success else 0,
+                                    ci, m["uid"]))
+                    m["_mlf"] = None
+                hist.append(dict(uid=m["uid"], day=day, amount=m["amount"],
+                                 ok=bool(success), code=code))
 
                 m["prev_code"] = code
                 if success:
@@ -336,6 +365,61 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                         continue
                     tgt = int(erng.integers(lo_d, hi_d + 1))
                     tt = earliest_legal(tgt, t + HOURS)
+                    if tt is not None and tt < cycle_close(m) * HOURS:
+                        if collect_ml:
+                            m["_mlf"] = mlfeat.build(
+                                hist, m["uid"], m["amount"], m["n"], cap,
+                                day, tt // HOURS, cycle_open(m),
+                                cycle_close(m), cyc, est_sal, est_pay,
+                                len(mands), sum_amt - m["amount"])
+                        commits.append((m, tt, t))
+            elif policy == "ml_index":
+                # THE CLEAN ABLATION. Identical index maths, identical
+                # constraint layer, identical metric. ONLY the probability
+                # engine changes.
+                #
+                # The candidate-day set is reproduced exactly rather than
+                # approximately: Belief.forecast yields day+1 .. day+LOOKAHEAD
+                # and stops at `days`, and the belief branch then drops any
+                # day at or past cycle_close. Getting this wrong would make
+                # ml_index a different policy and void the comparison.
+                #
+                # Note what is being predicted: P(success ON CANDIDATE DAY dd
+                # | information at decision time) -- not P(success today).
+                # mlfeat carries `offset` precisely so the model can express
+                # that, mirroring p_success(amount, P) taking a FUTURE
+                # posterior.
+                cand_days = [day + i for i in range(1, LOOKAHEAD_DAYS + 1)
+                             if day + i < days]
+                rows, spans = [], []
+                for m in live:
+                    dd_use = [dd for dd in cand_days if dd < cycle_close(m)]
+                    if not dd_use or cand_days[0] >= cycle_close(m):
+                        continue
+                    spans.append((m, dd_use, len(rows)))
+                    for dd in dd_use:
+                        rows.append(mlfeat.build(
+                            hist, m["uid"], m["amount"], m["n"], cap,
+                            day, dd, cycle_open(m), cycle_close(m), cyc,
+                            est_sal, est_pay, len(mands),
+                            sum_amt - m["amount"]))
+                sc = []
+                if rows:
+                    allp = ml_predict(rows)
+                    for m, dd_use, off in spans:
+                        ps = allp[off:off + len(dd_use)]
+                        p_now = float(ps[0])
+                        p_lat = 0.0
+                        if cap - m["n"] > 1 and len(ps) > 1:
+                            p_lat = max(float(x) for x in ps[1:])
+                        s_ = w3.index_score(p_now, p_lat, m["amount"],
+                                            cap - m["n"], ltv_mult, discount)
+                        sc.append((s_, p_now, m, dd_use[0]))
+                sc.sort(key=lambda x: -x[0])
+                for s_, p_now, m, tgt_day in sc:
+                    if s_ <= 0:
+                        continue
+                    tt = earliest_legal(tgt_day, t + HOURS)
                     if tt is not None and tt < cycle_close(m) * HOURS:
                         commits.append((m, tt, t))
             elif policy == "oracle":
@@ -447,4 +531,5 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
         violations=V.total(),
         vdetail=V.asdict(),
         calib=calib,
+        ml_rows=ml_rows,
     )
