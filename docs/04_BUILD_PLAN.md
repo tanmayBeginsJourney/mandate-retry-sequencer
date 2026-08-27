@@ -48,8 +48,34 @@ and a measured batch result, it is out of scope this week.**
 Something will break. It always does.
 
 ## Explicitly out of scope
-- Further simulation research beyond one honest batch number
 - Chasing the payday parameter through external sources
 - Rewriting the Notion knowledge base
 - Reintroducing coordinated budgeting
-- Any new policy variant
+
+## Scope change, 27 August 2026 — read this before citing the list above
+
+Two items were removed from the out-of-scope list by an explicit decision, and
+the reason is recorded here so it is not mistaken for scope creep:
+
+- ~~Further simulation research beyond one honest batch number~~
+- ~~Any new policy variant~~
+
+**Why.** The suite rebuild showed the belief filter is the *true generative
+model* of this world — `w3.Belief` is hand-built to match `w3.balance_trace`,
+same spend shape, same payday model. That makes every in-distribution
+comparison biased toward Bayes by construction, and it means we cannot claim
+the timing brain is a good choice without testing it where its assumptions are
+wrong. An ML baseline plus a **misspecification study** is therefore in scope,
+and it is directly judged: "AI Judgment: whether AI tools, LLMs, or agents were
+applied appropriately instead of forcing unnecessary tech stacks."
+
+Two new policy variants are authorised, and only these two:
+- **`explore`** — uniformly random legal day within the cycle, under the same
+  Stage 0 constraints as everything else. Exists to generate an unbiased
+  training set, not as a candidate policy.
+- **`ml_index`** — identical index policy, constraint layer and metric, with
+  **only** the probability engine swapped for an ML estimator. It is an
+  ablation, not a product policy.
+
+This does **not** reopen coordinated budgeting, and it does not authorise any
+further policy variants. The agent build remains the deliverable.

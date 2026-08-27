@@ -364,3 +364,35 @@ S2 arms to n=60 (~18s/run) at some cost in power. Needs a decision.
 is for. What changed and why is above; the old S2 was kept as `S2_LEGACY`
 rather than deleted precisely so this is auditable. No threshold was loosened:
 S1's 0.10 is untouched, and the two S2 gates that fail are left failing.
+
+---
+
+## 2026-08-27 — handoff prep: environment facts and stale-spec cleanup
+
+Context: the next work (runtime optimisation + an ML baseline) is being handed
+to a session with **no history of this repo**. Three things were fixed first,
+because each of them is a trap a cold reader walks straight into.
+
+**`CLAUDE.md` now has an Environment section.** Repo root is not the shell's
+starting directory; `python`/`python3` on PATH are msys2 builds with no numpy
+and no pip; the full suite takes ~27 minutes and looks hung under a default
+timeout; large heredocs into files are unreliable in this shell. All of that
+cost an hour to rediscover once and none of it was written down.
+
+**`05_TEST_DESIGN.md` got an appended implementation-status section.** The file
+is a pre-registration — it was written before the harness on purpose — so it
+was NOT rewritten. What changed: one retracted number (`+5.4 points`) that
+rule 6 forbids quoting was removed from the S2 rationale, and a clearly
+separated section now records what was actually built versus what was
+specified. M7, M9 and the T7 conservation identity are still unimplemented;
+T3, T7, T1, S2 and S3 differ from the spec; and the spec names a policy
+`solo_own` that has never existed.
+
+**`04_BUILD_PLAN.md` scope change recorded.** The out-of-scope list said "no
+further simulation research" and "any new policy variant". The ML baseline
+needs both, so the removal is written down with its reason rather than left as
+a silent contradiction a future reader would trip over. Exactly two new policy
+variants are authorised (`explore`, `ml_index`); coordinated budgeting stays
+cut and the agent build is still the deliverable.
+
+Nothing in `sim/` changed in this commit.

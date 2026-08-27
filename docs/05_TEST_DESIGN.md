@@ -93,8 +93,11 @@ means 70%. A filter can be sharply wrong and still beat a bad baseline.
 across mandates as `solo_shared` does — but the pooled observations come from a
 **different, randomly chosen customer**. Identical mechanics, identical
 observation count, wrong information.
-*If the placebo gains as much as real pooling, the +5.4 points is not
-information — it is an artefact of the update schedule.*
+*If the placebo gains as much as real pooling, the pooling gain is not
+information - it is an artefact of the update schedule.*
+(This sentence originally quoted `+5.4 points`. That figure is
+`[RETRACTED]` - see `01_FACTS.md`. CLAUDE.md rule 6 forbids quoting
+retired numbers, so it has been removed. The gate itself is unchanged.)
 This is the strongest available test of the project's central claim and it has
 never been run.
 *Gate:* real pooling must beat placebo pooling by a margin exceeding 2 SE.
@@ -140,3 +143,62 @@ point.
 5. Thresholds are declared here, before any result is seen.
 6. The competitive baseline (`payday_wait`) is a permanent row, not an
    afterthought, because it is what a good competing team would build.
+
+---
+
+# IMPLEMENTATION STATUS — appended 27 August 2026
+
+**Everything above this line is the original pre-registration and has not been
+edited**, apart from removing one retracted number that rule 6 forbids quoting.
+It records what was specified before the harness existed. This section records
+what was actually built, which is not the same thing. Where they differ, the
+difference is the finding.
+
+## Specified but NOT implemented
+
+| ID | Status |
+|---|---|
+| **M7** forecast reads the real future array | **Never implemented.** `tests.py` comments claim "M6/M7" over a block that records only M6. T2 covers the same property structurally, but the mutant does not exist. |
+| **M9** calibration target silently switched | **Never implemented.** |
+| **T7 conservation identity** | **Never implemented.** `recovered + dead + unresolved + lapsed == 1.0 by count` is not computed anywhere. `harness.run` does not return the counts it needs. T7 checks bounds and the per-event cap only — do not read it as covering conservation. |
+
+## Implemented differently from the spec
+
+- **T3.** Specified as "no true-balance leakage, with the true current balance
+  poisoned". As originally written it ran `solo_pop` twice and compared — a
+  determinism check wearing a leakage test's name, duplicating T4 and testing
+  nothing about leakage. Rewritten 27 Aug to the property the spec is actually
+  after: a belief's predictions must not move when `w3.balance_trace` is
+  poisoned. Paired with a `_LeakyPD` mutant it must catch.
+- **T7.** The cap clause compared `att_per_cycle`, a **mean**, against the cap.
+  A mean cannot exceed 4 unless the breach is population-wide, so one mandate
+  taking a 5th attempt was invisible. Now reads the per-event counter
+  `vdetail["cap"]`.
+- **T1.** Now runs at both contention levels, as "at every contention level"
+  requires, and is paired with the `weak_oracle` mutant — if a crippled oracle
+  is still not beaten, T1 reports VACUOUS instead of passing.
+- **T6.** Spec names a policy `solo_own`. **No such policy exists.** The
+  harness has `solo_naive` / `solo_pop` / `solo_shared` / `solo_placebo` and
+  their `_pd` variants. The gate compares `solo_pop` with `solo_shared`.
+- **S2.** Rebuilt as three arms (`S2a` moat, `S2b` confound check, `S2c` the
+  old headline) on the **payday-posterior** policies at ±7d. The original
+  point-estimate gate is retained, still failing, as `S2_LEGACY`. See
+  `02_RESULTS.md` — the old real-minus-placebo headline was ~60% placebo
+  damage, because `solo_placebo` injects wrong observations rather than neutral
+  extra ones.
+- **S3.** Implemented as a test of the significance machinery (a positive
+  control that must read significant, a null control that must not), reporting
+  the headline with its SE but deliberately not gating on it.
+
+## Operating point — added to the spec after the fact
+
+Gates that only bind under contention (**M1, S2, T5, T7**) run at
+`payday_err=7`. At the harness default of ±1 day the world is uncontended:
+policies hit payday nearly every time, recovery is ~97%, and a constraint that
+is never reached cannot be tested. Everything else stays at the default.
+
+**This did not fix M1**, which is VACUOUS at both operating points: the deepest
+any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against
+`NPCI_MAX = 4`, so the 5th attempt that trips the counter never occurs. The
+attempt-cap guarantee therefore has no working test behind it, and T7's cap
+clause reads the same counter, so both cap gates are exactly as strong as M1.

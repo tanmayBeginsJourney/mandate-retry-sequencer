@@ -144,6 +144,40 @@ logs/                  raw output from prior runs
 agent/                 (you will create this) the actual product
 ```
 
+## Environment — read before running anything
+
+These are facts about this machine, established 27 August 2026. They cost an
+hour to rediscover once. Do not rediscover them again.
+
+**Repo root is not the shell's starting directory.** The shell starts in
+`/c/codeing/razorpay`. The git repo, and every path in this file, is rooted
+at `/c/codeing/razorpay/razorpay_handoff/pkg`
+(Windows: `C:\codeing\razorpay\razorpay_handoff\pkg`). `cd` there first.
+
+**`python` and `python3` on PATH are the wrong interpreter.** Both resolve to an
+msys2 build with **no numpy and no pip**. The suite will not run on them and
+`pip install` will not fix it. The working interpreter is:
+
+```
+/c/Users/tanma/AppData/Local/Programs/Python/Python312/python.exe
+```
+
+CPython 3.12.0 with numpy 2.4.2, pinned in `requirements.txt`. `sim/gate.py` and
+`scripts/pre-commit` probe for an interpreter that can import numpy rather than
+trusting a name; do the same in anything new.
+
+**The full suite takes ~27 minutes.** Do not run it in a foreground shell with a
+default timeout and conclude it has hung. Background it and wait. The dominant
+cost is the payday-posterior policies: `solo_shared_pd` is ~25s per run at
+n=100 and there are 24 such runs in the S2 arms.
+
+**Large heredocs into files are unreliable in this shell.** Writing a long
+Python file with `cat > f <<'EOF'` has failed here. Write to a scratch file with
+the editor tool and `cp` it into place.
+
+**git identity is already configured** (Tanmay / tanmaymohan12@gmail.com). You
+do not need `-c user.name=...`.
+
 ## Before you commit anything
 
 Install the hooks once per clone, then just commit — the gate runs itself:
