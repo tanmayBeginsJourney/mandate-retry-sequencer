@@ -135,7 +135,13 @@ def R(policy, pop_key, seed, **kw):
 def record(tid, name, status, detail=""):
     results.append((tid, name, status, detail))
     tag = {"PASS": "  ok  ", "FAIL": " FAIL ", "VACUOUS": "VACUOUS"}[status]
-    print(f"[{tag}] {tid:<5} {name:<46} {detail}")
+    # flush=True is not cosmetic. gate.py reads this through a pipe, so stdout
+    # is block-buffered, and a hard crash (this suite has segfaulted twice with
+    # 0xC0000005) loses whatever is still in the buffer. That is why the first
+    # crash looked like "printed no gate lines" and was misread as crashing
+    # early -- it could have died anywhere. Flushing per gate means the next
+    # crash names the last gate that completed.
+    print(f"[{tag}] {tid:<5} {name:<46} {detail}", flush=True)
 
 
 def paired(a, b):

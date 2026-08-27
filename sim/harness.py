@@ -92,7 +92,7 @@ class Violations:
                     pending=self.pending, represent=self.represent)
 
 
-def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
+def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
         topup_life=48, topup_mult=1.15, discount=0.92, payday_err=1,
         cap_override=None, collect_calib=False, mutate=None, pop_spend=0.80,
         n_mandates_hint=None, collect_ml=False, ml_predict=None,
@@ -412,8 +412,7 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                         p_lat = 0.0
                         if cap - m["n"] > 1 and len(ps) > 1:
                             p_lat = max(float(x) for x in ps[1:])
-                        s_ = w3.index_score(p_now, p_lat, m["amount"],
-                                            cap - m["n"], ltv_mult, discount)
+                        s_ = w3.index_score(p_now, p_lat, m["amount"], discount)
                         sc.append((s_, p_now, m, dd_use[0]))
                 sc.sort(key=lambda x: -x[0])
                 for s_, p_now, m, tgt_day in sc:
@@ -455,7 +454,21 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                     if mutate == "leak_bal":
                         b.p = np.zeros(w3.NB)
                         b.p[min(int(bal[t] / b.bw), w3.NB - 1)] = 1.0
-                    if fc_days is None or policy not in POOLED:
+                    # Reuse one forecast for every mandate ONLY when they
+                    # genuinely share a belief. `collapse` is true exactly when
+                    # they do, so this is now correct by construction rather
+                    # than by coincidence.
+                    #
+                    # It used to read `policy not in POOLED`, which was right
+                    # for the five non-placebo pooled policies (their beliefs
+                    # are provably identical, measured max|diff| = 0.0) and
+                    # WRONG for solo_placebo and solo_placebo_pd, which are
+                    # also in POOLED but whose beliefs genuinely diverge
+                    # (measured max|diff| = 0.94). Those two were scoring
+                    # mandates 2..k off mandate 1's belief. Fixed 28 Aug 2026;
+                    # it moves the placebo arms, which is why S2b and S2c
+                    # change. See NOTES.md.
+                    if fc_days is None or not collapse:
                         fc_days = b.forecast(day, LOOKAHEAD_DAYS)
                     p_now_l = [(dd, p) for dd, p in fc_days if dd >= day + 1]
                     if not p_now_l:
@@ -470,8 +483,7 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                         cand = [b.p_success(m["amount"], p) for dd, p in p_now_l[1:]
                                 if dd < cycle_close(m)]
                         p_lat = max(cand, default=0.0) if cap - m["n"] > 1 else 0.0
-                        s_ = w3.index_score(p_now, p_lat, m["amount"],
-                                            cap - m["n"], ltv_mult, discount)
+                        s_ = w3.index_score(p_now, p_lat, m["amount"], discount)
                     sc.append((s_, p_now, m, tgt_day))
                 sc.sort(key=lambda x: -x[0])
 

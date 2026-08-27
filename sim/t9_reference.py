@@ -118,11 +118,61 @@ def meta():
     )
 
 
+def diff_against(runs, ref):
+    """Every field that differs, oldest-first. Used by --check and --recapture."""
+    out = []
+    for key in sorted(set(runs) | set(ref)):
+        got, want = runs.get(key), ref.get(key)
+        if want is None:
+            out.append(f"{key}: NEW (not in reference)")
+            continue
+        if got is None:
+            out.append(f"{key}: GONE (in reference, not captured)")
+            continue
+        for field in sorted(set(want) | set(got)):
+            if want.get(field) != got.get(field):
+                a, b = want.get(field), got.get(field)
+                extra = ""
+                if field in SCALARS:
+                    try:
+                        extra = (f"   ({float.fromhex(a)*100:.2f}% -> "
+                                 f"{float.fromhex(b)*100:.2f}%)")
+                    except Exception:
+                        pass
+                out.append(f"{key}.{field}: {a} -> {b}{extra}")
+    return out
+
+
 def main():
     check = "--check" in sys.argv
+    recapture = "--recapture" in sys.argv
     t0 = time.perf_counter()
     runs = capture()
     print(f"\ntotal capture time: {time.perf_counter()-t0:.1f}s")
+
+    if recapture:
+        # A DELIBERATE re-baseline. The whole risk of this mode is that someone
+        # regenerates the reference to make T9 go green and never looks at what
+        # moved -- which would turn T9 into a gate that cannot fail, the exact
+        # error this project has made three times. So the diff is printed in
+        # full, unconditionally, and the instruction to paste it into NOTES.md
+        # is part of the output rather than a convention someone can forget.
+        with open(REF_PATH, encoding="utf-8") as fh:
+            old = json.load(fh)["runs"]
+        d = diff_against(runs, old)
+        print("\n" + "=" * 78)
+        print(f"RE-BASELINE DIFF against the existing reference: "
+              f"{len(d)} field(s) changed")
+        print("=" * 78)
+        for line in d:
+            print("   " + line)
+        if not d:
+            print("   (nothing changed -- a re-baseline was not needed)")
+        print("=" * 78)
+        print("PASTE THIS DIFF INTO NOTES.md WITH THE REASON FOR EACH CHANGE.")
+        print("A reference regenerated without its diff on the record makes T9")
+        print("a gate that cannot fail.")
+        print("=" * 78)
 
     if check:
         with open(REF_PATH, encoding="utf-8") as fh:

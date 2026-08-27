@@ -1123,3 +1123,132 @@ move that could hide a defect, so:
 
 A reference regenerated without its diff on the record would make T9 a gate
 that cannot fail. That is the error this project has made three times.
+
+---
+
+## 2026-08-28 — LTV removed, placebo forecast defect fixed, T9 re-baselined
+
+### (4) The LTV multiplier: the structural prediction was right, and then some
+
+Pre-registered: `ltv_mult` is a no-op for every NON-budgeted policy, because
+`value` is strictly positive so it cannot flip the index's sign, and
+non-budgeted policies commit every positive-score mandate regardless of rank.
+I predicted it WOULD change `portfolio` / `myopic` / `portfolio_pd`, which rank
+against a budget.
+
+Swept over {0, 1, 6, 20}, n=60, pe=7:
+
+```
+solo_shared_pd  83.24 83.24 83.24 83.24      portfolio_pd  78.86 x4
+solo_pop_pd     69.55 x4                     portfolio     53.01 x4
+payday_wait     63.42 x4                     myopic        51.59 x4
+```
+
+**It is a no-op EVERYWHERE, including the budgeted policies.** I was right about
+the mechanism and wrong about the exception: reordering only ever happens on a
+mandate's final attempt of a cycle, and that never coincided with a binding
+budget in a way that changed an outcome.
+
+So the "invented 6x LTV multiplier" was not sitting on the headline result at
+all. It was dead code. `01_FACTS.md` and `02_RESULTS.md` said it was "no longer
+used" while it was still live; the accurate statement is that it was live and
+inert. **Removed**, and the removal is confirmed inert by T9: not one
+non-placebo policy moved. The cycle-based metric prices mandate death on its
+own — a dead mandate forfeits its remaining cycles because they still count in
+`cyc_due`.
+
+### The 0.92 discount is a different story and the docs are wrong about it too
+
+`CLAUDE.md` and `01_FACTS.md` say the hardcoded `0.92` discount is "gone". **It
+is not.** It is the default in `w3.index_score` and `harness.run`, and unlike
+`ltv_mult` it multiplies `p_later` and therefore **does change the sign** of the
+index. It is live on every index policy including `solo_shared_pd`.
+
+This is item **A3** in `05_TEST_DESIGN.md`'s adversarial sweep list, declared at
+the start of the project and never done. Doing it now, `solo_shared_pd` at
+pe=7, n=100, 8 populations each:
+
+| discount | 0.80 | 0.85 | 0.88 | 0.90 | **0.92** | 0.94 | 0.96 | 0.98 | 1.00 |
+|---|---|---|---|---|---|---|---|---|---|
+| train (600-607) | 77.11 | 78.73 | 78.65 | **82.24** | 82.06 | 81.86 | 81.49 | 80.76 | 78.41 |
+| eval (700-707) | 79.41 | 79.72 | 79.10 | 80.47 | 82.16 | **83.06** | 82.15 | 81.20 | 78.68 |
+
+**0.92 is not a tuned peak — it sits on a broad plateau.** The argmax moves
+between population sets (0.90 on train, 0.94 on eval), which is what a flat
+region looks like rather than a fitted constant. That is the mildest possible
+version of this finding and I want to state the other half plainly: it is still
+a hand-chosen number, the spread across the swept range is **78.7% to 83.1%**,
+i.e. about 4.4 points, and **every headline that depends on it should be quoted
+with that range, not as a point.** Kept at 0.92 rather than moved to the eval
+argmax, because moving it would be fitting a constant to the evaluation set.
+
+### The placebo forecast defect: real, and much smaller than I implied
+
+Raised earlier as a defect at `harness.py:325` and deliberately not bundled
+into the performance work. Fixed now.
+
+`if fc_days is None or policy not in POOLED:` reused one forecast for every
+mandate of a customer. Correct for the five non-placebo pooled policies, whose
+beliefs are provably identical. Wrong for `solo_placebo` and `solo_placebo_pd`,
+also in `POOLED`, whose beliefs genuinely diverge — those were scoring mandates
+2..k off mandate 1's belief.
+
+The fix is one token: the condition is now `not collapse`, and `collapse` is
+true exactly when the mandates really do share a belief object. It is now
+correct by construction rather than by coincidence.
+
+**Effect, measured:**
+
+| gate | before | after | moved by |
+|---|---|---|---|
+| S2b placebo neutrality | −14.51 (±2.24) | **−14.09** (±2.09) | 0.42 |
+| S2c real vs placebo | +24.04 (±2.25) | **+23.62** (±2.14) | 0.42 |
+| S2a the moat | +9.53 (±1.81) | **+9.53** (±1.81) | unchanged |
+
+**So the defect accounted for 0.42 of the 14.51.** I flagged that S2b's
+non-neutrality had "two candidate causes, not one". It now has one: the placebo
+arm is damaged because it is fed observations computed against a different
+customer's balance, exactly as `known_failures.txt` says. The forecast defect
+was real and worth fixing, and it was 3% of the effect. The documented
+diagnosis stands.
+
+S2a is untouched because neither `solo_pop_pd` nor `solo_shared_pd` is affected
+— they collapse, so the reuse was always correct for them.
+
+### T9 re-baseline #1, with the diff
+
+`t9_reference.py` now has `--recapture`, which prints the full field-level diff
+against the existing reference before writing, and says in its own output that
+the diff must be pasted here. A reference regenerated silently would make T9 a
+gate that cannot fail.
+
+**21 fields changed, all of them on the two placebo policies. Nothing else
+moved at all.**
+
+```
+solo_placebo_pd|pe1  cycle_rec 72.74% -> 71.54%   approval 37.47% -> 37.94%
+                     survival  78.00% -> 77.00%   att_per_cycle 207.20 -> 202.62
+                     calib_n 1900 -> 1858, calib_sha256 changed
+solo_placebo_pd|pe7  cycle_rec 61.83% -> 63.90%   approval 32.06% -> 33.76%
+                     survival  72.00% -> 74.67%   att_per_cycle 208.18 -> 204.47
+                     calib_n 1909 -> 1875, calib_sha256 changed
+solo_placebo|pe1     approval 64.66% -> 64.45%    att_per_cycle 166.96 -> 167.50
+                     calib_n 1531 -> 1536, calib_sha256 changed  (cycle_rec unchanged)
+solo_placebo|pe7     approval 31.00% -> 31.30%    survival 77.00% -> 76.00%
+                     att_per_cycle 216.68 -> 214.29
+                     calib_n 1987 -> 1965, calib_sha256 changed  (cycle_rec unchanged)
+```
+
+That diff is itself the evidence for two claims: the LTV removal was inert (no
+policy moved from it), and the placebo fix touched exactly the two policies it
+should have and no others. The old reference remains checkoutable at `fb99e9f`.
+
+### Crash localisation
+
+The first segfault was reported as "printed no gate lines", which I read as
+"crashed early". **That reading was wrong.** `gate.py` reads the suite through
+a pipe, so stdout was block-buffered and a hard crash discarded whatever had
+not been flushed — the run could have died anywhere in its 27 minutes.
+`record()` now flushes per gate and `gate.py` runs the suite with `-u`, so the
+next crash names the last gate that completed. That is diagnosis support, not a
+fix; the crash is still unexplained.

@@ -404,24 +404,24 @@
    "violations": 0
   },
   "solo_placebo_pd|pe1": {
-   "approval": "0x1.7fbb03c5cb2eep-2",
-   "att_per_cycle": "0x1.0936703a114f0p+1",
+   "approval": "0x1.848bfcb176c4cp-2",
+   "att_per_cycle": "0x1.03599d2c63629p+1",
    "calib_head": [
     "0x1.118d5502d4415p-2",
     "0x1.8bca0aa9f27d9p-1",
     "0x1.bff875af9de74p-1"
    ],
-   "calib_n": 1900,
-   "calib_sha256": "6384dd541abb949042be6539bd43f7f30fe573df6af4b0ba679b9ed9f689c4b2",
+   "calib_n": 1858,
+   "calib_sha256": "f705530361f9ec3179bb5e09ec8a4e02cfa185d8489dab6edfa9d82009ac807c",
    "calib_tail": [
     "0x1.161e1fd16a491p-3",
     "0x0.0p+0",
     "0x0.0p+0"
    ],
-   "cycle_rec": "0x1.746a15c67da08p-1",
+   "cycle_rec": "0x1.6e45caf51cc13p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.8f5c28f5c28f6p-1",
+   "survival": "0x1.8a3d70a3d70a4p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -432,24 +432,24 @@
    "violations": 0
   },
   "solo_placebo_pd|pe7": {
-   "approval": "0x1.4847e0e36fb4ep-2",
-   "att_per_cycle": "0x1.0a780b2ab693fp+1",
+   "approval": "0x1.59b3d07c84b5ep-2",
+   "att_per_cycle": "0x1.05b9172bd4730p+1",
    "calib_head": [
     "0x1.c8879776bfe55p-2",
     "0x1.97946e5f6cc6fp-23",
     "0x1.ab60e48775925p-43"
    ],
-   "calib_n": 1909,
-   "calib_sha256": "a2243ba5bbe8860a3803dbd4a5c61f4cb295c11936c585afa10bd6288bda8867",
+   "calib_n": 1875,
+   "calib_sha256": "1fb726086d371b7fe809517f0fe61184369fa5f1fe117932f4d6cd952bdda01b",
    "calib_tail": [
     "0x1.05754d4d7afcap-1",
     "0x1.2fd9f9599997cp-4",
     "0x0.0p+0"
    ],
-   "cycle_rec": "0x1.3c9484e2afe0cp-1",
+   "cycle_rec": "0x1.47304bef3fee2p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.70a3d70a3d70ap-1",
+   "survival": "0x1.7e4b17e4b17e5p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -460,15 +460,15 @@
    "violations": 0
   },
   "solo_placebo|pe1": {
-   "approval": "0x1.4b13e5ea43380p-1",
-   "att_per_cycle": "0x1.ab693f5f3287bp+0",
+   "approval": "0x1.4a00000000000p-1",
+   "att_per_cycle": "0x1.acce9631b1461p+0",
    "calib_head": [
     "0x1.0000000000000p+0",
     "0x1.0000000000000p+0",
     "0x1.0000000000000p+0"
    ],
-   "calib_n": 1531,
-   "calib_sha256": "918f755d74fd231e4d3ef0ec7ff31b660e9a8b9698f778240df2f9c052316ab0",
+   "calib_n": 1536,
+   "calib_sha256": "2c7bf4acee8c32063b64ab03156d1d018c8e0dfccaef89254c307dac2327fad9",
    "calib_tail": [
     "0x1.14c873f6eb417p-3",
     "0x0.0p+0",
@@ -488,15 +488,15 @@
    "violations": 0
   },
   "solo_placebo|pe7": {
-   "approval": "0x1.3d74990f12f07p-2",
-   "att_per_cycle": "0x1.155b49faf9944p+1",
+   "approval": "0x1.407d119679291p-2",
+   "att_per_cycle": "0x1.1249249249249p+1",
    "calib_head": [
     "0x1.0000000000000p+0",
     "0x1.0000000000000p+0",
     "0x1.0000000000000p+0"
    ],
-   "calib_n": 1987,
-   "calib_sha256": "553846f6b53cd09b8872755fdae3c429817806133f46e3defaf074de69186cf7",
+   "calib_n": 1965,
+   "calib_sha256": "d7dc3632929eaeed4110462a9cbdb77e9dbba2d7821deebaaf200484bded4ab8",
    "calib_tail": [
     "0x1.11a2d197e4f39p-3",
     "0x0.0p+0",
@@ -505,7 +505,7 @@
    "cycle_rec": "0x1.381d08a780b2bp-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.8a3d70a3d70a4p-1",
+   "survival": "0x1.851eb851eb852p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,

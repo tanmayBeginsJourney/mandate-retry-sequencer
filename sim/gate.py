@@ -36,7 +36,10 @@ BAD = ("FAIL", "VACUOUS")
 def run_tests(tier):
     """Run the suite and return (combined_output, exit_code)."""
     proc = subprocess.run(
-        [sys.executable, TESTS, "--tier", tier],
+        # -u: unbuffered. See the flush note in tests.record(). Without it a
+        # crash discards the buffered gate lines and the failure looks like it
+        # happened at startup wherever it actually happened.
+        [sys.executable, "-u", TESTS, "--tier", tier],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,

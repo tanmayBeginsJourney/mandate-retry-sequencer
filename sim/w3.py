@@ -238,9 +238,37 @@ class Belief:
         return float((self.p * self.centers).sum())
 
 
-def index_score(p_now, p_later, amount, attempts_left, ltv_mult, discount=0.92):
-    value = amount * (1 + ltv_mult * (1 if attempts_left == 1 else 0))
-    return value * (p_now - discount * p_later)
+def index_score(p_now, p_later, amount, discount=0.92):
+    """Whittle-style index: value now, minus discounted value of waiting.
+
+    THE 6x LTV MULTIPLIER WAS REMOVED 28 August 2026, after being swept.
+    It used to read
+        value = amount * (1 + ltv_mult * (1 if attempts_left == 1 else 0))
+    and `01_FACTS.md` and `02_RESULTS.md` both already described it as "no
+    longer used" while it was still live -- an invented constant sitting on the
+    index with no sensitivity analysis, breaking rules 5 and 6.
+
+    Sweeping ltv_mult over {0, 1, 6, 20} changed NOTHING, for any policy:
+
+        solo_shared_pd 83.24 83.24 83.24 83.24    portfolio_pd 78.86 x4
+        solo_pop_pd    69.55 x4                   portfolio    53.01 x4
+        payday_wait    63.42 x4                   myopic       51.59 x4
+
+    The reason is structural. `value` is strictly positive, so it cannot change
+    the SIGN of the index, and non-budgeted policies commit every mandate whose
+    score is positive regardless of rank. It can only reorder, and only on the
+    final attempt of a cycle -- which never changed a budgeted policy's outcome
+    either. So the multiplier was dead code on the headline result, and the
+    cycle-based metric prices mandate death on its own: a dead mandate forfeits
+    its remaining cycles because they still count in `cyc_due`.
+
+    `discount` is a DIFFERENT matter and is NOT dead -- see the sweep in
+    NOTES.md, 28 August. It changes the sign, so it is live on every index
+    policy. It sits on a broad plateau (0.90-0.96) rather than a tuned peak,
+    and the argmax moves between population sets, but it remains a
+    hand-chosen constant and every headline is reported as a range over it.
+    """
+    return amount * (p_now - discount * p_later)
 
 
 class BeliefPD:
