@@ -188,3 +188,85 @@ it could be a numpy/BLAS difference or a real change, and there is no way to
 tell without knowing what the original ran on. Do not treat 0.091 as evidence
 that anything improved. It is worth noting the direction: 0.091 is *inside* the
 0.10 bound, so S1 now fails purely on the monotonicity half of the gate.
+
+---
+
+## 2026-08-27 — PRE-REGISTRATION: S2 rebuild, operating point, dead gates
+
+**Written before any of it was run.** Predictions below are committed in advance
+so that "we got the result we wanted" is checkable rather than assertable. Where
+I already know an answer from an earlier session I say so — that is prior
+knowledge, not a prediction, and it does not count in my favour.
+
+### Change being made
+
+1. Gates that only bind under contention (M1, S2, T5, T7) move to
+   `payday_err=7`. Everything else stays at the harness default `payday_err=1`.
+2. S2 is rebuilt as three arms at ±7d on the **payday-posterior** policies, plus
+   the old point-estimate gate kept as `S2_LEGACY` at its original operating
+   point so the change is auditable rather than a quiet substitution.
+3. T1 and T7 get real mutants; T3 gets implemented or deleted; S3 gets built.
+
+### A correction I owe first
+
+Last session I said **T1 "cannot fail"**. That was overstated and I should not
+have said it. T1 computes `orc` from a live oracle run — if the oracle
+*regresses*, `orc` drops and policies exceed it, so T1 fires. The `weak_oracle`
+mutant drops the oracle to 46.3% against a best policy of 96.9%, so T1 would
+fire on it. What is actually true is weaker and duller: **T1 has no margin.**
+With a correct oracle at 100.0% and the best policy at 96.9%, only an oracle
+regression larger than 3.1 points is detectable. A subtle oracle bug survives.
+That is a real weakness, but "vacuous" was the wrong word and I am correcting it
+before building on it.
+
+### Pre-registered predictions
+
+**S2a — `solo_pop_pd` → `solo_shared_pd` (the moat).** Docs claim +10.23 SIG at
+±7d. Gate: PASS if mean > 2 SE over 8 populations.
+*Prediction:* positive and significant, but **smaller than +10.23** — the docs'
+figure came from n=30 / 4 seeds and we run n=100 / 8 seeds. Point estimate
+guess **+4 to +12 pts**. If this lands at ≈0, the moat does not reproduce and
+that is the headline finding of the day.
+
+**S2b — `solo_pop_pd` → `solo_placebo_pd` (the confound check).** Gate: placebo
+is "neutral" if |mean| < 2 SE.
+*Prediction:* **I expect this to fail neutrality, with placebo well below own,
+around −5 to −20 pts.** Reason: `solo_placebo` does not inject *neutral* extra
+update events, it injects *wrong* ones — outcomes computed against a different
+customer's balance (`harness.py:227`). Feeding a belief actively misleading
+observations should be worse than feeding it nothing, not the same. If that is
+right, the placebo arm is not a clean negative control.
+
+**S2c — `solo_shared_pd` → `solo_placebo_pd` (the doc's headline).** Docs claim
++21.68 / +23.99 SIG. Gate: PASS if mean > 2 SE.
+*Prediction:* **large and positive, roughly S2a + |S2b|**, so plausibly ~+15 to
++30 — i.e. it will probably reproduce the doc's impressive number. **And it will
+be the least informative of the three**, because most of its magnitude comes
+from the placebo arm being damaged rather than from pooling being good.
+
+**The decision rule, committed now:** if S2b shows placebo significantly below
+own, then **S2c must not be quoted as evidence for the moat**, and the claim
+rests on S2a alone. I am writing this down before seeing the numbers precisely
+so that a big S2c cannot be retro-fitted into support.
+
+**M1 at ±7d — prior knowledge, not a prediction.** I already swept this last
+session: at `payday_err=7` the cap mutant produced `V.cap = 0` with a maximum of
+4 attempts per mandate-cycle against `NPCI_MAX = 4`. **So I expect moving M1 to
+±7d to leave it VACUOUS.** The operating-point fix, as specified, will probably
+not fix M1. Recording that up front so it is not presented afterwards as a
+discovery.
+
+**T5 at ±7d:** expect PASS, with a smaller margin than at ±1d.
+**T7 at ±7d** with a per-event cap check: expect PASS on clean runs.
+**T1:** expect dominance to hold and the crippled-oracle self-check to fire.
+**S3 headline** (`solo_shared_pd` − `payday_wait` at ±7d, 8 seeds): docs claim
++17.8 (±7.5). Expect positive and significant, magnitude uncertain.
+**Oracle at ±7d:** docs say 100.0%. Expect it still saturates.
+
+### What would make me wrong
+
+- S2a ≈ 0 → the moat does not reproduce; the project's central claim is in
+  trouble and no amount of S2c rescues it.
+- S2b ≈ 0 → I am wrong about the confound, the placebo really is neutral, and
+  the doc's +21.68 headline is sound as written.
+- M1 fires at ±7d → my prior sweep did not generalise across populations.
