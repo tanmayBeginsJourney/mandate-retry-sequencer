@@ -103,10 +103,38 @@ Roughly half the apparent gain is "customers never top up." `w3` supports
 
 ## Test suite status
 
-17 gates. Mutation tests all fire (696–1,141 violations vs a clean zero).
-The oracle deferral bug, deliberately restored, is caught (100.0% → 50.5%).
+17 gates. **Three are red on a clean checkout: S1 FAIL, S2 FAIL, M1 VACUOUS.**
+Enforced at commit time by `sim/gate.py`; reasons in `sim/known_failures.txt`.
 
-⚠️ **S1 (belief calibration) FAILS.** ECE 0.098 against a 0.10 threshold,
+⚠️ **S1 (belief calibration) FAILS.** ECE 0.091 against a 0.10 threshold,
 reliability curve not monotone, filter overconfident in its top decile (predicts
-0.998, achieves 0.916). The threshold was declared before results were seen.
+0.998, achieves 0.919). Note ECE is now *inside* the bound — the gate fails on
+the **monotonicity** half. The threshold was declared before results were seen.
 **Do not loosen it.** Nothing above is fully settled until it passes.
+
+⚠️ **S2 (placebo pooling) FAILS.** real − placebo = **−0.40 pts (±0.22)**. This
+is the negative control designed to destroy the pooling claim if the claim is
+false, and it is failing in that direction.
+
+Read it against the operating point before concluding the moat is dead. `S2` in
+`sim/tests.py` compares `solo_shared` / `solo_placebo` / `solo_pop` — the
+**point-estimate payday** trio — and it runs at the harness default
+`payday_err=1`. Both choices are ones this page already says have no signal:
+the point-estimate row of the moat table is −0.16 / −0.49 (n.s.), and ±1 day is
+the row labelled *"tie — no reason to build"*. The measured −0.96 pts for real
+pooling vs own matches the ±1d column of the full table (98.9% vs 99.8%) almost
+exactly. **The gate is not testing the pair the moat is claimed for.** Untriaged
+— do not change the gate before deciding what it should have tested.
+
+⚠️ **M1 (attempt-cap mutant) is VACUOUS**, so the claim "mutation tests all fire"
+that used to sit here was false. The cap mutant cannot trip the counter at
+`payday_err=1`: the deepest any mandate-cycle reaches is **3 attempts**, against
+`NPCI_MAX = 4`, so a 5th attempt never happens and the cap is never the binding
+constraint. Diagnosed 27 August 2026 — see `NOTES.md`. The other mutants (M2–M6,
+M8) do fire (608–1,119 violations vs a clean zero), and the oracle deferral bug,
+deliberately restored, is caught (100.0% → 46.3%).
+
+**Consequence: the attempt-cap guarantee is currently untested.** The counter in
+`harness.py` can be disabled outright without any gate going red — verified by
+experiment. Do not put the NPCI cap compliance claim in the pitch or the
+architecture doc until M1 is fixed.

@@ -97,3 +97,94 @@ handoff commit. No threshold was moved.
 1. M1 vacuous — why does the `cap` mutant not trip the counter?
 2. S2 — the pooling claim's own negative control says the claim is false.
 3. S1 ECE 0.098 vs 0.091 — environment, or a real change?
+
+---
+
+## 2026-08-27 — M1 diagnosed; docs corrected; environment pinned
+
+### Correction to the entry above, and to the handoff docs
+
+The 27 August entry above, `CLAUDE.md`, `docs/00_HANDOFF.md` and
+`docs/02_RESULTS.md` all said or implied that **S1 is the only known failure**.
+That was false. On a clean checkout it is **S1 FAIL, S2 FAIL, M1 VACUOUS**.
+`docs/02_RESULTS.md` additionally claimed "Mutation tests all fire," which M1
+directly contradicts.
+
+Those four documents have now been corrected to state all three. This entry is
+the history of that change; per rule 8 the earlier entry above is left standing
+rather than rewritten. Nothing in `sim/tests.py` was touched.
+
+### M1: why the attempt-cap mutant cannot trip the counter
+
+Time-boxed diagnosis, ~40 minutes. Both suggested hypotheses were checked.
+
+**Hypothesis B (mangled `pop_spend`) — ruled out.** `sim/tests.py:38-39` passes
+`pop_spend=1.05` explicitly to *both* the clean and the mutant run, on top of the
+`functools.partial` at line 13 that already sets it. Redundant, but identical.
+It is not the cause. (The sed damage is real but cosmetic and elsewhere: line 1
+is `import functools` sitting *above* the module docstring, so what reads as the
+docstring is actually a no-op string expression.)
+
+**Hypothesis A (mandates collected before a 5th attempt) — confirmed, with a
+sharper mechanism than "collected".** Instrumented copy of the harness, mutant
+run, `portfolio`, seed 7, `pop_spend=1.05`:
+
+```
+commits        1066
+n at commit    {0: 1017, 1: 48, 2: 1}     <- 49 of 1066 had anything to reset
+max attempts in any one (mandate, cycle):  3
+NPCI_MAX = 4  ->  V.cap fires on the 5th attempt
+```
+
+The mutant (`m["n"] = 0` at commit time) works exactly as designed: it removes
+the attempt-cap constraint. **The problem is that the cap was never binding.**
+At the operating point the suite runs at, the deepest any mandate-cycle ever
+reaches is 3 attempts against a cap of 4. Removing a constraint that is already
+slack changes nothing — clean and mutant runs are byte-identical on every
+metric (att/cycle 1.178, approval 0.883, recovery 0.969, all five violation
+counters 0). So the counter is never exercised and the gate is vacuous.
+
+Why the cap is slack: `sim/tests.py` never passes `payday_err`, so the whole
+suite runs at the harness default `payday_err=1` (`sim/harness.py:87`). At ±1
+day the policy hits payday nearly every time, per-attempt approval is 88% and
+recovery 96.9%, so mandates are collected on the first or second attempt and
+never need a fifth.
+
+Confirmed by sweeping the operating point (instrumented copy, same population):
+
+| `payday_err` | max attempts/cycle | mutant `V.cap` | recovery |
+|---|---|---|---|
+| 1 (suite default) | 3 | **0 — VACUOUS** | 0.969 |
+| 3 | 5 | 1 — fires | 0.796 |
+| 7 | 4 | **0 — VACUOUS** | 0.495 |
+
+So M1 is not a broken mutant and not a broken counter. It is a gate being run at
+an operating point where the thing it tests cannot happen. Note it only fires at
+±3d, and then on a **single** violation — even the fixed version would be a
+knife-edge gate, not a robust one. Whoever fixes this should not just switch the
+operating point and declare victory.
+
+**Did not touch the harness**, per the time-box.
+
+### The same root cause probably explains S2
+
+S2 also runs at the default `payday_err=1` — `docs/02_RESULTS.md` calls ±1 day
+"tie — no reason to build". And S2 compares `solo_shared` / `solo_placebo` /
+`solo_pop`: the **point-estimate payday** trio, not the `*_pd` posterior trio the
+moat is claimed for. `02_RESULTS.md` already reports the point-estimate pooling
+effect as −0.16 / −0.49 (n.s.). Measured real-vs-own here is −0.96, which matches
+the ±1d column of the full table (98.9% vs 99.8%) almost exactly.
+
+`solo_placebo_pd` **already exists** in the harness (`sim/harness.py:47,50,53`),
+so the posterior-architecture negative control could be run. Not doing it: S2 is
+explicitly on hold pending a decision about what it should have been testing.
+
+### Environment pinned
+
+`requirements.txt` added: `numpy==2.4.2`, CPython 3.12.0. **The numpy version
+that produced the handoff numbers was never recorded.** So the ECE difference
+(`02_RESULTS.md` said 0.098, measured 0.091) is **currently unattributable** —
+it could be a numpy/BLAS difference or a real change, and there is no way to
+tell without knowing what the original ran on. Do not treat 0.091 as evidence
+that anything improved. It is worth noting the direction: 0.091 is *inside* the
+0.10 bound, so S1 now fails purely on the monotonicity half of the gate.

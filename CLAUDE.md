@@ -146,14 +146,39 @@ agent/                 (you will create this) the actual product
 
 ## Before you commit anything
 
+Install the hooks once per clone, then just commit — the gate runs itself:
+
 ```bash
-python sim/tests.py       # 17 gates. Must be no new FAIL, no new VACUOUS.
+scripts/install-hooks.sh
 ```
 
+The hook runs `sim/gate.py`, which runs the 17-gate suite and blocks the commit
+on any `FAIL` or `VACUOUS` gate that is not listed in `sim/known_failures.txt`.
+To run it by hand: `python sim/gate.py`.
+
 A `VACUOUS` result means a gate exists that no mutant can trip — that is a
-failure of the suite, not a pass. Currently **S1 (belief calibration) FAILS**
-and is known. Do not "fix" it by loosening the threshold; the threshold was
-declared before results were seen.
+failure of the suite, not a pass, and the gate treats it exactly like a `FAIL`.
+
+**Three gates are red on a clean checkout, not one.** The full reasons are in
+`sim/known_failures.txt`; the short version:
+
+| Gate | State | What it means |
+|---|---|---|
+| **S1** belief calibration | FAIL | ECE 0.091 (inside the 0.10 bound) but the reliability curve is **not monotone**. It fails on the monotonicity half. |
+| **M1** attempt-cap mutant | VACUOUS | The mutant cannot trip the cap counter at the suite's operating point, so the NPCI attempt-cap claim has **no working test behind it**. |
+| **S2** placebo pooling | FAIL | The negative control for the pooling claim is failing. It tests the *point-estimate* policy trio, which `02_RESULTS.md` already says shows no effect. |
+
+Only S1 was declared at handoff. M1 and S2 were found by the first clean run on
+27 August 2026 and are untriaged. Do not quote the attempt-cap guarantee or any
+pooling number until M1 and S2 are resolved.
+
+Do not "fix" any of them by loosening a threshold. The S1 threshold in
+particular was declared in `05_TEST_DESIGN.md` before results were seen.
+
+**Environment matters here.** The suite needs `numpy` at the version pinned in
+`requirements.txt`. The numpy version that produced the handoff numbers was
+never recorded, so small numeric differences from this file are currently
+unattributable — see `NOTES.md`.
 
 ---
 

@@ -1,0 +1,10 @@
+# Pinned so the suite is reproducible. The handoff numbers were produced on an
+# UNKNOWN numpy version -- nobody recorded it -- so small numeric differences
+# between docs/02_RESULTS.md and a local run are currently unattributable.
+# See NOTES.md, 2026-08-27.
+#
+# Verified working: CPython 3.12.0 on Windows.
+# Note the `python` and `python3` on PATH here are msys2 builds with no numpy
+# and no pip; sim/gate.py and the pre-commit hook probe for an interpreter that
+# can actually import numpy.
+numpy==2.4.2

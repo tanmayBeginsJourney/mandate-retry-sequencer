@@ -27,13 +27,26 @@ and tested. The old one (`legacy/`) is defective and frozen.
 1. **How accurately can payday be estimated?** Decides whether the sophisticated
    version is worth building at all. Resolution: make the agent learn it online
    and expose its own uncertainty. Do not chase the number externally.
-2. **S1 belief calibration fails.** Overconfident in the top decile.
+2. **Three test gates are red on a clean checkout: S1, M1, S2.**
+   - **S1** belief calibration: ECE 0.091, reliability curve not monotone.
+     Overconfident in the top decile. Declared at handoff.
+   - **M1** attempt-cap mutant is VACUOUS: the cap counter has no working
+     test behind it. Found 27 August 2026, undeclared until then.
+   - **S2** placebo pooling, the negative control on the central claim,
+     fails. Found 27 August 2026, undeclared until then. See item 6.
+   Reasons are in `sim/known_failures.txt`; the gate is `sim/gate.py`.
 3. **Is cross-merchant pooling legal?** See `01_FACTS.md`. Unread: Razorpay's
    privacy policy, their merchant terms, RBI PA/PG directions.
 4. **Peak-hour rule: hard reject or time-shift?** Sources disagree. Stage 0
    assumes hard reject, which is the conservative choice.
 5. **Does exhausting attempts cancel a mandate, or halt it?** One news report
    says cancel; Razorpay's own docs suggest halt-and-manually-chargeable.
+6. **Does pooling actually beat placebo pooling?** S2 says no at the
+   operating point it runs at. But S2 compares `solo_shared` /
+   `solo_placebo` / `solo_pop` — the **point-estimate** payday trio —
+   while the moat in `02_RESULTS.md` is claimed for the **payday
+   posterior** trio (`*_pd`). The gate may be testing the wrong pair.
+   Unresolved, and it sits on the central claim.
 
 ## The three-way split — keep this true in the code
 
