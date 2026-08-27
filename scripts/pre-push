@@ -1,0 +1,56 @@
+#!/bin/sh
+#
+# pre-push hook for the Razorpay recovery agent.
+#
+# The pre-commit hook runs the FAST tier: every gate that tests whether the
+# code is correct. This one runs the FULL suite, which adds the gates that
+# test whether a statistical claim still holds -- S2a, S2b, S2c, S2_LEGACY,
+# S3. Those need 8 populations at n=100 to have any power, so they are never
+# shrunk to fit a time budget; they run here instead.
+#
+# The split exists because a 27-minute pre-commit hook does not survive
+# contact with a build week, and a hook people bypass protects nothing.
+#
+# Install with: scripts/install-hooks.sh
+# Emergency bypass is `git push --no-verify`. If you use it, say so in
+# NOTES.md. That file is a judged deliverable and the mess is the point.
+
+set -u
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+
+# --- find a Python that can actually import numpy --------------------------
+# On this machine the `python` and `python3` on PATH are msys2's, which have
+# no numpy and no pip. So probe candidates instead of assuming a name.
+PYBIN=""
+for cand in \
+    "python3" \
+    "python" \
+    "py -3" \
+    "${HOME:-}/AppData/Local/Programs/Python/Python312/python.exe" \
+    "${USERPROFILE:-}/AppData/Local/Programs/Python/Python312/python.exe"
+do
+    if $cand -c "import numpy" >/dev/null 2>&1; then
+        PYBIN="$cand"
+        break
+    fi
+done
+
+if [ -z "$PYBIN" ]; then
+    echo "pre-push: could not find a Python with numpy installed."
+    echo "pre-push: the gate cannot run, so the push is blocked."
+    exit 1
+fi
+
+echo "pre-push: running the FULL test suite ($PYBIN sim/gate.py --tier full)."
+echo "pre-push: this is the tier that carries the statistical gates."
+$PYBIN sim/gate.py --tier full
+if [ $? -ne 0 ]; then
+    echo "pre-push: gate failed. Push aborted."
+    echo "pre-push: fix the code. Do NOT loosen the test."
+    exit 1
+fi
+
+echo "pre-push: full suite passed."
+exit 0

@@ -33,10 +33,10 @@ LINE = re.compile(r"^\[\s*(ok|FAIL|VACUOUS)\s*\]\s+(\S+)\s*(.*?)\s*$")
 BAD = ("FAIL", "VACUOUS")
 
 
-def run_tests():
+def run_tests(tier):
     """Run the suite and return (combined_output, exit_code)."""
     proc = subprocess.run(
-        [sys.executable, TESTS],
+        [sys.executable, TESTS, "--tier", tier],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -82,7 +82,14 @@ def block(title, lines):
 
 
 def main():
-    output, code = run_tests()
+    tier = "full"
+    if "--tier" in sys.argv:
+        tier = sys.argv[sys.argv.index("--tier") + 1]
+    if tier not in ("fast", "full"):
+        print(f"gate: unknown tier {tier!r}; use fast or full")
+        return 1
+
+    output, code = run_tests(tier)
     print(output, end="" if output.endswith("\n") else "\n")
 
     gates = parse(output)
@@ -100,7 +107,11 @@ def main():
     known = load_known()
 
     unexpected = sorted(t for t in bad if t not in known)
-    fixed = sorted(t for t in known if t not in bad)
+    # A gate that did NOT RUN in this tier has not been "fixed" -- it has not
+    # been asked. Reporting it as fixed would invite someone to delete its
+    # known_failures entry on the strength of a tier that never exercised it.
+    fixed = sorted(t for t in known if t in gates and t not in bad)
+    skipped = sorted(t for t in known if t not in gates)
     still = sorted(t for t in known if t in bad)
 
     if unexpected:
@@ -142,9 +153,17 @@ def main():
             status, detail = gates[tid]
             print(f"    {tid:<5} {status:<8} {detail}")
 
+    if skipped:
+        print(f"\nNOT EXERCISED by the '{tier}' tier (still owed a full run):")
+        for tid in skipped:
+            print(f"    {tid}")
+
     total_bad = len(bad)
-    print(f"\nGATE PASS: {len(gates)} gates, {total_bad} bad, "
+    print(f"\nGATE PASS [tier={tier}]: {len(gates)} gates, {total_bad} bad, "
           f"all {total_bad} known. Commit allowed.")
+    if tier != "full":
+        print("Reminder: no number reaches docs/, the pitch or the "
+              "architecture doc from anything but a --tier full run.")
     return 0
 
 

@@ -3,7 +3,14 @@
 # pre-commit hook for the Razorpay recovery agent.
 #
 # Two jobs:
-#   1. Run the test gate. New FAIL or VACUOUS gates block the commit.
+#   1. Run the FAST test gate. New FAIL or VACUOUS gates block the commit.
+#      Fast = every gate that tests whether the CODE is correct (M1-M8,
+#      T1-T9, S1). About 35 seconds. The statistical gates (S2a/b/c,
+#      S2_LEGACY, S3) run on push instead -- see scripts/pre-push -- because
+#      they need 8 populations at n=100 and are never shrunk to fit a time
+#      budget. T9 is what makes that split safe: it compares every policy's
+#      output byte for byte against sim/t9_reference.json, so a change to the
+#      belief arithmetic cannot slip past the fast tier.
 #   2. Trip a wire if this commit edits the test suite or the known-failures
 #      list, because that is precisely how a real defect gets hidden.
 #
@@ -41,8 +48,8 @@ if [ -z "$PYBIN" ]; then
 fi
 
 # --- 1. the test gate -------------------------------------------------------
-echo "pre-commit: running the test gate ($PYBIN sim/gate.py)..."
-$PYBIN sim/gate.py
+echo "pre-commit: running the FAST test gate ($PYBIN sim/gate.py --tier fast)..."
+$PYBIN sim/gate.py --tier fast
 if [ $? -ne 0 ]; then
     echo "pre-commit: gate failed. Commit aborted."
     exit 1

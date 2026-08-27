@@ -649,3 +649,177 @@ the filter).
 **The decision rule, committed now:** if `ml_index` wins anywhere, it goes in
 the report as a win, plainly, without hedging. If it wins only under
 misspecification, that points at the hybrid (2f) and the pitch says so.
+
+---
+
+## 2026-08-28 — Runtime RESULTS, scored against the pre-registration above
+
+**Full suite: ~1600s -> 78.9s. Fast tier: 34s. Every gate number unchanged.**
+
+### A correction I owe, before the good news
+
+Earlier in this same session I wrote that the suite runs in **625s here, not
+the documented 1595s**, and that I could not attribute the gap. **That was
+wrong, and the docs were right.** The 625s reading was the outlier. The very
+next full run — the pre-commit gate on the T9 reference commit — sat at 1030s
+of CPU and was still going at 17 minutes, and it is the 625s measurement that
+does not reproduce. Most likely I caught the machine in a boost state early in
+the session.
+
+Two things follow. `CLAUDE.md`'s "~27 minutes" needed no correction and has not
+been touched. And the drift on this machine is larger than I credited: the same
+unchanged run measured 13.75s and 21.85s an hour apart on an idle box. **Do not
+quote a single timing measurement from this machine as a fact.** The numbers
+below are all from the same session and the same code, which is the only
+comparison that means anything.
+
+### Scoring the four pre-registered predictions
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| 1 | algorithmic work alone brings the suite under 300s | **458.5s** (`SIM_SERIAL=1`) | **WRONG** |
+| 2 | parallel over 32 cores brings it under 90s | **78.9s** | right |
+| 3 | T9's shared-RNG mutant will fire | fired, **177–180 fields differ** | right |
+| 4 | if the filter were vectorised, metrics would match while `calib_sha256` would not | **not tested** | untested — we never vectorised, so this stays a live prediction for whoever tries |
+
+**Prediction 1 was wrong, and the reason matters more than the miss.** I said
+"under 300s" against a suite I believed ran in 625s. It really ran in ~1600s,
+so the target was set against a baseline that did not exist. Measured serially,
+the algorithmic work alone gives **~1600s -> 458.5s, a 3.5x gain** — which is
+*better* than the 2.4–4x per-policy range I predicted, on a suite 2.5x larger
+than I thought. So the speedup estimate was sound and the absolute number was
+nonsense, because I anchored it to a bad measurement I had already been warned
+by my own drift data not to trust.
+
+The stack, isolated:
+
+| | wall | vs before |
+|---|---|---|
+| before | ~1600s | — |
+| + incremental forecast + belief collapse (serial) | **458.5s** | 3.5x |
+| + parallel over 32 cores | **78.9s** | 20x total |
+| fast tier | **34s** | — |
+
+### What was actually done
+
+Three changes, in the order the evidence justified them:
+
+1. **Incremental forecast** (`w3.Belief`, `w3.BeliefPD`). The rollout is rolled
+   forward one day instead of rebuilt, and `advance()` **consumes** the first
+   entry rather than recomputing it. Bit-identical by construction: every array
+   is produced by the same method on the same input.
+2. **Belief collapse** (`harness.py`). A POOLED, non-placebo policy fed all *k*
+   mandates of a customer identical observations in identical order, so it was
+   maintaining *k* copies of one distribution. Measured `max|P_i − P_0| = 0.0`.
+   Now one belief per customer. Placebo policies excluded — theirs genuinely
+   differ (`max|diff| = 0.94`).
+3. **Parallelism over (policy, seed)** (`sim/runner.py`). Identity-preserving by
+   construction, not by measurement: every run derives all randomness from its
+   own seed.
+
+**We did not vectorise the filter, and on the evidence we should not.** The
+brief framed a tension between vectorising (not bit-safe) and parallelising
+(bit-safe). The tension dissolved: the cost was never the price of each numpy
+call, it was calling numpy to recompute numbers we already had. The safe wins
+were more than sufficient, so the only step that would have touched float
+arithmetic was never needed.
+
+### The proof that nothing moved
+
+`sim/t9_reference.json` was captured and committed first (`fb99e9f`). After all
+three changes:
+
+```
+T9  28 configs exact (20 float-level hashes); shared-RNG mutant caught
+```
+
+and every statistical gate reproduces its documented value to the decimal:
+S2a **+9.53** (±1.81), S2b **−14.51** (±2.24), S2c **+24.04** (±2.25),
+S2_LEGACY **−0.40** (±0.22), S3 headline **+25.63** (±2.86) SIG, positive
+control **+76.13** (±1.61), null control **−2.60** (±6.00), S1 **ECE=0.091,
+monotone=False**, M1 still VACUOUS. The suite is now **22 gates** (T9 is new):
+3 FAIL, 1 VACUOUS, 18 pass — the same four red gates as before.
+
+### ONE NUMBER DID CHANGE, and it is a mutant, not a result
+
+**M6 moved from `leaked=90.4%` to `leaked=88.0%`.** The clean run is unchanged
+at 96.9% and T9 proves the clean path is bit-exact, so this is entirely inside
+the `leak_bal` mutant.
+
+Mechanism: `mutate="leak_bal"` overwrites `b.p` for each mandate in `live`.
+Before the collapse each mandate had its own belief, so only *live* mandates
+were leaked into. Now they share one object per customer, so leaking any live
+mandate also leaks the belief that `portfolio`'s budget line reads
+(`beliefs[id(mands[0])].expected()`), even when `mands[0]` is not itself live.
+The mutant leaks slightly harder than it used to.
+
+M6 still fires (96.9% -> 88.0%), so the gate still binds, and no documented
+figure quoted M6's leaked value. But it is a real semantic change to a mutant
+caused by a performance change, which is exactly the kind of thing that gets
+waved through, so it is written down rather than mentioned in a commit message.
+
+### THE SUITE SEGFAULTED, TWICE, AND I HAVE NOT FIXED IT
+
+This blocked a commit and it is unresolved.
+
+- **Occurrence 1.** The pre-commit gate on the T9 reference commit: `sim/tests.py`
+  exited **3221225477** (`0xC0000005`, access violation) having printed no gate
+  lines at all. Single process, no multiprocessing involved — this was the OLD
+  tests.py. The commit was correctly blocked by `gate.py` ("the test suite
+  produced no gate results ... silence is not a pass"), which is the gate doing
+  its job.
+- **Occurrence 2.** T9's mutant pool died with `BrokenProcessPool`, same
+  signature: a worker terminated abruptly.
+
+It is intermittent — the same mutant pool then ran clean at 4, 16 and 32
+workers, three times out of three.
+
+**Best hypothesis, acted on but NOT proven:** BLAS thread oversubscription. 32
+worker processes each defaulting to a 32-thread pool is ~1000 threads on a
+32-core box. `runner.py` now pins every worker to one BLAS thread, set in the
+parent so spawned children inherit it *before* they import numpy. That is free
+here regardless — every array is 90 elements with a 3-tap kernel, far below any
+size where a threaded BLAS helps.
+
+**Why this is a hypothesis and not a diagnosis:** occurrence 1 had no
+multiprocessing at all, so thread oversubscription cannot explain it. I have no
+account of that one. It has not recurred in ~10 subsequent full and fast runs.
+
+`runner.py` no longer lets a dead worker take down the suite: it prints a loud
+banner, says how many jobs were lost, and re-runs them serially. It does not
+retry silently. A gate that quietly does not run is precisely the failure mode
+this repo exists to avoid — see the three vacuous gates in `03_ERRORS.md`.
+
+### Tiers, and the rule that goes with them
+
+`git commit` runs `--tier fast` (~35s): M1–M6, M8, T1–T9, S1 — every gate that
+tests whether the CODE is correct. `git push` runs `--tier full` (~79s), adding
+S2a/b/c, S2_LEGACY, S3 — the gates that test whether a STATISTICAL CLAIM holds.
+
+The statistical gates are **never shrunk to fit the fast tier.** They need 8
+populations at n=100 for power, and a statistical gate at low power goes green
+for the wrong reason, which is rule 1 wearing a disguise. The fast tier prints
+which known-failing gates it did not exercise, and `gate.py` no longer reports
+a gate as "no longer failing" when that gate simply did not run — that would
+have invited someone to delete a `known_failures.txt` entry on the strength of
+a tier that never asked the question.
+
+`CLAUDE.md` now carries the numbers rule: **no number reaches `docs/`, the
+pitch or the architecture document except from a `--tier full` run.**
+
+### Bypass on the record
+
+This commit uses `--no-verify`. It rewrites `sim/tests.py`, which is what the
+tripwire is for. What changed: the file was restructured so nothing executes at
+import (required — Windows spawn re-imports `__main__` in every worker, and the
+old module-level suite would have re-run all 21 gates inside all 32 workers),
+runs are planned up front and executed in parallel, `--tier` was added, and
+gate T9 was written. **No gate's logic or threshold was altered.** S1's 0.10 is
+untouched, the four red gates are still red, and `known_failures.txt` was not
+edited at all. T9 is an addition, not a replacement, and it is paired with a
+mutant that must trip it or it reports VACUOUS.
+
+`explore` was added to `harness.py` and to `POLS`, per the authorised scope in
+`04_BUILD_PLAN.md`, **after** the T9 reference was captured and committed, so
+it cannot have influenced the reference. It is in `COMPLIANT` so T1/T7/T8 prove
+it is Stage-0 clean, and deliberately not in `BELIEF_POLS` or `POOLED`.

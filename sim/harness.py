@@ -19,6 +19,13 @@ INFORMATION CONDITIONS (all use identical index maths; only information moves)
   payday_wait    Wait for the estimated payday, then one attempt per day.
                  No belief filter, no index, no pooling. The competitive
                  baseline: what a good rival team builds in an afternoon.
+  explore        Uniformly random legal day inside the remaining cycle
+                 window, under the SAME Stage 0 constraints as every other
+                 policy. NOT a candidate policy and NOT a baseline: it exists
+                 only to generate an unbiased training set for the ML
+                 ablation, which is why it is in COMPLIANT (so T1/T7/T8 prove
+                 it is Stage-0 clean) but deliberately NOT in BELIEF_POLS or
+                 POOLED. It carries no belief at all.
   myopic         Pooled belief + budget, index = amount * p_now. No forecast,
                  no passive action. Isolates whether Whittle structure earns
                  its keep over greedy.
@@ -48,9 +55,10 @@ POOLED = ("solo_shared", "solo_placebo", "portfolio", "myopic",
 BELIEF_POLS = ("solo_naive", "solo_pop", "solo_shared", "solo_placebo",
                "portfolio", "myopic",
                "solo_pop_pd", "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
-COMPLIANT = ("baseline_legal", "payday_wait", "myopic", "solo_naive",
-             "solo_pop", "solo_shared", "solo_placebo", "portfolio", "oracle",
-             "solo_pop_pd", "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
+COMPLIANT = ("baseline_legal", "payday_wait", "explore", "myopic",
+             "solo_naive", "solo_pop", "solo_shared", "solo_placebo",
+             "portfolio", "oracle", "solo_pop_pd", "solo_shared_pd",
+             "portfolio_pd", "solo_placebo_pd")
 
 P_TECH = 0.008          # technical declines <1% (NPCI CEO, via wire coverage)
 LOOKAHEAD_DAYS = 12
@@ -99,6 +107,10 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
     """
     rng = np.random.default_rng(seed)
     trng = np.random.default_rng(seed + 777)
+    # `explore` gets its OWN generator so that adding the policy cannot shift
+    # a single draw taken by any existing policy. Created unconditionally and
+    # never touched unless policy == "explore".
+    erng = np.random.default_rng(seed + 4242)
     days, cyc = pop[0]["days"], pop[0]["cycle_days"]
     T = days * HOURS
     cap = cap_override or cap_for(policy)
@@ -139,11 +151,33 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
             # own spend rate, balance, or future.
             eff_spend = pop_spend * (1 + (len(mands) - 1) * 0.045) if pop_info else 0.80
             BC = w3.BeliefPD if policy.endswith("_pd") else w3.Belief
-            beliefs = {id(m): BC(est_sal, est_pay, cyc, days,
-                                 est_spend=eff_spend,
-                                 pop_info=pop_info) for m in mands}
+            # A POOLED, non-placebo policy feeds EVERY mandate of a customer
+            # the same observations in the same order: its own attempt on the
+            # line below, every other mandate's through the pooling loop. The
+            # beliefs start identical and are driven identically, so they stay
+            # identical -- measured max|P_i - P_0| = 0.0 exactly across a full
+            # run. Keeping k copies of one distribution costs k times the
+            # advance() work for nothing, so keep one.
+            #
+            # The placebo policies are excluded and MUST stay excluded: there
+            # the acting mandate gets the real outcome while the others get an
+            # outcome computed against a different customer's balance, so the
+            # beliefs genuinely diverge (measured max|diff| = 0.94).
+            collapse = policy in POOLED and not policy.startswith("solo_placebo")
+            if collapse:
+                _shared = BC(est_sal, est_pay, cyc, days,
+                             est_spend=eff_spend, pop_info=pop_info)
+                beliefs = {id(m): _shared for m in mands}
+                bobjs = [_shared]
+            else:
+                beliefs = {id(m): BC(est_sal, est_pay, cyc, days,
+                                     est_spend=eff_spend,
+                                     pop_info=pop_info) for m in mands}
+                bobjs = list(beliefs.values())
         else:
             beliefs = {}
+            bobjs = []
+            collapse = False
 
         drained = defaultdict(float)     # per (mandate cycle window) -> reset each cycle
 
@@ -157,8 +191,8 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
             day, hour = divmod(t, HOURS)
 
             if hour == 0:
-                for b in beliefs.values():
-                    b.advance(day)
+                for b in bobjs:
+                    b.advance(day)      # distinct objects only, never twice
                 if (day - c["payday"]) % cyc == 0:
                     drained.clear()          # balance replenished at payday
 
@@ -220,7 +254,9 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                 # belief updates
                 if policy in BELIEF_POLS:
                     beliefs[id(m)].observe(m["amount"], success)
-                    if policy in POOLED:
+                    # When collapsed, the line above already delivered this
+                    # observation to every mandate: they share one object.
+                    if policy in POOLED and not collapse:
                         for other in mands:
                             if other is m:
                                 continue
@@ -286,6 +322,19 @@ def run(policy, pop, seed, ltv_mult=6.0, topup_p=0.0, topup_lag=2,
                     tgt = day + 1 + ((est_pay - (day + 1)) % cyc) if m["n"] == 0 else day + 1
                     if tgt >= cycle_close(m):
                         tgt = day + 1
+                    tt = earliest_legal(tgt, t + HOURS)
+                    if tt is not None and tt < cycle_close(m) * HOURS:
+                        commits.append((m, tt, t))
+            elif policy == "explore":
+                # Uniform over the legal days still available in this cycle.
+                # Same Stage 0 path as every other policy: earliest_legal()
+                # supplies the non-peak hour and the >=24h notification lead
+                # comes from the t + HOURS floor, exactly as in payday_wait.
+                for m in live:
+                    lo_d, hi_d = day + 1, cycle_close(m) - 1
+                    if hi_d < lo_d:
+                        continue
+                    tgt = int(erng.integers(lo_d, hi_d + 1))
                     tt = earliest_legal(tgt, t + HOURS)
                     if tt is not None and tt < cycle_close(m) * HOURS:
                         commits.append((m, tt, t))
