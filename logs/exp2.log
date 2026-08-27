@@ -1,0 +1,23 @@
+CALIB horizon= 30d -> spend=0.80, baseline approval 30.1%
+--- 30-DAY (matches published) | horizon=30d, k=7, spend=0.80, topup_p=0.0 --------------------
+       policy  rec(cnt)    appr    dead   unres  att/man  unres_left
+     baseline     41.6%   19.3%   58.4%    0.0%     2.17        0.00
+ fixed_daily4     41.8%   15.3%   58.2%    0.0%     2.74        0.00
+  payday_wait     43.8%   75.5%    0.0%   56.2%     0.58        4.00
+       myopic     55.3%   23.0%   40.9%    3.8%     2.41        2.47
+     solo_own     68.2%   31.3%   27.7%    4.1%     2.19        1.00
+  solo_shared     74.6%   39.3%   13.7%   11.7%     1.90        1.69
+    portfolio     77.6%   50.4%    5.5%   17.0%     1.54        2.70
+       oracle     76.5%  100.0%    0.0%   23.5%     0.76        4.00
+   payday alignment, no belief                   +2.20 pts (+/-8.11) n.s.
+   full system OVER payday heuristic            +33.74 pts (+/-3.74) SIG
+   pooled observations (claimed moat)            +6.40 pts (+/-3.01) SIG
+   headroom to clairvoyance                      -1.10 pts (+/-1.91) n.s.
+
+CALIB horizon= 90d -> spend=0.80, baseline approval 30.3%
+--- 90-DAY (censoring removed) | horizon=90d, k=7, spend=0.80, topup_p=0.0 --------------------
+       policy  rec(cnt)    appr    dead   unres  att/man  unres_left
+     baseline     41.2%   19.0%   58.8%    0.0%     2.18        0.00
+ fixed_daily4     41.4%   15.1%   58.6%    0.0%     2.76        0.00
+  payday_wait    100.0%   88.0%    0.0%    0.0%     1.14        0.00
+       myopic     59.2%   24.1%   40.8%    0.0%     2.46        0.00

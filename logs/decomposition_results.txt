@@ -1,0 +1,40 @@
+DECOMPOSITION - identical index maths everywhere.
+Only the INFORMATION and the ACTION-COUPLING differ.
+
+--- 1 mandate(s) per customer --------------------------------------------
+       policy   recovery  approval   death  att/man  worst m
+     baseline      57.0%     30.3%   43.5%     1.87     0.7%
+     solo_own      82.9%     47.2%   16.0%     1.77    22.8%
+  solo_shared      82.9%     47.2%   16.0%     1.77    22.8%
+    portfolio      82.9%     47.5%   14.8%     1.76    22.8%
+       oracle      97.2%    100.0%    0.0%     0.97    65.7%
+   pooled observations (data)          +0.00 pts  (+/-0.00, NOT significant)
+   coordinated action (coordination)   +0.00 pts  (+/-0.00, NOT significant)
+   headroom left by imperfect inference +14.35 pts  (+/-2.06, significant)
+
+--- 3 mandate(s) per customer --------------------------------------------
+       policy   recovery  approval   death  att/man  worst m
+     baseline      53.8%     28.0%   46.2%     1.92    24.8%
+     solo_own      79.4%     43.4%   18.3%     1.85    52.2%
+  solo_shared      85.0%     48.8%   11.9%     1.74    60.7%
+    portfolio      86.5%     51.8%    8.9%     1.66    62.2%
+       oracle      92.0%    100.0%    0.0%     0.92    67.7%
+   pooled observations (data)          +5.63 pts  (+/-0.76, significant)
+   coordinated action (coordination)   +1.46 pts  (+/-1.63, NOT significant)
+   headroom left by imperfect inference  +5.55 pts  (+/-1.51, significant)
+
+--- 5 mandate(s) per customer --------------------------------------------
+       policy   recovery  approval   death  att/man  worst m
+     baseline      48.2%     23.6%   52.0%     2.04    22.1%
+     solo_own      74.7%     36.5%   23.5%     2.03    52.1%
+  solo_shared      80.1%     43.6%   12.8%     1.83    63.2%
+    portfolio      81.8%     49.0%    7.3%     1.66    62.7%
+       oracle      84.8%    100.0%    0.0%     0.84    70.1%
+   pooled observations (data)          +5.39 pts  (+/-1.59, significant)
+   coordinated action (coordination)   +1.70 pts  (+/-1.00, significant)
+   headroom left by imperfect inference  +3.06 pts  (+/-1.29, significant)
+
+--- 7 mandate(s) per customer --------------------------------------------
+       policy   recovery  approval   death  att/man  worst m
+     baseline      41.2%     19.1%   58.6%     2.17    22.2%
+     solo_own      68.3%     30.6%   28.5%     2.21    49.6%

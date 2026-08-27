@@ -1,0 +1,44 @@
+
+### payday_err=+/-1d  topup_p=0.0  irregular=0.0  k=5 
+         policy  cycle rec  approval  survival  att/cyc  starved
+   baseline_doc      23.3%     27.6%     21.6%     1.08     0.0%
+ baseline_legal      30.8%     30.9%     28.8%     1.21     0.0%
+    payday_wait      98.9%     73.8%     99.9%     1.44     0.0%
+         myopic      90.8%     60.1%     90.3%     1.64     0.1%
+     solo_naive      51.9%     24.1%     97.3%     2.35     0.0%
+       solo_pop      99.8%     62.5%     99.9%     1.76     0.0%
+   solo_placebo      99.2%     63.9%     99.5%     1.71     0.0%
+    solo_shared      98.9%     63.4%     99.7%     1.71     0.0%
+      portfolio      98.9%     88.9%    100.0%     1.19     0.0%
+         oracle     100.0%     98.9%    100.0%     1.12     0.0%
+   legality fix alone (spacing)                    +7.50 pts (+/-1.17) SIG
+   payday alignment, no belief                    +68.02 pts (+/-4.55) SIG
+   FULL SYSTEM over payday heuristic               +0.07 pts (+/-0.37) n.s.
+   aggregate population model (Tier 2)            +47.82 pts (+/-5.15) SIG
+   cross-merchant pooling (Tier 1)                 -0.90 pts (+/-0.47) SIG
+   pooling vs PLACEBO (negative control)           -0.37 pts (+/-0.25) SIG
+   coordinated action                              +0.07 pts (+/-0.20) n.s.
+   Whittle structure over greedy                   +8.14 pts (+/-0.55) SIG
+   headroom to clairvoyance                        +1.08 pts (+/-0.41) SIG
+
+### payday_err=+/-3d  topup_p=0.0  irregular=0.0  k=5 
+         policy  cycle rec  approval  survival  att/cyc  starved
+   baseline_doc      23.3%     27.6%     21.6%     1.08     0.0%
+ baseline_legal      30.8%     30.9%     28.8%     1.21     0.0%
+    payday_wait      93.2%     49.8%     95.3%     2.01     0.0%
+         myopic      72.3%     42.2%     83.9%     1.87     0.1%
+     solo_naive      51.9%     24.1%     97.3%     2.35     0.0%
+       solo_pop      85.6%     46.4%     89.3%     2.04     0.0%
+   solo_placebo      82.0%     45.2%     91.3%     2.01     0.0%
+    solo_shared      84.7%     46.8%     89.9%     2.00     0.0%
+      portfolio      78.0%     51.1%     98.2%     1.64     0.0%
+         oracle     100.0%     98.9%    100.0%     1.12     0.0%
+   legality fix alone (spacing)                    +7.50 pts (+/-1.17) SIG
+   payday alignment, no belief                    +62.34 pts (+/-3.46) SIG
+   FULL SYSTEM over payday heuristic              -15.14 pts (+/-2.26) SIG
+   aggregate population model (Tier 2)            +33.67 pts (+/-5.50) SIG
+   cross-merchant pooling (Tier 1)                 -0.88 pts (+/-0.37) SIG
+   pooling vs PLACEBO (negative control)           +2.73 pts (+/-1.58) SIG
+   coordinated action                              -6.69 pts (+/-1.61) SIG
+   Whittle structure over greedy                   +5.70 pts (+/-1.41) SIG
+   headroom to clairvoyance                       +21.96 pts (+/-2.53) SIG
