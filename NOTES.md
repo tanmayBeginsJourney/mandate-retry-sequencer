@@ -396,3 +396,256 @@ variants are authorised (`explore`, `ml_index`); coordinated budgeting stays
 cut and the agent build is still the deliverable.
 
 Nothing in `sim/` changed in this commit.
+
+---
+
+## 2026-08-28 — Runtime: profile first. And the pre-registration for both workstreams.
+
+New session, no history of this repo beyond `CLAUDE.md` and `docs/`. Two
+workstreams handed over: make the suite fast without weakening it, and build an
+ML baseline. The agent build is explicitly NOT started.
+
+### Order of work, and why the reference file came first
+
+`sim/t9_reference.json` was captured **before a single line of `sim/w3.py` or
+`sim/harness.py` was touched**. A performance change that cannot be proved
+inert is not a performance change, it is an unreviewed rewrite of the results.
+
+### 1a — the profile, scored against the hypothesis in the brief
+
+The brief stated a hypothesis and, correctly, told me to test it rather than
+assume it. Scoring it honestly:
+
+| Claim in the brief | Verdict |
+|---|---|
+| `BeliefPD.hyp` is 10 hypotheses, not ~15 | **right** — `[0,3,…,27]`, `len=10` |
+| `NB = 90`, convolve is 90 elements with a 3-tap kernel | **right** |
+| `advance()` = 10 `_step_one` per belief per day | **right** — 60,000 calls → 600,000 `_step_one` |
+| `forecast()` = 12 × 10 = 120 `_step_one`, and "may well dominate advance()" | **right, and it does dominate** |
+| `observe()` also loops over hypotheses | true, but **negligible** — 4% of runtime |
+| the cost is interpreter overhead in tiny numpy ops | **right in kind** |
+
+`cProfile`, one `solo_shared_pd` run, n=100, `payday_err=7`, `pop_spend=1.05`.
+Unprofiled wall time 13.75s; profiled 23.7s across **39.6M function calls**.
+
+```
+ncalls   tottime  cumtime  what
+4025429    4.083    4.083  numpy.ufunc.reduce          (the .sum() calls)
+1699340    3.869   18.200  w3.BeliefPD._step_one
+1824099    2.498    5.971  w3.BeliefPD._shift
+1699340    1.951    4.341  numpy.convolve
+1699340    1.504    1.504  builtins.round
+   9702    0.616   12.615  w3.BeliefPD.forecast        <-- 53% of the run
+  60000    0.314    6.979  w3.BeliefPD.advance         <-- 29% of the run
+  12860    0.341    0.997  w3.BeliefPD.observe         <--  4% of the run
+```
+
+**Real ranking: forecast ≫ advance ≫ observe.** By `_step_one` calls:
+
+| policy | advance | forecast | why |
+|---|---|---|---|
+| `solo_shared_pd` | 600,000 (35.3%) | 1,099,340 (**64.7%**) | POOLED: one forecast per decision hour |
+| `solo_pop_pd` | 600,000 (18.3%) | 2,687,060 (**81.7%**) | not pooled: one forecast **per mandate** |
+
+So `harness.py:326` is the hot line, exactly as the brief guessed.
+
+### Where the brief's implied conclusion is wrong: vectorising is not the fix
+
+The cost is interpreter overhead — but the right response is not to make each
+call cheaper, it is to **stop making calls that recompute a number we already
+have**.
+
+`forecast(day)` computes `P1 = step(P, day+1)`, `P2 = step(P1, day+2)`, …
+Tomorrow, `advance(day+1)` computes `step(P, day+1)` — that **is** `P1`, the
+same function on the same array. And `forecast(day+1)` then computes `P2…P13`,
+of which `P2…P12` were computed yesterday. If nothing changed the state in
+between, **11 of the 12 steps are recomputations and `advance()` is free.**
+
+How often does nothing change? `observe()` is the only invalidator:
+
+| policy | forecast calls | observe calls | forecasts needing a full rebuild |
+|---|---|---|---|
+| `solo_pop_pd` | 23,690 | 2,629 | ~11% |
+| `solo_shared_pd` | 9,702 | 12,860 | ~26% |
+
+**Second redundancy, and it is worse.** For a POOLED, non-placebo policy every
+mandate of a customer receives the *same* observations in the *same* order —
+its own attempt via the `own` line at `harness.py:222`, every other mandate's
+via the pooling loop at `harness.py:224-231`. All five beliefs start identical
+and are fed identical calls. Measured across a full run:
+`max|P_i − P_0| = 0.0` **exactly**, for all i. Five copies of one distribution,
+each paying its own `advance()` every day.
+
+The placebo policies are the exception and genuinely differ
+(`max|P_i − P_0| = 0.94`) — there the acting mandate gets the real outcome and
+the others get the donor-balance outcome.
+
+### Measured, and bit-exact
+
+Both changes were prototyped in a scratch directory with `sim/` untouched, and
+checked against `sim/t9_reference.json`:
+
+```
+                 28 configs, incl. 20 sha256 hashes of every predicted
+                 P(success) at every dispatch, raw float64 bytes
+  CACHE            -> EXACT MATCH
+  CACHE+COLLAPSE   -> EXACT MATCH
+```
+
+That is float-identity, not "close enough": one ulp anywhere in the filter
+moves the hash.
+
+Speed, one run each, n=100, pe=7:
+
+| policy | before | after | |
+|---|---|---|---|
+| `solo_pop_pd` | 33.86s | 10.06s | 3.4× |
+| `solo_shared_pd` | 21.85s | 5.31s | 4.1× |
+| `portfolio_pd` | 22.59s | 6.39s | 3.5× |
+| `solo_placebo_pd` | 23.14s | 12.50s | 1.9× (no collapse — beliefs differ) |
+| all 13 policies | 143.19s | 60.54s | 2.4× |
+
+**Caveat on every absolute number above.** This machine's timings drift a lot.
+The same `solo_shared_pd` run measured 13.75s early on and 21.85s an hour
+later, on an idle machine, unchanged code. Ratios inside one matched pass are
+trustworthy; absolute seconds are not. The only number worth quoting is an
+end-to-end suite run, and that has to wait until the changes are in `sim/`.
+
+### The suite is 625s here, not the documented 1595s
+
+Instrumented full suite: **625.3s**, 126 `harness.run` calls, and the gate
+results reproduce the documented baseline exactly — 21 gates, 3 FAIL (S1, S2b,
+S2_LEGACY), 1 VACUOUS (M1), 17 pass, with `+9.53`, `−14.51`, `+24.04`, `−0.40`,
+`ECE=0.091` all matching `docs/02_RESULTS.md` to the decimal.
+
+`CLAUDE.md` and `docs/02_RESULTS.md` say ~27 minutes (1595s). I measured 625s
+**while two other jobs of mine were competing for CPU**, so the clean figure is
+lower still. I cannot attribute the gap. Given the 60% run-to-run drift above,
+machine state is a plausible explanation and so is a difference nobody
+recorded. **I am not editing the 27-minute figure in the docs on the strength
+of one measurement** — noted here, to be settled by the post-optimisation
+end-to-end run.
+
+Where the 625s goes: three policies are 64% of it.
+
+```
+solo_pop_pd       8 calls  183.3s  29.3%   22.92 s/call
+solo_placebo_pd   8 calls  110.6s  17.7%   13.83 s/call
+solo_shared_pd    8 calls  105.8s  16.9%   13.22 s/call
+...everything else, 102 calls, 225.6s
+```
+
+All 24 of those are the S2 arms: n=100, 8 populations, `payday_err=7`.
+
+### RAISED SEPARATELY, NOT FIXED: `harness.py:325` is a real defect for the placebo arms
+
+The brief told me not to bundle this into a performance change. I am not. But
+the profiling turned up the evidence, so it goes on the record.
+
+`if fc_days is None or policy not in POOLED:` computes the forecast **once per
+decision hour, from the first live mandate's belief**, and reuses it for every
+mandate.
+
+- For the five non-placebo POOLED policies (`solo_shared`, `solo_shared_pd`,
+  `portfolio`, `portfolio_pd`, `myopic`) this is **exactly correct**, because
+  the beliefs are provably identical — measured `max|diff| = 0.0`. It looks
+  like a bug and is not one.
+- For `solo_placebo` and `solo_placebo_pd`, which are also in `POOLED`, the
+  beliefs **do** differ (`max|diff| = 0.94`). So mandates 2..k are scored using
+  mandate 1's forecast. **That is a defect, and it is in the placebo arms** —
+  the arms behind S2b (−14.51) and S2c (+24.04).
+
+I do not know how much of S2b's non-neutrality is "the placebo injects wrong
+observations" (the documented diagnosis) versus "the placebo scores four of
+five mandates off the wrong belief". Both mechanisms push the same direction.
+**Until this is separated, the −14.51 has two candidate causes, not one.**
+Not changing it: it moves every pooled number and it is not a performance
+issue. Flagged for a decision.
+
+### PRE-REGISTRATION — runtime work
+
+Committed before implementing, so "it worked" is checkable.
+
+- **Prediction 1.** Incremental forecast + belief collapse alone bring the full
+  suite under 300s. Basis: 2.4–4× measured per policy against a 625s suite.
+  Wrong if the suite is dominated by something the per-policy benchmark missed.
+- **Prediction 2.** Parallelising over (policy, seed) brings it under 90s on 32
+  logical cores. The longest single run is the binding constraint, ~10s.
+- **Prediction 3.** T9's paired mutant (a worker pool seeded from one shared
+  RNG rather than per-run seeds) **will fire**, because a shared RNG changes
+  `w3.balance_trace` draws and therefore every downstream count. If it does not
+  fire, T9 is VACUOUS and must report itself as such — this project has shipped
+  three gates that could not fail and this must not be the fourth.
+- **Prediction 4, the one I am least sure of.** T9's five headline metrics are
+  ratios of integer counts, so they are a **coarse** detector: an arithmetic
+  change that flips no scheduling decision leaves them untouched. I predict
+  that if the filter is ever vectorised, `cycle_rec` will still match for most
+  policies while `calib_sha256` will not. That is why both are stored. If a
+  future session reports "T9 passes" after a float-touching change, check
+  **which half** passed.
+
+### PRE-REGISTRATION — the ML study (written before any ML code exists)
+
+**The structural bias, stated first.** `w3.Belief` and `w3.BeliefPD` are
+hand-built to match `w3.balance_trace`: same `hourly_spend_profile`, same
+payday model, same salary arrival. **The Bayes filter is the true generative
+model of this world.** Any ML comparison run only in-distribution is biased
+toward Bayes by construction and must not be reported as like-for-like.
+
+The filter is not *perfectly* specified even in world A — it gets a noisy
+salary estimate (±30%), a population spend rate rather than the customer's own,
+and it approximates the world's hourly `uniform(0.4,1.6)` spend jitter with a
+fixed drain plus a fixed 3-tap diffusion kernel. So it is right in **structure**
+and wrong in **parameters**. That distinction is the whole experiment.
+
+**Predictions, in advance:**
+
+1. **In-distribution, `solo_shared_pd` beats `ml_index`.** If `ml_index` wins
+   in world A, I will treat it as a bug — feature leak or a candidate-day
+   mismatch in the 2d ablation — before believing it, per the brief.
+2. **`ml_index` beats `payday_wait` in-distribution at pe=7.** If it does not,
+   the ML model has not learned anything the 5-line heuristic doesn't have, and
+   the misspecification study is not worth running.
+3. **Under misspecification, which one degrades less depends on which
+   assumption is broken, and I expect a split result:**
+   - **decay 0.20 / 0.70 → Bayes still wins.** The decay constant controls how
+     fast money drains, not *when it arrives*. The filter's value is the payday
+     posterior, learned online from censored observations, and a success at ₹X
+     still proves balance ≥ ₹X whatever the decay is. Mis-parameterised, not
+     mis-structured.
+   - **wider payday dispersion (0.60 → 0.30) → Bayes still wins.** This makes
+     the filter's *prior* less informative but leaves its structure correct; it
+     has a posterior over payday precisely so it can recover from a bad prior.
+   - **`irregular_frac=0.5` → this is where I expect ML to win.** Income
+     arriving 6 times a cycle on random days makes the single-payday hypothesis
+     class **actively wrong**, not merely mis-tuned. There is no payday to find.
+     This is the one shift that attacks structure rather than parameters.
+   - **`topup_p=0.25` → both degrade, roughly together.** Neither model knows
+     about a replenishment process triggered by its own failures.
+4. **The counter-consideration, stated before the numbers, because it is the
+   easy thing to forget:** the ML model is trained on world A *only*, so under
+   shift **it is out of distribution too**. This is not a free win for ML. A
+   model with no structural prior can degrade worse, and if it does, that is a
+   real result in favour of the structural prior — but it must be reported with
+   the caveat that ML was never allowed to retrain. The genuinely fair
+   comparison, ML retrained on the shifted world, is a different experiment and
+   would favour ML.
+5. **A bias in the training data, declared now, that runs AGAINST ml_index.**
+   `explore` picks a legal day uniformly at random. That gives an unbiased
+   sample over *days*, but the *states* it visits are explore's states, not
+   `ml_index`'s. Deployed, `ml_index` will visit states the training set
+   under-covers — late attempts in a cycle after two failures, for instance.
+   This is off-policy evaluation and it costs ml_index something. It is still
+   the right choice: training on `solo_shared_pd`'s own trajectories would bias
+   the ML model toward reproducing Bayes, which is worse.
+
+**What would make me wrong:** `ml_index` winning in-distribution (→ look for a
+leak); `ml_index` winning at the decay shifts (→ my "structure survives
+mis-parameterisation" argument is wrong); Bayes winning at
+`irregular_frac=0.5` (→ the payday posterior degrades gracefully into a
+"money arrives sometimes" model, which would be a genuinely good finding for
+the filter).
+
+**The decision rule, committed now:** if `ml_index` wins anywhere, it goes in
+the report as a win, plainly, without hedging. If it wins only under
+misspecification, that points at the hybrid (2f) and the pitch says so.
