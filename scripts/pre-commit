@@ -1,0 +1,86 @@
+#!/bin/sh
+#
+# pre-commit hook for the Razorpay recovery agent.
+#
+# Two jobs:
+#   1. Run the test gate. New FAIL or VACUOUS gates block the commit.
+#   2. Trip a wire if this commit edits the test suite or the known-failures
+#      list, because that is precisely how a real defect gets hidden.
+#
+# Install with: scripts/install-hooks.sh
+# Emergency bypass is `git commit --no-verify`. If you use it, say so in
+# NOTES.md. That file is a judged deliverable and the mess is the point.
+
+set -u
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+
+# --- find a Python that can actually import numpy --------------------------
+# On this machine the `python` and `python3` on PATH are msys2's, which have
+# no numpy and no pip. So probe candidates instead of assuming a name.
+PYBIN=""
+for cand in \
+    "python3" \
+    "python" \
+    "py -3" \
+    "${HOME:-}/AppData/Local/Programs/Python/Python312/python.exe" \
+    "${USERPROFILE:-}/AppData/Local/Programs/Python/Python312/python.exe"
+do
+    if $cand -c "import numpy" >/dev/null 2>&1; then
+        PYBIN="$cand"
+        break
+    fi
+done
+
+if [ -z "$PYBIN" ]; then
+    echo "pre-commit: could not find a Python with numpy installed."
+    echo "pre-commit: the gate cannot run, so the commit is blocked."
+    echo "pre-commit: tried python3, python, py -3, and the Python312 path."
+    exit 1
+fi
+
+# --- 1. the test gate -------------------------------------------------------
+echo "pre-commit: running the test gate ($PYBIN sim/gate.py)..."
+$PYBIN sim/gate.py
+if [ $? -ne 0 ]; then
+    echo "pre-commit: gate failed. Commit aborted."
+    exit 1
+fi
+
+# --- 2. the test-suite tripwire --------------------------------------------
+# Staged paths only. --diff-filter excludes nothing: adding, editing or
+# deleting any of these counts.
+TOUCHED=$(git diff --cached --name-only | grep -E '^sim/(tests\.py|known_failures\.txt)$')
+
+if [ -n "$TOUCHED" ]; then
+    echo ""
+    echo "##############################################################################"
+    echo "COMMIT BLOCKED: this commit edits the test suite itself."
+    echo "##############################################################################"
+    echo ""
+    echo "Staged files that trip this wire:"
+    for f in $TOUCHED; do
+        echo "    $f"
+    done
+    echo ""
+    echo "This is exactly how a real defect gets hidden: the code stays broken,"
+    echo "the test stops saying so, and the suite goes green. This project has"
+    echo "already found six errors in its own work and every one of them made"
+    echo "the project look BETTER than it was. Do not add a seventh this way."
+    echo ""
+    echo "Before committing a change to these files, write down in NOTES.md:"
+    echo "    - which gate changed, and to what"
+    echo "    - the number it used to produce and the number it produces now"
+    echo "    - why the OLD test was wrong, not why the new one is convenient"
+    echo "    - if you added a line to known_failures.txt: who is fixing it"
+    echo ""
+    echo "Then commit with --no-verify and reference the NOTES.md entry in the"
+    echo "commit message, so the bypass is on the record."
+    echo ""
+    echo "##############################################################################"
+    exit 1
+fi
+
+echo "pre-commit: gate passed, test suite untouched. Proceeding."
+exit 0

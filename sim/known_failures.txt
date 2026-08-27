@@ -1,0 +1,55 @@
+# Known failing / vacuous gates.
+#
+# One gate ID per line. '#' starts a comment. sim/gate.py tolerates exactly
+# these and blocks on anything else.
+#
+# This list is DEBT, not permission. A gate belongs here only with a written
+# reason and only while someone intends to fix it. Adding a line here to make
+# a red suite go green is the same offence as loosening a threshold.
+#
+# Baseline recorded 2026-08-27 from a clean checkout of the research handoff,
+# before any build work: 17 gates, 2 FAIL, 1 VACUOUS.
+
+# ---------------------------------------------------------------------------
+S1
+# belief calibration: ECE<0.10 and monotone.  Currently ECE=0.091, monotone=False.
+#
+# THE 0.10 ECE THRESHOLD WAS DECLARED IN docs/05_TEST_DESIGN.md BEFORE ANY
+# RESULTS WERE SEEN. IT MUST NOT BE LOOSENED. Note that ECE is already inside
+# 0.10 -- the gate fails on the MONOTONICITY half, i.e. the reliability curve
+# is not ordered. Raising the ECE bound would not even fix it; it would only
+# hide which half is broken. The bins show the belief is badly underconfident
+# in the low-probability range (predicted 0.011, actual 0.500 at n=28) and
+# overconfident at the top (predicted 0.998, actual 0.919 at n=5873).
+# This is the one failure the handoff (CLAUDE.md) declares as known.
+
+# ---------------------------------------------------------------------------
+M1
+# "5th attempt in a cycle" mutant.  Status: VACUOUS -- the mutant did not trip
+# the counter, so this gate currently proves nothing.
+#
+# NOT DECLARED IN THE HANDOFF. CLAUDE.md says only S1 fails. This turned up on
+# the first clean run, so either it is an environment difference or it is a
+# seventh error nobody has logged yet. Untriaged.
+#
+# Why it matters more than it looks: the cap-violation counter in
+# sim/harness.py (`if ledger[lk] >= cap:`) is the ONLY detector of a 5th
+# attempt, and M1 is the only gate that proves that detector works. While M1
+# is vacuous, that line is unprotected -- it can be broken without any gate
+# going red. Verified by experiment on 2026-08-27; see NOTES.md.
+# Fixing M1 is a prerequisite for trusting the NPCI attempt-cap claim.
+
+# ---------------------------------------------------------------------------
+S2
+# real pooling beats placebo pooling (>2SE).  Currently real-placebo = -0.40 pts.
+#
+# NOT DECLARED IN THE HANDOFF. This is the negative control -- the gate written
+# specifically to destroy the central pooling claim if the claim is false. It
+# is now failing in the direction that says the claim IS false: real pooling
+# (-0.96 pts vs own) is no better than placebo pooling (-0.57 pts vs own), and
+# both are slightly negative.
+#
+# Do not treat this as flaky and do not raise the SE multiplier. Under CLAUDE.md
+# rule 3 this is a defect until proven otherwise, and it is sitting directly on
+# the central claim of the project. Needs triage before any pooling number is
+# quoted anywhere.
