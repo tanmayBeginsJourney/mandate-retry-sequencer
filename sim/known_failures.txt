@@ -7,8 +7,8 @@
 # reason and only while someone intends to fix it. Adding a line here to make
 # a red suite go green is the same offence as loosening a threshold.
 #
-# Baseline recorded 2026-08-27 from a clean checkout of the research handoff,
-# before any build work: 17 gates, 2 FAIL, 1 VACUOUS.
+# Baseline 2026-08-27, after the S2 rebuild and the dead-gate repairs:
+# 21 gates, 3 FAIL, 1 VACUOUS, 17 pass.
 
 # ---------------------------------------------------------------------------
 S1
@@ -21,35 +21,68 @@ S1
 # hide which half is broken. The bins show the belief is badly underconfident
 # in the low-probability range (predicted 0.011, actual 0.500 at n=28) and
 # overconfident at the top (predicted 0.998, actual 0.919 at n=5873).
-# This is the one failure the handoff (CLAUDE.md) declares as known.
+# Unchanged by the 27 August rebuild. Untouched, still the one failure the
+# handoff declared.
 
 # ---------------------------------------------------------------------------
 M1
-# "5th attempt in a cycle" mutant.  Status: VACUOUS -- the mutant did not trip
-# the counter, so this gate currently proves nothing.
+# "5th attempt in a cycle" mutant.  Status: VACUOUS at BOTH pe=1 and pe=7.
 #
-# NOT DECLARED IN THE HANDOFF. CLAUDE.md says only S1 fails. This turned up on
-# the first clean run, so either it is an environment difference or it is a
-# seventh error nobody has logged yet. Untriaged.
+# Diagnosed 2026-08-27: the mutant works, but the attempt cap is never the
+# binding constraint. The deepest any mandate-cycle reaches is 3 attempts at
+# pe=1 and 4 at pe=7, against NPCI_MAX=4, so the 5th attempt that would trip
+# the counter never happens. Moving the gate to the contended operating point
+# was tried and did NOT fix it -- this was predicted in advance, see the
+# pre-registration in NOTES.md.
 #
-# Why it matters more than it looks: the cap-violation counter in
-# sim/harness.py (`if ledger[lk] >= cap:`) is the ONLY detector of a 5th
-# attempt, and M1 is the only gate that proves that detector works. While M1
-# is vacuous, that line is unprotected -- it can be broken without any gate
-# going red. Verified by experiment on 2026-08-27; see NOTES.md.
-# Fixing M1 is a prerequisite for trusting the NPCI attempt-cap claim.
+# Consequence, unchanged: the cap-violation counter in sim/harness.py
+# (`if ledger[lk] >= cap:`) is the ONLY detector of a 5th attempt, M1 is the
+# only gate that proves that detector works, and T7's cap clause reads the
+# same counter -- so both cap gates are exactly as strong as M1, i.e. unproven.
+# Do not quote the NPCI attempt-cap compliance claim until this is fixed.
+#
+# Next thing to try (NOT yet done, needs sign-off): run the mutant with
+# cap_override=2, where the cap does bind at this operating point. That tests
+# the counter mechanism rather than the NPCI-specific value of 4.
 
 # ---------------------------------------------------------------------------
-S2
-# real pooling beats placebo pooling (>2SE).  Currently real-placebo = -0.40 pts.
+S2b
+# "placebo_pd is neutral vs own_pd".  Currently -14.51 pts (+/-2.24). NOT neutral.
 #
-# NOT DECLARED IN THE HANDOFF. This is the negative control -- the gate written
-# specifically to destroy the central pooling claim if the claim is false. It
-# is now failing in the direction that says the claim IS false: real pooling
-# (-0.96 pts vs own) is no better than placebo pooling (-0.57 pts vs own), and
-# both are slightly negative.
+# This is a finding about the experiment design, not a code defect, and it is
+# the most important thing the 27 August rebuild produced.
 #
-# Do not treat this as flaky and do not raise the SE multiplier. Under CLAUDE.md
-# rule 3 this is a defect until proven otherwise, and it is sitting directly on
-# the central claim of the project. Needs triage before any pooling number is
-# quoted anywhere.
+# solo_placebo does not inject NEUTRAL extra update events. It injects WRONG
+# ones -- outcomes computed against a different customer's balance
+# (sim/harness.py:227). Feeding a belief actively misleading observations is
+# worse than feeding it nothing, so the placebo arm is damaged rather than
+# merely uninformative. Predicted in advance (NOTES.md pre-registration).
+#
+# Why it matters: S2c (real - placebo) is algebraically S2a + |S2b|, an
+# identity for paired means, not an independent measurement. 60% of the
+# +24.04 headline is placebo damage. docs/02_RESULTS.md used to present that
+# number as "the strongest evidence we have" that pooling is information.
+# It is not. The honest moat number is S2a, +9.53 pts (+/-1.81).
+#
+# Fixing this means building a control that matches the UPDATE COUNT without
+# supplying wrong information -- e.g. label-shuffled observations with the
+# matched base rate -- not relaxing the neutrality threshold. Left failing on
+# purpose so the confound stays visible.
+
+# ---------------------------------------------------------------------------
+S2_LEGACY
+# "point-estimate pooling vs placebo".  Currently -0.40 pts (+/-0.22).
+#
+# RETIRED ARCHITECTURE. This is the original S2, unchanged, still running the
+# point-estimate payday trio (solo_shared / solo_placebo / solo_pop) at the
+# uncontended pe=1 operating point. docs/02_RESULTS.md already reports the
+# point-estimate pooling effect as -0.16/-0.49 (n.s.), so this gate is
+# faithfully reproducing a documented null.
+#
+# It is kept, failing, ON PURPOSE. The S2 rewrite replaced a red gate with
+# three new ones; deleting the red gate at the same time would have been
+# indistinguishable from loosening a test to get green. Keeping it visible is
+# what makes the change auditable.
+#
+# Do not "fix" this by deleting it. If the point-estimate architecture is ever
+# formally removed from the harness, this gate goes with it and not before.

@@ -63,16 +63,43 @@ Why an aggregator wins: one merchant sees **one debit per month** on an account.
 An aggregator sees five. Payday discovery is a data-volume problem, and volume
 is the one thing a single-merchant competitor cannot buy.
 
-## Negative control (this is the strongest evidence we have)
+## Negative control — RE-MEASURED 27 Aug 2026, and it was inflated
 
 `solo_placebo` pools with identical mechanics, timing and observation count, but
 outcomes computed against a **different customer's** balance.
 
-| | ±3d | ±7d |
-|---|---|---|
-| real pooling − placebo pooling | **+21.68** SIG | **+23.99** SIG |
+The old headline on this page was **+21.68 / +23.99 SIG**, presented as "the
+strongest evidence we have." Re-run as three separate arms on the
+payday-posterior policies at ±7d, 8 populations, n=100:
 
-The benefit is information, not an artefact of the update schedule.
+| arm | comparison | result |
+|---|---|---|
+| **S2a** the moat | `solo_pop_pd` → `solo_shared_pd` | **+9.53** pts (±1.81) SIG |
+| **S2b** confound check | `solo_pop_pd` → `solo_placebo_pd` | **−14.51** pts (±2.24) — **not neutral** |
+| **S2c** the old headline | `solo_placebo_pd` → `solo_shared_pd` | **+24.04** pts (±2.25) SIG |
+
+S2c reproduces the old +23.99 almost exactly. **It is also the least
+informative of the three.** For paired means, `S2c ≡ S2a + |S2b|` — an
+algebraic identity, not an independent measurement (9.53 + 14.51 = 24.04).
+**60% of that headline is placebo damage, not pooling benefit.**
+
+The reason is that `solo_placebo` is not a clean control. It does not add
+*neutral* extra update events; it adds *wrong* ones, computed against another
+customer's balance (`harness.py:227`). Feeding a belief actively misleading
+observations is worse than feeding it nothing, so the placebo arm is degraded
+rather than merely uninformative, and subtracting it flatters the result.
+
+**The defensible moat number is S2a: +9.53 pts (±1.81), significant.** That is
+close to the +10.23 this page already claimed for pooling under the payday
+posterior, and it stands on its own. **Do not quote +21.68 / +23.99 / +24.04 as
+evidence that the benefit is information.** A control that matches update count
+without supplying wrong information — label-shuffled observations at the matched
+base rate — has not been built yet.
+
+This also resolves an ambiguity flagged earlier: the old +23.99 figure was
+produced on the **payday-posterior** pair, not the point-estimate pair. The S2
+gate in `sim/tests.py` was testing the point-estimate trio, which is why it
+disagreed. That gate is retained as `S2_LEGACY`.
 
 ## Other established results
 
@@ -103,8 +130,18 @@ Roughly half the apparent gain is "customers never top up." `w3` supports
 
 ## Test suite status
 
-17 gates. **Three are red on a clean checkout: S1 FAIL, S2 FAIL, M1 VACUOUS.**
+**21 gates. Four are red: S1 FAIL, S2b FAIL, S2_LEGACY FAIL, M1 VACUOUS.**
 Enforced at commit time by `sim/gate.py`; reasons in `sim/known_failures.txt`.
+Full suite runtime is **~27 minutes**.
+
+Rebuilt 27 August 2026: gates that only bind under contention (M1, S2, T5, T7)
+now run at `payday_err=7` instead of the harness default of ±1 day, where the
+world is uncontended and constraints are never reached. T3 was rewritten (it
+had been a duplicate determinism check, not a leakage test), T7's cap clause
+was switched from a mean to a per-event count, T1 was paired with the
+`weak_oracle` mutant, and S3 was implemented. M7 and M9 from
+`05_TEST_DESIGN.md` remain unimplemented, and T7 still does **not** implement
+the conservation identity.
 
 ⚠️ **S1 (belief calibration) FAILS.** ECE 0.091 against a 0.10 threshold,
 reliability curve not monotone, filter overconfident in its top decile (predicts
@@ -112,19 +149,17 @@ reliability curve not monotone, filter overconfident in its top decile (predicts
 the **monotonicity** half. The threshold was declared before results were seen.
 **Do not loosen it.** Nothing above is fully settled until it passes.
 
-⚠️ **S2 (placebo pooling) FAILS.** real − placebo = **−0.40 pts (±0.22)**. This
-is the negative control designed to destroy the pooling claim if the claim is
-false, and it is failing in that direction.
+⚠️ **S2b (placebo neutrality) FAILS**, at −14.51 pts (±2.24) — see the negative
+control section above. This is a finding about the control's design, not a code
+defect, and it is left failing so the confound stays visible.
 
-Read it against the operating point before concluding the moat is dead. `S2` in
-`sim/tests.py` compares `solo_shared` / `solo_placebo` / `solo_pop` — the
-**point-estimate payday** trio — and it runs at the harness default
-`payday_err=1`. Both choices are ones this page already says have no signal:
-the point-estimate row of the moat table is −0.16 / −0.49 (n.s.), and ±1 day is
-the row labelled *"tie — no reason to build"*. The measured −0.96 pts for real
-pooling vs own matches the ±1d column of the full table (98.9% vs 99.8%) almost
-exactly. **The gate is not testing the pair the moat is claimed for.** Untriaged
-— do not change the gate before deciding what it should have tested.
+⚠️ **S2_LEGACY FAILS** at −0.40 pts (±0.22). This is the *original* S2, kept
+unchanged: the point-estimate trio (`solo_shared` / `solo_placebo` / `solo_pop`)
+at the uncontended ±1d operating point. It faithfully reproduces the −0.16 /
+−0.49 (n.s.) null this page already reports for point-estimate pooling. It is
+retained, failing, on purpose — the S2 rewrite replaced a red gate with three
+new ones, and deleting the red gate at the same time would have been
+indistinguishable from loosening a test to get green.
 
 ⚠️ **M1 (attempt-cap mutant) is VACUOUS**, so the claim "mutation tests all fire"
 that used to sit here was false. The cap mutant cannot trip the counter at
