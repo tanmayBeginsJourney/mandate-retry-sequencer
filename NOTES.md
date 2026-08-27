@@ -1012,3 +1012,114 @@ carries a belief -- i.e. a third policy variant. `docs/04_BUILD_PLAN.md`
 authorises exactly two (`explore`, `ml_index`) and says so emphatically. Given
 what the table shows I think the hybrid is now the most valuable next
 experiment, but it needs a scope decision, not an assumption. Not started.
+
+---
+
+## 2026-08-28 — PRE-REGISTRATION: the fair fight, S1, the hybrid, and the LTV audit
+
+**Written before any of it is measured.** Last round I scored 2 of 7 because I
+accepted a premise from the docs without checking it. The point of writing this
+first is that "we got the answer we wanted" stays checkable.
+
+### What is being changed, and why it is not test-loosening
+
+Three handicaps on the Bayes side, all hand-set, none fitted. Removing them
+makes `solo_shared_pd` *better*, which makes the ML comparison *harder* to win.
+Nobody is loosening a threshold; the Bayes arm is being given the same
+opportunity to fit the population that the ML arm already had.
+
+1. **`BeliefPD(stride=3)`** — a compute hack from the research phase. Leaves
+   26% of customers with no representable true payday. Compute is now ~20x
+   cheaper, so `stride=1`.
+2. **The payday prior `exp(-0.10 d)`** — invented, never fitted.
+3. **`est_spend = pop_spend * (1 + (k-1) * 0.045)`** — a hand-derived
+   correction that has never been checked against anything.
+
+**How the fit stays honest.** Everything is selected on the TRAINING
+populations (seeds 600-607, the same 800 customers the GBDT trained on) and
+reported on the EVALUATION populations (seeds 700-707), which neither model has
+seen. Selection uses only observable quantities — `est_pay`, attempt day,
+outcome — never `c["payday"]`, `c["salary"]` or `c["spend"]`. **If I end up
+using a true harness parameter anywhere, it gets labelled as cheating in the
+result table, not quietly folded in.**
+
+### Predicted direction and magnitude — committed now
+
+**(1a) stride 3 -> 1.** The biggest of the three. 26% of customers gain a
+representable payday hypothesis for the first time; those are disproportionately
+the non-day-0 customers the filter currently serves worst.
+*Prediction: **+3 to +8 pts** on `solo_shared_pd` in-distribution.* Cost: 30
+hypotheses instead of 10, so the `_pd` policies get ~3x slower.
+
+**(1b) fitted payday prior.** The current `exp(-0.10 d)` is broad and puts real
+mass at distances the estimator cannot produce. Note `est_pay - payday` is
+exactly the injected noise, so at `payday_err=7` the truth is always within 7
+days of `est_pay` and a prior with mass at 15 days is spending it on the
+impossible.
+*Prediction: **+1 to +4 pts**.*
+
+**(1c) fitted `est_spend`.** Least confident of the three; the hand-derived
+0.045 may already be about right.
+*Prediction: **0 to +2 pts**, and I would not be surprised by 0.*
+
+**(1) OVERALL: I predict the fair-fight filter BEATS `ml_index`
+in-distribution, reversing the +4.03.** Combined gain predicted **+4 to +12
+pts** against a gap of 4.03. This is a real prediction that can embarrass me:
+if the fair filter gains only ~2 pts, ML still wins and we ship ML.
+*On the payday-dispersion row Bayes already wins by +4.14; I expect the fair
+filter to widen it, because that row is exactly where the learned prior fails
+and a posterior does not.*
+
+**(2) S1 on the fair filter.** *Prediction: **ECE improves to 0.04-0.07 but S1
+still FAILS on monotonicity**, ~60% confidence.* Reason: the monotonicity break
+and the top-decile overconfidence (predicts 0.998, achieves 0.919) come from
+things stride and prior do not touch — the filter does not model the balance
+floor at zero, and it approximates the world's hourly U(0.4,1.6) spend jitter
+with a fixed 3-tap kernel. A sharper payday posterior should not fix either.
+*If S1 goes green it comes out of `known_failures.txt` with the reasoning
+written down, and that would be the first gate this project has ever fixed by
+fixing the code.*
+
+**(3) The hybrid.** Bayes posterior summaries (expected balance, `p_success`,
+payday-posterior entropy, top-hypothesis weight) as extra GBDT features.
+*Prediction: wins in-distribution over both, by a **small** margin — +1 to +3
+pts over whichever of the two wins — and, unlike pure ML, holds up on the
+payday-dispersion row, because the entropy and top-weight features carry the
+filter's online payday learning into the model.* If it wins both rows it is the
+probability engine for the agent.
+*What would make me wrong: the summaries turn out to be redundant with the raw
+history features the GBDT already has, and the hybrid ties pure ML.*
+
+**(4) The LTV audit — a structural prediction, testable before any run.**
+`index_score` computes `value * (p_now - discount * p_later)` where
+`value = amount * (1 + ltv_mult * [attempts_left == 1])`. `value` is strictly
+positive, so **it cannot change the sign of the score**. Non-budgeted policies
+commit every mandate with `s_ > 0` regardless of order. Therefore:
+*Prediction: **`ltv_mult` is a complete no-op for every non-budgeted policy** —
+`solo_*`, `payday_wait`, `ml_index`, everything except `portfolio`, `myopic`
+and `portfolio_pd`, which rank against a budget.* Sweeping it over {0, 1, 6,
+20} should give bit-identical results for `solo_shared_pd` and different ones
+for `portfolio_pd`.
+*If that holds, the "invented 6x multiplier" is not on the headline result at
+all — it is on three policies, two of which are already cut as harmful.*
+
+**Also flagged, and the docs are wrong about this too:** `01_FACTS.md` and
+`CLAUDE.md` say the hardcoded `0.92` discount is "gone". **It is not.** It is
+still the default in `w3.index_score` and `harness.run`, and unlike `ltv_mult`
+it *does* change the sign of the score, so it is live on every index policy
+including the shipping one. It gets swept in the same pass.
+
+### T9 and the deliberate re-baseline
+
+Several of these changes alter results on purpose. T9 exists to catch
+*accidental* change, so it has to be re-baselined — and that is exactly the
+move that could hide a defect, so:
+
+- the old reference stays in git history (`fb99e9f`), where it can still be
+  checked out and reproduced;
+- `t9_reference.py` gains a `--recapture` mode that **prints the full diff
+  against the existing reference before writing it**;
+- every re-baseline pastes that diff into `NOTES.md` with the reason.
+
+A reference regenerated without its diff on the record would make T9 a gate
+that cannot fail. That is the error this project has made three times.
