@@ -29,7 +29,8 @@ from agent.constraints.rules import AttemptLedger
 from agent.constraints.stage0 import Stage0Gate
 from agent.context.oracle_monitor import OracleRailMonitor
 from agent.context.rail_monitor import RailMonitor
-from agent.execution.sim_executor import OutageSchedule, SimExecutor
+from agent.execution.sim_executor import (DeclineMix, OutageSchedule,
+                                          SimExecutor)
 from agent.llm.fallback import RetryOnlyDiagnoser, RuleBasedDiagnoser
 from agent.loop import run_agent
 from agent.policy.belief_book import BeliefBook
@@ -70,7 +71,9 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              pause_on_outage: bool = False,
              suppress_tech_updates: str = "never",
              time_major: bool = False, collect_calib: bool = False,
-             per_customer_tech_rng: bool | None = None) -> dict:
+             per_customer_tech_rng: bool | None = None,
+             declines: DeclineMix | None = None,
+             decline_kw: dict | None = None) -> dict:
     """One agent run over one population.
 
     `mode="degenerate"` is retry-only with the deterministic diagnoser: the
@@ -85,6 +88,10 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     # across the process boundary instead of an object.
     if outage is None and outage_kw:
         outage = OutageSchedule(**outage_kw)
+    # Same pattern, same reason: a parallel driver ships numbers across
+    # the process boundary rather than pickling an object.
+    if declines is None and decline_kw:
+        declines = DeclineMix(**decline_kw)
 
     if diagnoser is None:
         diagnoser = (RetryOnlyDiagnoser() if mode == "degenerate"
@@ -99,7 +106,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         per_customer_tech_rng = time_major
     executor = SimExecutor(pop, seed, payday_err, topup_p=topup_p,
                            nudge_p=nudge_p, outage=outage,
-                           per_customer_tech_rng=per_customer_tech_rng)
+                           per_customer_tech_rng=per_customer_tech_rng,
+                           declines=declines)
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)
@@ -142,6 +150,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         bcfg=bcfg, bcfg_sha=hashlib.sha256(
             json.dumps(bcfg or {}, sort_keys=True).encode()).hexdigest()[:16],
         outage=outage.asdict() if outage else None,
+        declines=declines.asdict() if declines else None,
         monitor_enabled=monitor_enabled, monitor_kw=monitor_kw,
         monitor_kind=monitor_kind, oracle_mutant=oracle_mutant,
         oracle_windows=(list(monitor.windows)
@@ -159,7 +168,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
 
     t0 = time.time()
     res = run_agent(pop, seed, gate, book, log, diagnoser,
-                    estimates=executor.estimates, monitor=monitor,
+                    estimates=executor.estimates, banks=executor.banks,
+                    monitor=monitor,
                     discount=discount, log_ticks=log_ticks,
                     time_major=time_major, collect_calib=collect_calib,
                     pause_on_outage=pause_on_outage,
@@ -172,6 +182,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     res["exec_attempts_in_outage"] = executor.n_attempts_in_outage
     res["exec_tech_in_outage"] = executor.n_tech_in_outage
     res["exec_tech_total"] = executor.n_tech
+    res["exec_code_counts"] = dict(executor.code_counts)
+    res["exec_terminal_attempts"] = executor.n_terminal_attempts
 
     _skip = ("stops", "gate_refusals", "calib", "rail_transitions")
     log.emit(EventKind.RUN_END, 0,

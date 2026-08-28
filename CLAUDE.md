@@ -261,11 +261,19 @@ CPython 3.12.0 with numpy 2.4.2, pinned in `requirements.txt`. `sim/gate.py` and
 `scripts/pre-commit` probe for an interpreter that can import numpy rather than
 trusting a name; do the same in anything new.
 
-**The suite is fast now: ~81s full, ~34s fast tier.** It used to take ~27
-minutes; that figure is dead. Runs are planned up front and executed across
-processes by `sim/runner.py`, and the belief filter's forecast is incremental.
-Individual `solo_shared_pd` runs at n=100 are ~5s unfitted and ~15s with
-`FITTED_BELIEF` (30 payday hypotheses instead of 10).
+**The suite is fast now: ~100s full, ~34s fast tier, ON AN IDLE MACHINE.**
+It used to take ~27 minutes; that figure is dead. Runs are planned up front and
+executed across processes by `sim/runner.py`, and the belief filter's forecast
+is incremental. Individual `solo_shared_pd` runs at n=100 are ~5s unfitted and
+~15s with `FITTED_BELIEF` (30 payday hypotheses instead of 10).
+
+⚠️ **CORRECTED 29 August 2026: "~81s" was optimistic and the figure is
+LOAD-DEPENDENT, which matters more than the number.** Measured three times back
+to back with nothing else running: **100s / 102s / 98s**. Measured once earlier
+the same day while other work was in flight: **223s**. The suite saturates eight
+worker processes, so anything else on the machine more than doubles it. Budget
+~100s idle and do not treat a slow run as a hang -- check CPU, not the clock
+(error 10).
 
 **EVERY AGENT MEASUREMENT MUST RUN ONE PROCESS PER RUN.** Long-lived
 processes that make many `agent.batch.run_once` calls crash on this machine
@@ -321,7 +329,7 @@ failure of the suite, not a pass, and the gate treats it exactly like a `FAIL`.
 | fast | `python sim/gate.py --tier fast` | M1-M6, M4B, M8, T1-T9, S1, S1_PD | Does the CODE still do what it did? |
 | full | `python sim/gate.py --tier full` | all of the above **plus** S2a, S2b, S2c, S2_LEGACY, S3, S4 | Do the STATISTICAL CLAIMS still hold? |
 
-`git commit` runs fast (~34s). `git push` runs full (~81s). Both are installed
+`git commit` runs fast (~34s). `git push` runs full (~100s idle; see the environment note above -- concurrent work more than doubles it). Both are installed
 by `scripts/install-hooks.sh`, which you must run once per clone.
 
 The statistical gates are **never run at reduced n to fit a time budget.**

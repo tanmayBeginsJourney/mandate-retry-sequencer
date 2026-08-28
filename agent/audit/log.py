@@ -40,16 +40,50 @@ class EventKind:
     LLM_FAILURE = "LLM_FAILURE"
 
 
-class AuditLog:
-    """Append-only writer. One JSON object per line, one line per event."""
+class LogFileNotEmpty(RuntimeError):
+    """A run tried to write into a log file that already holds another run.
 
-    def __init__(self, path: str, run_id: str):
+    FOUND 29 AUGUST 2026, and it was printing wrong compliance numbers on the
+    screen a viewer sees.
+
+    `AuditLog` opens in "a" mode, which is what makes the file append-only and
+    checkable by eye. `agent/demo.py` wrote to a FIXED path. So the second
+    invocation appended to the first, and `auditor.replay` -- whose only input
+    is the file -- then audited two concatenated runs as if they were one. The
+    same mandate's cycle appeared twice, so attempts double against the cap and
+    a notification from run A reads as concurrent with one from run B. The demo
+    printed `cap 24, pending 282` beside the gate's zeros. Replayed per
+    `run_id` both are 0: the agent was fine and the display was not.
+
+    ONE LOG FILE IS ONE RUN. That was always the assumption every reader of a
+    log makes -- `replay` sorts by `seq`, and `seq` restarts at 1 for each run
+    -- but nothing enforced it, so a fresh clone looked clean on its first run
+    and lied on its second. It is now an exception at open time rather than a
+    plausible number at print time, which is the lesson of error 14."""
+
+
+class AuditLog:
+    """Append-only writer. One JSON object per line, one line per event.
+
+    Refuses to open a file that already has content unless the caller says
+    explicitly that it means to append. See `LogFileNotEmpty`.
+    """
+
+    def __init__(self, path: str, run_id: str, *, allow_append: bool = False):
         self.path = path
         self.run_id = run_id
         self._seq = 0
         d = os.path.dirname(os.path.abspath(path))
         if d:
             os.makedirs(d, exist_ok=True)
+        if not allow_append and os.path.exists(path) and os.path.getsize(path):
+            raise LogFileNotEmpty(
+                f"{path} already holds {os.path.getsize(path)} bytes. One log "
+                f"file is one run: `auditor.replay` sorts by `seq`, and `seq` "
+                f"restarts at 1 for every run, so replaying a concatenated "
+                f"file reports violations that did not happen. Delete it, "
+                f"choose a fresh path, or pass allow_append=True and accept "
+                f"that nothing downstream can audit the result.")
         self._fh = open(path, "a", encoding="utf-8", buffering=1)
 
     def emit(self, kind: str, ts_hour: int, **fields: Any) -> int:

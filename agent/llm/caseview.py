@@ -29,6 +29,21 @@ WHAT DOES CROSS, and why each is defensible to show a merchant:
                       use Merchant A's outcomes for Merchant B") resolves the
                       wrong way. That question is tagged [GUESS] and unread.
 
+  bank             -- the REMITTER BANK's UPI handle, e.g. "@oksbi". Added
+                      29 Aug 2026. This is not customer financial state: in
+                      real UPI the payer's VPA carries the bank on its face, so
+                      a merchant already sees it on their own transaction
+                      report. What it buys is the one thing `RailMonitor`
+                      structurally cannot say -- the monitor pools technical
+                      declines across every bank, so a single-bank incident is
+                      locally obvious and statistically invisible. A diagnoser
+                      that can see "every failure I have is @oksbi" has
+                      information the binomial tail has averaged away.
+                      ⚠️ It is also the field most likely to invite an
+                      inference about a person, so `governance.py` treats a
+                      bank NAME in merchant-facing prose as a disclosure and
+                      the rationale may not carry one.
+
 `merchant_note` IS UNTRUSTED INPUT. It is free text supplied by a merchant and
 is carried here so the injection tests have something to attack. Nothing may
 treat it as an instruction.
@@ -52,7 +67,7 @@ def build_case_view(*, amount: Rupees, attempts_used: int, attempts_cap: int,
                     decline_history: Sequence[str],
                     peer_success_recent: bool,
                     uncertainty: PaydayUncertainty,
-                    merchant_note: str = "") -> CaseView:
+                    merchant_note: str = "", bank: str = "") -> CaseView:
     hist = tuple(decline_history[-6:])
     payload = {
         "attempts_used": attempts_used,
@@ -65,6 +80,10 @@ def build_case_view(*, amount: Rupees, attempts_used: int, attempts_cap: int,
         "decline_history": list(hist),
         "peer": bool(peer_success_recent),
         "band": uncertainty.band,
+        # In the hash, so two cases that differ only by bank do NOT share a
+        # cached LLM response. A bank-shaped outage is the case the cache would
+        # otherwise collapse into its bank-agnostic twin.
+        "bank": bank,
     }
     return CaseView(
         case_hash=_hash(payload),
@@ -78,4 +97,5 @@ def build_case_view(*, amount: Rupees, attempts_used: int, attempts_cap: int,
         peer_mandate_success_recent=bool(peer_success_recent),
         uncertainty_band=uncertainty.band,
         merchant_note=merchant_note,
+        bank=bank,
     )

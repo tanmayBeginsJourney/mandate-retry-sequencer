@@ -44,6 +44,77 @@ Z9 = "Z9"           # insufficient funds. Needs a FRESH notification to retry.
 TECH = "TECH"       # technical decline. May auto-represent under the old one.
 
 
+# ------------------------------------------------------- the richer taxonomy
+# Added 29 August 2026. `sim/w3.py` is frozen and its vocabulary is the three
+# symbols above, which is all the belief filter needs -- it reasons about WHEN
+# money is there and nothing else. It is not enough to name the families NPCI
+# publishes, and that gap is precisely what a narrative layer is for:
+#
+#   a frozen account   -> STOP FOREVER. No retry ever helps.
+#   a broken mandate   -> no retry helps either; the merchant must re-authorise.
+#   a limit hit        -> the money IS there. A SMALLER debit works.
+#   insufficient funds -> wait for money. This is the only one w3 models.
+#   a technical decline-> the rail glitched. Try again; it costs an attempt.
+#
+# `w3.index_score` has no slot for "this account will never succeed again", so
+# a frozen account looks to it like a very unlucky customer and it will spend
+# attempts until the cap kills the mandate. A structural blind spot, not an
+# unlearned parameter -- the same shape as the rail-outage argument.
+#
+# THE MEMBER CODES ARE [VERIFIED] against NPCI "UPI Error and Response Codes"
+# v2.9 section 3.1, read via `agent/eval/golden_cases.yaml`'s research block.
+# HOW OFTEN each family occurs is [GUESS]: no source found gives AutoPay
+# -specific decline frequencies. The mix is SWEPT, never picked. See
+# `agent/execution/declines.py`.
+#
+# This table lives in ports.py because `agent/llm` must be able to read it and
+# rule I2 forbids `agent/llm` importing `agent.execution`. ports.py imports
+# nothing, so it is the only lawful home for shared vocabulary.
+FAMILY_OK = "OK"
+FAMILY_FUNDS = "FUNDS"                    # Z9
+FAMILY_TECH = "TECH"                      # TECH
+FAMILY_ACCOUNT_SHUT = "ACCOUNT_SHUT"      # ZX, YE
+FAMILY_MANDATE_BROKEN = "MANDATE_BROKEN"  # VD, VI, VF
+FAMILY_LIMIT = "LIMIT"                    # Z8, IE
+FAMILY_AMBIGUOUS = "AMBIGUOUS"            # U30 -- names nothing
+
+#: Drawn uniformly within a family: nothing found ranks the members against
+#: each other, and inventing a within-family split would stack a second [GUESS]
+#: on the first for no gain.
+FAMILY_CODES: dict[str, tuple[str, ...]] = {
+    FAMILY_OK: ("OK",),
+    FAMILY_FUNDS: ("Z9",),
+    FAMILY_TECH: ("TECH",),
+    FAMILY_ACCOUNT_SHUT: ("ZX", "YE"),
+    FAMILY_MANDATE_BROKEN: ("VD", "VI", "VF"),
+    FAMILY_LIMIT: ("Z8", "IE"),
+    FAMILY_AMBIGUOUS: ("U30",),
+}
+
+CODE_FAMILY: dict[str, str] = {c: fam for fam, cs in FAMILY_CODES.items()
+                               for c in cs}
+
+#: The debit failed and NO retry can ever help. The only correct response is to
+#: stop and hand the mandate back to the merchant.
+TERMINAL_CODES = frozenset(FAMILY_CODES[FAMILY_ACCOUNT_SHUT]
+                           + FAMILY_CODES[FAMILY_MANDATE_BROKEN])
+
+#: The money exists; this particular request was refused for being too large or
+#: too frequent. A smaller debit is the right answer -- and PARTIAL is still a
+#: recommendation only, because its legality under one mandate is unestablished.
+LIMIT_CODES = frozenset(FAMILY_CODES[FAMILY_LIMIT])
+
+#: May be re-presented under the SAME pre-debit notification. Only a technical
+#: decline may; every business decline needs a fresh one. docs/01_FACTS.md.
+REPRESENTABLE_CODES = frozenset({TECH})
+
+
+def family_of(code: str) -> str:
+    """Family for a response code. Unknown codes are AMBIGUOUS, never guessed
+    into a family -- a code we cannot name is exactly the U30 situation."""
+    return CODE_FAMILY.get(code, FAMILY_AMBIGUOUS)
+
+
 # ---------------------------------------------------------------------- time
 @dataclass(frozen=True, order=True)
 class Clock:
@@ -97,6 +168,12 @@ class RootCause(Enum):
     TIMING_MISMATCH = "TIMING_MISMATCH"     # money exists, we asked on the wrong day
     TECHNICAL = "TECHNICAL"
     MANDATE_AT_RISK = "MANDATE_AT_RISK"     # one attempt from death
+    # --- added 29 Aug 2026 with the richer decline taxonomy above. Purely
+    # additive: every value the golden cases already use is unchanged.
+    ACCOUNT_UNAVAILABLE = "ACCOUNT_UNAVAILABLE"   # frozen/dormant. STOP FOREVER.
+    MANDATE_INVALID = "MANDATE_INVALID"           # revoked/expired/paused. Re-authorise.
+    LIMIT_EXCEEDED = "LIMIT_EXCEEDED"             # money is there. Debit smaller.
+    RAIL_OUTAGE = "RAIL_OUTAGE"                   # the rail, not this customer.
     UNKNOWN = "UNKNOWN"
 
 
@@ -218,6 +295,18 @@ class CaseView:
     peer_mandate_success_recent: bool       # did another merchant just succeed?
     uncertainty_band: str                   # narrow | medium | wide
     merchant_note: str = ""                 # UNTRUSTED free text from merchant metadata
+    bank: str = ""                          # remitter bank handle. See caseview.py.
+
+    @property
+    def decline_families(self) -> tuple[str, ...]:
+        """`decline_history` mapped through `family_of`. Convenience only --
+        the codes themselves are what a merchant sees on their report."""
+        return tuple(family_of(c) for c in self.decline_history)
+
+    @property
+    def has_terminal_code(self) -> bool:
+        """Did any attempt come back with a code no retry can ever fix?"""
+        return any(c in TERMINAL_CODES for c in self.decline_history)
 
 
 @dataclass(frozen=True)

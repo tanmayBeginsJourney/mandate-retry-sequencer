@@ -37,6 +37,19 @@ _FINANCIAL_STATE = [
     r"\bhas only\b", r"\bonly ₹\b", r"\bfunds (?:remaining|available)\b",
 ]
 
+# The remitter bank. It is IN the CaseView on purpose -- a diagnoser that can
+# see "every failure I have is @oksbi" beats a binomial tail that pooled the
+# banks together -- but naming it in merchant-facing prose is a different act.
+# "Your customer banks with SBI and SBI is having a bad morning" is an
+# inference about a person delivered to a third party, and the merchant did not
+# need the bank to be told the window is bad. Added 29 Aug 2026 with the field.
+_BANK_NAMES = [
+    r"@ok\w+", r"@ybl\b", r"@paytm\b", r"@ibl\b", r"@upi\b",
+    r"\bsbi\b", r"\bhdfc\b", r"\bicici\b", r"\baxis bank\b",
+    r"\bkotak\b", r"\bpaytm\b", r"\bphonepe\b",
+    r"\btheir bank\b", r"\bcustomer'?s? bank\b", r"\bthis bank\b",
+]
+
 # Anything that recommends WHEN. See the module docstring.
 _TIME_EXPRESSIONS = [
     r"\b\d{1,2}\s*(?:am|pm)\b", r"\b\d{1,2}:\d{2}\b",
@@ -63,6 +76,7 @@ class GovernanceResult:
     financial_state: tuple[str, ...] = ()
     time_expressions: tuple[str, ...] = ()
     injection_echo: tuple[str, ...] = ()
+    bank_disclosure: tuple[str, ...] = ()
 
     @property
     def reasons(self) -> tuple[str, ...]:
@@ -73,6 +87,8 @@ class GovernanceResult:
             out.append(f"recommends a debit time: {hit!r}")
         for hit in self.injection_echo:
             out.append(f"echoes injected instruction text: {hit!r}")
+        for hit in self.bank_disclosure:
+            out.append(f"names the customer's bank to the merchant: {hit!r}")
         return tuple(out)
 
 
@@ -86,9 +102,10 @@ def check(text: str) -> GovernanceResult:
     fs = _hits(_FINANCIAL_STATE, text)
     te = _hits(_TIME_EXPRESSIONS, text)
     inj = _hits(_INJECTION, text)
-    return GovernanceResult(ok=not (fs or te or inj),
+    bk = _hits(_BANK_NAMES, text)
+    return GovernanceResult(ok=not (fs or te or inj or bk),
                             financial_state=fs, time_expressions=te,
-                            injection_echo=inj)
+                            injection_echo=inj, bank_disclosure=bk)
 
 
 SAFE_FALLBACK = ("Our timing model scores the scheduled window highest for "

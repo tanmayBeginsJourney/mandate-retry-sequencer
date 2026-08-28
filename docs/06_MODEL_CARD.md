@@ -287,11 +287,17 @@ the guard multiprocessing raises, and then *hangs instead of exiting*. That cost
 
 ```bash
 python sim/gate.py --tier fast     # ~34s — every gate that tests the CODE
-python sim/gate.py --tier full     # ~81s — adds the STATISTICAL gates
+python sim/gate.py --tier full     # ~100s idle — adds the STATISTICAL gates
 ```
 
 `git commit` runs fast, `git push` runs full. Install both once per clone with
 `scripts/install-hooks.sh`.
+
+⚠️ **The full-tier figure is LOAD-DEPENDENT and "~81s" was optimistic.**
+Re-measured 29 August 2026, three consecutive runs on an idle machine:
+**100s / 102s / 98s**. One run earlier the same day, with other work in flight:
+**223s**. The suite saturates eight worker processes. Budget ~100s idle, and do
+not read a slow run as a hang — check CPU, not the clock (error 10).
 
 **The statistical gates are never run at reduced n to fit a time budget.**
 Shrinking S2/S3/S4 would be weakening a test — a statistical gate at low power

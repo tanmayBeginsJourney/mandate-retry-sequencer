@@ -180,7 +180,11 @@ def half_b(tmp: str) -> None:
 
     # ---- now the injection. Same executor type, no gate, no counters.
     ex2 = SimExecutor(pop, seed=7, payday_err=7)
-    inj = AuditLog(path, "injected")
+    # allow_append IS CORRECT HERE and is the only place in the repo it is.
+    # Half B models a rogue writer that moves money BELOW the gate and writes
+    # into the SAME run's trail -- that is one run with two writers, not two
+    # runs in one file, which is what `LogFileNotEmpty` exists to stop.
+    inj = AuditLog(path, "injected", allow_append=True)
     ref2 = MandateRef(1, 0, pop[1]["mandates"][0]["merchant"])
     amt2 = pop[1]["mandates"][0]["amount"]
 

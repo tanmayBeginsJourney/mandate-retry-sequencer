@@ -56,6 +56,17 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     os.makedirs(LOG_DIR, exist_ok=True)
+    # ONE LOG FILE IS ONE RUN. The demo writes to fixed, advertised paths so
+    # that the trail is easy to point at on camera -- which meant every second
+    # invocation APPENDED to the first, and `auditor.replay` then audited two
+    # concatenated runs as one and printed `cap 24, pending 282` beside the
+    # gate's zeros. Both runs were individually clean. Fixed 29 Aug 2026; see
+    # `agent/audit/log.py:LogFileNotEmpty`, which now makes the same mistake
+    # an exception anywhere else in the repo instead of a plausible number.
+    for _stale in ("demo_degenerate.jsonl", "demo_full.jsonl"):
+        _p = os.path.join(LOG_DIR, _stale)
+        if os.path.exists(_p):
+            os.remove(_p)
     pop = make_pop(a.n, a.k, a.pop, spend=1.05, days=a.days)
     outage_kw = (dict(days=list(range(20, a.days, 30)), duration_h=6,
                       severity=a.outage) if a.outage > 0 else None)

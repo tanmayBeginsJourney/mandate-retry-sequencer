@@ -89,6 +89,11 @@ class CustomerRuntime:
     c: dict
     mands: list
     recent_success: list = field(default_factory=list)
+    # The remitter bank's UPI handle. Carried here rather than looked up,
+    # because `loop.py` may not hold an executor (rule I2) -- `batch.py`
+    # passes it in as a plain string, exactly as it passes the noisy
+    # estimates in.
+    bank: str = ""
 
 
 # ------------------------------------------------------------------- phases
@@ -285,7 +290,8 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             amount=m.amount, attempts_used=m.attempts_used, attempts_cap=CAP,
             day=day, cycle_open=m.cycle_open, cycle_close=m.cycle_close,
             decline_history=m.decline_history, peer_success_recent=peer,
-            uncertainty=unc, merchant_note=rt.c.get("merchant_note", ""))
+            uncertainty=unc, merchant_note=rt.c.get("merchant_note", ""),
+            bank=rt.bank)
 
         diag = ctx.diagnoser.diagnose(view)
         safe_text, gov = sanitise(diag.rationale)
@@ -367,7 +373,8 @@ PHASES = (_phase_advance, _phase_dispatch, _phase_rollover, _phase_decide)
 
 # -------------------------------------------------------------------- driver
 def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
-              diagnoser, *, estimates, monitor: RailMonitor | None = None,
+              diagnoser, *, estimates, banks=None,
+              monitor: RailMonitor | None = None,
               discount: float = DEFAULT_DISCOUNT, log_ticks: bool = False,
               time_major: bool = False, collect_calib: bool = False,
               pause_on_outage: bool = False,
@@ -390,7 +397,7 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
         est_sal, est_pay = estimates(ci)
         book.add_customer(ci, est_sal, est_pay, len(c["mandates"]))
         runtimes.append(CustomerRuntime(
-            ci=ci, c=c,
+            ci=ci, c=c, bank=(banks or {}).get(ci, ""),
             mands=[MandateState(ref=MandateRef(ci, mi, m["merchant"]),
                                 amount=m["amount"], due_day=m["due_day"],
                                 cycle_days=cyc)

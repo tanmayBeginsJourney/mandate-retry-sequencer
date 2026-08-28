@@ -37,13 +37,42 @@ having to hold an executor.
 """
 from __future__ import annotations
 
+import hashlib
+
 import numpy as np
 
 import agent  # noqa: F401  -- puts sim/ on the path
 import harness
 import w3
 
-from agent.ports import OK, TECH, Z9, AttemptOutcome, MandateRef, Rupees
+from agent.ports import (FAMILY_ACCOUNT_SHUT, FAMILY_CODES, FAMILY_LIMIT,
+                         FAMILY_MANDATE_BROKEN, OK, TECH, Z9,
+                         AttemptOutcome, MandateRef, Rupees)
+
+#: How many remitter banks the population is spread across. [GUESS], and the
+#: assignment is UNIFORM -- real Indian UPI share is heavily skewed but nothing
+#: found gives per-bank AutoPay mandate share, and a skew we invented would be a
+#: constant with no source (rule 5). Swept rather than argued about.
+N_BANKS = 8
+
+#: Handles a merchant would already recognise: in real UPI the payer's VPA
+#: carries the bank (`@oksbi`, `@ybl`), so the remitter bank is information the
+#: merchant can already see on their own transaction. That is why it is
+#: allowed across the redaction boundary -- see `agent/llm/caseview.py`.
+BANK_HANDLES = ("@oksbi", "@ybl", "@okhdfcbank", "@okicici", "@okaxis",
+                "@paytm", "@ibl", "@upi")
+
+
+def bank_of(customer_id: int, n_banks: int = N_BANKS) -> str:
+    """Which bank holds this customer's account.
+
+    Derived from a stable hash of the customer index rather than from any RNG,
+    so it is identical across every run, seed and process and consumes nothing
+    from the money path's stream. A bank assignment that moved with the seed
+    would make a bank-scoped outage unreproducible."""
+    h = hashlib.blake2b(str(customer_id).encode(), digest_size=8).digest()
+    return BANK_HANDLES[int.from_bytes(h, "big") % min(n_banks,
+                                                       len(BANK_HANDLES))]
 
 P_TECH = harness.P_TECH             # 0.008
 
@@ -84,29 +113,175 @@ class OutageSchedule:
     downstream is an UPPER bound on both the damage and the value of detecting
     it. Said out loud because an outage model that quietly missed the dispatch
     hour would report "outages don't matter" for the wrong reason.
+
+    BANK-SCOPED OUTAGES, added 29 August 2026. `banks=None` means every bank,
+    which is what every existing measurement used and what the defaults still
+    do. `banks=["@oksbi"]` scopes the window to one remitter.
+
+    WHY THAT MATTERS AND WHY IT IS THE HARD CASE. `RailMonitor` pools technical
+    declines across every customer and therefore across every bank, which is
+    exactly what gives an aggregator 22.5 attempts per 24h window against one
+    merchant's 0.38. But pooling is also what HIDES a single-bank incident: at
+    N_BANKS=8 a one-bank outage raises the pooled technical-decline rate by
+    roughly an eighth of its severity, which the binomial tail will not see
+    while the affected eighth of customers is failing outright. India's 2026
+    incidents were repeatedly bank-shaped while NPCI's own dashboard reported
+    the system healthy [GUESS -- the read-across from public reporting is ours,
+    see docs/01_FACTS.md]. So a bank-scoped window is locally obvious and
+    statistically invisible, and that gap is where a judgement call has room to
+    beat a threshold test. It is the reason this parameter exists.
     """
 
     def __init__(self, days: list[int], duration_h: int, severity: float,
-                 start_hour: int = 8):
+                 start_hour: int = 8, banks: list[str] | None = None):
         self.windows = [(d * w3.HOURS + start_hour,
                          d * w3.HOURS + start_hour + duration_h)
                         for d in days]
         self.severity = severity
         self.duration_h = duration_h
         self.days = list(days)
-
-    def p_tech_at(self, t: int) -> float:
-        for lo, hi in self.windows:
-            if lo <= t < hi:
-                return self.severity
-        return P_TECH
+        self.banks = list(banks) if banks else None
 
     def covers(self, t: int) -> bool:
+        """TIME only. This is the benchmark's ground-truth window and it stays
+        bank-agnostic on purpose: the outage is a fact about the world at time
+        t, and whether a given attempt was exposed to it is a separate
+        question, answered by `affects`."""
         return any(lo <= t < hi for lo, hi in self.windows)
+
+    def affects(self, t: int, bank: str | None = None) -> bool:
+        """Time AND bank. With `banks=None` this is identical to `covers`, so
+        every measurement taken before 29 Aug 2026 is unchanged."""
+        if not self.covers(t):
+            return False
+        return self.banks is None or bank in self.banks
+
+    def p_tech_at(self, t: int, bank: str | None = None) -> float:
+        return self.severity if self.affects(t, bank) else P_TECH
 
     def asdict(self) -> dict:
         return dict(days=self.days, duration_h=self.duration_h,
-                    severity=self.severity, n_windows=len(self.windows))
+                    severity=self.severity, n_windows=len(self.windows),
+                    banks=self.banks)
+
+
+# ============================================================================
+# THE RICHER DECLINE TAXONOMY
+# ============================================================================
+# RICHER DECLINE CODES, AND WHY THEY LIVE HERE AND NOT IN `sim/`.
+#
+# `sim/w3.py` is FROZEN and its outcome vocabulary is three symbols: OK, Z9,
+# TECH. That is enough to model *when money is there*, which is all the belief
+# filter reasons about. It is not enough to name the families NPCI actually
+# publishes, and the difference is the whole reason a narrative layer has
+# anything to do:
+#
+#     a frozen account       means STOP FOREVER -- no retry ever helps
+#     a broken mandate       means no retry ever helps either, for a different
+#                            reason, and the merchant must re-authorise
+#     a limit hit            means the money IS there and a SMALLER debit works
+#     insufficient funds     means wait for money
+#     a technical decline    means the rail glitched; try again
+#
+# `w3.index_score` cannot represent any of that. It reads a probability of
+# success and a discount. It has no slot for "this account will never succeed
+# again", so a frozen account looks to it exactly like a very unlucky customer
+# and it will keep spending attempts on it until the cap kills the mandate. That
+# is a structural blind spot, not an unlearned parameter, and it is the same
+# shape as the rail-outage argument in `agent/context/rail_monitor.py`.
+#
+# WHERE THE CODES COME FROM. `agent/eval/golden_cases.yaml`'s `research` block,
+# which read NPCI's "UPI Error and Response Codes" v2.9 section 3.1 directly.
+# The families and their member codes are [VERIFIED] against that document. What
+# is NOT verified, and is tagged [GUESS] everywhere it appears, is HOW OFTEN each
+# family occurs: no source found gives AutoPay-specific decline frequencies, and
+# the case file says so explicitly. So the mix is SWEPT, never picked --
+# the same discipline `topup_p`, `nudge_p` and outage `severity` are held to.
+#
+# DEFAULTS ARE ALL ZERO AND THAT IS LOAD-BEARING. With `DeclineMix()` unset the
+# executor emits exactly OK / Z9 / TECH, byte for byte, so
+# `test_parity_vs_harness.py` still reproduces `harness.run` and every gated
+# number is untouched. Enrichment is opt-in, exactly like `OutageSchedule`.
+#
+# THE THREE LATENT STATES ARE STICKY, NOT PER-ATTEMPT. A frozen account does not
+# un-freeze because you tried again -- that is the entire point of it. So
+# `account_shut` and `mandate_broken` are absorbing: once entered, every
+# subsequent attempt on that account (or that mandate) returns the family's code
+# regardless of balance. A per-attempt coin flip would produce a world where
+# retrying eventually works, which is the world we already have and the one the
+# LLM has nothing to add to.
+
+
+class DeclineMix:
+    """How often each non-Z9 family happens. Every rate is [GUESS] and swept.
+
+    All zero by default: `SimExecutor` then emits exactly the frozen
+    vocabulary and parity with `harness.run` is bit-exact.
+
+    Rates are per-CUSTOMER or per-MANDATE onset probabilities over the whole
+    horizon, not per-attempt, because two of the three states are absorbing.
+    """
+
+    def __init__(self, p_account_shut: float = 0.0,
+                 p_mandate_broken: float = 0.0,
+                 p_limit: float = 0.0,
+                 p_ambiguous: float = 0.0):
+        self.p_account_shut = p_account_shut       # per customer, per horizon
+        self.p_mandate_broken = p_mandate_broken   # per mandate, per horizon
+        self.p_limit = p_limit                     # per attempt that HAD money
+        self.p_ambiguous = p_ambiguous             # per failure, relabel to U30
+        self.enabled = any((p_account_shut, p_mandate_broken, p_limit,
+                            p_ambiguous))
+
+    def asdict(self) -> dict:
+        return dict(p_account_shut=self.p_account_shut,
+                    p_mandate_broken=self.p_mandate_broken,
+                    p_limit=self.p_limit, p_ambiguous=self.p_ambiguous)
+
+    def __repr__(self) -> str:
+        return f"DeclineMix({self.asdict()})"
+
+
+class DeclineState:
+    """Per-run latent state: which accounts are shut, which mandates are broken.
+
+    Drawn once from its OWN generator, seeded off the run seed the way
+    `harness.py:158` seeds `donor_bal`, so turning enrichment on consumes
+    nothing from the money path's stream and cannot shift a single balance
+    draw. That is what keeps `DeclineMix()` -> parity and
+    `DeclineMix(...)` -> the same world plus labels.
+    """
+
+    def __init__(self, mix: DeclineMix, pop, seed: int, days: int):
+        self.mix = mix
+        self.shut_from: dict[int, int] = {}       # customer_id -> hour
+        self.broken_from: dict[str, int] = {}     # mandate uid -> hour
+        if not mix.enabled:
+            return
+        rng = np.random.default_rng(seed + 5150)
+        T = days * 24
+        for ci, c in enumerate(pop):
+            if rng.random() < mix.p_account_shut:
+                # Onset uniform over the horizon. A shut that lands on the last
+                # day is nearly inert and one on the first is maximal; sweeping
+                # the RATE and averaging over onset is the honest version of
+                # "we do not know when accounts get frozen".
+                self.shut_from[ci] = int(rng.integers(0, T))
+            for mi, _m in enumerate(c["mandates"]):
+                if rng.random() < mix.p_mandate_broken:
+                    self.broken_from[f"c{ci}m{mi}"] = int(rng.integers(0, T))
+
+    def terminal_family(self, customer_id: int, uid: str, t: int) -> str | None:
+        """Is this mandate permanently dead at time t, and why?
+
+        Account-shut is checked first: if both are true the account is the
+        bigger fact, and a merchant re-authorising the mandate would still get
+        nothing."""
+        if customer_id in self.shut_from and t >= self.shut_from[customer_id]:
+            return FAMILY_ACCOUNT_SHUT
+        if uid in self.broken_from and t >= self.broken_from[uid]:
+            return FAMILY_MANDATE_BROKEN
+        return None
 
 
 class CustomerWorld:
@@ -131,7 +306,8 @@ class SimExecutor:
                  topup_lag: int = 2, topup_life: int = 48,
                  topup_mult: float = 1.15, spend_decay=None,
                  nudge_p: float = 0.0, outage: "OutageSchedule | None" = None,
-                 per_customer_tech_rng: bool = False):
+                 per_customer_tech_rng: bool = False,
+                 declines: "DeclineMix | None" = None, n_banks: int = N_BANKS):
         self.pop = pop
         self.days = pop[0]["days"]
         self.cyc = pop[0]["cycle_days"]
@@ -150,6 +326,14 @@ class SimExecutor:
         self.n_tech = 0
         self.n_tech_in_outage = 0
         self.n_attempts_in_outage = 0
+        # ---- the richer decline taxonomy. ALL RATES DEFAULT TO ZERO, and that
+        # is what keeps `test_parity_vs_harness.py` bit-exact: with an unset
+        # mix every branch below collapses to the frozen OK/Z9/TECH vocabulary.
+        self.declines = declines or DeclineMix()
+        self.n_banks = n_banks
+        self.banks = {ci: bank_of(ci, n_banks) for ci in range(len(pop))}
+        self.code_counts: dict[str, int] = {}
+        self.n_terminal_attempts = 0        # attempts spent on a dead account
 
         rng = np.random.default_rng(seed)
         # ONE shared technical-decline generator reproduces harness.run's draw
@@ -170,6 +354,11 @@ class SimExecutor:
         # draw taken by the money path, or degenerate-mode parity would break
         # for a reason that has nothing to do with the agent.
         self.nrng = np.random.default_rng(seed + 9119)
+        # A THIRD generator for the decline taxonomy, for the same reason the
+        # nudge has its own: turning enrichment on must not shift a single draw
+        # taken by the money path, or the enriched world would be a DIFFERENT
+        # world rather than the same world with better labels.
+        self.drng = np.random.default_rng(seed + 5150)
 
         # Consumed for RNG-order parity with harness.run. We have no placebo
         # arm, so the result is discarded -- but the draws are not.
@@ -186,6 +375,9 @@ class SimExecutor:
             self.worlds[ci] = CustomerWorld(bal, topups, c["payday"], self.cyc,
                                             est_sal, est_pay)
 
+        # Drawn from its OWN generator, so this consumes nothing from `rng`.
+        self.dstate = DeclineState(self.declines, pop, seed, self.days)
+
     # ---- what the loop is allowed to read: the NOISY estimates only.
     def estimates(self, customer_id: int) -> tuple[float, int]:
         """(est_salary, est_payday). Never the true salary, payday or balance.
@@ -194,6 +386,12 @@ class SimExecutor:
         balance array. There is no accessor here that returns one."""
         w = self.worlds[customer_id]
         return w.est_salary, w.est_payday
+
+    def _pick(self, family: str) -> str:
+        """One member code from a family, uniformly. Uses the decline
+        generator, never the money path's."""
+        codes = FAMILY_CODES[family]
+        return codes[int(self.drng.integers(0, len(codes)))]
 
     # ---- the money path
     def attempt(self, ref: MandateRef, amount: Rupees, t: int) -> AttemptOutcome:
@@ -211,20 +409,56 @@ class SimExecutor:
 
         rng = (self._ctrng[ref.customer_id] if self.per_customer_tech_rng
                else self.trng)
-        p_tech = self.outage.p_tech_at(t) if self.outage else P_TECH
+        bank = self.banks[ref.customer_id]
+        p_tech = self.outage.p_tech_at(t, bank) if self.outage else P_TECH
+        # `covers` is time-only, so `n_attempts_in_outage` keeps counting every
+        # attempt that landed in a window whether or not that attempt's bank was
+        # the one having the incident. That is what the detection benchmark's
+        # G-3 witness means and it must not quietly change meaning.
         in_outage = bool(self.outage and self.outage.covers(t))
+        exposed = bool(self.outage and self.outage.affects(t, bank))
         if in_outage:
             self.n_attempts_in_outage += 1
 
-        if rng.random() < p_tech:
+        # ONE DRAW, ALWAYS CONSUMED, WHATEVER THE OUTCOME. The enriched world
+        # has to be the same world with better labels, not a different world:
+        # if a terminal state short-circuited before this line, the technical
+        # -decline stream would shift and every subsequent customer's outcomes
+        # would move for a reason that has nothing to do with the taxonomy.
+        u = rng.random()
+
+        # ---- is this account or mandate permanently dead?  STICKY, ABSORBING.
+        terminal = (self.dstate.terminal_family(ref.customer_id, ref.uid, t)
+                    if self.declines.enabled else None)
+
+        if terminal is not None:
+            code, success = self._pick(terminal), False
+            self.n_terminal_attempts += 1
+        elif u < p_tech:
             code, success = TECH, False
             self.n_tech += 1
             if in_outage:
                 self.n_tech_in_outage += 1
         elif avail >= amount:
-            code, success = OK, True
+            # The money IS there. A limit decline is the one failure mode where
+            # that is true, and it is why a smaller debit is the right answer
+            # and a later retry of the same amount is not.
+            if self.declines.p_limit and self.drng.random() < self.declines.p_limit:
+                code, success = self._pick(FAMILY_LIMIT), False
+            else:
+                code, success = OK, True
         else:
             code, success = Z9, False
+
+        # ---- the catch-all. U30 names nothing, and a merchant who sees it
+        # learns only that something went wrong. Relabelling AFTER the true
+        # outcome is decided is deliberate: the world still knows what really
+        # happened, and the agent does not. That asymmetry is the point.
+        if (not success and self.declines.p_ambiguous
+                and self.drng.random() < self.declines.p_ambiguous):
+            code = FAMILY_CODES["AMBIGUOUS"][0]
+
+        self.code_counts[code] = self.code_counts.get(code, 0) + 1
 
         if success:
             self.n_success += 1

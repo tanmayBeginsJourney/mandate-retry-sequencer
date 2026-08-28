@@ -21,6 +21,12 @@ against in the eval harness: an LLM that cannot beat thirty lines of if-else
 is not worth its latency, and finding that out is the "AI Judgment" criterion
 doing its job rather than being asserted at.
 
+⚠️ `WAIT` IS NOT REACHABLE FROM ANY BRANCH OF `RuleBasedDiagnoser`. Recorded
+rather than fixed: GC-22 is the only golden case where WAIT is the registered
+answer, so the evidence that the action is worth having rests on one case. If
+the action ablation cannot show a gain from it, cut the action rather than
+adding a branch to reach it.
+
 NEITHER MAY RAISE. `ports.Diagnoser` says so. An LLM failure is an event in
 the audit log, not an exception in the recovery loop.
 """
@@ -94,6 +100,36 @@ class RuleBasedDiagnoser:
     def _decide(self, view: CaseView):
         last = view.decline_history[-1] if view.decline_history else None
         left = view.attempts_cap - view.attempts_used
+
+        # ---- ALREADY COLLECTED. This branch must run FIRST.
+        #
+        # FIXED 29 AUGUST 2026 (golden case GC-40). Before this, the first
+        # branch tested only for "TECH", so an "OK" fell straight through to
+        # the peer-success branch, which fires on `peer_mandate_success_recent`
+        # plus a non-wide band and returns RETRY -- proposing a SECOND debit on
+        # a cycle that has already collected. Charging a customer twice is the
+        # worst outcome this system can produce: worse than never collecting,
+        # because it costs a refund, a complaint and probably the mandate.
+        #
+        # It was harmless only because `agent/loop.py` filters `not m.collected`
+        # out of `live` before it ever calls a diagnoser. THAT IS A CORRECTNESS
+        # PROPERTY LIVING IN THE CALLER, NOT IN THE COMPONENT, which is the same
+        # shape as every vacuous gate in docs/03_ERRORS.md -- the check and the
+        # thing checked sharing an assumption that nothing states. A diagnoser
+        # is a component with a Protocol; it does not get to assume its only
+        # current caller.
+        #
+        # `attempts_used >= 1` IS LOAD-BEARING. `decline_history` is cleared at
+        # rollover by `loop.py:_phase_rollover`, but `golden_cases.yaml`'s
+        # stated convention is that it MAY span cycles. Under that convention a
+        # trailing "OK" at `attempts_used == 0` is last cycle's success and a
+        # new cycle is owed a debit, so guarding on the attempt count is what
+        # makes this branch correct under both readings.
+        if last == "OK" and view.attempts_used >= 1:
+            return (RootCause.UNKNOWN, InterventionKind.STOP, 0.95,
+                    "This billing cycle has already been collected. No further "
+                    "money action is due on this mandate until the next cycle "
+                    "opens.")
 
         if last == "TECH":
             return (RootCause.TECHNICAL, InterventionKind.RETRY, 0.9,
