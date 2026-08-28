@@ -2447,3 +2447,198 @@ what it inspects.**
 Committed with `--no-verify`, as the tripwire's own instructions require, with
 this entry referenced from the commit message. The bypass is on the record and
 that is the point of it.
+
+---
+
+# 29 August 2026 — PRE-REGISTRATION: the detection benchmark, before any run
+
+**Written before a single measurement.** Prior pre-registration records on this
+project: 2/7, 3/7, 6/8, 3/6. The misses are the useful part, so these are
+written to be breakable rather than to be met.
+
+## Why a detection benchmark exists at all
+
+The recovery channel is measured and it saturates. Outage awareness is worth
+**+0.256 pts at severity 0.80** (`suppress`, SIG) and pausing is **significantly
+negative at severity 0.40** (−0.529, SIG). The belief-corruption argument that
+motivated the layer is **retracted** — suppression alone makes ECE *worse*
+(0.0346 → 0.0373). None of that is revisited here and no attempt is made to
+revive it.
+
+What survives is a capability claim: at n=100 the aggregator sees **22.5
+attempts per 24h window**, one merchant sees **0.38**, and a single merchant
+never reaches `min_attempts=8` at any population size tested. Structural
+unavailability, not difficulty. Zero false alarms in 48 runs at severity zero.
+
+So the scoreboard moves from recovery to **detection**, and detection needs an
+upper bound to be measured against. That is what this builds.
+
+## The literature this takes its method from
+
+Two papers, abstracts read, neither ported. Full read-back in the session
+report; the two lines that matter here:
+
+* **arXiv 2511.09324, MARBLE** — RMAB augmented with a latent Markov state that
+  switches over time, inducing nonstationarity. `[VERIFIED]` from the abstract.
+  Cited for the **formalism only**: it is a convergence result for Q-learning
+  with Whittle indices under a relaxed indexability criterion, and its policy
+  *adapts to* the latent state without ever detecting a change point. It
+  supplies no evaluation methodology.
+* **arXiv 2604.10177, piecewise-stationary RMAB** — excess regret measured
+  against **an oracle that restarts the base algorithm at the true change
+  points**, with the bound decomposed into exploration cost, detection delay,
+  and false alarms / missed detections. `[VERIFIED]` from the abstract and the
+  HTML full text. **This is the methodology being borrowed**: an oracle defined
+  by knowledge of the true change points, and a loss reported as the excess
+  over it. The specific five-way decomposition below is ours, not theirs.
+
+No usable public code for either. Not ported to their domains — public-health
+resource allocation, wrong state space, no money, no NPCI constraints.
+
+## The oracle
+
+`OracleRailMonitor` is handed the true outage windows and reports
+`OUTAGE` for exactly `t ∈ W`, `NORMAL` otherwise. It is **unreachable by any
+real detector by construction**: a statistical detector needs evidence, evidence
+arrives only at dispatch, and dispatch happens after onset. The oracle has no
+evidence requirement at all.
+
+It plugs into the same `assess(t)` / `record(t, code)` contract the statistical
+monitor uses, and it enforces the same `NonMonotonicTime` rule, so it cannot be
+run under a loop order the statistical monitor could not also be run under.
+
+**The mutants are window transforms, not code branches.** The single most
+important design decision here, and it is a direct consequence of error 11 and
+rule 1a. A crippled oracle differs from the true oracle *only in the list of
+numbers it is handed*; the monitor executes byte-identical code in every arm.
+A mutant therefore cannot write to a counter, cannot special-case itself, and
+cannot be exempted, because there is no branch to exempt.
+
+| mutant | window transform | component it cripples |
+|---|---|---|
+| `M-BLIND` | `W → []` | missed detection (total failure) |
+| `M-LATE` | `[lo, hi) → [lo+dur, hi+dur)` | detection delay |
+| `M-LATCH` | `[lo, hi) → [lo, T)` | late resumption |
+| `M-PHANTOM` | `W → W ∪ {fabricated windows}` | false positives |
+
+## The loss
+
+Ground truth `s*(t) = OUTAGE iff t ∈ W`. A detector's trajectory `s(t)` is
+reconstructed from its transition log. Excess loss is the **Hamming distance in
+detector-hours**, `L = Σ_t 1[s(t) ≠ s*(t)]`, partitioned exhaustively:
+
+| bucket | definition |
+|---|---|
+| `DELAY` | `t ∈ W`, `s=NORMAL`, before the first detection of that window |
+| `MISSED` | `t ∈ W`, `s=NORMAL`, in a window never detected within `[lo, hi+24)` |
+| `DROPOUT` | `t ∈ W`, `s=NORMAL`, after a detection of that same window |
+| `LATE` | `t ∉ W`, `s=OUTAGE`, in an episode that began inside a window |
+| `FALSE_ALARM` | `t ∉ W`, `s=OUTAGE`, in an episode that never overlapped a window |
+
+`DELAY + MISSED + DROPOUT + LATE + FALSE_ALARM == L` is **asserted in code**,
+not hoped for. The three the brief asks for are `DELAY`, `FALSE_ALARM` and
+`LATE`; `MISSED` and `DROPOUT` are reported rather than folded into them,
+because folding a miss into "delay" is how a detector that never fires comes to
+look merely slow.
+
+The oracle's loss is **identically zero, by construction**, and that is said out
+loud rather than presented as a result. Error 5 was a broken oracle whose guard
+gate was "oracle approval ≈ 100%" — true whether the oracle worked or not. The
+dominance half of G-1 below has exactly that shape and carries exactly that much
+information: none. **The entire content of the gate is the mutant half.**
+
+## The gates
+
+| gate | statement | independent witness? |
+|---|---|---|
+| **G-1** | the oracle's detection loss ≤ every detector's, at every severity | no — true by construction. Content is in the mutants. |
+| **G-2** | at severity 0 (`W = ∅`) the oracle arm is identical to the monitor-off arm: same `cycle_rec`, zero pauses, zero transitions | yes — `cycle_rec` comes from the accounting, not the monitor |
+| **G-3** | with the pause response on, the oracle arm executes **0** attempts inside any window at every severity > 0, and every statistical detector executes **> 0** | **yes** — `SimExecutor.n_attempts_in_outage`, incremented by the executor from the schedule, sharing no code with any monitor |
+
+G-3 is the one that matters. It is the first check in this work whose witness is
+written by different code from the thing it checks.
+
+**Vacuity rule, and it is the point of the exercise:** every mutant must be
+caught by at least one gate. If any crippled oracle passes all three gates, the
+suite reports **VACUOUS**, not PASS. If a gate flags the true oracle as well as
+the mutants it discriminates nothing and that is reported too.
+
+## The predictions
+
+`E-BEN-2`, `E-BEN-3`, `E-BEN-5` are the ones written to be broken.
+
+**E-BEN-1 — FALSE ALARMS.** At severity 0, all three statistical detectors
+(`min_attempts` ∈ {4, 8, 16}) produce **zero** false-alarm episodes across
+8 populations each. *Vacuity guard, per the error-16 rule:* zero is what a
+disconnected detector reports, so this is scored HELD only if the same detector
+fires at severity 0.80. Otherwise VACUOUS.
+
+**E-BEN-2 — LATENCY IS QUANTISED, NOT CONTINUOUS.** 99.22% of attempts land at
+hour 8 and every window starts at hour 8, so evidence arrives in one burst per
+day. Predict detected-window latencies are **bimodal at ≈0h and ≈24h with no
+mass in [1h, 23h]**. If latency is spread across that interval, the hour-8
+concentration is not doing what the whole outage story says it does.
+
+**E-BEN-3 — DELAY IS NOT THE DOMINANT LOSS TERM.** For the shipping detector
+(`min_attempts=8`) at severity 0.80, predict `LATE > DELAY`: the monitor holds
+OUTAGE for `hold_h=12` against a 6h window, so it should over-hold more hours
+than it under-detects.
+
+**E-BEN-4 — `min_attempts` IS MONOTONE IN LOSS AT n=100.** Predict
+`L(ma4) ≤ L(ma8) ≤ L(ma16)` at severity 0.80. The aggregator has 22.5 attempts
+per 24h window, so 16 sits near the volume cliff and 4 sits well below it. This
+is open item 0c and the constant has never been swept.
+
+**E-BEN-5 — THE ORACLE DOES NOT MAXIMISE RECOVERY.** With pausing on, predict
+the oracle's `cycle_rec` is **below the monitor-off arm at severity 0.40**,
+because pausing is already measured at −0.529 there and the oracle pauses
+*more* completely than any real detector. If this breaks — if perfect detection
+beats no detection everywhere — then the response is not what is wrong and the
+pause result needs re-opening.
+
+**E-BEN-6 — RECOVERY SATURATES.** Predict the oracle beats the shipping
+detector by **less than +0.256 pts** on `cycle_rec` at every severity: perfect
+detection buys less than the already-measured ceiling. This is the claim
+"recovery saturates and detection does not", made falsifiable.
+
+**E-BEN-7 — NO MUTANT SURVIVES.** Every one of the four crippled oracles is
+caught by at least one gate. Scored VACUOUS if any survives all three.
+
+**E-BEN-8 — G-3 BINDS IN BOTH DIRECTIONS.** The oracle executes exactly 0
+attempts inside a window at every severity > 0, **and** the shipping detector
+executes strictly more than 0. A gate that only ever sees zeros is a gate whose
+null value satisfies it.
+
+## How this could be biased toward the answer we want
+
+Said before the numbers, per rule 2.
+
+* **Window placement is worst case.** Every window starts at hour 8 where
+  99.22% of attempts land. That maximises both the damage and the detectability,
+  so every detection figure here is an **upper bound**.
+* **Severity is invented.** No source found reports what fraction of UPI AutoPay
+  executions fail during a rail incident. `[GUESS]`, swept.
+* **The oracle is handed the windows.** If the benchmark computed them
+  differently from the world, the oracle would be graded against the wrong
+  target. G-3's witness is the *executor's* counter, which is computed from the
+  schedule object itself, so this failure mode is covered — but only by G-3.
+* **Detection is measured with the response OFF** (`pause_on_outage=False`), as
+  the detection-power study does, because pausing suppresses the evidence that
+  produces detection. Recovery is measured separately with the response ON. The
+  two tables are therefore not two views of one run.
+* **Excess loss in hours weights a 6h window and a 24h hold equally.** An hour of
+  false alarm is not obviously worth an hour of missed outage. No exchange rate
+  is invented; the components are reported separately and never summed into a
+  single score with weights.
+* **n=100, 8 populations, one run seed each.** Not a large study.
+
+## Configuration, fixed before running
+
+`n=100, k=5, 120d, payday_err=7, FITTED_BELIEF, pop_spend=1.05`, populations
+700–707, run seed 7, four 6h outages on days 20/50/80/110 starting at hour 8,
+severities {0.00, 0.15, 0.40, 0.80}. **Identical to the ablation in
+`02_RESULTS.md`**, deliberately, so the recovery column can be read straight
+against the published +0.256 row.
+
+Every run goes through `agent/tests/_parallel.py`, one process per run,
+`max_tasks_per_child=1`. `sim/` is untouched.
