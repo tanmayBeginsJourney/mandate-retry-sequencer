@@ -1479,3 +1479,20 @@ Suite is now **24 gates, 4 FAIL, 1 VACUOUS, 19 pass, 65.6s.**
   evidence that it degrades gracefully; do not assume that holds further out.
 - **The segfault is still unexplained.** No recurrence in this session's ~25
   further full and fast runs since BLAS threads were pinned.
+
+### Segfault: soak-tested, not solved
+
+Six consecutive full-suite runs after the BLAS pinning: all exit 0, all 24
+gates, identical results. Together with the rest of this session that is
+roughly 30 full and fast runs with no recurrence.
+
+**That is not a fix and it should not be recorded as one.** The mitigation
+(one BLAS thread per worker, set in the parent so spawned children inherit it
+before importing numpy) cannot explain the FIRST occurrence, which happened in
+a single process with no multiprocessing at all. What has changed is that a
+crash is now survivable and diagnosable rather than silent: `runner.py` prints
+a banner naming how many jobs were lost and finishes them serially, `record()`
+flushes per gate, and `gate.py` runs the suite with `-u`, so the next
+occurrence will name the last gate that completed. If it never recurs, the
+honest description remains "unexplained, mitigated, not reproduced in ~30
+runs".
