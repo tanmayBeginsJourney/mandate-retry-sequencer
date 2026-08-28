@@ -7,8 +7,15 @@
 # reason and only while someone intends to fix it. Adding a line here to make
 # a red suite go green is the same offence as loosening a threshold.
 #
-# Baseline 2026-08-27, after the S2 rebuild and the dead-gate repairs:
-# 21 gates, 3 FAIL, 1 VACUOUS, 17 pass.
+# Baseline 2026-08-28, after the handoff audit added M4B:
+# 25 gates, 5 FAIL, 1 VACUOUS, 19 pass.  Verified by a --tier full run.
+#
+# Every figure quoted in the reasons below is from a --tier full run on
+# 28 August 2026. They were stale once: this file carried S2b at -14.51,
+# S2c at +24.04, S2_LEGACY at -0.40 and S1_PD at ECE 0.040, none of which
+# the suite produces. If you change anything, re-run the suite and update
+# these numbers in the same commit -- a reason file that disagrees with the
+# gate it explains is worse than no reason file.
 
 # ---------------------------------------------------------------------------
 S1
@@ -47,20 +54,20 @@ M1
 
 # ---------------------------------------------------------------------------
 S2b
-# "placebo_pd is neutral vs own_pd".  Currently -14.51 pts (+/-2.24). NOT neutral.
+# "placebo_pd is neutral vs own_pd".  Currently -14.09 pts (+/-2.09). NOT neutral.
 #
 # This is a finding about the experiment design, not a code defect, and it is
 # the most important thing the 27 August rebuild produced.
 #
 # solo_placebo does not inject NEUTRAL extra update events. It injects WRONG
 # ones -- outcomes computed against a different customer's balance
-# (sim/harness.py:227). Feeding a belief actively misleading observations is
+# (sim/harness.py:312). Feeding a belief actively misleading observations is
 # worse than feeding it nothing, so the placebo arm is damaged rather than
 # merely uninformative. Predicted in advance (NOTES.md pre-registration).
 #
 # Why it matters: S2c (real - placebo) is algebraically S2a + |S2b|, an
 # identity for paired means, not an independent measurement. 60% of the
-# +24.04 headline is placebo damage. docs/02_RESULTS.md used to present that
+# +23.62 headline is placebo damage. docs/02_RESULTS.md used to present that
 # number as "the strongest evidence we have" that pooling is information.
 # It is not. The honest moat number is S2a, +9.53 pts (+/-1.81).
 #
@@ -71,7 +78,7 @@ S2b
 
 # ---------------------------------------------------------------------------
 S2_LEGACY
-# "point-estimate pooling vs placebo".  Currently -0.40 pts (+/-0.22).
+# "point-estimate pooling vs placebo".  Currently -0.38 pts (+/-0.22).
 #
 # RETIRED ARCHITECTURE. This is the original S2, unchanged, still running the
 # point-estimate payday trio (solo_shared / solo_placebo / solo_pop) at the
@@ -89,7 +96,7 @@ S2_LEGACY
 
 # ---------------------------------------------------------------------------
 S1_PD
-# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.040, monotone=False.
+# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.026, monotone=False.
 #
 # ADDED 2026-08-28, and the reason it exists is the finding.
 #
@@ -108,9 +115,17 @@ S1_PD
 #
 # It fails, on the monotonicity half, exactly as predicted in advance (the
 # pre-registration guessed ECE 0.04-0.07 and "still fails on monotonicity",
-# at ~60% confidence; measured 0.040 and not monotone). Fitting the filter
-# improved ECE from 0.059 to 0.040 but did not make the reliability curve
-# ordered. The remaining break is in the mid-range, and the plausible causes
+# at ~60% confidence).
+#
+# TWO DIFFERENT ECE NUMBERS EXIST FOR THIS FILTER AND THEY ARE NOT THE SAME
+# MEASUREMENT. This gate reports ECE=0.026 on populations Pc0-Pc2 (n=120,
+# pop seeds 300-302, run seeds 800-802). sim/fair_audit.py reports 0.059
+# shipped -> 0.040 fitted on DIFFERENT populations (n=100, pop seeds
+# 700-702, run seeds 1600-1602). This file used to quote fair_audit's 0.040
+# as if it were the gate's. Quote 0.026 for S1_PD and name fair_audit when
+# quoting 0.040. Fitting improved ECE on both and made neither monotone.
+#
+# The remaining break is in the mid-range, and the plausible causes
 # are the two things the fit does not touch: the filter does not model the
 # balance floor at zero, and it approximates the world's hourly U(0.4,1.6)
 # spend jitter with a fixed 3-tap kernel.
@@ -118,3 +133,59 @@ S1_PD
 # Do NOT loosen the 0.10 bound; ECE is already well inside it. The gate fails
 # on monotonicity and raising the ECE bound would only hide which half is
 # broken.
+
+# ---------------------------------------------------------------------------
+M4B
+# "no mutant writes the counter it is graded on".
+# Currently FAIL: M4(pending->V.pending), M5(represent->V.represent).
+#
+# ADDED 2026-08-28 by the handoff audit. This is the fourth time this project
+# has shipped a guardrail that passed by construction, and the first time the
+# guardrail was a MUTATION test -- the thing whose entire job is to be
+# adversarial.
+#
+# M1-M5 each run a mutant and require vdetail[field] to move. That is evidence
+# only if the mutant creates an illegal STATE and a DIFFERENT piece of code
+# notices. Two of the five increment the counter themselves:
+#
+#   sim/harness.py:610-612   mutate == "pending"   -> V.pending += 1
+#   sim/harness.py:331-333   mutate == "represent" -> V.represent += 1
+#
+# Measured on an instrumented copy of the harness (portfolio, pop P, seed 7):
+#
+#   mutate='pending'    1066 counted, 1066 self-written, 0 independent.
+#                       The independent branch is `if m["pend"] is not None`
+#                       at harness.py:607, and `live` at harness.py:349-351
+#                       has ALREADY filtered `m["pend"] is None`, so it is
+#                       unreachable for every policy. M4 IS VACUOUS and has
+#                       been reporting PASS.
+#   mutate='represent'   608 counted, 304 self-written, 304 independent.
+#                       M5 still binds -- the dispatch-time check at
+#                       harness.py:262 finds it -- but the reported count is
+#                       inflated 2x.
+#
+# CONSEQUENCE, and it is the same shape as M1's: the one-pending-notification
+# constraint has NO working test. Do not put pending-notification compliance
+# in the pitch or the architecture doc, for exactly the reason the attempt cap
+# is already banned. Two of the five Stage 0 rules are now unproven.
+#
+# WHY IT IS NOT FIXED HERE. The fix is in sim/harness.py -- delete the two
+# self-writes and make the pending check independent of `live` -- and
+# sim/harness.py is FROZEN until 5 September (CLAUDE.md, tag `model-frozen`).
+# Removing the self-writes would also change M4/M5's reported counts, which
+# would move gate T9's reference. That is a model change, not a doc fix, and
+# it needs sign-off from Tanmay.
+#
+# WHEN THE FREEZE LIFTS, in this order:
+#   1. delete `V.pending += 1` from the mutate branch (harness.py:612) and
+#      `V.represent += 1` from harness.py:333.
+#   2. give `pending` a detector that `live` cannot pre-satisfy -- count at
+#      dispatch, from the harness's own record, the way cap/peak/lead do.
+#   3. re-run M4. If it now reports VACUOUS, that is the TRUE state and it
+#      belongs in this file under its own heading, not hidden by a self-write.
+#   4. re-baseline T9 with sim/t9_reference.py --recapture and paste the diff
+#      into NOTES.md.
+#
+# Do NOT "fix" M4B by deleting it, by exempting a mutant, or by making the
+# detector stop looking at `represent`. It reports VACUOUS if it ever flags
+# all five, which is its own falsifiability check.

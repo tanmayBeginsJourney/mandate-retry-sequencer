@@ -38,6 +38,7 @@ threshold:
    do not run, and a tier that did not run them says so.
 """
 import argparse
+import ast
 import json
 import os
 import sys
@@ -76,7 +77,7 @@ POP_SPECS = {
 POP_SPECS.update({f"Pc{r}": (120, 5, 300 + r, 1.05, 120) for r in range(3)})
 POP_SPECS.update({f"S2P{r}": (100, 5, 400 + r, 1.05, 120) for r in S2_SEEDS})
 
-FAST_GATES = ("M1", "M2", "M3", "M4", "M5", "M6", "M8",
+FAST_GATES = ("M1", "M2", "M3", "M4", "M4B", "M5", "M6", "M8",
               "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9",
               "S1", "S1_PD")
 FULL_ONLY = ("S2a", "S2b", "S2c", "S2_LEGACY", "S3", "S4")
@@ -262,6 +263,99 @@ def tier1():
     record("M8", "crippled oracle is detectably worse",
            PASS if o_bad < o_ok - 1e-9 else VACUOUS,
            f"fixed={o_ok*100:.1f}% crippled={o_bad*100:.1f}%")
+
+    gate_m4b()
+
+
+# ============================ M4B: THE MUTANT MUST NOT GRADE ITSELF
+def mutant_written_counters():
+    """
+    {mutation name: {violation counters it increments itself}}.
+
+    Static read of sim/harness.py: every `V.<field> += 1` that sits inside a
+    branch guarded by `mutate == "<name>"`. Returns only self-writes, so an
+    empty dict means every mutant creates an illegal STATE and lets the
+    independent dispatch-time re-check find it.
+    """
+    with open(os.path.join(HERE, "harness.py"), encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    out = {}
+
+    def mutate_names(test):
+        names = set()
+        for n in ast.walk(test):
+            if (isinstance(n, ast.Compare) and isinstance(n.left, ast.Name)
+                    and n.left.id == "mutate"
+                    and len(n.ops) == 1 and isinstance(n.ops[0], ast.Eq)
+                    and isinstance(n.comparators[0], ast.Constant)
+                    and isinstance(n.comparators[0].value, str)):
+                names.add(n.comparators[0].value)
+        return names
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        names = mutate_names(node.test)
+        if not names:
+            continue
+        for sub in ast.walk(node):
+            if (isinstance(sub, ast.AugAssign)
+                    and isinstance(sub.op, ast.Add)
+                    and isinstance(sub.target, ast.Attribute)
+                    and isinstance(sub.target.value, ast.Name)
+                    and sub.target.value.id == "V"):
+                for nm in names:
+                    out.setdefault(nm, set()).add(sub.target.attr)
+    return out
+
+
+def gate_m4b():
+    """
+    M1-M5 grade a mutant by reading vdetail[field] and requiring it to move.
+    That is evidence ONLY if the mutant creates an illegal STATE and a
+    different piece of code notices. If the mutation branch increments
+    V.<field> itself, the gate passes by construction -- the same shape as the
+    three vacuous gates in docs/03_ERRORS.md, and one level worse, because the
+    mutant is the thing that is supposed to be adversarial.
+
+    Measured 28 August 2026 on an instrumented copy of the harness:
+
+        mutate='pending'    1066 counted, 1066 written by the mutant itself,
+                               0 from the independent re-check.  M4 IS VACUOUS.
+        mutate='represent'   608 counted,  304 written by the mutant itself,
+                             304 from the independent re-check.  M5 double-counts
+                               but does still bind.
+
+    Why this gate is STATIC. The harness returns only the counter, so from the
+    outside a self-written violation and an independently-detected one are the
+    same integer. There is no behavioural probe that separates them without
+    editing sim/harness.py, which is frozen. So the gate reads the source.
+
+    FALSIFIABILITY. The detector must DISCRIMINATE, not just flag. `cap`,
+    `peak` and `lead` create state and are detected independently; if this gate
+    ever flags all five it is broken, not the harness, and it reports VACUOUS.
+
+    THE FIX IS IN harness.py AND IS BLOCKED BY THE FREEZE (CLAUDE.md, tag
+    `model-frozen`). Listed in sim/known_failures.txt until 5 September.
+    """
+    self_written = mutant_written_counters()
+    fields = {tid: field for tid, _mut, field, _d, _pe in MUTANTS}
+    flagged, clean = [], []
+    for tid, mut, field, _desc, _pe in MUTANTS:
+        if field in self_written.get(mut, set()):
+            flagged.append(f"{tid}({mut}->V.{field})")
+        else:
+            clean.append(tid)
+    if not flagged:
+        record("M4B", "no mutant writes the counter it is graded on", PASS,
+               f"all {len(fields)} Stage-0 mutants create state only")
+    elif not clean:
+        record("M4B", "no mutant writes the counter it is graded on", VACUOUS,
+               "detector flagged every mutant - it cannot discriminate")
+    else:
+        record("M4B", "no mutant writes the counter it is graded on", FAIL,
+               f"self-graded: {', '.join(flagged)}; "
+               f"independent: {', '.join(clean)}")
 
 
 # ======================================================= TIER 2: INVARIANTS

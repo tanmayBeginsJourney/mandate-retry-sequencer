@@ -2334,3 +2334,116 @@ rate of zero, a detector that works at n≥50, and a curve rather than a number.
 
 Nothing here has gone near `docs/` or the pitch. `sim/w3.py` and
 `sim/harness.py` untouched and clean.
+
+---
+
+# 28 August 2026 — M4B committed. Test-suite tripwire bypassed, on the record.
+
+**Committed by the agent session (28 Aug, evening). Authored by the session that
+found error 11.** The pre-commit tripwire blocks any commit touching
+`sim/tests.py` or `sim/known_failures.txt` and demands this entry first. Written
+because a fresh clone would otherwise get a 24-gate suite while every doc
+describes 25 — and a new session that catches the docs lying once starts
+trusting its own judgement over them, which is the most expensive failure
+available here.
+
+## Which gate changed, and to what
+
+**Added: M4B, "no mutant writes the counter it is graded on."** `sim/tests.py`
+gains `import ast`, `mutant_written_counters()`, `gate_m4b()`, and `"M4B"` in
+`FAST_GATES`. Purely additive. **No threshold moved, no gate deleted, no
+existing gate weakened.**
+
+## The numbers: before and after
+
+M4B did not exist before, so it produced nothing. It now reports **FAIL**:
+
+```
+M4B  FAIL  no mutant writes the counter it is graded on
+           self-graded: M4(pending->V.pending), M5(represent->V.represent)
+           independent: M1, M2, M3
+```
+
+Suite baseline moves **21 gates / 3 FAIL / 1 VACUOUS / 17 pass** →
+**25 gates / 5 FAIL / 1 VACUOUS / 19 pass**.
+
+**The commit also corrects four stale figures in `known_failures.txt`**, which
+is more than "adds M4B" and is recorded here rather than waved through:
+
+| entry | was | now |
+|---|---|---|
+| S2b | −14.51 (±2.24) | −14.09 (±2.09) |
+| S2c headline | +24.04 | +23.62 |
+| S2_LEGACY | −0.40 (±0.22) | −0.38 (±0.22) |
+| S1_PD | ECE 0.040 | ECE 0.026 |
+
+Plus a stale source reference (`harness.py:227` → `:312`). All four are
+**corrections toward what the suite actually produces** — the file had been
+quoting numbers the gates do not emit, and S1_PD's 0.040 was `fair_audit.py`'s
+figure on *different* populations being passed off as the gate's. None of them
+loosens anything.
+
+## Why the OLD test was wrong
+
+Not why the new one is convenient. **M4 passed by construction.**
+
+M4 runs `mutate="pending"` and requires `vdetail["pending"]` to move. It moved —
+1066 — and M4 reported PASS for the life of the suite. Those 1066 are the
+mutant's own writes: `harness.py:610-612` increments `V.pending` **inside the
+mutation branch**. The only independent detector is `if m["pend"] is not None`
+at `harness.py:607`, and `live` at `harness.py:349-351` has already filtered
+`m["pend"] is None`, so it is unreachable for every policy.
+
+Instrumented count: **1066 counted, 1066 self-written, 0 independent.**
+
+`mutate="represent"` does the same at `harness.py:333` — 608 counted, 304
+self-written, 304 independent — so M5 still binds and merely double-counts.
+
+**Consequence: the one-pending-notification rule has no working enforcement test
+in `sim/`.** With M1 already VACUOUS, two of the five Stage 0 rules are unproven.
+**Neither goes in the pitch or the architecture doc.**
+
+## What M4B actually is — corrected here on purpose
+
+**M4B is a STATIC AST PARSE of `sim/harness.py`.** It walks the tree for every
+`V.<field> += 1` sitting inside a branch guarded by `mutate == "<name>"`, and
+fails if any mutant writes the counter its own gate reads.
+
+It does **not** inject an action, and it touches no counter itself. It cannot:
+its own docstring gives the reason — *the harness returns only the counter, so
+from outside, a self-written violation and an independently-detected one are the
+same integer.* Separating them behaviourally would mean editing `harness.py`,
+which is frozen.
+
+Recording this precisely because the instruction to commit it described M4B as
+"injects below the gate and touches no counter". That description belongs to
+`agent/tests/test_stage0_enforces.py` Half B, which is a different test in a
+different directory. A NOTES entry that misdescribes the gate it is justifying
+would be error 9, 11, 12 and 13's shape — a doc confidently describing code it
+does not match — inside the very entry written to stop that happening.
+
+M4B carries its own falsifiability check: if it ever flags **all five** mutants
+it reports VACUOUS, because a detector that flags everything discriminates
+nothing.
+
+## Who is fixing it, and when
+
+**Owner: the agent session, after the LLM layer.** Blocked until then by the
+freeze — the repair is in `sim/harness.py` (tag `model-frozen`, CLAUDE.md), and
+removing the self-writes changes M4/M5's reported counts, which moves gate T9's
+reference. That is a model change needing sign-off from Tanmay, not a doc fix.
+
+Procedure when the freeze lifts is written out in `sim/known_failures.txt` under
+M4B: delete the two self-writes; give `pending` a dispatch-time detector that
+`live` cannot pre-satisfy; re-run M4 and, if it reports VACUOUS, record that as
+the true state under its own heading; re-baseline T9 with
+`sim/t9_reference.py --recapture` and paste the diff here.
+
+**Do not make M4B green by deleting it, by exempting a mutant, or by narrowing
+what it inspects.**
+
+## The bypass
+
+Committed with `--no-verify`, as the tripwire's own instructions require, with
+this entry referenced from the commit message. The bypass is on the record and
+that is the point of it.
