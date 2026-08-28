@@ -1,13 +1,17 @@
 # 00 — HANDOFF
 
-## Where things stand, 27 August 2026
+## Where things stand, 28 August 2026
 
-Research: **done. Stop doing it.**
+Research and simulation: **done and FROZEN.** Stop doing it.
 Production code: **none exists.** That is the entire problem.
-Deadline: **5 September 2026.** Nine days.
+Deadline: **5 September 2026 — 8 days from today.**
 
-Four simulation harnesses have been written. The current one (`sim/`) is sound
-and tested. The old one (`legacy/`) is defective and frozen.
+**If you are the next session, read `docs/07_AGENT_BRIEF.md` first, then
+`docs/06_MODEL_CARD.md`.** Between them they carry everything needed to build
+the agent without reading the simulation code.
+
+Four simulation harnesses have been written. The current one (`sim/`) is sound,
+tested and frozen. The old one (`legacy/`) is defective and frozen.
 
 ## Decided — do not relitigate
 
@@ -15,7 +19,7 @@ and tested. The old one (`legacy/`) is defective and frozen.
 |---|---|
 | Track 3, mandate retry sequencing | Razorpay lists it as an example direction |
 | Belief over balance **and** payday | Payday posterior is where the moat lives |
-| `solo_shared_pd` is the policy | Best measured; +10.2 pts from pooling |
+| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth +9.53 pts (±1.81), gated as S2a |
 | **No** coordinated budgeting | Measured −6 pts twice. Cut. |
 | No LLM on the debit-timing path | ADR-005. Deliberate, defensible. |
 | **Yes** LLM on diagnosis / intervention choice / audit narrative | Needed for the track, and honest |
@@ -52,9 +56,15 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
 
 ## Open — genuinely unresolved
 
-1. **How accurately can payday be estimated?** Decides whether the sophisticated
-   version is worth building at all. Resolution: make the agent learn it online
-   and expose its own uncertainty. Do not chase the number externally.
+1. **How accurately can payday be estimated in reality?** Still unmeasured, and
+   still the one fact that decides whether the sophisticated version is worth
+   building. What IS now measured is where the crossover sits: the system
+   loses to `payday_wait` at ±1 day, ties at ±3, and wins by +23.6 at ±5
+   rising to +53.2 at ±14 (`06_MODEL_CARD.md` §2). So the open question is
+   narrow and concrete: **is real payday uncertainty above or below ~4 days?**
+   Resolution unchanged: make the agent learn payday online and expose its own
+   uncertainty, so the posterior width is a product feature rather than an
+   assumption. Do not chase the number externally.
 2. **Five gates are red on a clean checkout: S1, S1_PD, M1, S2b, S2_LEGACY.**
    **S1 measures the wrong filter** — it runs `portfolio`, which carries the
    point-estimate `w3.Belief`, not the `w3.BeliefPD` the project recommends.
@@ -76,12 +86,16 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    assumes hard reject, which is the conservative choice.
 5. **Does exhausting attempts cancel a mandate, or halt it?** One news report
    says cancel; Razorpay's own docs suggest halt-and-manually-chargeable.
-6. **Does pooling actually beat placebo pooling?** S2 says no at the
-   operating point it runs at. But S2 compares `solo_shared` /
-   `solo_placebo` / `solo_pop` — the **point-estimate** payday trio —
-   while the moat in `02_RESULTS.md` is claimed for the **payday
-   posterior** trio (`*_pd`). The gate may be testing the wrong pair.
-   Unresolved, and it sits on the central claim.
+6. ~~**Does pooling actually beat placebo pooling?**~~ **RESOLVED 27–28 August.**
+   The old S2 was testing the point-estimate trio, not the payday-posterior
+   trio the moat is claimed for. Rebuilt as three arms. **S2a — the moat —
+   passes at +9.53 pts (±1.81)** and survives the belief refit (+9.61, ±1.67
+   on held-out populations). What remains open is narrower: **S2b shows the
+   placebo is not a clean control** (−14.09 pts), because it injects *wrong*
+   observations rather than neutral extra ones. A control that matches the
+   update count without supplying misinformation — label-shuffled observations
+   at the matched base rate — has still not been built. Until it is, quote
+   S2a and **never** S2c.
 
 ## The three-way split — keep this true in the code
 
@@ -91,12 +105,12 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
 
 ## What "done" looks like on 5 September
 
-- [ ] Public repo, commits visible across the whole nine days
+- [ ] Public repo, commits visible across the whole period
 - [ ] Agent runs end to end over a batch of synthetic merchants
 - [ ] One number: money recovered, with `payday_wait` printed beside it
 - [ ] Audit log: every money action, with reason, constraint check, outcome
 - [ ] Stopping rules explicit and demonstrable
 - [ ] One failure handled gracefully, on camera
 - [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the six errors
+- [ ] 5-minute pitch video, opening with the errors (there are ten)
 - [ ] `NOTES.md` full of real mess

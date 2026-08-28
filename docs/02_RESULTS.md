@@ -20,13 +20,11 @@ Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 > pts (±1.67)**, still significant. Pooling was not compensating for the bad
 > prior.
 >
-> **What is NOT on this page:** the ML baseline, the misspecification study and
-> the six-world table. Those come from `sim/ml_study.py`, not from the gated
-> suite, and under the numbers rule in `CLAUDE.md` they may not be quoted here
-> or in the pitch. They are in `NOTES.md`, 28 August. The one-line summary,
-> for orientation only: **the fitted Bayes filter beats the ML baseline in all
-> six worlds by 5–12 points, and a Bayes+ML hybrid is worse than the filter
-> alone.**
+> **The ML comparison lives in `06_MODEL_CARD.md`**, with the six-world
+> table. Those numbers come from `sim/ml_study.py`, not the gated suite, and
+> are labelled as such under the numbers rule in `CLAUDE.md`. Summary: **the
+> fitted Bayes filter beats the ML baseline in all six worlds by 5–12 points,
+> and a Bayes+ML hybrid is worse than the filter alone.**
 >
 > **The one baked-in population fact, stress-tested.** `w3.FITTED_BELIEF`
 > carries `prior_day0=8.0`, an 8x prior weight on payday hypothesis 0, fitted
@@ -59,33 +57,59 @@ Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 
 **Setup.** World calibrated so Razorpay's documented UPI schedule reproduces
 ~30% per-attempt approval (spend=1.05). 120-day horizon, 30-day billing cycles,
-5 mandates/customer, 4 seeds, n=30 customers. Primary metric: **billing cycles
-collected ÷ cycles due**, where a dead mandate forfeits all remaining cycles.
+5 mandates/customer. Primary metric: **billing cycles collected ÷ cycles due**,
+where a dead mandate forfeits all remaining cycles.
 
 **Known bias risks in this design, stated up front:**
-- Small n (30) and few seeds (4). Error bars are wide. Re-run bigger before the pitch.
-- The world model, the policies and the tests were all built by one party in one pass.
+- The world model, the policies and the tests were all built by one party.
 - `payday_err` is swept, but the *shape* of the payday distribution is assumed.
-- Top-up probability is pinned at 0 in these runs. It matters — see below.
+- Top-up probability is pinned at 0 except where stated. It matters — see below.
+- **No real data has ever entered this project.** Every number on this page is
+  simulation. See `06_MODEL_CARD.md`, "what this has never been tested on".
 
 ---
 
-## The headline is conditional
+## The headline is conditional — REGENERATED 28 August 2026
 
-| Payday known to | `payday_wait` (5-line heuristic) | best full system | verdict |
-|---|---|---|---|
-| ±1 day | 98.9% | 99.8% | tie — no reason to build |
-| ±3 days | **96.0%** | 87.5% | **heuristic wins by 8.5** |
-| ±7 days | 59.4% | **83.4%** | **system wins by 17.8** (±7.5, SIG) |
+n=100, **8 held-out populations** (seeds 700–707, never used to fit anything),
+120-day horizon, paired 2 SE. `bayes fitted` is `solo_shared_pd` with
+`w3.FITTED_BELIEF` — **the shipping policy**.
 
-The crossover sits between ±3 and ±7 days. **This is the number that decides
-whether the project is worth building**, and it is an empirical fact about
-Indian salary timing we have not measured.
+*Not gate-protected. Reproduce with `python sim/headline.py`.*
 
-Decision taken: do not chase it externally. Make the agent *learn* payday online
-and report its own uncertainty. The posterior width becomes a product feature.
+| Payday known to | `payday_wait` (5-line heuristic) | bayes shipped | **bayes fitted** | oracle | fitted − heuristic |
+|---|---|---|---|---|---|
+| ±1 day | **99.24%** | 93.61% | 95.73% | 100% | **−3.51** ±0.36 SIG — heuristic wins |
+| ±3 days | 94.65% | 88.62% | **95.82%** | 100% | +1.17 ±1.35 **n.s. — tie** |
+| ±5 days | 72.18% | 83.57% | **95.82%** | 100% | **+23.64** ±2.61 SIG |
+| ±7 days | 59.14% | 82.16% | **95.57%** | 100% | **+36.43** ±3.37 SIG |
+| ±10 days | 48.11% | 79.87% | **95.62%** | 100% | **+47.50** ±3.17 SIG |
+| ±14 days | 40.01% | 73.40% | **93.16%** | 100% | **+53.15** ±2.90 SIG |
 
-## Full table
+**The crossover sits between ±3 and ±5 days.** This is the number that decides
+whether the project is worth building, and it remains an empirical fact about
+Indian salary timing that we have not measured.
+
+**Two things changed when the belief was fitted, and both matter for the pitch.**
+The old version of this table (n=30, 4 seeds, unfitted belief) reported the
+heuristic *beating* the system by 8.5 points at ±3 days. That region is gone:
+at ±3 it is now a statistical tie, and the system only loses at ±1, by 3.5
+points. And the fitted system is **flat at ~95–96% from ±1 all the way to
+±10**, where the heuristic collapses from 99% to 48%. The system's value is not
+that it is better on average — it is that **it does not care how wrong the
+payday estimate is**, which is the whole product argument.
+
+Decision taken: do not chase the payday parameter externally. Make the agent
+*learn* payday online and report its own uncertainty. The posterior width
+becomes a product feature.
+
+## Full table — HISTORICAL (n=30, 4 seeds, unfitted belief)
+
+⚠️ **Superseded. Kept for the policy ranking, not for the values.** These were
+measured at n=30 with 4 seeds before the belief was fitted, and every `_pd` row
+understates what the shipping configuration now achieves. Do not quote a number
+from this table. The policy *ordering* is still correct and is why
+`solo_shared_pd` was chosen.
 
 | Policy | ±1d | ±3d | ±7d |
 |---|---|---|---|

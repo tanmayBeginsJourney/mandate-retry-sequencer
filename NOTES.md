@@ -1624,3 +1624,95 @@ hypothesis index. Not run; the honest limit of this result.
 `sim/harness.py` or the fitted constants before 5 September without explicit
 approval. The model is done. Everything after this is the agent, and its
 probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`.
+
+---
+
+## 2026-08-28 — Handoff: docs audited against the code, two new pages, one new check
+
+The deliverable of this session is that `docs/` is now self-sufficient. Audited
+by opening the files against the code at `model-frozen`, not from memory.
+
+### Doc/code contradictions found and fixed
+
+Beyond the LTV multiplier and the 0.92 discount already logged today:
+
+| where | claimed | actually |
+|---|---|---|
+| `CLAUDE.md` | "the 17-gate suite" | 24 gates |
+| `CLAUDE.md` | "The full suite takes ~27 minutes" | ~81s full, ~34s fast |
+| `CLAUDE.md` | "Three gates are red on a clean checkout" | five: S1, S1_PD, M1, S2b, S2_LEGACY |
+| `CLAUDE.md` | "do not quote any pooling number until M1 and S2 are resolved" | pooling IS resolved; S2a passes at +9.53 |
+| `CLAUDE.md` | fast tier = "M1-M6, M8, T1-T9, S1" | S1_PD too; full tier adds S4 |
+| `CLAUDE.md` | repo layout listed 3 files under `sim/` | 18 |
+| `00_HANDOFF.md` | "27 August 2026 ... Nine days" | 28 August, 8 days |
+| `00_HANDOFF.md` | "+10.2 pts from pooling" | superseded; +9.53 gated |
+| `00_HANDOFF.md` item 6 | "Does pooling beat placebo? Unresolved" | resolved 27-28 Aug |
+| `02_RESULTS.md` | headline table at n=30 / 4 seeds / unfitted belief | regenerated, see below |
+| `04_BUILD_PLAN.md` | "Two new policy variants are authorised" | four exist |
+| `04_BUILD_PLAN.md` | "`ml_index` beats `solo_shared_pd` by +4.03" | superseded by the fair fight |
+| `05_TEST_DESIGN.md` | A3/A4 discharged | A2 and A6 are discharged too |
+
+### The headline table was stale in a way that mattered
+
+`02_RESULTS.md`'s conditional headline — the number that decides whether the
+project is worth building — was measured at **n=30, 4 seeds, on the unfitted
+belief**, and reported the heuristic *beating* the system by 8.5 points at ±3
+days. Regenerated at n=100 across 8 held-out populations on the fitted filter
+(`sim/headline.py`, not gate-protected):
+
+| payday known to | `payday_wait` | shipped | **fitted** | fitted − heuristic |
+|---|---|---|---|---|
+| ±1 | **99.24%** | 93.61% | 95.73% | **−3.51** ±0.36 SIG |
+| ±3 | 94.65% | 88.62% | **95.82%** | +1.17 ±1.35 n.s. |
+| ±5 | 72.18% | 83.57% | **95.82%** | **+23.64** ±2.61 SIG |
+| ±7 | 59.14% | 82.16% | **95.57%** | **+36.43** ±3.37 SIG |
+| ±10 | 48.11% | 79.87% | **95.62%** | **+47.50** ±3.17 SIG |
+| ±14 | 40.01% | 73.40% | **93.16%** | **+53.15** ±2.90 SIG |
+
+**The crossover moved from "between ±3 and ±7" to "between ±3 and ±5", and the
+region where the heuristic beats the system shrank to ±1 day only.** The old
+table's ±3 row said the heuristic won by 8.5 points; it is now a statistical
+tie.
+
+The better framing, which the old table could not show: the fitted system is
+**flat at 95–96% from ±1 to ±10** while the heuristic falls from 99% to 48%.
+The product argument is not "better on average", it is **"does not care how
+wrong the payday estimate is"**.
+
+### New: `sim/verify_brief.py`
+
+Both contradictions found earlier today were *prose claims that nothing
+checked*. `docs/07_AGENT_BRIEF.md` documents an interface the next session will
+act on — constants, a construction recipe, a decision recipe — so that prose is
+now asserted in code. It checks every quoted constant, that
+`BeliefPD(**FITTED_BELIEF)` still raises (the constant carries a key the belief
+rejects), and that the documented decision recipe reproduces `harness.py`'s own
+belief branch **bit-for-bit** on target day, `p_now`, `p_later` and the index
+score. Under a second, no simulations. Passes.
+
+Not added as a gate: it needs no harness runs, and destabilising a frozen suite
+for a doc check was not worth it. Run it after any change to `w3.py` or
+`harness.py`.
+
+### New docs
+
+- **`06_MODEL_CARD.md`** — what ships, what it is worth, and a section
+  "what this has never been tested on" listing nine limits, including that no
+  real data has ever entered this project and that the legality of the
+  cross-merchant moat is still `[GUESS]`. Also the reproduction order for the
+  gitignored `ml_artifacts/`, which was documented nowhere.
+- **`07_AGENT_BRIEF.md`** — the exact interface, the Stage 0 task, the freeze,
+  and a vocabulary table. **"Stage 0" was used in five documents and defined in
+  none of them**; nor were `payday_err`, `pop_spend`, `cycle_close`, or how to
+  build a `pop`. A reader would have had to open `sim/` to find any of it.
+
+### The thing I most want the next session not to get wrong
+
+Stage 0 in `harness.py` **counts** violations, it does not **prevent** them —
+deliberately, because that is what makes the counters falsifiable, and three
+gates in the old suite were vacuous precisely because they checked something
+the policy had already guaranteed. But a product cannot ship a constraint layer
+that only takes notes. That is now the first item in the build plan and its own
+section in the brief, with both halves spelled out: enforce in the agent, and
+keep the independent counter behind it so the enforcement can still be proved
+rather than asserted.

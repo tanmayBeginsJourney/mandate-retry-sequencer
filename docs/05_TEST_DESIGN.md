@@ -162,11 +162,20 @@ difference is the finding.
 | **S4** | The fitted belief configuration beats the shipped one by >2 SE. The decision number for which probability engine ships. | `ignore_bcfg` — drops the fitted config, gain collapses to +0.00 |
 | **S1_PD** | S1's threshold, unchanged, applied to `w3.BeliefPD` — the filter that actually ships. S1 runs `portfolio`, which carries `w3.Belief`, so it has never measured the product. | shares S1's binning; fails on monotonicity |
 
-**A4 is now discharged.** The adversarial sweep list below named the `p_later`
-discount (A3) and the LTV multiplier (A4) as constants pinned to convenient
-values. Both were swept 28 Aug 2026. The LTV multiplier turned out to be a
-**no-op for every policy** and was removed. The discount is **not** a no-op and
-now carries a reported range (78.7%–83.1% over 0.80–1.00) rather than a point.
+**Four of the six Tier-4 adversarial sweeps are now discharged**, 28 Aug 2026.
+The list below named six modelling choices pinned to convenient values. Status:
+
+| ID | parameter | status |
+|---|---|---|
+| A1 | top-up probability | **still pinned at 0** except one `topup_p=0.25` row. The old-harness sweep suggesting ~half the gain was "customers never top up" has NOT been redone on `w3`. |
+| A2 | payday estimate error | **DONE** — swept ±1 to ±14, `sim/headline.py`. The crossover against `payday_wait` is between ±3 and ±5 days. |
+| A3 | `p_later` discount | **DONE** — swept 0.80–1.00. Not a no-op: it changes the index's sign. Broad plateau, argmax moves between population sets. Reported as a range, 78.7%–83.1%, never as a point. |
+| A4 | LTV multiplier | **DONE, and removed.** Swept over {0,1,6,20}: a **no-op for every policy**, because `value` is strictly positive so it cannot flip the index's sign, and non-budgeted policies commit every positive-score mandate regardless of rank. It was live and inert. |
+| A5 | horizon | **still pinned at 120 days.** |
+| A6 | payday dispersion | **DONE** — `payday_day0_frac` swept 0.2–0.8 with the prior held fixed, `sim/stress_day0.py`. 6.95 pts of degradation, no cliff. |
+
+A1 and A5 remain open and are the two places an unswept assumption could still
+be flattering the result.
 
 ## Specified but NOT implemented
 

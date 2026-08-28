@@ -1,9 +1,30 @@
 # 04 — BUILD PLAN
 
-Nine days. Day 1 is 27 August. Deadline 5 September.
+Deadline **5 September 2026**. Day 1 was 27 August; **today is 28 August and
+the simulation is finished and frozen.** Seven working days remain.
 
 **Rule: if a task does not move us toward a running agent with an audit trail
-and a measured batch result, it is out of scope this week.**
+and a measured batch result, it is out of scope.**
+
+## WHERE WE ACTUALLY ARE, 28 August
+
+Days 1–2 were spent on the simulation, not the agent, and that was the right
+call — the model was carrying a dead constant, an unfitted belief and a
+calibration gate pointed at the wrong object. It is now frozen at tag
+`model-frozen`. **Nothing in `sim/` needs further work before the deadline.**
+
+| Day | Date | What |
+|---|---|---|
+| 3 | **29 Aug** | `agent/` skeleton: detect → diagnose → choose → execute → log. Wire `w3.BeliefPD` + `w3.FITTED_BELIEF` + `w3.index_score` in as the timing brain. Every action returns a structured record, not a print. |
+| 4 | **30 Aug** | **Stage 0 as enforced middleware.** Today it only *counts* violations after the fact. Making it *refuse* is the first real product task — see `07_AGENT_BRIEF.md`. |
+| 5 | **31 Aug** | Audit log as a queryable artifact: action, reason, constraint check, outcome, timestamp. Stopping rules explicit and demonstrable. |
+| 6 | **1 Sep** | LLM layer: root-cause diagnosis, intervention choice, per-action justification. **Build the failure path first**, then the happy path. |
+| 7 | **2 Sep** | The batch number. Money recovered over synthetic merchants, with `payday_wait` printed beside it, always. Redo the top-up sweep on `w3`. |
+| 8 | **3 Sep** | Architecture doc, one page. |
+| 9 | **4 Sep** | Pitch video. **Open with the errors** — lead with error 5, the broken oracle, then error 7, the ML result that reversed. |
+| — | **5 Sep** | Submit. Buffer is Day 9; something will break. |
+
+## Original day-by-day detail (kept — the content still applies)
 
 ## Day 1–2 — agent skeleton
 - `agent/` package. Loop: **detect → diagnose → choose → execute → log**
@@ -39,7 +60,8 @@ and a measured batch result, it is out of scope this week.**
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the six errors.** Lead with error 5, the broken oracle.
+- **Open with the errors** (there are ten; see `03_ERRORS.md`). Lead with
+  error 5, the broken oracle, then error 7, the ML result that reversed.
 - Then the mechanism, then the demo, then the conditional result.
 - The conditional result is a *strength*: it shows we measured whether the
   sophisticated thing was worth it and are prepared to say when it isn't.
@@ -67,28 +89,39 @@ comparison biased toward Bayes by construction, and it means we cannot claim
 the timing brain is a good choice without testing it where its assumptions are
 wrong.
 
-> **CORRECTION, 28 August 2026 — the paragraph above is overstated and the ML
-> study measured it.** The filter matches the functional *shape* of the world.
-> It does not match its *parameters*, and in one respect it cannot:
-> `BeliefPD.hyp` is a stride-3 grid `[0, 3, …, 27]`, so only **74%** of
-> customers have a representable true payday, and among the 38% not paid on
-> day 0 only **31.7%** do. `est_salary` is also wrong by ±30% by construction
-> and `est_spend` is a population rate. So in-distribution comparisons are
-> biased toward Bayes **less than this claimed**, and `ml_index` in fact beats
-> `solo_shared_pd` in world A by +4.03 pts (±2.00). Do not repeat "true
-> generative model" without this qualification. See `NOTES.md`, 28 August.
+> **CORRECTION, 28 August 2026 — the paragraph above is overstated.** The
+> filter matches the functional *shape* of the world but not its *parameters*.
+> The stride-3 grid `[0, 3, …, 27]` left only **74%** of customers with a
+> representable true payday; `est_salary` is wrong by ±30% by construction and
+> `est_spend` was a population rate.
+>
+> **Those three parameters have since been fitted** (`w3.FITTED_BELIEF`,
+> `sim/fit_belief.py`), which is worth **+11.66 pts (±1.61)**, gated as S4.
+>
+> **And that reversed the ML result.** An intermediate finding on this page's
+> earlier revision — "`ml_index` beats `solo_shared_pd` in world A by +4.03" —
+> is **superseded and must not be quoted.** It compared a fitted GBDT against
+> an unfitted filter. Against the fitted filter, ML loses in all six worlds by
+> 5–12 points and a Bayes+ML hybrid is worse than the filter alone. That is
+> error 7 in `03_ERRORS.md`. Current numbers: `06_MODEL_CARD.md`.
 
 An ML baseline plus a **misspecification study** is therefore in scope,
 and it is directly judged: "AI Judgment: whether AI tools, LLMs, or agents were
 applied appropriately instead of forcing unnecessary tech stacks."
 
-Two new policy variants are authorised, and only these two:
-- **`explore`** — uniformly random legal day within the cycle, under the same
-  Stage 0 constraints as everything else. Exists to generate an unbiased
-  training set, not as a candidate policy.
-- **`ml_index`** — identical index policy, constraint layer and metric, with
-  **only** the probability engine swapped for an ML estimator. It is an
-  ablation, not a product policy.
+Four research-only policy variants were built. **None of them is the product**
+and none may be reopened — the model is frozen:
 
-This does **not** reopen coordinated budgeting, and it does not authorise any
-further policy variants. The agent build remains the deliverable.
+- **`explore`** — uniformly random legal day within the cycle, under the same
+  Stage 0 constraints as everything else. Generates an unbiased training set.
+- **`ml_index`** — identical index policy, constraint layer and metric, with
+  **only** the probability engine swapped for a GBDT. An ablation.
+- **`explore_pd`** — as `explore`, but carrying the payday-posterior belief so
+  each training row can be tagged with the filter's own summaries. Authorised
+  28 August for the hybrid.
+- **`ml_index_pd`** — the hybrid: the same index policy, scored by a GBDT that
+  is additionally handed four Bayes posterior summaries. Authorised 28 August.
+  **It loses to the plain fitted filter by 5–10 points in every world.**
+
+This does **not** reopen coordinated budgeting. **The shipping policy is
+`solo_shared_pd` with `w3.FITTED_BELIEF`.** The agent build is the deliverable.
