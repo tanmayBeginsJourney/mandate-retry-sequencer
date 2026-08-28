@@ -2642,3 +2642,44 @@ against the published +0.256 row.
 
 Every run goes through `agent/tests/_parallel.py`, one process per run,
 `max_tasks_per_child=1`. `sim/` is untouched.
+
+## AMENDMENT to the pre-registration, same day, still before any run
+
+Found while writing the oracle, not after seeing a number. Recorded as an
+amendment rather than edited into the text above, because a pre-registration
+you can silently revise is not one.
+
+**The oracle cannot be consulted at the true change points, and neither can
+anything else.** `agent/loop.py` calls `monitor.assess(t)` only when it has
+something to do: once per pending dispatch, and once per customer at the hour-8
+decision. Windows run `[hour 8, hour 14)`. So the *entry* boundary is consulted
+exactly (hour 8 is a decision hour), but the *exit* boundary at hour 14 is not
+consulted at all — the next question anyone asks the monitor is at hour 8 the
+following day. A latched-state trajectory therefore shows ~18 hours of
+"late resumption" for a perfect oracle, imposed by the consultation schedule
+rather than by any detector.
+
+This does not change behaviour — there are no dispatches between hour 14 and the
+next hour 8, and the next day's dispatch phase re-assesses before it acts — but
+it changes what the hour-level loss means. So G-1 splits, and the split makes
+the gate stronger rather than weaker:
+
+* **G-1a — the analytic oracle**, `s*(t) = 1[t ∈ W]`, loss identically zero.
+  **True by construction and carrying no information**, exactly as flagged.
+* **G-1b — the oracle as consulted**, run through the real loop and graded from
+  its transition log like every other arm. Its loss is the **consultation
+  floor**. `L(oracle-as-consulted) ≤ L(every statistical detector)` at every
+  severity is a real claim that can fail, and it is now the content of G-1.
+
+The four mutants are run and graded the same way, so nothing is compared
+against an idealisation it never had to meet. Prediction **E-BEN-3** is scored
+against the as-consulted oracle's `LATE` as the floor, not against zero;
+predicting `LATE > DELAY` while a ~18h/window floor exists would have been a
+prediction that could not lose.
+
+Run budget fixed here, before running: 320 runs, one process each.
+Detection with the response off — 3 statistical detectors × 4 severities, the
+as-consulted oracle × 4 severities, 4 mutants × severities {0.40, 0.80}.
+Recovery with pausing on — {monitor-off, `min_attempts=8`, oracle} × 4
+severities. G-3's behavioural witness — 4 mutants at severity 0.40, pausing on.
+Eight populations everywhere.
