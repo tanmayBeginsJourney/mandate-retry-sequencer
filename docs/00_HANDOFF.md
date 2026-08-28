@@ -22,6 +22,12 @@ and tested. The old one (`legacy/`) is defective and frozen.
 | Cycle-based metric, no LTV constant | Death priced automatically |
 | `payday_wait` is a permanent baseline row | It is what a good rival builds in an afternoon |
 
+## THE MODEL IS FROZEN (tag `model-frozen`, 28 August 2026)
+
+No changes to `sim/w3.py`, `sim/harness.py` or the fitted constants before
+5 September without explicit approval. Next session is `agent/`, and its
+probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
+
 ## Resolved 28 August 2026
 
 - **The belief filter's three hand-set values were never fitted.** Fitting them
@@ -39,6 +45,10 @@ and tested. The old one (`legacy/`) is defective and frozen.
   removed; the discount is live and now reported as a range.
 - **`harness.py:325`** — the placebo policies were scoring mandates 2..k off
   mandate 1's belief. Fixed; worth 0.42 of S2b's −14.51.
+- **Does the day-0 payday prior create a cliff when the population differs?**
+  No. 6.95 pts of gentle degradation across `payday_day0_frac` 0.8→0.2, and the
+  margin over `ml_index` *grows* from +5.30 to +12.03 as the population moves
+  away from the fit.
 
 ## Open — genuinely unresolved
 

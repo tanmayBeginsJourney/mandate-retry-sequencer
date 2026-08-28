@@ -14,6 +14,28 @@ The single most important thing about this project:
 
 ---
 
+## THE MODEL IS FROZEN — tag `model-frozen`, 28 August 2026
+
+**Do not change `sim/w3.py`, `sim/harness.py`, or the fitted constants
+(`w3.FITTED_BELIEF`, the `0.92` discount) before 5 September without explicit
+approval from Tanmay.** Not to tidy them, not to squeeze another point out of
+them, not because a better idea turned up. The simulation model is done.
+
+Everything from here is `agent/`. The probability engine is `w3.BeliefPD`
+configured with `w3.FITTED_BELIEF` — wire it in, do not rewrite it.
+
+What is still open and still allowed: `agent/`, `docs/`, `NOTES.md`, the pitch,
+and the architecture document. `sim/tests.py` may gain gates but no gate's
+threshold may move.
+
+Why this rule exists: the model went through four significant corrections in a
+single day (a dead LTV multiplier, a placebo forecast defect, an unfitted
+belief, and a fitted-then-brittle prior that had to be refitted). Each was
+worth making. None of them is worth making on 4 September with a deadline on
+the 5th and no time to re-run the suite.
+
+---
+
 ## Hard rules. These are not preferences.
 
 ### 1. Never weaken a test to make it pass

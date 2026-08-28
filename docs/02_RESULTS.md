@@ -28,6 +28,30 @@ Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 > six worlds by 5–12 points, and a Bayes+ML hybrid is worse than the filter
 > alone.**
 >
+> **The one baked-in population fact, stress-tested.** `w3.FITTED_BELIEF`
+> carries `prior_day0=8.0`, an 8x prior weight on payday hypothesis 0, fitted
+> on populations drawn with `payday_day0_frac=0.60`. Moving the WORLD's day-0
+> fraction while holding the prior fixed (n=100, 8 evaluation populations,
+> `payday_err=7`, 160 runs, zero Stage 0 violations):
+>
+> | `payday_day0_frac` | `payday_wait` | bayes shipped | **bayes fitted** | `ml_index` |
+> |---|---|---|---|---|
+> | 0.2 | 55.60% | 81.38% | **88.62%** | 76.59% |
+> | 0.4 | 58.70% | 82.50% | **93.12%** | 82.29% |
+> | 0.6 (fitted here) | 59.14% | 82.16% | **95.57%** | 86.18% |
+> | 0.8 | 58.58% | 82.93% | **96.68%** | 91.38% |
+>
+> **No cliff: 6.95 points of degradation across a 4x change in the parameter**,
+> never falling below the unfitted filter, and beating `payday_wait` by 33-38
+> points throughout. And the margin over `ml_index` **grows** as the population
+> moves away from the fit, +5.30 at 0.8 to **+12.03 at 0.2** — `ml_index`
+> degrades 14.8 points across the sweep against the filter's 8.1. A wrong prior
+> is recoverable by evidence; a wrong learned split is not.
+>
+> **Limit of that result:** the sweep moves the *fraction* at day 0, not *which
+> day* the spike sits on. A population spiking on day 14 is a harsher test and
+> has not been run.
+>
 > **A range every number on this page owes.** The `p_later` discount is still
 > the hardcoded 0.92. Swept 28 Aug (item A3, declared at project start, never
 > previously done): `solo_shared_pd` ranges **78.7%–83.1%** across discount

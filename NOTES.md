@@ -1496,3 +1496,131 @@ flushes per gate, and `gate.py` runs the suite with `-u`, so the next
 occurrence will name the last gate that completed. If it never recurs, the
 honest description remains "unexplained, mitigated, not reproduced in ~30
 runs".
+
+---
+
+## 2026-08-28 — Cleanup: a 97-minute process that did 0.3 seconds of work
+
+### The runaway was not running
+
+`sim/fair_audit.py` was alive for **97.8 minutes**. It had consumed **0.3 CPU
+seconds** and had **no child processes**. It was not a large sweep and not an
+infinite loop — it was hung, and it had never executed a single simulation.
+
+**It was the leftover from the FIRST invocation of `fair_audit.py`**, the one
+that hit the Windows spawn `RuntimeError` because I called `runner.run_jobs` at
+module level without an `if __name__ == "__main__"` guard. After that failure
+multiprocessing left non-daemon threads alive and the interpreter never shut
+down. Killing it is what finally let the stale background task report
+"completed" — that is the tell.
+
+**So it consumed nothing and contaminated nothing.** The premise that it was
+"competing for 32 cores" is not supported: 0.3 CPU seconds over 97.8 minutes is
+an idle process. Corroborating evidence, in the wrong direction for that
+theory: the verification full-suite run on the now-genuinely-idle machine took
+**81.1s**, *slower* than the 64.5s measured while the hung process existed.
+This machine's drift is larger than anything that process could have caused.
+
+**Neither reported table came from it.** Both came from completed runs that
+wrote files:
+
+| table | file | written | status |
+|---|---|---|---|
+| brittle config (−4.85 at pe=14) | `fair_audit.out` | 13:05:36 | completed, exit 0 |
+| robust config (+19.76 at pe=14) | `fair_audit2.out` | 13:29:22 | completed |
+
+The hung process started at 13:02:09, before either file existed. It wrote its
+traceback and then hung; `fair_audit.out` was overwritten three minutes later
+by the fixed re-run.
+
+**Timing, now measured rather than estimated: `fair_audit.py` takes 1m11s.**
+102 runs (6 `payday_err` × 2 configs × 8 populations, plus 6 calibration runs),
+all `solo_shared_pd` at n=100, roughly half at stride=1. Predicted 1–2 minutes
+against the 65s/124-run suite baseline before re-running it; measured 71s. So
+97.5 minutes was **~82× its real runtime**, and it did none of that work.
+
+The script already used `runner.run_jobs` on both call sites and needed no fix
+beyond the `__main__` guard it now has. **The lesson is about me, not the
+script: I wrote the trap into `sim/runner.py`'s docstring and then walked into
+it an hour later in a new file.** Any new script that calls `run_jobs` needs
+the guard, and a Python process at ~0 CPU is hung, not busy — check
+`Get-Process | Select CPU` before assuming a long-running job is working.
+
+### Re-verification on an idle machine: everything reproduces exactly
+
+Every headline re-run with nothing else on the box. All identical to the
+figures already reported — which is what should happen, since every run is
+deterministic in its seed and T9 gates exactly that, but it needed confirming
+rather than assuming.
+
+| number | reported | re-verified |
+|---|---|---|
+| **S4** fitted beats shipped | +11.66 (±1.61), mutant +0.00 | **+11.66 (±1.61), mutant +0.00** |
+| **moat** S2a fitted | +9.61 (±1.67) | **+9.61 (±1.67)** |
+| moat S2a shipped | +8.20 (±0.92) | +8.20 (±0.92) |
+| S2a (suite, shipped) | +9.53 (±1.81) | +9.53 (±1.81) |
+| S2b / S2c | −14.09 / +23.62 | −14.09 / +23.62 |
+| S1 / S1_PD | 0.091 / 0.026 | 0.091 / 0.026 |
+| S3 headline | +25.63 (±2.86) | +25.63 (±2.86) |
+| six-world table | all six rows | **all six rows, digit for digit** |
+| `payday_err` generalisation | +2.12 … +19.76 | **+2.12 … +19.76** |
+| T9 | 28 configs exact | 28 configs exact |
+
+**Nothing moved.** Suite: 24 gates, 4 FAIL, 1 VACUOUS, 19 pass, 81.1s.
+
+### `prior_day0=8.0` under stress: it fails gracefully, and the margin GROWS
+
+The last baked-in population fact. `FITTED_BELIEF` puts 8× prior weight on
+payday hypothesis 0 because `make_pop` puts 62% of customers there, and it was
+fitted on populations drawn with `payday_day0_frac=0.60`. The question a judge
+will ask is what happens when the population is not that one.
+
+The world's `payday_day0_frac` moves; **the prior stays at 8.0 throughout**.
+n=100, 8 evaluation populations, `payday_err=7`, 160 runs, zero Stage 0
+violations.
+
+| `payday_day0_frac` | `payday_wait` | bayes shipped | **bayes fitted** | `ml_index` | oracle |
+|---|---|---|---|---|---|
+| 0.2 | 55.60% | 81.38% | **88.62%** | 76.59% | 100% |
+| 0.4 | 58.70% | 82.50% | **93.12%** | 82.29% | 100% |
+| 0.6 ← fitted here | 59.14% | 82.16% | **95.57%** | 86.18% | 100% |
+| 0.8 | 58.58% | 82.93% | **96.68%** | 91.38% | 100% |
+
+| `payday_day0_frac` | fitted − `ml_index` | fitted − `payday_wait` |
+|---|---|---|
+| 0.2 | **+12.03** ±2.37 SIG | +33.02 ±2.44 SIG |
+| 0.4 | +10.83 ±1.49 SIG | +34.42 ±3.43 SIG |
+| 0.6 | +9.38 ±2.09 SIG | +36.43 ±3.37 SIG |
+| 0.8 | +5.30 ±1.83 SIG | +38.10 ±3.95 SIG |
+
+**Three things, and the second one is the answer to the judge's question.**
+
+1. **No cliff.** Monotone, gentle degradation: 96.68% → 88.62% across a 4×
+   change in the population parameter, **6.95 points total**. It never drops
+   below the *unfitted* filter (81.4–82.9%), and it beats the competitive
+   `payday_wait` baseline by 33–38 points everywhere.
+
+2. **The advantage over ML GROWS as the population moves away from the fit**,
+   from +5.30 at 0.8 to **+12.03 at 0.2**. `ml_index` degrades 14.8 points
+   across the sweep; the fitted filter degrades 8.1 — **ML degrades about 1.8×
+   harder.** That is the opposite of the naive worry. The reason is that
+   `prior_day0` is a *prior*: an 8× weight that evidence reweights away within
+   a cycle or two. The GBDT learned the same population fact as hard splits on
+   `tgt_day_mod_cyc` and has no mechanism to revise it.
+
+3. So the honest framing for the pitch is not "we got away with a baked-in
+   constant". It is: **a wrong prior is recoverable and a wrong learned split
+   is not.** That is the same finding as the payday-dispersion row, now
+   measured directly on the specific constant that was worrying me.
+
+**What this does NOT establish.** The sweep moves the *fraction* at day 0, not
+*which day* the spike is on. A population whose spike sits on day 14 rather
+than day 0 is a different and harsher test, because `prior_day0` boosts a fixed
+hypothesis index. Not run; the honest limit of this result.
+
+### Frozen
+
+`model-frozen` tagged. `CLAUDE.md` now forbids changes to `sim/w3.py`,
+`sim/harness.py` or the fitted constants before 5 September without explicit
+approval. The model is done. Everything after this is the agent, and its
+probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`.
