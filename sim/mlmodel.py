@@ -16,18 +16,28 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(HERE, "ml_artifacts", "model.pkl")
 
-_BOOSTER = None
-_WHICH = os.environ.get("ML_MODEL", "gb")     # "gb" or "lr"
+_CACHE = {}
 
 
-def _load():
-    global _BOOSTER
-    if _BOOSTER is None:
+def _load(which):
+    if which not in _CACHE:
         with open(MODEL_PATH, "rb") as fh:
-            _BOOSTER = pickle.load(fh)[_WHICH]
-    return _BOOSTER
+            _CACHE[which] = pickle.load(fh)[which]
+    return _CACHE[which]
 
 
 def predict(rows):
-    """rows: list of feature vectors in mlfeat.FEATURES order -> P(success)."""
-    return _load().predict_proba(np.asarray(rows, dtype=np.float64))[:, 1]
+    """rows: feature vectors in mlfeat.FEATURES order -> P(success)."""
+    return _load(os.environ.get("ML_MODEL", "gb")).predict_proba(
+        np.asarray(rows, dtype=np.float64))[:, 1]
+
+
+def predict_hybrid(rows):
+    """rows: feature vectors in mlfeat.FEATURES_HYBRID order -> P(success).
+
+    Same GBDT, four extra inputs: the Bayes filter's P(success) for the
+    candidate day, its expected balance, and the entropy and top weight of its
+    payday posterior.
+    """
+    return _load("gb_hybrid").predict_proba(
+        np.asarray(rows, dtype=np.float64))[:, 1]

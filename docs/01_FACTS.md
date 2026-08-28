@@ -107,6 +107,21 @@ Read these. They are the most likely place for you to reintroduce an error.
 - `[RETRACTED]` **The 6× LTV multiplier.** No longer needed and no longer used.
   Counting billing cycles due over the full horizon prices mandate death
   automatically — a dead mandate forfeits its remaining cycles.
+  **Correction, 28 August 2026:** "no longer used" was wrong when written. It
+  was still applied by `w3.index_score` whenever `attempts_left == 1`, with
+  `ltv_mult=6.0` defaulted in `harness.run`. Swept over {0, 1, 6, 20}: it is a
+  **no-op for every policy**, because `value` is strictly positive and so
+  cannot change the index's sign, and non-budgeted policies commit every
+  positive-score mandate regardless of rank. It was live and inert. Now
+  genuinely removed. `[VERIFIED]` by sweep, NOTES.md 28 Aug 2026.
+- `[VERIFIED]` **The 0.92 `p_later` discount is still live and is NOT inert.**
+  Unlike the LTV multiplier it multiplies `p_later`, so it changes the sign of
+  the index and therefore the wait/attempt decision. Swept 28 Aug 2026:
+  `solo_shared_pd` ranges **78.7%–83.1%** over discount 0.80–1.00, with a broad
+  plateau from 0.90 to 0.96 and the argmax moving between population sets
+  (0.90 train, 0.94 eval). Kept at 0.92 — moving it to the evaluation argmax
+  would be fitting a constant to the evaluation set. **Every headline that
+  depends on it owes that range.**
 - `[RETRACTED]` **"Spacing retries over days is the main win."** Tested directly:
   spreading the same attempts over four days buys **nothing** (−0.6 pts, n.s.).
   The win is waiting for payday specifically, not spacing.

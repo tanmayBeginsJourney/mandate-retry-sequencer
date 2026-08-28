@@ -38,6 +38,35 @@ NPCI_MAX = 4
 
 Z9, TECH, OK = "Z9", "TECH", "OK"
 
+# The fitted BeliefPD configuration. NOT an invented constant: every value was
+# selected by sim/fit_belief.py, by outcome, on TRAINING populations 600-607 --
+# the same 800 customers the ML baseline was allowed to fit itself to -- and
+# reported on populations it had never seen. The three values replace three
+# hand-set ones that had never been checked against anything:
+#
+#   stride       3 -> 1        the old grid [0,3,...,27] left 26% of
+#                              customers with no representable true payday
+#   prior        exp(-0.10d) -> a window of half-width 12 around est_payday
+#                              with 8x weight on hypothesis 0 and a SOFT
+#                              floor of 0.25 outside it
+#   spend_beta   0.045 -> 0.0   the hand-derived cross-mandate correction
+#                              turns out to be worth less than nothing
+#
+# THE FLOOR IS THE IMPORTANT PART, and it is there because the first fit was
+# wrong. Selecting at payday_err=7 alone gave a hard window of half-width 7,
+# which looked superb (+15.37 pts) and was BRITTLE: at payday_err=14 the true
+# payday falls outside the window, gets weight 1e-6, and can never be
+# recovered -- that configuration measured -4.85 pts, i.e. actively WORSE than
+# the filter it replaced. The gain peaked exactly at the operating point it
+# had been fitted on. Re-selected on training populations against the MEAN
+# across payday_err in {1,3,5,7,10,14}, because the true operating point is
+# not known. See NOTES.md, 28 August 2026.
+#
+# Gate S4 holds this, paired with the `ignore_bcfg` mutant so the gate goes
+# red if the plumbing that applies it is ever broken.
+FITTED_BELIEF = dict(stride=1, prior_w=12, prior_day0=8.0,
+                     prior_floor=0.25, spend_beta=0.0)
+
 
 def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
              payday_day0_frac=0.60, irregular_frac=0.0, n_credits=6):
@@ -293,7 +322,28 @@ class BeliefPD:
     """
 
     def __init__(self, est_salary, est_payday, cycle_days, days,
-                 est_spend=0.80, pop_info=True, stride=3):
+                 est_spend=0.80, pop_info=True, stride=3,
+                 prior_w=None, prior_day0=1.0, prior_floor=1e-6):
+        """
+        THE THREE FITTABLE HANDICAPS (all default to the original values, so an
+        unconfigured BeliefPD is bit-identical and gate T9 stays exact).
+
+        `stride`   was 3 -- a compute hack from the research phase. On a
+                   30-day cycle it yields hypotheses [0,3,...,27], so only 74%
+                   of customers have a representable true payday and only 31.7%
+                   of those NOT paid on day 0 do. stride=1 removes that.
+        `prior_w`  None keeps the original invented prior exp(-0.10 d). An
+                   integer switches to a uniform window of that half-width
+                   around est_payday, which is the shape the estimator's own
+                   noise implies: est_pay - payday IS the injected noise, so
+                   mass beyond the noise width is spent on the impossible.
+        `prior_day0` extra weight on hypothesis 0. The population puts a large
+                   spike at day 0, so P(payday=0 | est_pay) is far above
+                   uniform even a few days away.
+
+        These are fitted on TRAINING populations by outcome only -- never from
+        c["payday"], c["salary"] or c["spend"]. See NOTES.md, 28 August.
+        """
         self.cyc, self.days = cycle_days, days
         self.hi = 2.5 * est_salary
         self.bw = self.hi / NB
@@ -303,7 +353,18 @@ class BeliefPD:
         # prior: broad, gently centred on the population's payday guess
         d = np.array([min(abs(h - est_payday), cycle_days - abs(h - est_payday))
                       for h in self.hyp], dtype=float)
-        self.w = np.exp(-0.10 * d)
+        if prior_w is None:
+            self.w = np.exp(-0.10 * d)          # the original, unfitted prior
+        else:
+            # `prior_floor` is the weight kept OUTSIDE the window. At 1e-6
+            # the window is effectively hard, which is why a prior fitted at
+            # payday_err=7 goes actively harmful at payday_err=14: the true
+            # payday falls outside and can never be recovered. A soft floor
+            # lets evidence pull it back. See NOTES.md, 28 August.
+            self.w = np.where(d <= prior_w, 1.0, prior_floor)
+            if prior_day0 != 1.0:
+                self.w = self.w * np.where(np.asarray(self.hyp) == 0,
+                                           prior_day0, 1.0)
         self.w /= self.w.sum()
         p0 = np.zeros(NB)
         p0[:max(1, int(0.08 * est_salary / self.bw))] = 1.0
@@ -404,3 +465,15 @@ class BeliefPD:
 
     def expected(self):
         return float(np.dot(self.w, (self.P * self.centers).sum(axis=1)))
+
+    def posterior_summary(self):
+        """(entropy of the payday posterior, top hypothesis weight, E[balance]).
+
+        These are what the hybrid hands to the GBDT. Entropy and top-weight are
+        the filter's own statement of how sure it is about payday -- the thing
+        a model with no structural prior cannot compute for itself, and the
+        thing that survives a change in the population.
+        """
+        w = np.clip(self.w, 1e-12, None)
+        ent = float(-(w * np.log(w)).sum())
+        return ent, float(self.w.max()), self.expected()

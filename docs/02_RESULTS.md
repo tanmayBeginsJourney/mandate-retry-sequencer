@@ -2,6 +2,37 @@
 
 Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 
+> ## UPDATE, 28 August 2026 — the belief filter was refitted and the numbers below it moved
+>
+> Three values inside `w3.BeliefPD` had been hand-set during the research phase
+> and never checked: a stride-3 payday hypothesis grid, an invented
+> `exp(-0.10 d)` prior, and a hand-derived cross-mandate spend correction.
+> Fitting them **on training populations only** is worth **+11.66 pts
+> (±1.61)** — gated as **S4** — and on held-out evaluation populations lifts
+> `solo_shared_pd` from 82.16% to **95.57%** at ±7 days.
+>
+> **Every `_pd` row in the table below was produced with the OLD, unfitted
+> filter.** They are retained because they are what the suite still measures
+> for S2a/S2b/S2c, and because replacing them wholesale would erase the
+> comparison. Read them as the *shipped-but-unfitted* configuration.
+>
+> **The pooling moat survives the refit and grows slightly:** +8.20 → **+9.61
+> pts (±1.67)**, still significant. Pooling was not compensating for the bad
+> prior.
+>
+> **What is NOT on this page:** the ML baseline, the misspecification study and
+> the six-world table. Those come from `sim/ml_study.py`, not from the gated
+> suite, and under the numbers rule in `CLAUDE.md` they may not be quoted here
+> or in the pitch. They are in `NOTES.md`, 28 August. The one-line summary,
+> for orientation only: **the fitted Bayes filter beats the ML baseline in all
+> six worlds by 5–12 points, and a Bayes+ML hybrid is worse than the filter
+> alone.**
+>
+> **A range every number on this page owes.** The `p_later` discount is still
+> the hardcoded 0.92. Swept 28 Aug (item A3, declared at project start, never
+> previously done): `solo_shared_pd` ranges **78.7%–83.1%** across discount
+> 0.80–1.00. No point estimate here is tighter than that constant allows.
+
 **Setup.** World calibrated so Razorpay's documented UPI schedule reproduces
 ~30% per-attempt approval (spend=1.05). 120-day horizon, 30-day billing cycles,
 5 mandates/customer, 4 seeds, n=30 customers. Primary metric: **billing cycles
@@ -130,9 +161,25 @@ Roughly half the apparent gain is "customers never top up." `w3` supports
 
 ## Test suite status
 
-**21 gates. Four are red: S1 FAIL, S2b FAIL, S2_LEGACY FAIL, M1 VACUOUS.**
-Enforced at commit time by `sim/gate.py`; reasons in `sim/known_failures.txt`.
-Full suite runtime is **~27 minutes**.
+**24 gates. Five are red: S1 FAIL, S1_PD FAIL, S2b FAIL, S2_LEGACY FAIL,
+M1 VACUOUS.** Enforced by `sim/gate.py`; reasons in `sim/known_failures.txt`.
+
+**Runtime: ~66s for the full suite, ~34s for the fast tier** (was ~27 minutes).
+The suite is now planned up front and run in parallel, and the belief filter's
+forecast is incremental. Gate **T9** locks every policy's output to
+`sim/t9_reference.json` byte for byte so none of that changed a result.
+
+Two tiers: `git commit` runs `--tier fast` (code-correctness gates), `git push`
+runs `--tier full` (adds S2a/b/c, S2_LEGACY, S3, S4).
+
+**New since the 27 August rebuild:**
+- **T9** — output identical to a reference captured before any optimisation.
+  28 configs, 20 of them hashed at float level. Paired with a shared-RNG mutant.
+- **S4** — the fitted belief configuration beats the shipped one, +11.66 pts
+  (±1.61). Paired with the `ignore_bcfg` mutant, under which the gain collapses
+  to +0.00. **This is the decision number for which probability engine ships.**
+- **S1_PD** — S1's threshold applied to the filter that actually ships. It
+  FAILS (ECE 0.026–0.040, not monotone). See below.
 
 Rebuilt 27 August 2026: gates that only bind under contention (M1, S2, T5, T7)
 now run at `payday_err=7` instead of the harness default of ±1 day, where the
@@ -160,6 +207,17 @@ at the uncontended ±1d operating point. It faithfully reproduces the −0.16 /
 retained, failing, on purpose — the S2 rewrite replaced a red gate with three
 new ones, and deleting the red gate at the same time would have been
 indistinguishable from loosening a test to get green.
+
+⚠️ **S1 HAS BEEN MEASURING THE WRONG FILTER FOR THE WHOLE PROJECT.** S1 runs
+`portfolio`, which does not end in `_pd` and therefore carries `w3.Belief`, the
+**point-estimate** payday filter. The recommended policy is `solo_shared_pd`,
+which carries `w3.BeliefPD`. S1 was NOT repointed — its threshold is
+pre-registered and quietly aiming it elsewhere would be indistinguishable from
+moving a test. **S1_PD** is a new gate with the identical threshold on the real
+filter, and it also fails: ECE 0.026–0.040, reliability curve not monotone.
+Fitting the filter halved its ECE and did not order the curve; the remaining
+break is structural (no balance floor at zero, and the hourly spend jitter is
+approximated by a fixed 3-tap kernel).
 
 ⚠️ **M1 (attempt-cap mutant) is VACUOUS**, so the claim "mutation tests all fire"
 that used to sit here was false. The cap mutant cannot trip the counter at

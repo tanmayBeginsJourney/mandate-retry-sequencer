@@ -1252,3 +1252,230 @@ not been flushed — the run could have died anywhere in its 27 minutes.
 `record()` now flushes per gate and `gate.py` runs the suite with `-u`, so the
 next crash names the last gate that completed. That is diagnosis support, not a
 fix; the crash is still unexplained.
+
+---
+
+## 2026-08-28 — THE FAIR FIGHT: the ML win was an artefact of an unfitted opponent
+
+**Headline: once the Bayes filter is given the same chance to fit itself that
+the ML model always had, it wins every world, by 5 to 12 points.** The
+in-distribution ML win of +4.03 reported earlier today is gone. It was never a
+result about ML versus Bayes; it was a result about a fitted model versus an
+unfitted one.
+
+### Scoring the pre-registration. 3 of 7, and the pattern is consistent.
+
+| # | Predicted | Measured | Verdict |
+|---|---|---|---|
+| 1 | fair filter BEATS ml_index in-distribution; combined gain +4 to +12 | gain **+13.41**, and Bayes beats ML by **9.38** | **right** (magnitude just over) |
+| 1a | stride 3→1 is the biggest of the three, +3 to +8 | stride alone: **+0.49**, and stride=1 was *worse* than stride=3 under the old prior | **WRONG** |
+| 1b | fitted prior worth +1 to +4 | **+12.85** — it is the whole effect | **WRONG, badly** |
+| 1c | fitted `spend_beta` worth 0 to +2, possibly 0 | +0.99, and the best value is **0.0** | right |
+| 2 | S1 on the fair filter: ECE 0.04–0.07, still FAILS on monotonicity | ECE **0.026–0.040**, still not monotone | **right** |
+| 3 | hybrid wins in-distribution by +1 to +3 and holds under dispersion | **loses by 5–10 pts in every world** | **WRONG** |
+| 4 | `ltv_mult` is a no-op for non-budgeted policies, but moves the budgeted ones | no-op **everywhere** | right on mechanism, wrong on the exception |
+
+Two rounds of pre-registration now, 2/7 then 3/7. **The pattern is that I
+predict mechanisms reasonably and magnitudes badly**, and that I keep being
+wrong about which of several changes will dominate. Worth knowing about my own
+estimates before the next one.
+
+### The finding that matters most is a methodological one
+
+**The first fit was brittle and I nearly shipped it.**
+
+Selecting on the training populations at `payday_err=7` alone produced
+`prior_w=7` with a hard window — the same number as the injected payday noise.
+It looked superb: **+15.37 pts (±1.06)**, 97.53% recovery, only 2.5 points off
+a clairvoyant oracle. `03_ERRORS.md` says, about error 5, that *a near-zero
+oracle gap is a symptom, not an achievement*. So I checked it against the one
+parameter the study never varied — `payday_err` itself, which is fixed at 7 in
+all six worlds:
+
+| `payday_err` | shipped | fitted (pe=7 only) | gain |
+|---|---|---|---|
+| 1 | 93.61% | 98.44% | +4.83 |
+| 3 | 88.62% | 97.28% | +8.66 |
+| 5 | 83.57% | 97.88% | +14.31 |
+| **7** | 82.16% | 97.53% | **+15.37** ← fitted here |
+| 10 | 79.87% | 84.51% | +4.64 |
+| **14** | 73.40% | **68.55%** | **−4.85 — WORSE than what it replaced** |
+
+**The gain peaked exactly at the operating point it had been fitted on, and
+went negative two steps away.** The mechanism is plain once seen: a hard window
+gives every hypothesis outside ±7 a weight of 1e-6, so when the true payday is
+14 days from `est_pay` it is excluded a priori and no amount of evidence brings
+it back.
+
+The fix was to make the window soft — a floor of 0.25 outside it rather than
+1e-6 — and, more importantly, to **re-select against the mean across
+`payday_err ∈ {1,3,5,7,10,14}`** rather than at a single operating point,
+still on training populations only. Final configuration:
+
+```python
+FITTED_BELIEF = dict(stride=1, prior_w=12, prior_day0=8.0,
+                     prior_floor=0.25, spend_beta=0.0)
+```
+
+| `payday_err` | shipped | fitted (robust) | gain |
+|---|---|---|---|
+| 1 | 93.61% | 95.73% | +2.12 SIG |
+| 3 | 88.62% | 95.82% | +7.20 SIG |
+| 5 | 83.57% | 95.82% | +12.26 SIG |
+| 7 | 82.16% | 95.57% | +13.41 SIG |
+| 10 | 79.87% | 95.62% | +15.75 SIG |
+| 14 | 73.40% | 93.16% | +19.76 SIG |
+
+It gives up ~2 points at `pe=7` and buys ~25 at `pe=14`. The gain now *grows*
+with payday uncertainty instead of peaking where it was fitted, which is the
+shape a real effect should have — the worse your payday estimate, the more a
+posterior over payday is worth.
+
+**This is worth stating as a rule rather than an anecdote: a fitted value whose
+benefit peaks at the operating point it was fitted on is tuned to the harness,
+not fitted to the population.** `sim/fair_audit.py` runs this check and should
+keep running.
+
+### The final table
+
+n=100, k=5, 8 evaluation populations (700–707, never used for fitting),
+`payday_err=7`, 120-day horizon, paired 2 SE. 288 runs, **zero Stage 0
+violations**. `discount` is at its hardcoded 0.92 throughout, and every row
+inherits the ±4.4-point range that constant carries.
+
+| world | `payday_wait` | bayes shipped | **bayes fitted** | `ml_index` | hybrid | oracle |
+|---|---|---|---|---|---|---|
+| A: in-distribution | 59.14% | 82.16% | **95.57%** | 86.18% | 85.97% | 100.00% |
+| decay 0.20 | 75.19% | 92.03% | **98.86%** | 93.60% | 92.94% | 100.00% |
+| decay 0.70 | 49.91% | 69.45% | **81.52%** | 74.99% | 75.85% | 99.97% |
+| payday spread 0.60→0.30 | 57.95% | 82.08% | **90.42%** | 77.94% | 79.94% | 100.00% |
+| `irregular_frac` 0.5 | 71.07% | 89.72% | **96.69%** | 89.66% | 88.92% | 100.00% |
+| `topup_p` 0.25 | 69.77% | 85.02% | **95.84%** | 87.28% | 86.83% | 100.00% |
+
+| world | ml − fitted | hybrid − fitted | fitted − shipped |
+|---|---|---|---|
+| A | −9.38 ±2.09 SIG | −9.60 ±1.86 SIG | +13.41 ±1.61 SIG |
+| decay 0.20 | −5.26 ±0.97 SIG | −5.93 ±1.26 SIG | +6.83 ±1.04 SIG |
+| decay 0.70 | −6.52 ±2.10 SIG | −5.67 ±1.81 SIG | +12.07 ±2.56 SIG |
+| payday spread | −12.48 ±1.70 SIG | −10.48 ±1.09 SIG | +8.34 ±1.86 SIG |
+| irregular 0.5 | −7.02 ±1.05 SIG | −7.76 ±1.24 SIG | +6.97 ±1.51 SIG |
+| topup 0.25 | −8.56 ±2.01 SIG | −9.01 ±1.96 SIG | +10.82 ±1.22 SIG |
+
+**Bayes wins everywhere, significantly.** The answer to "should the agent's
+timing brain be an ML model" is no, and it is no in every world tested,
+including the ones designed to break the filter's assumptions.
+
+### The hybrid does not help, and I think I know why
+
+Predicted: hybrid wins by +1 to +3 and holds under payday dispersion.
+Measured: it **loses to the pure filter by 5–10 points in every world**, and is
+statistically indistinguishable from pure ML.
+
+The GBDT has `bayes_p_success` as a feature — it is the single most-split
+feature in the model — so it can see the filter's answer and could in principle
+just repeat it. It does not, and it cannot: a tree ensemble approximates that
+input with piecewise-constant splits, and the fitted filter is now accurate
+enough (95.57%, 4.4 points off a clairvoyant oracle) that any smoothing of its
+probability destroys more value than the residual structure the GBDT adds. On
+top of that the hybrid is trained on `explore_pd` states and deployed on
+`ml_index_pd` states, which is off-policy and costs it further.
+
+**A GBDT wrapped around a good probability is worse than the probability.**
+That is a real result and it argues directly against the "add ML on top"
+instinct. It is also the honest answer to a question I expected to come out the
+other way.
+
+### The pooling moat survives the fair fight, and grows
+
+The obvious worry: if a better prior is what was really missing, maybe pooling
+was only ever compensating for a bad prior, and the project's central claim
+dissolves. Measured on the evaluation populations:
+
+| | own (`solo_pop_pd`) | shared (`solo_shared_pd`) | **S2a moat** |
+|---|---|---|---|
+| shipped belief | 73.95% | 82.16% | **+8.20** (±0.92) SIG |
+| fitted belief | 85.96% | 95.57% | **+9.61** (±1.67) SIG |
+
+**The moat is not an artefact of the bad prior.** It is slightly larger with a
+good one. Cross-merchant pooling is worth ~9.6 points either way.
+
+*(An earlier intermediate measurement using the brittle `prior_w=7` config
+showed the moat shrinking to +4.57. That number came from the configuration
+that was subsequently rejected for being tuned to the operating point, and it
+should not be quoted.)*
+
+### S1 has been measuring the wrong filter for the whole project
+
+`S1` runs `portfolio`. `portfolio` does not end in `_pd`, so it carries
+`w3.Belief` — the **point-estimate** payday filter. The policy this project
+recommends is `solo_shared_pd`, which carries `w3.BeliefPD`.
+
+**So the calibration gate has never measured the filter that ships.** That also
+retracts something I wrote earlier today: I said "S1 has been red since the
+handoff saying the filter's probabilities are wrong, and the ML ablation is the
+first thing that exploits it." The premise was about the wrong object. The
+conclusion happened to survive — the payday-posterior filter *is* also
+miscalibrated — but I reached it by reading a gate that was pointed elsewhere.
+
+`S1` was **not** repointed. It is a pre-registered gate whose threshold was
+declared before any result was seen, and quietly aiming it at another policy
+would be indistinguishable from moving a test until it says something else.
+**`S1_PD` is a new gate with the identical threshold, on the real filter.** It
+fails:
+
+| filter | ECE | monotone | S1's rule |
+|---|---|---|---|
+| `w3.Belief` via `portfolio` (S1) | 0.091 | False | FAIL |
+| `w3.BeliefPD` shipped | 0.059 | False | FAIL |
+| `w3.BeliefPD` fitted (S1_PD) | **0.026–0.040** | **False** | **FAIL** |
+
+Fitting improved ECE by more than half and did not make the curve ordered. The
+break is now in the mid-range, and the two plausible causes are the things the
+fit does not touch: the filter does not model the balance floor at zero, and it
+approximates the world's hourly `U(0.4,1.6)` spend jitter with a fixed 3-tap
+kernel. Both are structural, not parametric. Added to `known_failures.txt` with
+that reasoning.
+
+### S4: the decision number is now gated
+
+`S4 — fitted belief beats the shipped one (>2SE)`, in the FULL tier:
+**+11.66 pts (±1.61)** on the S2 populations (400–407), a third population set
+that the fit never saw.
+
+Paired with the `ignore_bcfg` mutant, which silently drops the fitted
+configuration exactly as a broken plumbing change would. Under the mutant the
+measured gain **collapses to +0.00** and the gate goes red. Verified, so S4 is
+not vacuous.
+
+`FITTED_BELIEF` lives in `w3.py` as a documented constant with its provenance,
+not in a gitignored artifact, so the gate runs on a clean checkout.
+
+Suite is now **24 gates, 4 FAIL, 1 VACUOUS, 19 pass, 65.6s.**
+
+### Docs corrected
+
+- `CLAUDE.md` rule 5 said the `0.92` discount and the `6×` LTV multiplier "are
+  both gone". Neither was. LTV was live and inert and is now genuinely removed;
+  the discount is live and **not** inert and now carries its swept range.
+- `01_FACTS.md`'s LTV retraction said "no longer used" — corrected to "was
+  still applied, swept, found inert, now removed", plus a new `[VERIFIED]`
+  entry for the discount sweep.
+- `04_BUILD_PLAN.md`'s "true generative model" claim was corrected earlier
+  today; the fair fight sharpens it further. The filter was not wrong in
+  *shape*, it was wrong in three *parameters*, and fixing them is worth more
+  than the entire ML programme.
+
+### Still open
+
+- **M1 remains VACUOUS.** Untouched.
+- **The 0.92 discount is still hand-chosen.** Swept and reported as a range,
+  not fitted, because fitting it on the evaluation set is exactly the error
+  this session spent its time undoing.
+- **`prior_day0=8.0` encodes the population's day-0 payday spike.** Legitimate
+  Tier-2 aggregate knowledge — the ML model learned the same thing from data,
+  where `tgt_day_mod_cyc` was its 4th most-split feature — but it is a
+  population fact baked into a prior, and if the population changes it is
+  wrong. The payday-dispersion row (+8.34 for the fitted filter) is the
+  evidence that it degrades gracefully; do not assume that holds further out.
+- **The segfault is still unexplained.** No recurrence in this session's ~25
+  further full and fast runs since BLAS threads were pinned.

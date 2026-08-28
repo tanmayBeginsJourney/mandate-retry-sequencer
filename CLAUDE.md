@@ -53,8 +53,16 @@ docs, the pitch, or the architecture document.
 If you need a number that isn't in `docs/01_FACTS.md`, either derive it
 transparently, make it a swept parameter, or ask. A previous version of this
 project had a hardcoded `0.92` discount and an invented `6×` LTV multiplier
-sitting directly on the headline result, with no sensitivity analysis. Both are
-gone. Do not add new ones.
+sitting directly on the headline result, with no sensitivity analysis.
+
+**Corrected 28 August 2026 — "both are gone" was false for two years of this
+file's life.** The 6× LTV multiplier was still live in `w3.index_score` until
+it was swept, found to be a **complete no-op for every policy**, and removed.
+The 0.92 discount is **still live** and is not a no-op — it multiplies
+`p_later`, so it changes the sign of the index. It has now been swept (item A3
+in `05_TEST_DESIGN.md`, declared at project start and never done): it sits on a
+broad plateau, and `solo_shared_pd` ranges **78.7%–83.1%** across
+discount 0.80–1.00. Quote that range, not a point. Do not add new ones.
 
 ### 6. Never quote retired numbers
 `41.7% → 76.3%` is **dead**. So is the `+5.4 pts` pooling figure, the `+1.5–2.1

@@ -82,6 +82,19 @@ FEATURES += [f"fail_phase_{i}" for i in range(NPHASE)]
 
 N_FEATURES = len(FEATURES)
 
+# The hybrid's extra inputs: four summaries of the Bayes posterior, computed by
+# the filter at the same decision point. These are what a model with no
+# structural prior cannot produce for itself -- in particular the entropy and
+# the top-hypothesis weight are the filter's own statement of how sure it is
+# about payday, which is the quantity that survives a change in the population.
+BAYES_FEATURES = [
+    "bayes_p_success",        # filter's P(success on the CANDIDATE day)
+    "bayes_expected_frac",    # E[balance] / est_salary
+    "bayes_entropy",          # entropy of the payday posterior
+    "bayes_top_w",            # weight on the single best payday hypothesis
+]
+FEATURES_HYBRID = FEATURES + BAYES_FEATURES
+
 
 def bucket(day, cyc):
     return min(int(day % cyc) * NPHASE // cyc, NPHASE - 1)
@@ -89,7 +102,7 @@ def bucket(day, cyc):
 
 def build(hist, uid, amount, n_before, cap, decision_day, target_day,
           cycle_open, cycle_close, cyc, est_sal, est_pay,
-          n_mandates, sum_other_amt):
+          n_mandates, sum_other_amt, bayes=None):
     """
     hist: chronological list of dicts for THIS CUSTOMER only, each
           {uid, day, amount, ok, code}, every one of them already dispatched
@@ -199,4 +212,8 @@ def build(hist, uid, amount, n_before, cap, decision_day, target_day,
         f[f"ok_phase_{i}"] = ok_phase[i]
         f[f"fail_phase_{i}"] = fail_phase[i]
 
-    return [f[k] for k in FEATURES]
+    out = [f[k] for k in FEATURES]
+    if bayes is not None:
+        # (p_success_on_candidate_day, E[balance]/est_sal, entropy, top weight)
+        out += [float(x) for x in bayes]
+    return out

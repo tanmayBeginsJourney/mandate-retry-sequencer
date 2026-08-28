@@ -22,12 +22,37 @@ and tested. The old one (`legacy/`) is defective and frozen.
 | Cycle-based metric, no LTV constant | Death priced automatically |
 | `payday_wait` is a permanent baseline row | It is what a good rival builds in an afternoon |
 
+## Resolved 28 August 2026
+
+- **The belief filter's three hand-set values were never fitted.** Fitting them
+  (stride, payday prior, cross-mandate spend correction) is worth **+11.66 pts
+  (±1.61)**, gated as S4. More than the entire ML programme produced.
+- **Is an ML model a better timing brain?** No. Against a *fitted* filter it
+  loses in all six worlds by 5–12 points, and a Bayes+ML hybrid is worse than
+  the filter alone. The earlier +4.03 ML win was a fitted model beating an
+  unfitted one. `NOTES.md`, 28 August.
+- **Does pooling survive a properly fitted filter?** Yes, and it grows:
+  +8.20 → **+9.61 pts (±1.67)**.
+- **Suite runtime.** ~27 min → **~66s full / ~34s fast**, output proved
+  byte-identical by T9.
+- **The 6× LTV multiplier and the 0.92 discount.** Swept. LTV was inert and is
+  removed; the discount is live and now reported as a range.
+- **`harness.py:325`** — the placebo policies were scoring mandates 2..k off
+  mandate 1's belief. Fixed; worth 0.42 of S2b's −14.51.
+
 ## Open — genuinely unresolved
 
 1. **How accurately can payday be estimated?** Decides whether the sophisticated
    version is worth building at all. Resolution: make the agent learn it online
    and expose its own uncertainty. Do not chase the number externally.
-2. **Three test gates are red on a clean checkout: S1, M1, S2.**
+2. **Five gates are red on a clean checkout: S1, S1_PD, M1, S2b, S2_LEGACY.**
+   **S1 measures the wrong filter** — it runs `portfolio`, which carries the
+   point-estimate `w3.Belief`, not the `w3.BeliefPD` the project recommends.
+   S1_PD was added with the identical threshold on the real filter and also
+   fails (ECE 0.026–0.040, not monotone). The remaining break looks structural:
+   no balance floor at zero, and a fixed 3-tap kernel standing in for the
+   world's hourly spend jitter.
+   Historical, from the 27 August rebuild:
    - **S1** belief calibration: ECE 0.091, reliability curve not monotone.
      Overconfident in the top decile. Declared at handoff.
    - **M1** attempt-cap mutant is VACUOUS: the cap counter has no working

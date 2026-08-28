@@ -52,11 +52,14 @@ import mlfeat
 from w3 import HOURS, PEAK, DECISION_HOUR, NPCI_MAX, Z9, TECH, OK
 
 POOLED = ("solo_shared", "solo_placebo", "portfolio", "myopic",
-          "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
+          "solo_shared_pd", "portfolio_pd", "solo_placebo_pd",
+          "explore_pd", "ml_index_pd")
 BELIEF_POLS = ("solo_naive", "solo_pop", "solo_shared", "solo_placebo",
                "portfolio", "myopic",
-               "solo_pop_pd", "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
+               "solo_pop_pd", "solo_shared_pd", "portfolio_pd",
+               "solo_placebo_pd", "explore_pd", "ml_index_pd")
 COMPLIANT = ("baseline_legal", "payday_wait", "explore", "ml_index",
+             "explore_pd", "ml_index_pd",
              "myopic", "solo_naive", "solo_pop", "solo_shared",
              "solo_placebo", "portfolio", "oracle", "solo_pop_pd",
              "solo_shared_pd", "portfolio_pd", "solo_placebo_pd")
@@ -96,7 +99,7 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
         topup_life=48, topup_mult=1.15, discount=0.92, payday_err=1,
         cap_override=None, collect_calib=False, mutate=None, pop_spend=0.80,
         n_mandates_hint=None, collect_ml=False, ml_predict=None,
-        spend_decay=None):
+        spend_decay=None, bcfg=None):
     """
     `mutate` injects a deliberate defect, used only by the mutation tests:
       'cap'       -> attempt a 5th time in a cycle
@@ -106,6 +109,8 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
       'represent' -> re-present a Z9 decline under the old notification
       'leak_bal'  -> feed the belief the true balance
       'weak_oracle' -> restore the deferral bug found in the audit
+      'ignore_bcfg' -> silently drop the fitted belief configuration, as if
+                       the bcfg plumbing had been broken. Gate S4's mutant.
 
     `collect_ml` records one training row per dispatched attempt: the feature
     vector as it was AT THE MOMENT OF THE DECISION, paired with the outcome.
@@ -113,6 +118,11 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
 
     `ml_predict` is a callable(list_of_feature_rows) -> probabilities, used by
     the `ml_index` policy. The harness never imports a model library.
+
+    `bcfg` configures the payday-posterior belief for `_pd` policies:
+    {"stride": int, "prior_w": int|None, "prior_day0": float,
+     "spend_beta": float}. None means the original hand-set values, so an
+    unconfigured run is bit-identical -- gate T9 depends on that.
 
     `spend_decay` overrides the WORLD's spend-curve decay (w3 default 0.42).
     It is passed to w3.balance_trace ONLY, never to a belief: the whole point
@@ -171,8 +181,17 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
             # a pop_info policy knows the POPULATION spend rate and how many
             # mandates compete for the balance; it never knows this customer's
             # own spend rate, balance, or future.
-            eff_spend = pop_spend * (1 + (len(mands) - 1) * 0.045) if pop_info else 0.80
+            # 0.045 is the hand-derived cross-mandate spend correction. It
+            # is one of the three unfitted handicaps; `spend_beta` replaces it
+            # when a fitted configuration is supplied.
+            # mutate='ignore_bcfg' is S4's mutant: it drops the fitted
+            # configuration on the floor, which is what a broken plumbing
+            # change would do. S4 must notice.
+            _cfg = dict(bcfg) if (bcfg and mutate != "ignore_bcfg") else {}
+            _beta = _cfg.pop("spend_beta", 0.045)
+            eff_spend = pop_spend * (1 + (len(mands) - 1) * _beta) if pop_info else 0.80
             BC = w3.BeliefPD if policy.endswith("_pd") else w3.Belief
+            _bkw = _cfg if policy.endswith("_pd") else {}
             # A POOLED, non-placebo policy feeds EVERY mandate of a customer
             # the same observations in the same order: its own attempt on the
             # line below, every other mandate's through the pooling loop. The
@@ -188,13 +207,13 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
             collapse = policy in POOLED and not policy.startswith("solo_placebo")
             if collapse:
                 _shared = BC(est_sal, est_pay, cyc, days,
-                             est_spend=eff_spend, pop_info=pop_info)
+                             est_spend=eff_spend, pop_info=pop_info, **_bkw)
                 beliefs = {id(m): _shared for m in mands}
                 bobjs = [_shared]
             else:
                 beliefs = {id(m): BC(est_sal, est_pay, cyc, days,
                                      est_spend=eff_spend,
-                                     pop_info=pop_info) for m in mands}
+                                     pop_info=pop_info, **_bkw) for m in mands}
                 bobjs = list(beliefs.values())
         else:
             beliefs = {}
@@ -372,6 +391,78 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
                                 day, tt // HOURS, cycle_open(m),
                                 cycle_close(m), cyc, est_sal, est_pay,
                                 len(mands), sum_amt - m["amount"])
+                        commits.append((m, tt, t))
+            elif policy in ("explore_pd", "ml_index_pd"):
+                # THE HYBRID PAIR.
+                #   explore_pd   picks a day uniformly at random, exactly as
+                #                `explore` does, but carries the pooled payday
+                #                posterior so that each training row can be
+                #                tagged with the filter's own summaries.
+                #   ml_index_pd  is the hybrid probability engine: the same
+                #                index maths and the same candidate days as
+                #                every other index policy, scored by a GBDT
+                #                that has been handed four Bayes summaries
+                #                alongside the raw features.
+                # Both use the SAME mlfeat.build call, so the features a row is
+                # trained on and the features it is scored on cannot drift.
+                fc_days = None
+                rows, spans = [], []
+                for m in live:
+                    b = beliefs[id(m)]
+                    if fc_days is None or not collapse:
+                        fc_days = b.forecast(day, LOOKAHEAD_DAYS)
+                    p_now_l = [(dd, p) for dd, p in fc_days if dd >= day + 1]
+                    if not p_now_l or p_now_l[0][0] >= cycle_close(m):
+                        continue
+                    use = [(dd, p) for dd, p in p_now_l if dd < cycle_close(m)]
+                    ent, topw, expb = b.posterior_summary()
+
+                    if policy == "explore_pd":
+                        lo_d, hi_d = day + 1, cycle_close(m) - 1
+                        if hi_d < lo_d:
+                            continue
+                        tgt = int(erng.integers(lo_d, hi_d + 1))
+                        tt = earliest_legal(tgt, t + HOURS)
+                        if tt is None or tt >= cycle_close(m) * HOURS:
+                            continue
+                        if collect_ml:
+                            pt = dict(use).get(tt // HOURS)
+                            bz = (b.p_success(m["amount"], pt) if pt is not None
+                                  else b.p_success(m["amount"]),
+                                  expb / max(est_sal, 1.0), ent, topw)
+                            m["_mlf"] = mlfeat.build(
+                                hist, m["uid"], m["amount"], m["n"], cap,
+                                day, tt // HOURS, cycle_open(m),
+                                cycle_close(m), cyc, est_sal, est_pay,
+                                len(mands), sum_amt - m["amount"], bayes=bz)
+                        commits.append((m, tt, t))
+                        continue
+
+                    spans.append((m, [dd for dd, _ in use], len(rows)))
+                    for dd, p in use:
+                        rows.append(mlfeat.build(
+                            hist, m["uid"], m["amount"], m["n"], cap, day, dd,
+                            cycle_open(m), cycle_close(m), cyc, est_sal,
+                            est_pay, len(mands), sum_amt - m["amount"],
+                            bayes=(b.p_success(m["amount"], p),
+                                   expb / max(est_sal, 1.0), ent, topw)))
+                sc = []
+                if rows:
+                    allp = ml_predict(rows)
+                    for m, dd_use, off in spans:
+                        ps = allp[off:off + len(dd_use)]
+                        p_now = float(ps[0])
+                        p_lat = 0.0
+                        if cap - m["n"] > 1 and len(ps) > 1:
+                            p_lat = max(float(x) for x in ps[1:])
+                        s_ = w3.index_score(p_now, p_lat, m["amount"], discount)
+                        sc.append((s_, p_now, m, dd_use[0]))
+                sc.sort(key=lambda x: -x[0])
+                for s_, p_now, m, tgt_day in sc:
+                    if s_ <= 0:
+                        continue
+                    tt = earliest_legal(tgt_day, t + HOURS)
+                    if tt is not None and tt < cycle_close(m) * HOURS:
                         commits.append((m, tt, t))
             elif policy == "ml_index":
                 # THE CLEAN ABLATION. Identical index maths, identical

@@ -154,6 +154,20 @@ It records what was specified before the harness existed. This section records
 what was actually built, which is not the same thing. Where they differ, the
 difference is the finding.
 
+## Added after the fact, 28 August 2026
+
+| ID | What it does | Mutant |
+|---|---|---|
+| **T9** | Every policy's output must equal `sim/t9_reference.json` exactly, at both operating points. Metrics catch a changed decision; `calib_sha256` catches a changed float. | worker pool seeded from one shared RNG instead of per-run seeds |
+| **S4** | The fitted belief configuration beats the shipped one by >2 SE. The decision number for which probability engine ships. | `ignore_bcfg` — drops the fitted config, gain collapses to +0.00 |
+| **S1_PD** | S1's threshold, unchanged, applied to `w3.BeliefPD` — the filter that actually ships. S1 runs `portfolio`, which carries `w3.Belief`, so it has never measured the product. | shares S1's binning; fails on monotonicity |
+
+**A4 is now discharged.** The adversarial sweep list below named the `p_later`
+discount (A3) and the LTV multiplier (A4) as constants pinned to convenient
+values. Both were swept 28 Aug 2026. The LTV multiplier turned out to be a
+**no-op for every policy** and was removed. The discount is **not** a no-op and
+now carries a reported range (78.7%–83.1% over 0.80–1.00) rather than a point.
+
 ## Specified but NOT implemented
 
 | ID | Status |

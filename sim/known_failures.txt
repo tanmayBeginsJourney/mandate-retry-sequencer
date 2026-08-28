@@ -86,3 +86,35 @@ S2_LEGACY
 #
 # Do not "fix" this by deleting it. If the point-estimate architecture is ever
 # formally removed from the harness, this gate goes with it and not before.
+
+# ---------------------------------------------------------------------------
+S1_PD
+# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.040, monotone=False.
+#
+# ADDED 2026-08-28, and the reason it exists is the finding.
+#
+# S1 runs `portfolio`. `portfolio` does not end in "_pd", so it carries
+# w3.Belief -- the POINT-ESTIMATE payday filter. The policy this project
+# recommends is `solo_shared_pd`, which carries w3.BeliefPD. So for the entire
+# life of the project the calibration gate has been measuring a filter that is
+# not the product, and every conclusion drawn from S1 about "the belief
+# filter" was about the wrong object.
+#
+# S1 was NOT repointed. It is a pre-registered gate whose threshold was
+# declared in docs/05_TEST_DESIGN.md before any result was seen, and quietly
+# aiming it at a different policy would be indistinguishable from moving a
+# test until it says something else. S1_PD is an ADDITION with the IDENTICAL
+# threshold, on the real filter.
+#
+# It fails, on the monotonicity half, exactly as predicted in advance (the
+# pre-registration guessed ECE 0.04-0.07 and "still fails on monotonicity",
+# at ~60% confidence; measured 0.040 and not monotone). Fitting the filter
+# improved ECE from 0.059 to 0.040 but did not make the reliability curve
+# ordered. The remaining break is in the mid-range, and the plausible causes
+# are the two things the fit does not touch: the filter does not model the
+# balance floor at zero, and it approximates the world's hourly U(0.4,1.6)
+# spend jitter with a fixed 3-tap kernel.
+#
+# Do NOT loosen the 0.10 bound; ECE is already well inside it. The gate fails
+# on monotonicity and raising the ECE bound would only hide which half is
+# broken.

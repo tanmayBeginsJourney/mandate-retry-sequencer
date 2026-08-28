@@ -77,8 +77,9 @@ POP_SPECS.update({f"Pc{r}": (120, 5, 300 + r, 1.05, 120) for r in range(3)})
 POP_SPECS.update({f"S2P{r}": (100, 5, 400 + r, 1.05, 120) for r in S2_SEEDS})
 
 FAST_GATES = ("M1", "M2", "M3", "M4", "M5", "M6", "M8",
-              "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "S1")
-FULL_ONLY = ("S2a", "S2b", "S2c", "S2_LEGACY", "S3")
+              "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9",
+              "S1", "S1_PD")
+FULL_ONLY = ("S2a", "S2b", "S2c", "S2_LEGACY", "S3", "S4")
 
 _POPS = {}
 _CACHE = {}
@@ -111,8 +112,15 @@ def norm(kw):
     return kw
 
 
+def _hashable(v):
+    # bcfg is a dict, and a dict cannot go in a cache key. Only the key needs
+    # flattening -- harness.run still receives the real dict.
+    return tuple(sorted(v.items())) if isinstance(v, dict) else v
+
+
 def ckey(policy, pop_key, seed, kw):
-    return (policy, pop_key, seed, tuple(sorted(kw.items())))
+    return (policy, pop_key, seed,
+            tuple(sorted((k, _hashable(v)) for k, v in kw.items())))
 
 
 def R(policy, pop_key, seed, **kw):
@@ -200,9 +208,11 @@ def plan_jobs(tier):
         for pol in T9_POLICIES:
             J(pol, "P", 7, payday_err=pe)
 
-    # S1
+    # S1 (point-estimate belief) and S1_PD (the belief that ships)
     for r in range(3):
         J("portfolio", f"Pc{r}", 800 + r)
+        J("solo_shared_pd", f"Pc{r}", 800 + r, payday_err=PE_CONT,
+          bcfg=w3.FITTED_BELIEF)
 
     if tier == "full":
         for r in S2_SEEDS:
@@ -214,6 +224,11 @@ def plan_jobs(tier):
             J("payday_wait", f"S2P{r}", 6950 + r, payday_err=PE_CONT)
             J("oracle", f"S2P{r}", 950 + r, payday_err=PE_CONT)
             J("baseline_doc", f"S2P{r}", 950 + r, payday_err=PE_CONT)
+            # S4: the fitted belief, and its mutant
+            J("solo_shared_pd", f"S2P{r}", 950 + r, payday_err=PE_CONT,
+              bcfg=w3.FITTED_BELIEF)
+            J("solo_shared_pd", f"S2P{r}", 950 + r, payday_err=PE_CONT,
+              bcfg=w3.FITTED_BELIEF, mutate="ignore_bcfg")
     return jobs
 
 
@@ -498,22 +513,61 @@ def gate_s1():
     cal = []
     for r in range(3):
         cal += R("portfolio", f"Pc{r}", 800 + r)["calib"]
+    ece, mono = reliability(cal, "w3.Belief via portfolio (POINT-ESTIMATE "
+                                 "payday -- NOT the shipping filter)")
+    record("S1", "belief calibration: ECE<0.10 and monotone",
+           PASS if (ece < 0.10 and mono) else FAIL,
+           f"ECE={ece:.3f}, monotone={mono}")
+
+
+def reliability(cal, label, extra=""):
+    """S1's binning and S1's threshold, factored out so S1_PD cannot drift
+    from it. ECE < 0.10 AND monotone, both declared in 05_TEST_DESIGN.md
+    before any result was seen."""
     cal = np.array(cal, dtype=float)
     edges = np.linspace(0, 1, 11)
     rows, ece, ntot = [], 0.0, len(cal)
     for i in range(10):
-        sel = cal[(cal[:, 0] >= edges[i]) & (cal[:, 0] < edges[i + 1] + (1e-9 if i == 9 else 0))]
+        sel = cal[(cal[:, 0] >= edges[i])
+                  & (cal[:, 0] < edges[i + 1] + (1e-9 if i == 9 else 0))]
         if len(sel) < 20:
             continue
         pred, emp = sel[:, 0].mean(), sel[:, 1].mean()
         rows.append((edges[i], edges[i + 1], len(sel), pred, emp))
         ece += len(sel) / ntot * abs(pred - emp)
-    print(f"       reliability (n={ntot}):")
+    print(f"       reliability, {label} (n={ntot}){extra}:")
     for lo_, hi_, n_, pr, em in rows:
-        print(f"         P in [{lo_:.1f},{hi_:.1f})  n={n_:>6}  predicted={pr:.3f}  actual={em:.3f}"
-              f"  {'over' if pr > em else 'under'}confident by {abs(pr-em):.3f}")
+        print(f"         P in [{lo_:.1f},{hi_:.1f})  n={n_:>6}  predicted={pr:.3f}"
+              f"  actual={em:.3f}  {'over' if pr > em else 'under'}confident "
+              f"by {abs(pr-em):.3f}")
     mono = all(rows[i][4] <= rows[i + 1][4] + 0.02 for i in range(len(rows) - 1))
-    record("S1", "belief calibration: ECE<0.10 and monotone",
+    return ece, mono
+
+
+def gate_s1_pd():
+    """
+    S1_PD -- THE SAME GATE, ON THE FILTER THAT ACTUALLY SHIPS.
+
+    S1 runs `portfolio`, which does not end in "_pd" and therefore carries
+    w3.Belief: the POINT-ESTIMATE payday filter. The policy this project
+    recommends is `solo_shared_pd`, which carries w3.BeliefPD. So for the whole
+    life of the project the calibration gate has been measuring a filter that
+    is not the product, and the conclusions drawn from S1 -- including one I
+    drew myself earlier in this session, that "S1 says the shipping filter's
+    probabilities are wrong" -- were about the wrong object.
+
+    S1 is left exactly as it is. It is a pre-registered gate with a threshold
+    declared before results, and quietly repointing it at another policy would
+    be indistinguishable from moving a test until it says something else.
+    S1_PD is an ADDITION, with the identical threshold, on the real filter.
+    """
+    cal = []
+    for r in range(3):
+        cal += R("solo_shared_pd", f"Pc{r}", 800 + r, payday_err=PE_CONT,
+                 bcfg=w3.FITTED_BELIEF)["calib"]
+    ece, mono = reliability(cal, "BeliefPD, fitted config (the shipping filter)",
+                            "  <-- S1_PD")
+    record("S1_PD", "SHIPPING belief calibration: ECE<0.10 and monotone",
            PASS if (ece < 0.10 and mono) else FAIL,
            f"ECE={ece:.3f}, monotone={mono}")
 
@@ -566,6 +620,47 @@ def tier3_stats():
           f"real vs own {paired(own, real)[0]:+.2f}, placebo vs own {paired(own, plac)[0]:+.2f}")
     record("S2_LEGACY", "retired: point-estimate pooling vs placebo",
            PASS if m_l > e_l else FAIL, f"{m_l:+.2f} pts (+/-{e_l:.2f})")
+
+    # ------------------------------------------------------------------ S4
+    # THE DECISION NUMBER. Which probability engine the agent ships with.
+    #
+    # `solo_shared_pd` carried three hand-set values that had never been
+    # checked -- a stride-3 payday grid, an invented exp(-0.10 d) prior, and a
+    # hand-derived cross-mandate spend correction. Fitting them on TRAINING
+    # populations (600-607, the same customers the ML baseline was allowed to
+    # fit itself to) and reporting here on the S2 populations (400-407, which
+    # the fit never saw) is what makes the Bayes-versus-ML comparison
+    # like-for-like. Before this, a fitted model was being compared against an
+    # unfitted one and unsurprisingly won.
+    #
+    # MUTANT: `ignore_bcfg` drops the fitted configuration on the floor, which
+    # is exactly what a broken plumbing change would do. The mutant arm then
+    # reproduces the shipped filter bit-for-bit, the measured gain collapses to
+    # zero, and this gate goes red. Verified: it does.
+    ship, fair, mut = [], [], []
+    for r in S2_SEEDS:
+        kw = dict(payday_err=PE_CONT)
+        ship.append(R("solo_shared_pd", f"S2P{r}", 950 + r, **kw)["cycle_rec"])
+        fair.append(R("solo_shared_pd", f"S2P{r}", 950 + r,
+                      bcfg=w3.FITTED_BELIEF, **kw)["cycle_rec"])
+        mut.append(R("solo_shared_pd", f"S2P{r}", 950 + r,
+                     bcfg=w3.FITTED_BELIEF, mutate="ignore_bcfg",
+                     **kw)["cycle_rec"])
+    s4_m, s4_e = paired(ship, fair)
+    s4_mm, s4_me = paired(ship, mut)
+    print(f"       shipped belief   {np.mean(ship)*100:6.2f}%")
+    print(f"       fitted  belief   {np.mean(fair)*100:6.2f}%   "
+          f"{w3.FITTED_BELIEF}")
+    if not (s4_m > s4_e):
+        record("S4", "fitted belief beats the shipped one (>2SE)", FAIL,
+               f"{s4_m:+.2f} pts (+/-{s4_e:.2f})")
+    elif s4_mm > s4_me:
+        record("S4", "fitted belief beats the shipped one (>2SE)", VACUOUS,
+               f"ignore_bcfg mutant still 'won' ({s4_mm:+.2f}) - gate does not bind")
+    else:
+        record("S4", "fitted belief beats the shipped one (>2SE)", PASS,
+               f"{s4_m:+.2f} pts (+/-{s4_e:.2f}); mutant collapses to "
+               f"{s4_mm:+.2f}")
 
     # S3 SEED STABILITY / SIGNIFICANCE MACHINERY.
     s3_pw, s3_pw_alt, s3_orc, s3_doc = [], [], [], []
@@ -622,6 +717,7 @@ def main(argv=None):
     gate_t9(args.workers)
     print("\n--- Tier 3: statistical validity ---")
     gate_s1()
+    gate_s1_pd()
     if args.tier == "full":
         tier3_stats()
     else:
