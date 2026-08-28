@@ -8,3 +8,23 @@
 # and no pip; sim/gate.py and the pre-commit hook probe for an interpreter that
 # can actually import numpy.
 numpy==2.4.2
+
+# THE GATED SUITE NEEDS ONLY NUMPY. `python sim/gate.py --tier full` imports
+# nothing below this line, and sim/harness.py never imports a model library --
+# it takes `ml_predict` as a plain callable.
+#
+# The UNGATED scripts do need more, and this list was missing until
+# 28 August 2026, which made docs/06_MODEL_CARD.md section 4b's "reproduce
+# from nothing" recipe impossible to follow from requirements.txt alone:
+#
+#   sim/ml_study.py      train / eval   lightgbm, scikit-learn
+#   sim/ml_diagnose.py                  lightgbm, scikit-learn
+#   sim/stress_day0.py                  via sim/mlmodel.py -> the pickled GBDT
+#   sim/headline.py, sim/fair_audit.py, sim/fit_belief.py, sim/verify_brief.py
+#                                       numpy only
+#
+# Versions are what this machine has, NOT a reproducibility claim: the trained
+# model in sim/ml_artifacts/ is gitignored and was built here, so a different
+# lightgbm will not reproduce it bit-for-bit. Rebuild it, do not assume it.
+lightgbm==4.6.0
+scikit-learn==1.8.0

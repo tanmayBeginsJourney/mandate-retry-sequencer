@@ -50,10 +50,28 @@ Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 > day* the spike sits on. A population spiking on day 14 is a harsher test and
 > has not been run.
 >
-> **A range every number on this page owes.** The `p_later` discount is still
-> the hardcoded 0.92. Swept 28 Aug (item A3, declared at project start, never
-> previously done): `solo_shared_pd` ranges **78.7%–83.1%** across discount
-> 0.80–1.00. No point estimate here is tighter than that constant allows.
+> **A range every number on this page owes — CORRECTED 28 Aug 2026, and it is
+> wider than was stated.** The `p_later` discount is still the hardcoded 0.92.
+> The A3 sweep reported here as **78.7%–83.1%** was run on the **UNFITTED**
+> filter, which is not what ships. Re-swept on the shipping configuration
+> (`solo_shared_pd` + `w3.FITTED_BELIEF`, `pe=7`, eval populations 700–707):
+>
+> | discount | unfitted (what A3 measured) | **fitted (what ships)** |
+> |---|---|---|
+> | 0.80 | 79.41% | 92.05% |
+> | 0.90 | — | 94.48% |
+> | **0.92** | **82.16%** | **95.57%** |
+> | 0.94 | — | 94.57% |
+> | 0.96 | 82.15% | 94.25% |
+> | 1.00 | 78.68% | 88.73% |
+> | **full spread** | **3.5 pts** | **6.8 pts** |
+>
+> So the band every number on this page owes is **~7 points, not ~4**. The
+> 0.90–0.96 plateau does survive on the fitted filter (94.25–95.57, ~1.3 pts),
+> which is the claim that matters — the constant is not perched on a spike.
+> But 0.92 is the argmax on the *evaluation* set by ~1 point on this grid,
+> which is the situation `01_FACTS.md` says was deliberately avoided. Treat
+> that as an open flag, not a settled one: 5 grid points, 8 populations.
 
 **Setup.** World calibrated so Razorpay's documented UPI schedule reproduces
 ~30% per-attempt approval (spend=1.05). 120-day horizon, 30-day billing cycles,
@@ -154,23 +172,35 @@ payday-posterior policies at ±7d, 8 populations, n=100:
 | arm | comparison | result |
 |---|---|---|
 | **S2a** the moat | `solo_pop_pd` → `solo_shared_pd` | **+9.53** pts (±1.81) SIG |
-| **S2b** confound check | `solo_pop_pd` → `solo_placebo_pd` | **−14.51** pts (±2.24) — **not neutral** |
-| **S2c** the old headline | `solo_placebo_pd` → `solo_shared_pd` | **+24.04** pts (±2.25) SIG |
+| **S2b** confound check | `solo_pop_pd` → `solo_placebo_pd` | **−14.09** pts (±2.09) — **not neutral** |
+| **S2c** the old headline | `solo_placebo_pd` → `solo_shared_pd` | **+23.62** pts (±2.14) SIG |
 
 S2c reproduces the old +23.99 almost exactly. **It is also the least
 informative of the three.** For paired means, `S2c ≡ S2a + |S2b|` — an
-algebraic identity, not an independent measurement (9.53 + 14.51 = 24.04).
+algebraic identity, not an independent measurement (9.53 + 14.09 = 23.62).
 **60% of that headline is placebo damage, not pooling benefit.**
 
 The reason is that `solo_placebo` is not a clean control. It does not add
 *neutral* extra update events; it adds *wrong* ones, computed against another
-customer's balance (`harness.py:227`). Feeding a belief actively misleading
+customer's balance (`harness.py:312` -- the line was 227 when this was
+written; it moved). Feeding a belief actively misleading
 observations is worse than feeding it nothing, so the placebo arm is degraded
 rather than merely uninformative, and subtracting it flatters the result.
 
 **The defensible moat number is S2a: +9.53 pts (±1.81), significant.** That is
 close to the +10.23 this page already claimed for pooling under the payday
-posterior, and it stands on its own. **Do not quote +21.68 / +23.99 / +24.04 as
+posterior, and it stands on its own.
+
+⚠️ **S2a is measured on the UNFITTED filter** (`sim/tests.py:583-585` passes
+no `bcfg`), so the *gate-protected* moat number is not the shipping
+configuration's. The shipping configuration's is **+9.61 pts (±1.67)**, which
+is ungated (`sim/fair_audit.py` populations). Both are fine and they agree —
+the point is that `CLAUDE.md` and `00_HANDOFF.md` present "+9.53, gated as
+S2a" directly beside "the policy is `solo_shared_pd` with `w3.FITTED_BELIEF`",
+which reads as though the gate covers what ships. It does not. See error 13:
+only 2 of 25 gates run the fitted configuration at all.
+
+**Do not quote +21.68 / +23.99 / +23.62 / +24.04 as
 evidence that the benefit is information.** A control that matches update count
 without supplying wrong information — label-shuffled observations at the matched
 base rate — has not been built yet.
@@ -182,13 +212,43 @@ disagreed. That gate is retained as `S2_LEGACY`.
 
 ## Other established results
 
-- **Coordinated budgeting is harmful.** −5.95 pts (±3d), −6.10 pts (±7d), both
-  significant. Cut. Do not reintroduce.
+⚠️ **"Established" is doing too much work in this heading. Audited 28 Aug
+2026: the first two bullets are NOT reproducible from anything in this repo.**
+No committed script computes them, no artifact stores them, and they predate
+the fitted filter. They are retained because the *directions* are decisions the
+project has already taken and should not relitigate — but **do not quote the
+figures**, and do not treat them as gated. If you need either number for the
+pitch, re-measure it and say what you ran.
+
+- **Coordinated budgeting is harmful.** −5.95 pts (±3d), −6.10 pts (±7d).
+  `[UNVERIFIED — no script computes this.]` The *decision* stands: `portfolio`
+  and `portfolio_pd` lose to `solo_shared_pd` in every table on this page and
+  in `sim/t9_reference.json`. Cut. Do not reintroduce.
 - **Whittle structure beats greedy** by +7.15 (±3d) to +24.54 (±7d) pts.
-- **Headroom to the oracle: +18.5 to +22.7 pts**, significant everywhere. There
-  is plenty left. A near-zero oracle gap is a symptom, not an achievement.
-- **The documented UPI baseline is not legally executable.** ~978
-  re-presentation violations per run: retrying at +1h/+2h re-presents a Z9 under
+  `[UNVERIFIED — and the policy pair is not even named.]` `myopic` is the
+  greedy arm, but `portfolio − myopic` in `sim/t9_reference.json` is +4.69 at
+  ±1d and +0.98 at ±7d, which is not this. `solo_shared_pd − myopic` at ±7d is
+  +31.4. Whatever was compared, it is not recoverable from the repo. The
+  qualitative claim (forecast-and-wait beats greedy) is supported by the
+  tables; the interval is not.
+- ~~**Headroom to the oracle: +18.5 to +22.7 pts**~~ **`[RETRACTED]` 28 Aug
+  2026 — that figure predates the fitted filter and the warning attached to it
+  now applies to us.** For the **shipping** configuration the oracle gap is
+  **4.3 to 6.8 pts** (`headline.json`: 93.16–95.82% against a 100% oracle;
+  4.43 pts in world A of the misspecification study). The sentence this bullet
+  used to end with — *"a near-zero oracle gap is a symptom, not an
+  achievement"* — was written about error 5, and it is now **the live
+  condition**. Two things to check before believing 95.6%, neither done:
+  (a) the oracle ignores `topups` (`harness.py:524` vs `:268`), so in any
+  top-up world it is not a true upper bound; (b) the oracle and the filter
+  share `w3.balance_trace`'s generative assumptions, so a 4-point gap may be
+  measuring how well the filter matches the world rather than how well it
+  schedules. **Do not put "within 4.4 points of a clairvoyant oracle" in the
+  pitch.** That is the exact sentence error 5 produced last time.
+- **The documented UPI baseline is not legally executable.** 974
+  re-presentation violations on the suite's population (n=60, pop seed 1,
+  run seed 7). It is population-specific, not a universal "per run" figure;
+  this page said ~978 until 28 Aug 2026: retrying at +1h/+2h re-presents a Z9 under
   the original notification. Making it legal is worth **+7.5 pts on its own.**
 - **The payday assumption is forced.** Calibrating to ~30% approval: lumpy payday
   reaches 29.1%; 50% irregular income floors at 44.2%; fully irregular at 74.0%.
@@ -209,10 +269,15 @@ Roughly half the apparent gain is "customers never top up." `w3` supports
 
 ## Test suite status
 
-**24 gates. Five are red: S1 FAIL, S1_PD FAIL, S2b FAIL, S2_LEGACY FAIL,
-M1 VACUOUS.** Enforced by `sim/gate.py`; reasons in `sim/known_failures.txt`.
+**25 gates. Six are red: S1 FAIL, S1_PD FAIL, S2b FAIL, S2_LEGACY FAIL,
+M4B FAIL, M1 VACUOUS.** Enforced by `sim/gate.py`; reasons in
+`sim/known_failures.txt`. **M4B was added 28 Aug 2026 and is the important
+one: it says gate M4's mutant increments the counter M4 grades it on, so the
+pending-notification constraint has no working test.** See error 11.
 
-**Runtime: ~66s for the full suite, ~34s for the fast tier** (was ~27 minutes).
+**Runtime: ~81s for the full suite, ~34s for the fast tier** (was ~27 minutes).
+Measured 28 Aug 2026, twice, on the pinned interpreter. The "~66s" this page
+and `00_HANDOFF.md` used to quote is not what the suite does.
 The suite is now planned up front and run in parallel, and the belief filter's
 forecast is incremental. Gate **T9** locks every policy's output to
 `sim/t9_reference.json` byte for byte so none of that changed a result.
@@ -244,13 +309,17 @@ reliability curve not monotone, filter overconfident in its top decile (predicts
 the **monotonicity** half. The threshold was declared before results were seen.
 **Do not loosen it.** Nothing above is fully settled until it passes.
 
-⚠️ **S2b (placebo neutrality) FAILS**, at −14.51 pts (±2.24) — see the negative
+⚠️ **S2b (placebo neutrality) FAILS**, at −14.09 pts (±2.09) — see the negative
 control section above. This is a finding about the control's design, not a code
 defect, and it is left failing so the confound stays visible.
 
-⚠️ **S2_LEGACY FAILS** at −0.40 pts (±0.22). This is the *original* S2, kept
+⚠️ **S2_LEGACY FAILS** at −0.38 pts (±0.22). This is the *original* S2, kept
 unchanged: the point-estimate trio (`solo_shared` / `solo_placebo` / `solo_pop`)
-at the uncontended ±1d operating point. It faithfully reproduces the −0.16 /
+at the uncontended ±1d operating point. It reproduces the *direction* of the
+null this page reports for point-estimate pooling, not the values: the suite
+currently prints real-vs-own **−0.96** and placebo-vs-own **−0.59** on these
+populations. "Faithfully reproduces" overstated it — the pair below is from
+the retired n=30 table. The −0.16 /
 −0.49 (n.s.) null this page already reports for point-estimate pooling. It is
 retained, failing, on purpose — the S2 rewrite replaced a red gate with three
 new ones, and deleting the red gate at the same time would have been
@@ -279,3 +348,256 @@ deliberately restored, is caught (100.0% → 46.3%).
 `harness.py` can be disabled outright without any gate going red — verified by
 experiment. Do not put the NPCI cap compliance claim in the pitch or the
 architecture doc until M1 is fixed.
+
+---
+
+# THE AGENT'S ACTION SPACE — what it is worth. Added 28 August 2026.
+
+**Not gate-protected.** Reproduce with `python agent/tests/test_action_ablation.py`
+(~3 min) and `python agent/tests/test_stop_mechanism.py` (~2 min), from the repo
+root. `sim/` is untouched.
+
+## Why this is measurable at all
+
+The agent in **degenerate mode** — retry-only, deterministic diagnoser, no other
+actions — reproduces `harness.run("solo_shared_pd", ...)` **bit-exactly on 24 of
+24 runs** at `payday_err` 1 and 7, fitted and unfitted
+(`agent/tests/test_parity_vs_harness.py`). So every point of difference between
+degenerate and any other arm is the AGENT, not the timing brain. Zero Stage 0
+refusals, and an independent recount from the audit log alone also finds zero
+violations.
+
+## The action space, and where each action's cost and credit come from
+
+| action | costs | credits | source |
+|---|---|---|---|
+| RETRY | one attempt against the NPCI cap of 4; at the cap, kills the mandate | the debit amount on success | `harness` dispatch + `w3.balance_trace` |
+| WAIT | one day | the option on a better day | `w3.index_score` sign. **Already inside the frozen policy** — not an agent action, not ablated |
+| NUDGE | one decision day (no attempt scheduled) | with probability `nudge_p`, amount × 1.15 for 48h | `harness.run`'s `topup_p`, made conditional on the agent acting. Swept, never picked |
+| ESCALATE | nothing — it is now a zero-credit workflow action | nothing modelled in this world | none. Said out loud rather than hidden |
+| STOP | every remaining attempt in the cycle | the mandate survives, so its remaining cycles are not forfeited | `harness.py:299-300` death rule + `:619-621` cycle accounting |
+
+## The ablation
+
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`FITTED_BELIEF`, paired 2 SE against degenerate.*
+
+| arm | cycle_rec | vs degenerate | 2 SE | sig |
+|---|---|---|---|---|
+| degenerate | 95.31 | — | — | — |
+| +NUDGE p=0.10 | 95.22 | −0.089 | 0.912 | n.s. |
+| +NUDGE p=0.25 | 94.75 | −0.560 | 0.901 | n.s. |
+| +NUDGE p=0.50 | 95.24 | −0.073 | 1.092 | n.s. |
+| +ESCALATE (halting) | 96.07 | +0.759 | 0.323 | SIG |
+| **+STOP** | **96.68** | **+1.371** | 0.599 | **SIG** |
+| full (all three) | 95.04 | −0.271 | 0.932 | n.s. |
+| **`payday_wait`** | **56.79** | −38.52 | 1.371 | permanent row |
+
+**Pre-registration record: 6/8.** ESCALATE and STOP both came in ABOVE the
+predicted range, i.e. in the direction that flatters the agent — which is the
+signature of all sixteen errors in `03_ERRORS.md`, so rule 3 was applied and the
+improvement was investigated rather than narrated.
+
+## STOP's mechanism, and why it is a CURVE not a number
+
+A mandate dies only by failing AT the attempt cap (`harness.py:299-300`, inside
+the failure branch); only live mandates roll over (`:338`); and `cyc_due` counts
+every closed cycle while `got_cycles` stops (`:619-621`). So death forfeits every
+remaining cycle, and holding an attempt back preserves them — **with no new
+constant**, because the cycle-based metric already prices mandate death.
+
+Four pre-registered falsification checks, all HELD:
+
+| check | measured |
+|---|---|
+| gain grows with horizon | **+0.563 (60d) → +1.371 (120d) → +1.790 (180d)** |
+| 60d below and 180d above the 120d figure | +0.563 < 1.371 < +1.790 |
+| gain tracks deaths avoided, per population | **Pearson r = +0.915** |
+| not buying survival by simply not billing | att/cycle 1.533 → 1.553 (+1.3%) |
+
+Deaths fall from 138 to 49 of 4000 mandates.
+
+⚠️ **+1.371 IS A 120-DAY NUMBER AND NOTHING ELSE.** At 60 days it is +0.563 and
+not significant. Quote it as a curve over the horizon, exactly as the headline is
+quoted conditional on `payday_err`.
+
+## Three decisions this measurement forced
+
+1. **ESCALATE no longer halts attempts.** Its entire +0.759 was death-prevention
+   — it was STOP wearing a different trigger. Two actions doing one job is worse
+   than one, so the halting lives in STOP and ESCALATE is now a **zero-credit
+   workflow action**, kept so "compliant escalation" is demonstrable in the audit
+   log.
+2. **NUDGE is cut from the money path**, kept as a zero-credit recommendation.
+   Its ceiling is settled: sweeping the UNCONDITIONAL `topup_p` on the shipping
+   configuration gives **+0.02 pts (2 SE 0.59)** — and that fires on *every*
+   failure, so it strictly bounds an agent-triggered nudge. The same sweep moves
+   `payday_wait` by **+11.4 pts**, so the mechanism is live; it is the shipping
+   policy that has nothing left to recover, already collecting 95.3%.
+3. **`PARTIAL` is a recommendation only.** Whether a partial debit is permitted
+   under one UPI AutoPay mandate is not established in `01_FACTS.md`, and a
+   merchant-acceptance rate would be an invented constant. It credits zero money
+   and never reaches the gate.
+
+## How this could be biased toward the answer we want
+
+- STOP's value is entirely a property of the **cycle-based metric** and the
+  120-day horizon. A shorter horizon or a metric that did not forfeit remaining
+  cycles would shrink or erase it.
+- Mandate death is rare on the shipping configuration (survival 96.55%), so this
+  is a small effect on a small population of mandates. On the **unfitted** filter
+  survival is 84.50% and STOP would look far more valuable — the same shape as
+  error 7, where a thing looks good only because the baseline was not fitted.
+- Single run seed per population, 8 populations. Not a large study.
+
+---
+
+# THE CONTEXT LAYER — outage detection. Added 28 August 2026.
+
+**Not gate-protected.** Reproduce with, from the repo root:
+
+```
+python agent/tests/test_outage_detection.py     # ~80s   detection power
+python agent/tests/test_outage_ablation.py      # ~4min  what it is worth
+```
+
+These are `agent/` scripts, not `sim/` gates. `sim/` is untouched by all of it.
+
+## Why there is an outage layer at all
+
+`w3.BeliefPD.observe(amount, success)` **takes no decline code** (`w3.py:416`),
+and `harness.py:270-276` sets `success = False` for a technical decline, passing
+it straight to `observe` at `harness.py:304`. A bank glitch and an empty account
+are therefore the same measurement to the filter. The failure branch is
+`q[idx:] = 0.0` (`w3.py:432`) — every balance bin at or above the attempted
+amount is hard-zeroed — so one technical decline permanently asserts "this
+customer had less than ₹X". `[VERIFIED]` by reading the frozen source.
+
+That is a real property of the model. **It does not follow that fixing it
+helps**, and the measurement below says it does not. See `01_FACTS.md`, the
+retraction dated 28 August 2026.
+
+## THE FACT THAT SHAPES EVERY NUMBER BELOW: attempts land at hour 8
+
+**99.22% of all attempts occur at hour 8** — 2288 of 2306, measured at n=100,
+k=5, 120d, `payday_err=7`, `FITTED_BELIEF`. The decision runs at
+`w3.DECISION_HOUR = 8` and `harness.earliest_legal(day+1, t+24)` returns hour 8
+again. Mean 19.2 attempts per day across 100 customers.
+
+Two consequences, and both must be quoted with any outage number:
+
+1. **An outage that misses hour 8 is harmless by construction.** Every outage
+   window in these experiments therefore *starts* at hour 8. That is worst-case
+   placement, so **every figure below is an upper bound** on the damage an
+   outage does AND on the value of detecting it.
+2. A detector has roughly 19 attempts per 24h window at n=100 to work with.
+   That is the entire statistical budget.
+
+## Detection power
+
+*k=5, 60d, `payday_err=7`, `FITTED_BELIEF`, two 6h outages on days 20 and 40,
+worst-case placement, 8 populations per cell. Fraction of runs in which the
+monitor raised OUTAGE inside a window.*
+
+| severity | n=5 | n=10 | n=25 | n=50 | n=100 | n=200 |
+|---|---|---|---|---|---|---|
+| 0.15 | 0.00 | 0.00 | 0.00 | 0.12 | 0.38 | 0.75 |
+| 0.40 | 0.00 | 0.25 | 0.00 | 0.75 | **1.00** | **1.00** |
+
+**False alarms: 0 of 48 runs at severity 0.** The detector uses an exact
+binomial tail, not a z-score — see error 15 in `03_ERRORS.md` for why that
+distinction is load-bearing.
+
+**TPR is not monotone at severity 0.40** (0.25 at n=10, 0.00 at n=25). This was
+a pre-registered prediction and it broke. Cause, from the detector's own
+evidence log: fires at n=10 show `window n = 8, tech = 6`. Technical declines
+auto-represent (`harness.py:318`), cascading further attempts into the window
+until it clears `min_attempts = 8`. So detection at low volume happens *because*
+attempts were already burned, and behaviour near that threshold is lumpy.
+`min_attempts` is a `[GUESS]` constant and is the obvious next sweep.
+
+## The moat's second dividend — what one merchant would see
+
+Mandates are spread over 60 merchants (`w3.make_pop` draws from `range(60)`), so
+one merchant holds `n*k/60` of them.
+
+| n customers | aggregator, attempts per 24h | one merchant, attempts per 24h |
+|---|---|---|
+| 25 | 5.6 | 0.09 |
+| 50 | 11.4 | 0.19 |
+| 100 | **22.5** | **0.38** |
+| 200 | 44.5 | 0.74 |
+
+A single merchant never reaches `min_attempts = 8` at any n tested — **it cannot
+evaluate the statistic at all**, at any severity. This is structural
+unavailability rather than difficulty, and it is the strongest form the moat
+argument takes anywhere in this repo.
+
+⚠️ It rests on the same unresolved legal question as the rest of the moat:
+whether an aggregator may use Merchant A's outcomes for Merchant B is
+`[GUESS]` and unread. See `01_FACTS.md`.
+
+## What outage awareness is WORTH — the ablation
+
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`FITTED_BELIEF`, four 6h outages on days 20/50/80/110, worst-case placement.
+Paired 2 SE against the `none` arm at the same severity. Degenerate mode
+throughout, so the timing brain is held fixed and every difference is the
+context layer. ECE is computed with `sim/tests.py`'s own `reliability()`, so it
+cannot drift from gate S1_PD's definition.*
+
+| severity | arm | cycle_rec | vs `none` | 2 SE | sig | ECE |
+|---|---|---|---|---|---|---|
+| 0.00 | all four arms | 95.30 | +0.000 | 0.000 | — | 0.0324 |
+| 0.15 | pause | 94.89 | −0.273 | 0.275 | n.s. | 0.0338 |
+| 0.15 | suppress | 95.16 | +0.000 | 0.000 | n.s. | 0.0342 |
+| 0.40 | none | 94.86 | — | — | — | 0.0356 |
+| 0.40 | pause | 94.33 | **−0.529** | 0.296 | **SIG** | 0.0341 |
+| 0.40 | suppress | 94.97 | +0.115 | 0.138 | n.s. | 0.0361 |
+| 0.80 | none | 93.83 | — | — | — | 0.0346 |
+| 0.80 | pause | 94.03 | +0.199 | 0.634 | n.s. | 0.0341 |
+| 0.80 | suppress | 94.09 | **+0.256** | 0.179 | **SIG** | 0.0373 |
+
+Arms: `none` = monitor off. `pause` = detect and stop dispatching into a broken
+rail. `suppress` = detect and stop feeding technical declines to the belief.
+`both` = both, and it is **numerically identical to `pause` at every severity**,
+because a paused dispatch produces no technical decline for suppression to act
+on. The two mechanisms do not compose.
+
+### The three things a reader must take from this table
+
+1. **THE CEILING IS +0.26 POINTS.** At severity 0.80 — the most extreme setting
+   swept, and a pure `[GUESS]` — the best arm beats `none` by **+0.256 pts
+   (2 SE 0.179)**. That is the whole recovery value of outage awareness on this
+   world. It is not a headline recovery number and must not be presented as one.
+
+2. **PAUSING IS SIGNIFICANTLY NEGATIVE AT MODERATE SEVERITY.** −0.529 pts
+   (2 SE 0.296, SIG) at severity 0.40. It only turns positive at 0.80, and even
+   there it is not significant. Mechanism: detection needs evidence, evidence
+   needs dispatched attempts, and because 99.22% of attempts land in one hour,
+   most of the batch is already out by the time the window clears the threshold.
+   Pausing then costs a scheduling day for mandates that would mostly have
+   succeeded. **Do not ship pause-on-outage as an unconditional behaviour.**
+
+3. **The gain does grow with severity** (+0.000 → +0.000 → +0.115 → +0.256), so
+   the number is a curve and must always be quoted as one, exactly like the
+   `payday_wait` headline is quoted conditional on `payday_err`.
+
+### What IS defensible from this work
+
+Not a recovery number. A **capability claim**: an aggregator can detect a rail
+outage with a measured false-alarm rate of 0/48 and TPR 1.00 at n≥100 and
+severity 0.40, and a single merchant cannot do it at all (0.38 attempts per
+window against a floor of 8). Every money action, every refusal, every pause and
+every suppressed belief update is in the audit log with its reason.
+
+### How this could be biased toward the answer we want
+
+- Worst-case window placement inflates both damage and detection.
+- Severity is invented. Nothing found reports what fraction of AutoPay executions
+  fail during a rail incident.
+- Only 4 outages across 120 days. More or longer outages would raise the
+  aggregate effect; that sweep has not been run.
+- **No oracle row is quoted.** The oracle reads `bal[tt] - drained` with no
+  topups (`06_MODEL_CARD.md` §3 item 11) and has no notion of the rail at all,
+  so it is not a meaningful upper bound for this experiment.

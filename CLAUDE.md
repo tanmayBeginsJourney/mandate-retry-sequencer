@@ -13,10 +13,24 @@ Then read `docs/00_HANDOFF.md`, `docs/01_FACTS.md`, `docs/02_RESULTS.md` and
 
 The single most important thing about this project:
 
-> **It has found six significant errors in its own work. Every single one made
-> the project look BETTER than it was.** That is not coincidence. It is what
-> happens when the same party builds the measuring stick and the thing being
-> measured. You are now that party. Behave accordingly.
+> **It has found sixteen significant errors in its own work. Every single one
+> made the project look BETTER than it was.** That is not coincidence. It is
+> what happens when the same party builds the measuring stick and the thing
+> being measured. You are now that party. Behave accordingly.
+
+**And the second most important thing, added 28 August 2026.** Errors 11–13
+were found by an outside reader who was handed `docs/`, told to write down what
+they believed, and then told to check it against `sim/`. All three were in the
+*measuring* apparatus — a mutation test that graded itself, a fit script that
+cannot produce the constant it documents, and a byte-lock that does not cover
+the shipping configuration. Ten prior errors, a mutation-testing rule, a
+pre-registration habit and a doc/code contract checker did not catch any of
+them.
+
+> **Self-audit has a floor.** You check results against tests and never check
+> tests against a stranger. If you have time for one quality activity this
+> week, it is another outside read of `docs/` against `sim/` — not another
+> sweep.
 
 ---
 
@@ -53,6 +67,14 @@ reasoning in `NOTES.md` first.
 The test suite has already caught three defects in its own author's code. It is
 the most valuable asset in the repo. Treat it as read-mostly.
 
+**1a. A mutant may create illegal state and nothing else.** Added 28 August
+2026 after error 11. If a `mutate == ...` branch increments a violation
+counter, the gate that reads that counter is grading the mutant, not the
+harness — it passes by construction. Gate **M4B** parses `sim/harness.py` and
+fails if any `V.<field> += 1` sits inside a mutation branch. Two do today
+(`pending`, `represent`); the repair is blocked by the freeze. **Never make
+M4B green by exempting a mutant or by narrowing what it looks at.**
+
 ### 2. Never report a number without stating how it could be wrong
 Before presenting any simulation result, state:
 - the experimental design (n, seeds, parameters, horizon)
@@ -88,9 +110,15 @@ file's life.** The 6× LTV multiplier was still live in `w3.index_score` until
 it was swept, found to be a **complete no-op for every policy**, and removed.
 The 0.92 discount is **still live** and is not a no-op — it multiplies
 `p_later`, so it changes the sign of the index. It has now been swept (item A3
-in `05_TEST_DESIGN.md`, declared at project start and never done): it sits on a
-broad plateau, and `solo_shared_pd` ranges **78.7%–83.1%** across
-discount 0.80–1.00. Quote that range, not a point. Do not add new ones.
+in `05_TEST_DESIGN.md`, declared at project start and never done).
+
+**Corrected again 28 August 2026, later the same day.** The A3 sweep that
+produced "**78.7%–83.1%**" was run on the **unfitted** filter, which is not
+what ships. On the shipping configuration the spread across discount 0.80–1.00
+is **88.7%–95.6%, i.e. ~7 points, not ~4**. The 0.90–0.96 plateau does survive
+(94.25–95.57), so the constant is not perched on a spike — but quote the
+fitted range, and say which filter it came from. Table in `02_RESULTS.md`.
+Do not add new constants.
 
 ### 6. Never quote retired numbers
 `41.7% → 76.3%` is **dead**. So is the `+5.4 pts` pooling figure, the `+1.5–2.1
@@ -172,7 +200,7 @@ docs/
                        (start at 07_AGENT_BRIEF.md if you are building the agent)
   01_FACTS.md          every external fact, with source and confidence
   02_RESULTS.md        gated simulation results. See also 06_MODEL_CARD.md.
-  03_ERRORS.md         TEN errors, with mechanism + guard. Pitch material.
+  03_ERRORS.md         SIXTEEN errors, with mechanism + guard. Pitch material.
   04_BUILD_PLAN.md     what is left, dated
   05_TEST_DESIGN.md    test philosophy, written BEFORE the harness on purpose
   06_MODEL_CARD.md     WHAT SHIPS. Read this before touching sim/ or agent/.
@@ -180,7 +208,7 @@ docs/
 sim/
   w3.py                world + belief filters + FITTED_BELIEF. FROZEN.
   harness.py           policies, Stage 0 violation counters, run(). FROZEN.
-  tests.py             the 24-gate suite. Tripwired: see "Before you commit".
+  tests.py             the 25-gate suite. Tripwired: see "Before you commit".
   gate.py              runs tests.py, decides if a commit is allowed
   runner.py            parallel driver (spawn-safe). Read its docstring first.
   t9_reference.py      captures/checks sim/t9_reference.json (gate T9)
@@ -199,7 +227,16 @@ sim/
 legacy/                FROZEN. Known-defective. Do not build on.
 logs/                  raw output from prior runs
 scripts/               install-hooks.sh, pre-commit, pre-push, day-start.sh
-agent/                 (you will create this) the actual product
+agent/                 THE PRODUCT. Built 28 Aug 2026; LLM layer still missing.
+  demo.py              run it end to end: `python -m agent.demo`
+  ports.py             shared types. `Diagnosis` has NO time field, on purpose.
+  loop.py batch.py     the recovery loop; batch.py is the composition root
+  policy/              ONE BeliefPD per CUSTOMER + the index. Wraps frozen sim/.
+  constraints/         Stage 0 ENFORCED, plus an independent auditor
+  context/             rail_monitor.py — cross-customer outage detection
+  execution/ audit/    the world; append-only JSONL audit trail
+  llm/                 redaction boundary + deterministic fallback. No model yet.
+  tests/               seven gates. _parallel.py is MANDATORY — see below.
 ```
 
 ## Environment — read before running anything
@@ -230,6 +267,16 @@ processes by `sim/runner.py`, and the belief filter's forecast is incremental.
 Individual `solo_shared_pd` runs at n=100 are ~5s unfitted and ~15s with
 `FITTED_BELIEF` (30 payday hypotheses instead of 10).
 
+**EVERY AGENT MEASUREMENT MUST RUN ONE PROCESS PER RUN.** Long-lived
+processes that make many `agent.batch.run_once` calls crash on this machine
+— SIGSEGV, sometimes SIGILL, at a different point every time, and a test that
+passed 24/24 in the morning segfaulted before printing a line that afternoon
+with no code change. **The root cause was not found; it is contained, not
+fixed.** Use `agent/tests/_parallel.py`
+(`ProcessPoolExecutor(max_tasks_per_child=1)`), which also raises if a worker
+dies — a crashed run is a FAILED measurement, not a missing one. Evidence and
+the isolation table: `docs/06_MODEL_CARD.md` §6a.
+
 **A Python process at ~0 CPU is HUNG, not busy.** This cost 97 minutes once.
 Check before waiting on anything:
 
@@ -257,7 +304,7 @@ Install the hooks once per clone, then just commit — the gate runs itself:
 scripts/install-hooks.sh
 ```
 
-The hook runs `sim/gate.py`, which runs the 24-gate suite and blocks the commit
+The hook runs `sim/gate.py`, which runs the 25-gate suite and blocks the commit
 on any `FAIL` or `VACUOUS` gate that is not listed in `sim/known_failures.txt`.
 To run it by hand: `python sim/gate.py --tier full`.
 
@@ -271,7 +318,7 @@ failure of the suite, not a pass, and the gate treats it exactly like a `FAIL`.
 
 | Tier | Command | Gates | Answers |
 |---|---|---|---|
-| fast | `python sim/gate.py --tier fast` | M1-M6, M8, T1-T9, S1, S1_PD | Does the CODE still do what it did? |
+| fast | `python sim/gate.py --tier fast` | M1-M6, M4B, M8, T1-T9, S1, S1_PD | Does the CODE still do what it did? |
 | full | `python sim/gate.py --tier full` | all of the above **plus** S2a, S2b, S2c, S2_LEGACY, S3, S4 | Do the STATISTICAL CLAIMS still hold? |
 
 `git commit` runs fast (~34s). `git push` runs full (~81s). Both are installed
@@ -311,16 +358,27 @@ Bayes-versus-ML comparison. Requiring the label is stricter in the way that
 matters — a reader can tell which is which — and the alternative was a rule
 everyone quietly broke.)*
 
-**Five gates are red on a clean checkout.** Full reasons in
-`sim/known_failures.txt`; the short version:
+**Six gates are red on a clean checkout** (25 gates: 5 FAIL, 1 VACUOUS, 19
+pass). Full reasons in `sim/known_failures.txt`; the short version:
 
 | Gate | State | What it means |
 |---|---|---|
 | **S1** calibration, point-estimate filter | FAIL | ECE 0.091, inside the 0.10 bound, but the reliability curve is **not monotone**. Note S1 runs `portfolio`, which carries `w3.Belief` — **not the filter that ships**. |
 | **S1_PD** calibration, shipping filter | FAIL | Same threshold, on `w3.BeliefPD` under `FITTED_BELIEF`. ECE 0.026, also not monotone. Added 28 Aug because S1 had never measured the product. |
-| **M1** attempt-cap mutant | VACUOUS | The mutant cannot trip the cap counter at either operating point, so the NPCI attempt-cap claim has **no working test behind it**. **Do not put the cap-compliance claim in the pitch.** |
+| **M1** attempt-cap mutant | VACUOUS | The mutant cannot trip the cap counter at either operating point, so the NPCI attempt-cap claim has **no working test behind it**. |
+| **M4B** mutants must not grade themselves | FAIL | **Added 28 Aug. `mutate="pending"` increments `V.pending` itself (`harness.py:610-612`), so gate M4 passes by construction — 1066 counted, 1066 self-written, 0 independent. The pending-notification constraint has no working test either.** `mutate="represent"` does the same but M5 still binds. |
 | **S2b** placebo neutrality | FAIL | −14.09 pts. A finding about the control's design, not a code defect: the placebo injects *wrong* observations, not neutral extra ones. Left visible on purpose. |
 | **S2_LEGACY** point-estimate pooling | FAIL | Retired architecture, kept failing on purpose so the S2 rewrite is auditable rather than looking like test-loosening. |
+
+⚠️ **Two of the five Stage 0 rules have no working test: the attempt cap (M1)
+and the pending notification (M4/M4B). Keep BOTH out of the pitch and the
+architecture doc.** Peak-hour, notification-lead and Z9 re-presentation are
+genuinely tested and are safe to claim.
+
+⚠️ **Only 2 of 25 gates run the configuration that ships** (`S1_PD` and `S4`).
+Everything else — every mutant, every invariant, the T9 byte-lock, and all
+three S2 arms — runs the **unfitted** `BeliefPD`. A green suite is much weaker
+evidence about `w3.FITTED_BELIEF` than it looks. See error 13.
 
 **The pooling claim is resolved and is not blocked by S2b.** S2a passes at
 +9.53 pts (±1.81) and is the defensible moat number. S2c (+23.62) is

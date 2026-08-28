@@ -8,6 +8,25 @@ Deadline **5 September 2026**. Day-by-day plan: `04_BUILD_PLAN.md`.
 
 ---
 
+### The three things most likely to cost you the project
+
+Added 28 August 2026 after an outside audit of `docs/` against `sim/`. Each of
+these is a mistake you can make while every test still passes.
+
+1. **ONE BELIEF PER CUSTOMER, SHARED BY ALL `k` MANDATES.** Not one per
+   mandate. That sharing *is* the cross-merchant moat. Build it per-mandate and
+   you have silently built `solo_pop_pd` — the arm the moat is measured
+   against — and you are **9.53 points worse** with nothing to tell you. §3.
+2. **Two of the five Stage 0 rules have no working test** — the attempt cap
+   and the pending notification. Do not claim either in the pitch, and do not
+   treat the harness's counters for them as a spec you can port. §4.
+3. **Do not say "within 4.4 points of a clairvoyant oracle."** The oracle gap
+   is now that small, and this project's error 5 was *exactly* a near-zero
+   oracle gap produced by a broken oracle. `02_RESULTS.md` under "Other
+   established results".
+
+---
+
 ## 0. Vocabulary, and how to run anything
 
 Every term below is used across `docs/` without definition. Read this once.
@@ -25,6 +44,9 @@ Every term below is used across `docs/` without definition. Read this once.
 | **`pop`** | A population: a list of customer dicts. Built by `w3.make_pop` (below). |
 | **the metric** | Billing cycles collected ÷ cycles due, over the full horizon. A dead mandate forfeits its remaining cycles, which prices mandate death without an invented LTV constant. |
 | **oracle** | A clairvoyant policy with the true balance and true future. The upper bound; must weakly dominate everything (gate T1). |
+| **degenerate mode** | The agent with its action space switched off: retry-only, deterministic diagnoser, no nudge/escalate/stop, no rail monitor. It reproduces `harness.run("solo_shared_pd", ...)` **bit-exactly**, which is what makes every agent number comparable to a gated one. Added 28 Aug 2026. |
+| **full mode** | Degenerate plus the action space. The difference between the two is the agent's own contribution, isolated. |
+| **the rail** | The payment network itself, as opposed to a customer's account. `w3.BeliefPD` has no representation of it — that is why the context layer exists. |
 
 ### Running anything
 
@@ -63,10 +85,16 @@ those arguments. `sim/runner.py` relies on that: it ships a 5-to-7 number
 python sim/verify_brief.py
 ```
 
-It asserts every constant, the construction recipe, and that the decision recipe
-in §3 reproduces `harness.py`'s own branch bit-for-bit. It runs in under a
+It asserts every constant and the construction recipe, and runs in under a
 second. Two doc/code contradictions survived weeks in this repo before anyone
 checked; this is the check.
+
+⚠️ **Know its limit.** For the decision recipe it does *not* call
+`harness.py`. It compares §3's recipe against a **hand transcription** of the
+harness branch living inside `verify_brief.py:81-88`. If `harness.py`'s belief
+branch changed, this script would keep passing. It is a doc-vs-copy-of-code
+check. Flagged 28 Aug 2026; making it genuine needs the decision logic factored
+out of `harness.run`, which is a frozen file.
 
 ---
 
@@ -91,8 +119,11 @@ Judged on, among other things — `[REPORTED]`, see `01_FACTS.md`:
 
 Applicants are explicitly asked to **explain what broke during development and
 how they recovered**. That is why `NOTES.md` and `03_ERRORS.md` exist and why
-they are judged deliverables, not housekeeping. `03_ERRORS.md` has ten entries
-with mechanisms and guards. **Open the pitch with them.**
+they are judged deliverables, not housekeeping. `03_ERRORS.md` has **sixteen**
+entries with mechanisms and guards. **Open the pitch with them.** Errors 11-13
+were found by an outside reader checking `docs/` against `sim/` on 28 Aug --
+all three in the measuring apparatus, all three past a suite built to stop
+exactly that. That is the strongest Failure-Recovery material in the repo.
 
 ---
 
@@ -146,7 +177,7 @@ b = w3.BeliefPD(
     30,                     # cycle_days
     days,                   # horizon, e.g. 120
     est_spend=est_spend,
-    pop_info=True,
+    pop_info=True,          # INERT on BeliefPD -- see below. Harmless.
     **cfg,                  # stride=1, prior_w=12, prior_day0=8.0,
 )                           # prior_floor=0.25
 ```
@@ -154,6 +185,54 @@ b = w3.BeliefPD(
 With the fitted `spend_beta=0.0` the `est_spend` line reduces to `pop_spend`,
 but do not hardcode that — read it from the constant so a future refit
 propagates instead of silently not applying.
+
+⚠️ **`pop_info` does nothing on `BeliefPD`.** It is in the signature
+(`w3.py:325`) and the body never reads it; `self.prof` is set unconditionally
+at `w3.py:373`. It *is* load-bearing on the older `Belief` (`w3.py:164-168`,
+`189-195`), which is where the parameter comes from. Pass it or don't — just
+don't build a "no aggregate model" arm by flipping it and expect a different
+filter. Found 28 Aug 2026; not fixed because `w3.py` is frozen.
+
+### ⚠️ ONE BELIEF PER **CUSTOMER**, NOT PER MANDATE. THIS IS THE MOAT.
+
+**This is the single easiest way to build the wrong thing, and the brief did
+not say it until 28 August 2026.**
+
+`solo_shared_pd` does not give each mandate its own filter. All `k` mandates of
+one customer **share one `BeliefPD` object**, and every mandate's attempt
+outcome is folded into that one object. See `harness.py:207-215`:
+
+```python
+collapse = policy in POOLED and not policy.startswith("solo_placebo")
+if collapse:
+    _shared = BC(est_sal, est_pay, cyc, days, est_spend=eff_spend, ...)
+    beliefs = {id(m): _shared for m in mands}      # ONE object, k references
+```
+
+That is what "pooling" *is* in this codebase. The customer is the unit of
+inference; the mandate is only the unit of action.
+
+Build one belief per *mandate*, each seeing only its own attempts, and you have
+built **`solo_pop_pd`** — which is the arm the moat is measured *against*. You
+would ship the architecture minus its central claim and the number would be
+**9.53 points worse** (gate S2a), and nothing in the suite or this brief would
+tell you, because both policies exist and both run clean.
+
+Concretely, for a customer with mandates `m1..mk`:
+
+```python
+b = w3.BeliefPD(...)                 # ONE per customer
+per_mandate_belief = {m.id: b for m in mandates}    # all the same object
+
+# on every outcome, for ANY mandate:
+b.advance(day)                       # ONCE per day per CUSTOMER, not per mandate
+b.observe(m.amount, success)         # ONCE -- every mandate already sees it
+```
+
+`advance()` and `observe()` are called **once per customer**, not once per
+mandate. Calling them k times ages the belief k× too fast and silently
+destroys it — `advance` has no guard against being called twice for a day
+(`w3.py:400-409`).
 
 **Methods you will use:**
 
@@ -270,6 +349,32 @@ different code from a different source of truth. Three gates in the old suite
 were vacuous precisely because they checked a condition the policy had already
 guaranteed — see `03_ERRORS.md`, "Three vacuous gates".
 
+⚠️ **That paragraph is true for three of the five counters, not all five.**
+Corrected 28 August 2026, gate **M4B**:
+
+| counter | independent detector? | test behind it |
+|---|---|---|
+| `cap` | yes, `harness.py:253` | **none** — M1 is VACUOUS, the cap never binds |
+| `peak` | yes, `harness.py:256` | M2, fires 1119 |
+| `lead` | yes, `harness.py:258` | M3, fires 1080 |
+| `pending` | **NO** | **none** — M4 is vacuous, see below |
+| `represent` | yes, `harness.py:262` | M5, but double-counts |
+
+`pending` is the bad one. Its only detector is `if m["pend"] is not None` at
+`harness.py:607`, and `live` at `harness.py:349-351` has *already* filtered
+`m["pend"] is None`, so it can never fire. The M4 mutant passes because the
+mutation branch increments `V.pending` **itself** (`harness.py:610-612`).
+Measured on an instrumented copy: 1066 counted, 1066 self-written, **0**
+independent. `represent`'s mutant does the same at `harness.py:333`, but there
+the independent check still fires (304 of the 608), so M5 binds.
+
+**What this means for you.** When you build the enforcement layer, `cap` and
+`pending` have **no reference implementation you can check yourself against** —
+the simulation's counters for those two have never been proven to work. Build
+both enforcers, build the independent counter behind both, and write your own
+test that puts an illegal action through and watches your counter move. Do not
+assume the harness's counter is a spec you can port.
+
 **But a product cannot ship a constraint layer that only takes notes.** Your
 first real task is to build Stage 0 as **enforced middleware**: every money
 action passes through it, and it **refuses** illegal ones rather than recording
@@ -290,10 +395,13 @@ behind it, so you can still prove the enforcement works rather than asserting
 it. An enforcement layer with no independent check is exactly the vacuous-gate
 shape this project has hit three times.
 
-⚠️ **Do not put the NPCI attempt-cap compliance claim in the pitch or the
-architecture doc.** Gate M1 is VACUOUS: the cap counter has no working test
-behind it, because at both operating points the cap is never the binding
-constraint. See `06_MODEL_CARD.md` §4.
+⚠️ **Do not put the NPCI attempt-cap OR the pending-notification compliance
+claim in the pitch or the architecture doc.** Gate M1 is VACUOUS (the cap is
+never the binding constraint at either operating point) and gate M4 is
+vacuous-but-green (its mutant grades itself). **Two of the five Stage 0 rules
+have no working test.** Peak-hour, notification-lead and Z9 re-presentation are
+genuinely tested and are safe to claim. See `06_MODEL_CARD.md` §4 and
+`sim/known_failures.txt` under `M4B`.
 
 ---
 
@@ -336,7 +444,83 @@ That is how the last four defects were found.
 1. `06_MODEL_CARD.md` — what ships, what it is worth, what it was never tested
    on. Especially §3, before you quote any number to anyone.
 2. `CLAUDE.md` — the ten hard rules, the environment, the numbers rule.
-3. `03_ERRORS.md` — ten errors with mechanisms. Pitch material.
+3. `03_ERRORS.md` — sixteen errors with mechanisms. Pitch material.
 4. `01_FACTS.md` — every external fact with its source tag. **Nothing outside
    this file is established**, and the legality of the cross-merchant moat is
    still `[GUESS]`.
+
+---
+
+## 8. THE AGENT EXISTS NOW. Added 28 August 2026.
+
+`agent/` is built through the constraint layer, the action space and the context
+layer. The LLM layer is **not** built. If you are the next session, this section
+plus `06_MODEL_CARD.md` §6 is your starting point, and `NOTES.md` from
+28 August has the full blow-by-blow.
+
+### What is built
+
+```
+agent/
+  ports.py            shared types. Imports no layer. `Diagnosis` has NO time field.
+  state.py            per-mandate bookkeeping (the POLICY's view, not the gate's)
+  loop.py             detect -> diagnose -> choose -> schedule -> enforce -> execute -> log
+  batch.py            composition root: the only place that builds an executor AND a gate
+  policy/             belief_book.py (ONE BeliefPD per CUSTOMER), timing.py (the index)
+  constraints/        rules.py + stage0.py (enforce), auditor.py (independent recount)
+  context/            rail_monitor.py - outage detection. NEW.
+  execution/          sim_executor.py - the world, incl. OutageSchedule
+  audit/              log.py - append-only JSONL, one row per event
+  llm/                caseview.py (redaction boundary), fallback.py (deterministic),
+                      governance.py, schema in ports.py. NO MODEL-BACKED DIAGNOSER YET.
+  tests/              _parallel.py + seven gates. See 06_MODEL_CARD.md §6b.
+```
+
+### The four things most likely to cost you the project, updated
+
+1. **ONE BELIEF PER CUSTOMER, SHARED BY ALL k MANDATES.** Unchanged, still the
+   most expensive available mistake. `agent/policy/belief_book.py` enforces it
+   and `test_one_belief.py` asserts it.
+2. **RUN EVERY BATCH THROUGH `agent/tests/_parallel.py`.** One process per run,
+   `max_tasks_per_child=1`. Long-lived processes crash on this machine and the
+   root cause is unknown. `06_MODEL_CARD.md` §6a has the evidence.
+3. **Two of the five Stage 0 rules still have no working test in `sim/`** (the
+   attempt cap and the pending notification). `agent/` now has its own working
+   tests for both, written from the rule text in `01_FACTS.md` rather than
+   ported from the harness - `test_stage0_enforces.py`. Those are the only
+   working tests either rule has anywhere in this repo. **The pitch ban stands
+   for the `sim/` claims.**
+4. **The agent's headline is a CAPABILITY claim, not a recovery number.**
+   `06_MODEL_CARD.md` §6d. Do not let it drift into "money recovered".
+
+### Two hard requirements in the agent code
+
+**The rail monitor requires `time_major=True`.** It keeps a rolling window and a
+customer-major loop restarts the clock at t=0 for every customer, so nothing
+prunes and it latches OUTAGE forever - it read 1.97% recovery that way, without
+crashing. It now raises `NonMonotonicTime` instead. Error 14.
+
+**Anything that drops a pending notification must emit
+`NOTIFICATION_CANCELLED`.** Otherwise `auditor.py` correctly reports `pending`
+violations that did not happen. `06_MODEL_CARD.md` §6c.
+
+### What is NOT built, and what the open question is
+
+No model-backed diagnoser. Everything measured so far comes from
+`RuleBasedDiagnoser` / `RetryOnlyDiagnoser`, deterministic and offline **on
+purpose**: the batch number must never depend on a network call, or it is not
+reproducible and the numbers rule forbids quoting it.
+
+The eval harness for an LLM layer is also not built. The open design question,
+recorded so the next session does not have to rediscover it: **the aggregate
+recovery ceiling for outage awareness is now known to be about +0.26 pts**, so
+scoring an LLM's outage verdict on recovery has almost no headroom. The
+alternative is to score it on **detection quality** - latency, false alarms, and
+the ambiguous bursts where the binomial test sits near its threshold and a
+judgement call has room to matter. That decision has not been made.
+
+Whatever is built there: the diagnoser must never see a balance (the `CaseView`
+redaction boundary in `agent/llm/caseview.py` is what guarantees it), `Diagnosis`
+must keep having no temporal field, and the judge must be a different model from
+the diagnoser - same-model-grading-itself is the same-party failure this project
+has now hit sixteen times.

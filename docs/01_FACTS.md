@@ -52,6 +52,45 @@ Tags: `[VERIFIED]` primary source read directly · `[REPORTED]` secondary ·
   Read from their docs, but see the RETRACTIONS below — we now believe this
   schedule may not be legally executable post-August 2025.
 
+## UPI rail outages — added 28 August 2026, for the agent's context layer
+
+- `[REPORTED]` UPI suffered roughly **995 minutes of total downtime across ~17
+  incidents between March 2020 and March 2025**. The longest single incident was
+  **~207 minutes (July 2024)**. A March 2025 incident ran **~95 minutes**, and
+  the **12 April 2025** incident was reported at **4–5 hours** and described as
+  the longest in over three years, attributed to a surge of "Check Transaction
+  Status" API calls from PSP banks.
+  Sources: Business Standard and ORF Online summaries, read 28 August 2026.
+  ⚠️ **The Business Standard page returned HTTP 403 and could not be read
+  directly**; these figures come from search-result summaries and from the ORF
+  piece, which corroborates that outages occurred in March, April and May 2025
+  but gives **no per-incident durations**.
+- `[REPORTED]` **NPCI's own uptime dashboard has not been updated past March
+  2025**, per ORF. The public record of UPI availability is therefore incomplete
+  by the operator's own admission. Treat any downtime total as a floor.
+- `[GUESS]` **That any of this applies to UPI AutoPay MANDATE EXECUTION.** Every
+  figure above describes UPI end-to-end (P2P/P2M). Nothing found states that
+  mandate debits failed during those windows. The read-across is ours.
+- `[GUESS]` **The rail monitor's three tuning constants**, all in
+  `agent/context/rail_monitor.py`: `window_h=24` (how far back the detector
+  looks), `min_attempts=8` (below this it refuses to evaluate), `hold_h=12`
+  (minimum time in the OUTAGE state). None is derived from any source and
+  **none has been swept.** Detection TPR is non-monotone in population size
+  right at the `min_attempts` cliff, so that one matters most.
+  The detection threshold `alpha_enter=1e-4` is NOT in this category: it is
+  derived from a false-alarm target (~60 evaluations per run), and the
+  realised false-alarm rate is measured at 0/48 runs rather than assumed.
+- `[GUESS]` **Outage severity — what fraction of attempts fail inside a window.**
+  Reported nowhere found. It is swept (0.15 / 0.40 / 0.80) and never picked.
+  See `02_RESULTS.md`, the context-layer section.
+- `[VERIFIED]` **`w3.BeliefPD.observe(amount, success)` takes no decline code**
+  (`w3.py:416`), and `harness.py:270-276` passes `success=False` for a technical
+  decline. The failure branch hard-zeroes every balance bin at or above the
+  attempted amount (`w3.py:432`). So the filter cannot distinguish a bank glitch
+  from an empty account. Read directly from the frozen source.
+  **This fact is true and the intervention it motivated does not work — see the
+  retraction below.**
+
 ## Data governance
 
 - `[REPORTED]` India's DPDP Act 2023 requires data be used only for the purpose
@@ -125,3 +164,21 @@ Read these. They are the most likely place for you to reintroduce an error.
 - `[RETRACTED]` **"Spacing retries over days is the main win."** Tested directly:
   spreading the same attempts over four days buys **nothing** (−0.6 pts, n.s.).
   The win is waiting for payday specifically, not spacing.
+
+- `[RETRACTED]` **"Technical declines corrupt the belief, so suppressing them
+  will help."** Added and retracted the same day, 28 August 2026.
+  The *mechanism* is `[VERIFIED]` and stands: `observe()` cannot see a decline
+  code and a technical decline hard-zeroes balance mass, and because a pooled
+  belief is one object shared by all `k` mandates, one glitch corrupts all `k`.
+  The *inference* — that suppressing those updates improves the filter — was
+  **measured and is false**. Suppression alone moves ECE from **0.0346 to
+  0.0373 at severity 0.80: worse, not better** (`agent/tests/test_outage_ablation.py`,
+  8 populations, S1's own `reliability()` binning). Suppressing a technical
+  decline removes genuine information along with the noise, and on this measure
+  the loss exceeds the gain.
+  ⚠️ **The first version of that check reported HELD.** It compared the `both`
+  arm against `none`, and `both` turns out to be numerically identical to
+  `pause` — so the check was crediting suppression with pausing's effect. It was
+  re-scored against the arm that isolates the mechanism, and then it broke.
+  *A plausible mechanism verified in source is not evidence that acting on it
+  helps.* That is the general lesson and it belongs next to the other twelve.

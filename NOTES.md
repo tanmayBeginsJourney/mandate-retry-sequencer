@@ -1716,3 +1716,621 @@ that only takes notes. That is now the first item in the build plan and its own
 section in the brief, with both halves spelled out: enforce in the agent, and
 keep the independent counter behind it so the enforcement can still be proved
 rather than asserted.
+
+
+---
+
+# 2026-08-28, later — OUTSIDE AUDIT OF `docs/` AGAINST `sim/`
+
+A fresh reader was given `CLAUDE.md` and `docs/` **only**, told to write down
+what they believed the project was, and then told to open `sim/` and list every
+place the docs had misled them. They were told to fix nothing.
+
+**Result: three new errors (11–13), all in the measuring apparatus, all of
+which made the project look better than it was.** That is now thirteen for
+thirteen on the "every error flattered us" record.
+
+This entry is the mess, per rule 8. It is not tidied.
+
+## What the audit got RIGHT, so the value of the exercise is not overstated
+
+The suite reproduced exactly: 24 gates, 4 FAIL, 1 VACUOUS, 19 pass, 80.8s.
+`verify_brief.py` passed on every constant. The headline table, the six-world
+ML table and the `prior_day0` stress table matched their stored artifacts to
+the digit. `stride=3` representability measured 74.4% / 31.4% against the
+documented 74% / 31.7%. AUC 0.946, shuffled 0.459, 50 features, 288 runs =
+6x8x6 — all confirmed. The five red gates were red for the stated reasons.
+**The science is in better shape than the bookkeeping.**
+
+## Error 11 — M4's mutant grades itself. THE BAD ONE.
+
+`harness.py:610-612`:
+
+    if mutate == "pending":
+        m["pend"] = (notif, tt, False)
+        V.pending += 1          # <- the mutant writes the scoreboard
+
+The gate reads `vdetail["pending"]`, sees 1066, and passes. The only
+independent detector is `if m["pend"] is not None` at `harness.py:607`, and
+`live` at `harness.py:349-351` has ALREADY filtered `m["pend"] is None`, so it
+can never fire. Instrumented copy of the harness, portfolio / pop P / seed 7:
+
+    mutate=None       V.pending=   0  commits=1066  independent=  0  self=   0
+    mutate='pending'  V.pending=1066  commits=1066  independent=  0  self=1066
+
+`commits == V.pending` exactly. Every single one is a self-write.
+
+`mutate == "represent"` (`harness.py:333`) does the same, but there the
+dispatch-time check at `harness.py:262` still fires: 608 = 304 self + 304
+independent. M5 binds; it double-counts.
+
+**Why this one stings.** The mutation tier exists BECAUSE three gates in the
+old suite passed by construction. The rule that came out of that was "no
+mutant, no gate". The rule was followed. And the mutant — the single piece of
+code in the repo whose whole job is to be adversarial — was written by the
+same hand, in the same file, with write access to the scoreboard. M4 is the
+same tautology as the old `assert violations == 0`, wearing a mutation test's
+uniform.
+
+**Consequence:** `pending` joins `cap` as a Stage 0 rule with no working test.
+Two of five. Both now banned from the pitch.
+
+**Guard:** gate `M4B`, added today. It parses `sim/harness.py` with `ast` and
+fails if any `V.<field> += 1` sits inside a `mutate == ...` branch. Static,
+because the harness returns only the integer — from outside, a self-written
+violation and a real one are the same number. It reports VACUOUS if it ever
+flags all five mutants, which is its own falsifiability check. Verified it
+discriminates: flags `pending` and `represent`, clean on `cap`/`peak`/`lead`.
+
+**M4B is RED and in `known_failures.txt`.** I did not repair it. The repair is
+in `harness.py`, which is frozen, and deleting the self-writes would change
+M4/M5's counts and therefore move T9's reference. Procedure for after
+5 September is written into the `known_failures.txt` entry.
+
+New rule, now `CLAUDE.md` 1a: **a mutant may create illegal state and nothing
+else.**
+
+## Error 12 — `fit_belief.py` cannot produce `w3.FITTED_BELIEF`
+
+Two of the five values are not in the script that is committed *precisely* so
+the fit is reproducible:
+
+- **`prior_floor=0.25`** — the string `prior_floor` appears NOWHERE in
+  `fit_belief.py`. `BASE` omits it; none of the three sweeps sets it. So every
+  config it evaluates inherits `BeliefPD`'s default `1e-6` — the HARD window
+  that error 8 identifies as the brittle failure. The soft floor is called
+  "THE IMPORTANT PART" in `w3.py`'s own comment.
+- **the objective** — `fit_belief.py:35` is `PE = 7` and there is no loop over
+  `payday_err` anywhere in the file. `w3.py:62`, `belief_fit.json`'s `note`
+  and `fair_audit.py`'s printed output ALL claim selection against the mean
+  across `payday_err` in {1,3,5,7,10,14}. That is the stated repair for error
+  8 and it is not in the code.
+
+Measured, identical call signature, eval pops 700–707, pe=7:
+
+    95.57%  w3.FITTED_BELIEF (floor 0.25)          <- ships, docs quote this
+    94.98%  what fit_belief.py can emit (1e-6)
+    82.16%  BASE as shipped
+
+And separately: `ml_artifacts/belief_fit.json` — the ONLY stored provenance
+record — says eval "fair fight" = **97.53%** for a call signature that
+measures 95.57%. Nothing reproduces 97.53%. That same number is quoted in
+`fair_audit.py`'s docstring as the current filter's score AND attributed in
+`03_ERRORS.md` error 8 to the *brittle first fit*. One of those is wrong and I
+cannot tell which from the repo.
+
+**What is NOT wrong: the constant.** `fair_audit.py` re-run today confirms the
+gain grows +2.12 (pe=1) → +19.76 (pe=14), monotone, no peak at the fitted
+point. That is exactly the property error 8 demands. **The value is fine. The
+provenance is fiction.**
+
+**Not repaired.** Adding `prior_floor` to the search re-opens a frozen constant
+eight days out, which is error 8's other half. Warning header added to
+`fit_belief.py`; `fair_audit.py`'s false printed claim removed.
+
+**Lesson:** a committed script is not a reproduction. Only a re-run is a
+reproduction. Errors 7 and 8's guard was "the fit is reproducible and its
+objective is visible" and nobody ever ran it again.
+
+## Error 13 — T9 does not lock what ships
+
+`t9_reference.py:54-56`: 14 policies x 2 operating points, and **not one of the
+28 passes `bcfg`**. Every locked config is the unfitted `BeliefPD`. The whole
+fitted-prior branch (`w3.py:358-367`) is outside the byte-lock that
+`CLAUDE.md` and `06_MODEL_CARD.md` describe as catching "a changed float
+anywhere in the belief filter".
+
+Broader: **only 2 of 25 gates run `FITTED_BELIEF`** (`tests.py:567` S1_PD,
+`tests.py:645-647` S4), and one of the two is red. S2a — the gated moat number
+— is unfitted too. `02_RESULTS.md` did say this; `CLAUDE.md` and
+`00_HANDOFF.md` presented "+9.53, gated as S2a" beside "the policy is
+solo_shared_pd with FITTED_BELIEF", which reads as coverage it does not have.
+
+Same mechanism as error 9: a gate named for a property rather than a subject.
+The fitted config arrived after T9's reference was captured and nothing
+re-asked what the lock covered.
+
+**Not repaired** — adding fitted configs and re-capturing is a deliberate
+re-baseline, and a silently regenerated reference is the thing this repo has
+got wrong three times. After 5 September.
+
+## Number corrections made today (all verified against a --tier full run)
+
+| | was | is |
+|---|---|---|
+| S2b | -14.51 (+/-2.24) | **-14.09 (+/-2.09)** |
+| S2c | +24.04 | **+23.62** |
+| S2_LEGACY | -0.40 | **-0.38** |
+| S1_PD ECE in `known_failures.txt` | 0.040 | **0.026** (0.040 is fair_audit's, different pops) |
+| suite runtime in `00`/`02` | ~66s | **~81s** (measured twice) |
+| baseline_doc re-presentations | ~978 | **974**, and population-specific |
+| `model.pkl` | ~4 MB | **7.87 MB** |
+| oracle headroom | +18.5 to +22.7 pts | **4.3 to 6.8 pts** — RETRACTED, see below |
+| discount band | 78.7-83.1%, "~4 points" | **88.7-95.6%, ~7 points** on the fitted filter |
+
+`known_failures.txt` — the file `CLAUDE.md` points to for "full reasons" —
+was the stalest of the four. Its header still said "21 gates, 3 FAIL". It now
+carries a standing instruction to re-run and update in the same commit.
+
+## Two things that are now WORSE than the docs said, and matter for the pitch
+
+**1. The oracle gap.** `02_RESULTS.md` said "+18.5 to +22.7 pts of headroom.
+There is plenty left. A near-zero oracle gap is a symptom, not an
+achievement." That figure predates the fitted filter. The shipping config sits
+**4.3-6.8 points** from a 100% oracle. **The warning is now the live
+condition.** Two reasons not to believe 95.6% yet, neither checked: the oracle
+ignores `topups` (`harness.py:524` vs `:268`), and oracle and filter share
+`balance_trace`'s generative assumptions, so a 4-point gap may be measuring
+how well the filter matches the world rather than how well it schedules.
+**"Within 4.4 points of a clairvoyant oracle" is the exact sentence error 5
+produced last time. It must not go in the pitch.**
+
+**2. The discount band.** A3 was swept on the unfitted filter. On the shipping
+config the 0.80-1.00 spread is ~7 points, not ~4, and 0.92 is also the
+evaluation-set argmax on a 5-point grid. The 0.90-0.96 plateau does survive
+(94.25-95.57) so this is a flag, not a defect — but every headline owes a
+wider band than was stated.
+
+## Unverifiable claims now labelled as such in `02_RESULTS.md`
+
+No committed script computes these and no artifact stores them:
+- coordinated budgeting -5.95 / -6.10
+- "Whittle beats greedy +7.15 to +24.54" — the policy pair is not even named;
+  `portfolio - myopic` in the T9 reference is +4.69 / +0.98, which is not this
+- "making it legal is worth +7.5 pts" (T9 ref gives +8.18 at n=60)
+- the forced-payday figures 29.1% / 44.2% / 74.0%
+
+The *decisions* stand — they are corroborated by tables that do reproduce.
+The *intervals* are not evidence and are now marked `[UNVERIFIED]`.
+
+## Smaller declarations added to docs
+
+- **T8 was an undeclared gate** — not in the pre-registration, not in the
+  "added after the fact" table. Now listed.
+- **S4's ID was reused.** Pre-registered S4 is "calibration anchor
+  independence, NOT a pass/fail gate". Shipped S4 is "fitted beats shipped", a
+  hard gate. The pre-registered one was never implemented and was missing from
+  the "specified but not implemented" list. Same shape as error 9. Told the
+  next person to call the real one `S5`.
+- **T7's mutant is a hand-edited dict**, not a broken implementation. Below
+  this document's own stated bar.
+- **`pop_info` is dead on `BeliefPD`** (`w3.py:325`, never read). The brief
+  told you to pass it as if it configured something.
+- **`verify_brief.py` compares the brief against a hand transcription of the
+  harness branch living inside itself** (`verify_brief.py:81-88`), not against
+  `harness.py`. It is a doc-vs-copy-of-code check.
+- **`requirements.txt` pinned only numpy** while `06 §4b`'s recipe needs
+  lightgbm and scikit-learn. Added, clearly labelled as not a reproducibility
+  claim since the model is gitignored.
+- **`n_mandates_hint`** (`harness.py:101`) is a dead parameter.
+- **`drained`'s comment** (`harness.py:223`) says "per mandate cycle window,
+  reset each cycle"; it is one per-customer accumulator cleared at payday.
+
+## THE ONE THING THE NEXT SESSION MOST NEEDS: one belief per CUSTOMER
+
+Not a doc error exactly — an omission, and the most expensive one available.
+
+`harness.py:207-215`: for `solo_shared_pd`, `collapse` is true and **all k
+mandates share ONE `BeliefPD` object**. Pooling IS that. The customer is the
+unit of inference; the mandate is only the unit of action. `advance()` and
+`observe()` are called ONCE PER CUSTOMER.
+
+`07_AGENT_BRIEF.md` §3 never said so. Build one belief per mandate — which is
+what the recipe reads like — and you have built `solo_pop_pd`, the arm the
+moat is measured AGAINST. You would ship the architecture minus its central
+claim, be 9.53 points worse, and nothing in the suite or the brief would tell
+you, because both policies exist and both run clean.
+
+That is now the loudest block in the brief.
+
+## Meta
+
+The project found errors 1–10 itself. An outside reader found 11–13 in an
+afternoon with no more access than `docs/` + `sim/`. All three were in the
+measuring apparatus, which is exactly where self-audit is blindest: you check
+results against tests and never check tests against a stranger.
+
+**If there is time for one more quality activity before 5 September, it is
+another outside read — not another sweep.**
+
+---
+
+# 28 August 2026 (later) — `agent/` steps 1–3: skeleton, parity, action ablation
+
+Session brief: build `agent/` in a fixed order — isolation first, parity gate
+second, action space with measured effects third, then stop and report before
+spending anything on the LLM layer.
+
+## Two claims I was told to check against `harness.py` before accepting them
+
+Both were put to me as corrections to my design proposal, and I was told to
+verify them myself rather than take them. **Both are structurally right and
+both are economically much weaker than they sound on the shipping config.**
+
+**Claim: `topup_p` is already a modelled nudge.** True.
+`harness.py:295-298` credits `amount * 1.15` for 48h from `t+2` with
+probability `topup_p` after a failed debit, and `harness.py:268` reads it back
+at dispatch. It is a nudge model.
+
+*But* — swept on the shipping configuration, 8 held-out populations, `pe=7`:
+
+| `topup_p` | shipping | `payday_wait` |
+|---|---|---|
+| 0.00 | 95.31 | 56.79 |
+| 0.10 | 95.13 | 61.79 |
+| 0.25 | 95.34 | 68.15 |
+| 0.50 | 95.56 | 77.53 |
+
+Paired, shipping at 0.25 vs 0.00: **+0.02 pts, 2SE 0.59 — not significant.**
+The same mechanism moves `payday_wait` by **+11.4 points**. So the mechanism is
+live and large; it is the *shipping policy* that has nothing left for a nudge
+to recover, because it already collects 95.3% by attempting when the money is
+there. And since the harness's version fires on EVERY failure unprompted, it is
+a strict **upper bound** on an agent-triggered nudge. I predicted >5 pts. Wrong,
+and wrong in the direction that would have flattered a NUDGE action.
+
+**Claim: `STOP` before cap-exhaustion preserves future revenue, already priced.**
+True, and verified in source: a mandate dies only by failing AT the cap
+(`harness.py:299-300`, inside the failure branch); only live mandates roll over
+(`:338`); and `cyc_due` counts every closed cycle while `got_cycles` stops
+(`:619-621`). So death forfeits remaining cycles and holding an attempt back
+preserves them, with no new constant.
+
+*But* I predicted the headroom was small, because survival on the shipping
+config is **96.55%** at `pe=7` — only 3.45% of mandates die. I put STOP at
+−1.0 to +0.5. **Measured +1.371 (2SE 0.599), SIG.** Wrong.
+
+Worth noting: on the *unfitted* filter survival is 84.50%. Fitting the belief
+already solved most of the death problem, so STOP's headroom is much smaller
+than it would have looked against the unfitted baseline. That is error 7's
+shape again — a thing that looks valuable only because the baseline was not
+fitted — and it is why the ablation is run against the fitted config.
+
+## `agent/` is built, and degenerate mode is BIT-IDENTICAL to the harness
+
+Structure: `ports` (shared vocabulary, imports no layer) · `policy/`
+(`belief_book`, `timing`) · `constraints/` (`rules`, `stage0`, `auditor`) ·
+`llm/` (`caseview`, `fallback`, `governance`) · `execution/` (`sim_executor`) ·
+`audit/` (JSONL log) · `loop.py` · `batch.py` (composition root).
+
+**The parity gate passed harder than expected.** Degenerate mode — retry-only,
+deterministic diagnoser — vs `harness.run("solo_shared_pd", ...)`, n=100, 8
+populations 700–707, 120d:
+
+| config | agent | harness | diff | exact |
+|---|---|---|---|---|
+| pe7 fitted | 95.31 | 95.31 | +0.0000 | 8/8 |
+| pe7 unfitted | 83.02 | 83.02 | +0.0000 | 8/8 |
+| pe1 fitted | 95.00 | 95.00 | +0.0000 | 8/8 |
+
+**24/24 runs bit-identical**, zero Stage 0 refusals, zero independently audited
+violations. I had pre-registered exact parity as a *bonus* with LOW confidence
+(predicted ≥6/8 at best) and the acceptance gate as "within paired 2SE". It
+came in exact on the first attempt.
+
+Why it worked: `harness.run` draws from one generator in a fixed order, and
+the customer loop is OUTSIDE the time loop (`harness.py:156`), so `trng` is
+consumed customer-major. Reproducing both — including `rng.shuffle(donors)`,
+whose result we discard but whose draws we must consume — was enough.
+`donor_bal` uses its own generator and consumes nothing shared.
+
+This matters more than a green tick: it means every difference between
+degenerate and full mode is attributable to the AGENT rather than to the timing
+brain. Without it the agent's number would be ungated code quoted beside gated
+numbers.
+
+## The action ablation — and two broken predictions, both flattering
+
+n=100, 8 populations, `pe=7`, FITTED_BELIEF, paired 2SE vs degenerate:
+
+| arm | cycle_rec | vs degen | 2SE | sig |
+|---|---|---|---|---|
+| degenerate | 95.31 | — | — | — |
+| rules_none | 95.31 | +0.000 | 0.000 | — |
+| +NUDGE p=0.10 | 95.22 | −0.089 | 0.912 | n.s. |
+| +NUDGE p=0.25 | 94.75 | −0.560 | 0.901 | n.s. |
+| +NUDGE p=0.50 | 95.24 | −0.073 | 1.092 | n.s. |
+| +ESCALATE | 96.07 | **+0.759** | 0.323 | SIG |
+| +STOP | 96.68 | **+1.371** | 0.599 | SIG |
+| full p=0.25 | 95.04 | −0.271 | 0.932 | n.s. |
+| `payday_wait` | 56.79 | −38.52 | 1.371 | permanent row |
+
+**Pre-registration record: 6/8.** Held: NUDGE ≈ 0 at all three rates,
+`rules_none` == degenerate exactly, full ≤ degenerate, zero refusals. Broke:
+ESCALATE (predicted [−0.3, 0.0], got +0.759) and STOP (predicted [−1.0, +0.5],
+got +1.371).
+
+**Both broke upward. That is the signature of all thirteen errors in this
+repo, so rule 3 applied: investigate, do not narrate.**
+
+## Investigating the improvement, rather than explaining it
+
+Proposed mechanism, from the usage table: both actions halt a mandate before it
+exhausts its attempts, and deaths fall — 138 (degenerate) → 102 (+ESCALATE) →
+49 (+STOP) out of 4000 mandates. Coherent. Error 5 was also coherent. So it got
+a falsification test with three pre-registered predictions that would each have
+killed the story:
+
+| check | prediction | measured | |
+|---|---|---|---|
+| gain grows with horizon | monotone over 60/120/180d | +0.563 → +1.371 → +1.790 | HELD |
+| 60d below, 180d above the 120d figure | — | +0.563 < 1.371 < +1.790 | HELD |
+| gain tracks deaths avoided across populations | r > 0.5 | **r = +0.915** | HELD |
+| not buying survival by not billing | att/cyc within 5% | 1.533 → 1.553 (+1.3%) | HELD |
+
+**4/4.** The channel is named and measured: preserved mandates collect in later
+cycles. It is not an artifact of attempting less.
+
+**Consequence — STOP's value is CONDITIONAL ON THE HORIZON**, the same way the
+headline is conditional on `payday_err`, and it must be quoted as a curve. At
+120 days it is +1.371; at 60 days it is +0.563 and not significant. Any single
+number here is a number about a 4-cycle horizon and nothing else.
+
+**And an architectural finding: ESCALATE and STOP are the same mechanism.**
+Escalate credits nothing modelled anywhere in this world, so its entire +0.759
+is death-prevention — it is a STOP with a different trigger. Two actions doing
+one job. They also do not add: `full` is −0.271 because NUDGE's cost (a nudge
+consumes a decision day, no attempt scheduled) eats the gain.
+
+## Things that broke while building
+
+- **`AuditLog.emit(kind, ts_hour, **fields)` collided with a field named
+  `kind`.** Every non-money action raised `TypeError: got multiple values for
+  argument 'kind'`. Renamed the field to `action_kind`.
+- **The above cost a debugging cycle because `TemporaryDirectory.__exit__`
+  masked it.** On Windows the rmtree of a still-open file fails *inside*
+  `__exit__`, and that `NotADirectoryError` REPLACES the real exception.
+  `ignore_cleanup_errors=True` now. The masking was the bug; the leftover file
+  was not.
+- **`BrokenProcessPool` on the first mechanism run.** Same 0xC0000005 shape
+  NOTES.md already records. Cause: I set the BLAS thread-pinning env vars
+  inside `main()`, but numpy was already imported at module level — and
+  `runner.py`'s docstring says exactly why that is too late. Moved them above
+  the numpy import and cut workers 16 → 8.
+- **A badly chosen test case, not a bug.** `test_one_belief` asserted that
+  observing a failure at ₹5000 moves the belief. It does not, correctly: a
+  fresh `BeliefPD` puts all mass below ₹833 (`w3.py:371` seeds at 8% of
+  `est_salary`), so "balance < 5000" was already certain. The censored-update
+  model was working. Changed to ₹400 and added the converse check, so the
+  assertion is not vacuous in the other direction.
+
+## Guards added
+
+- **Five import-graph gates** (`test_layer_isolation.py`), each with a named
+  mutant that is actually run: LLM cannot reach the belief/world/gate/timing;
+  only `stage0.py` holds an executor; the auditor shares no code with the
+  enforcer; timing cannot import the narrative layer; `ports.py` depends on no
+  layer. **5/5 mutants trip the checker**; it reports VACUOUS if any stops
+  tripping, and VACUOUS is treated as FAIL.
+- **Stage 0 enforcement + independent detection** (`test_stage0_enforces.py`,
+  20/20). Half A: the gate refuses all five. Half B: an action injected BELOW
+  the gate moves money illegally, and `auditor.replay()` finds all five from
+  the log alone. **The injection touches no counter** — rule 1a, the error 11
+  lesson. `cap` and `pending` are written from the rule text in `01_FACTS.md`,
+  not ported, because `harness.py`'s counters for those two have never been
+  shown to work. These are the only working tests either rule has in this repo.
+- **The moat, asserted** (`test_one_belief.py`, 11/11): k mandates, one belief
+  object; double-`advance` raises; `spend_beta` actually reaches `est_spend`.
+
+## Still not done, and not claimed
+
+The LLM layer does not exist yet. Every number above comes from the
+deterministic fallback, which is the point: the gated batch number must never
+depend on a network call. Nothing here has been near `docs/` or the pitch.
+`sim/` untouched.
+
+---
+
+# 28 August 2026 (later still) — the context layer: outage detection
+
+Pivot: the agent's action space was worth +1.371 pts against a policy already at
+95.31%, which is a weak headline. The world is saturated at the task the
+optimiser was given. So the agent's job moved to the thing the optimiser
+structurally cannot do — reason about the state of the *rail*.
+
+## The premise, verified in frozen source before building on it
+
+**`w3.BeliefPD.observe(amount, success)` takes no decline code** (`w3.py:416`).
+`harness.py:270-276` sets `success = False` for a technical decline and
+`harness.py:304` passes it straight through. So a bank glitch and an empty
+account are the same measurement to the filter.
+
+It is worse than "the same update". The failure branch is `q[idx:] = 0.0`
+(`w3.py:432`) — every balance bin at or above the attempted amount is
+**hard-zeroed**. One technical decline permanently asserts "this customer had
+less than ₹X". And because a pooled belief is ONE object shared by all k
+mandates (`harness.py:207-215`), one technical decline corrupts all k at once.
+Pooling amplifies the damage.
+
+Confirmed the claim. Built on it.
+
+## The measured fact that shaped every experiment
+
+**99.22% of all attempts land at hour 8** (2288 of 2306, n=100/120d). The
+decision runs at hour 8 and `earliest_legal(day+1, t+24)` returns hour 8 again.
+Mean 19.2 attempts/day across 100 customers.
+
+Consequences, all of them load-bearing:
+- An outage that misses hour 8 is harmless **by construction**. So every outage
+  window in these experiments starts at hour 8 — worst-case placement, and
+  every number below is an **upper bound** on both the damage and the value of
+  detecting it.
+- A detector gets ~19 attempts per 24h window at n=100. That is the entire
+  budget the statistics have to work with.
+
+## Outage duration anchor — [REPORTED], and thin
+
+Searched, found, and could not fully verify: ~995 minutes total UPI downtime
+across ~17 incidents (Mar 2020–Mar 2025); longest single incident ~207 min
+(July 2024); 12 April 2025 reported at 4–5 hours; March 2025 ~95 min. Business
+Standard returned HTTP 403 and could not be read directly. ORF confirms outages
+in Mar/Apr/May 2025, gives no per-incident durations, and notes **NPCI's own
+uptime dashboard has not been updated past March 2025** — the public record is
+incomplete by its own admission.
+
+None of it is about **AutoPay mandate execution** specifically. The read-across
+is ours and is a `[GUESS]`. Severity — what fraction of attempts fail during a
+window — is reported nowhere found, so it is swept 0.15/0.40/0.80, never picked.
+Duration fixed at 6h, inside the anchored range.
+
+## Three defects found while building, all of the house type
+
+**1. The rail monitor produced confident garbage under the wrong loop order.**
+A rolling window needs monotonic time. `_prune(t)` drops events older than
+`t - window_h`, so when a customer-major loop finishes customer 0 at t=2879 and
+restarts customer 1 at t=0, the cut is −24 and **nothing prunes**: the window
+holds one customer's entire 120-day history, all of it "in the last 24 hours".
+OUTAGE latched permanently, dispatch never resumed, recovery read **1.97%**
+against time-major's 79.41%.
+
+It did not crash. The loop-order gate went green on that divergence and I wrote
+"the monitor genuinely reads cross-customer state" underneath it. That was not
+the reason. Now `NonMonotonicTime` is raised, and the gate has a third half
+asserting it raises.
+
+**2. The detector used a normal approximation and manufactured outages.**
+With n=11 attempts in the window and p0=0.008, expected count is 0.088, so a
+**single ordinary technical decline** scored z=3.09 — apparently 1-in-1000. The
+exact probability of seeing at least one is **8.5%**. Entirely unremarkable.
+The detector fired 21–26 times on a horizon containing 3 outages.
+
+A normal approximation to a Binomial needs n·p of roughly 5+. Here n·p ranges
+0.09–0.8, so it never applied. Replaced with an exact binomial tail; transitions
+dropped to **6** on a 3-outage horizon (3 enters, 3 exits). Found by reading the
+transition counts, not the pass/fail line.
+
+**3. The detector was structurally silent whenever the response was off.**
+Both `assess()` calls sat inside `if ctx.pause_on_outage:`. The detection-power
+study ran with the response disabled to avoid confounding — so nothing ever
+asked the detector anything, and it reported **TPR 0.00 at every severity and
+every population size**. Two pre-registered checks reported HELD on that: a
+monotone sequence of all zeros, and "TPR < 0.5 at small n". Both vacuous.
+Detection and response are now separable, and the checks carry explicit
+vacuity guards that report VACUOUS rather than HELD when the detector never
+fires.
+
+## The independent auditor earned its keep
+
+In the pause arms the auditor reported **45/112/182 `pending` violations** while
+the gate's own counter said **0**. The auditor was right. Pausing dropped a
+pending notification without recording it, so from the log a withdrawn
+notification is indistinguishable from a live one, and the next notification for
+that mandate reads as a second concurrent one.
+
+The audit trail was incomplete. `NOTIFICATION_CANCELLED` is now emitted wherever
+a notification is dropped (outage pause, cycle rollover). Auditor back to 0.
+**The fix went in the trail, never in the auditor** — this is the first time the
+two-implementation design has caught something, and it caught a real hole.
+
+## The machine, again
+
+Long-lived processes running many `run_once` calls back to back began crashing
+— SIGSEGV, sometimes SIGILL, at a different point every time. Isolation: a
+single `harness.run` fine; imports fine; pure numpy stress fine; 8.7 of 15.7 GB
+free; six runs in one process crashed on **all three** code paths including ones
+untouched by this work; and `test_parity_vs_harness.py`, byte-identical to the
+version that passed 24/24 that morning, segfaulted before printing a line.
+
+That last one is decisive: the failing code demonstrably worked hours earlier
+and had not changed. This is the intermittent 0xC0000005 already in this file.
+
+Every measurement now runs through `agent/tests/_parallel.py` —
+`ProcessPoolExecutor(max_tasks_per_child=1)`, one fresh interpreter per run,
+nothing accumulates. Same shape `sim/runner.py` already uses. It also **raises
+if any job dies**: a crashed worker is a failed measurement, not a missing one,
+and silently dropping it would change the sample a mean is taken over — error
+4's shape. Side benefit: parity went from 6m08s to 44s.
+
+## Results
+
+**Detection power** (k=5, 60d, 6h outages, worst-case placement, 8 pops/cell):
+
+| severity | n=5 | n=10 | n=25 | n=50 | n=100 | n=200 |
+|---|---|---|---|---|---|---|
+| 0.15 | 0.00 | 0.00 | 0.00 | 0.12 | 0.38 | 0.75 |
+| 0.40 | 0.00 | 0.25 | 0.00 | 0.75 | **1.00** | **1.00** |
+
+False alarms: **0 of 48 runs** at severity 0.
+
+The moat arithmetic: mandates spread over 60 merchants, so at n=100 the
+aggregator sees **22.5 attempts per 24h window** and one merchant sees **0.38**.
+A single merchant never reaches `min_attempts=8` at any n tested — it cannot
+even evaluate the statistic. That is structural unavailability, not difficulty.
+
+TPR is **not monotone** at severity 0.40 (0.25 at n=10, 0.00 at n=25) — a
+pre-registered prediction that broke. The evidence table explains it: fires at
+n=10 show `window n = 8, tech = 6`. Technical declines auto-represent
+(`harness.py:318`), cascading more attempts into the window until it clears
+`min_attempts`. So detection at low volume happens *because* attempts were
+already burned, and behaviour near the `min_attempts=8` cliff is lumpy. That
+constant is a `[GUESS]` and is the obvious thing to sweep next.
+
+**The ablation** (n=100, 8 pops, 120d, pe=7, FITTED_BELIEF, 4×6h outages):
+
+| sev | arm | cycle_rec | vs none | 2SE | sig | ECE |
+|---|---|---|---|---|---|---|
+| 0.00 | all arms | 95.30 | +0.000 | 0.000 | — | 0.0324 |
+| 0.15 | pause | 94.89 | −0.273 | 0.275 | n.s. | 0.0338 |
+| 0.15 | suppress | 95.16 | +0.000 | 0.000 | n.s. | 0.0342 |
+| 0.40 | pause | 94.33 | **−0.529** | 0.296 | **SIG** | 0.0341 |
+| 0.40 | suppress | 94.97 | +0.115 | 0.138 | n.s. | 0.0361 |
+| 0.80 | pause | 94.03 | +0.199 | 0.634 | n.s. | 0.0341 |
+| 0.80 | suppress | 94.09 | **+0.256** | 0.179 | **SIG** | 0.0373 |
+| 0.80 | none | 93.83 | — | — | — | 0.0346 |
+
+**Pre-registration record: 3/6.** Three broke, and all three are unflattering:
+
+- **E-OUT-5 broke.** Best arm at severity 0.80 gains **+0.256 pts**, not the >1
+  predicted. The context layer is worth very little on aggregate recovery.
+- **E-OUT-3 broke, and it kills my own mechanism story.** Suppression *alone*
+  makes calibration **worse**: ECE 0.0346 → 0.0373. My first version of this
+  check compared `both` vs `none` and reported HELD — but `both` is numerically
+  identical to `pause`, so the check was crediting suppression with pausing's
+  effect. Corrected to isolate the arm. Suppressing technical declines removes
+  genuine information along with the noise, and on this measure the loss is
+  bigger than the gain. **The belief-corruption argument is not supported by
+  the ECE measurement**, however good it looks in the source.
+- **E-OUT-6 broke.** `pause` and `suppress` do not compose: `both` ≡ `pause` at
+  every severity, because a paused dispatch produces no technical decline for
+  suppression to act on. Two levers, one of them idle whenever the other is on.
+
+Held: no false alarms at severity 0 (exactly 0.000 change); best-arm gain does
+grow with severity; pausing does reduce attempts wasted on technical declines
+(448 → 316 at severity 0.80).
+
+**And pausing is significantly NEGATIVE at severity 0.40** (−0.529, SIG). It
+only turns positive at 0.80. The reason is the hour-8 concentration: detection
+needs evidence, evidence needs dispatched attempts, and by the time the window
+clears the threshold most of the batch has already gone out. Pausing then costs
+a day of scheduling for mandates that would mostly have succeeded.
+
+## Where this leaves the pivot
+
+The honest summary is that outage awareness is **worth +0.26 points at severity
+0.80 and negative at moderate severity**, on aggregate recovery. It is not the
+headline the pivot was hoping for. What it *is*: a capability a single merchant
+cannot build at all (0.38 attempts/day vs 22.5), with a measured false-alarm
+rate of zero, a detector that works at n≥50, and a curve rather than a number.
+
+Nothing here has gone near `docs/` or the pitch. `sim/w3.py` and
+`sim/harness.py` untouched and clean.

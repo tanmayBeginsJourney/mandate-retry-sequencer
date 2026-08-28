@@ -158,9 +158,11 @@ difference is the finding.
 
 | ID | What it does | Mutant |
 |---|---|---|
-| **T9** | Every policy's output must equal `sim/t9_reference.json` exactly, at both operating points. Metrics catch a changed decision; `calib_sha256` catches a changed float. | worker pool seeded from one shared RNG instead of per-run seeds |
-| **S4** | The fitted belief configuration beats the shipped one by >2 SE. The decision number for which probability engine ships. | `ignore_bcfg` — drops the fitted config, gain collapses to +0.00 |
-| **S1_PD** | S1's threshold, unchanged, applied to `w3.BeliefPD` — the filter that actually ships. S1 runs `portfolio`, which carries `w3.Belief`, so it has never measured the product. | shares S1's binning; fails on monotonicity |
+| **T8** | Every `COMPLIANT` policy must record zero Stage 0 violations, and `baseline_doc` must record some. **Not in the pre-registration above and not previously listed here — added to this table 28 Aug 2026.** An undeclared gate is a small version of the same problem as a vacuous one: nobody agreed in advance what it was for. | `baseline_doc` is the mutant: it is a real policy that must come back dirty (974 re-presentations) |
+| **T9** | Every policy's output must equal `sim/t9_reference.json` exactly, at both operating points. Metrics catch a changed decision; `calib_sha256` catches a changed float. **Covers the UNFITTED filter only** — none of its 28 configs passes `bcfg`. See error 13. | worker pool seeded from one shared RNG instead of per-run seeds |
+| **S4** | The fitted belief configuration beats the shipped one by >2 SE. The decision number for which probability engine ships. ⚠️ **This ID was pre-registered for a different test** — see "Specified but NOT implemented". | `ignore_bcfg` — drops the fitted config, gain collapses to +0.00 |
+| **S1_PD** | S1's threshold, unchanged, applied to `w3.BeliefPD` — the filter that actually ships. S1 runs `portfolio`, which carries `w3.Belief`, so it has never measured the product. **Note S1 runs at `pe=1` and S1_PD at `pe=7`**: same threshold, different operating point, so 0.091 vs 0.026 is not a like-for-like comparison. | shares S1's binning; fails on monotonicity |
+| **M4B** | No mutation branch may increment the violation counter its gate reads. Static parse of `sim/harness.py`. **Added 28 Aug 2026 after M4 was found to be vacuous-but-green.** | its own falsifiability check: reports VACUOUS if it flags all five mutants, i.e. if it cannot discriminate |
 
 **Four of the six Tier-4 adversarial sweeps are now discharged**, 28 Aug 2026.
 The list below named six modelling choices pinned to convenient values. Status:
@@ -184,6 +186,34 @@ be flattering the result.
 | **M7** forecast reads the real future array | **Never implemented.** `tests.py` comments claim "M6/M7" over a block that records only M6. T2 covers the same property structurally, but the mutant does not exist. |
 | **M9** calibration target silently switched | **Never implemented.** |
 | **T7 conservation identity** | **Never implemented.** `recovered + dead + unresolved + lapsed == 1.0 by count` is not computed anywhere. `harness.run` does not return the counts it needs. T7 checks bounds and the per-event cap only — do not read it as covering conservation. |
+| **S4 calibration-anchor independence** | **Never implemented — and its ID was reused.** Added to this table 28 Aug 2026. See below. |
+
+### ⚠️ S4's ID was reused for a different test. Declared 28 August 2026.
+
+The **pre-registered** S4, in Tier 3 above, is *"Calibration anchor
+independence — calibrate the world on each candidate baseline and report how
+much the fitted spend parameter moves. **Not a pass/fail gate — a mandatory
+disclosure.**"* That test **does not exist.**
+
+The S4 that ships is *"the fitted belief configuration beats the shipped one by
+>2 SE"* — a different subject, a different question, and a **hard pass/fail
+gate**. It was added in the table above as though it were new, and this
+"Specified but NOT implemented" list did not mention that a pre-registered ID
+had been consumed.
+
+This is **error 9's exact mechanism** — a gate identified by a concept rather
+than by the object it instantiates, so nobody re-checked which object that was.
+It is recorded here rather than repaired: renaming the live gate now would
+churn `known_failures.txt`, `gate.py` output and four documents eight days
+before the deadline, for no change in what is measured.
+
+**If you implement the anchor-independence disclosure, call it `S5`.** Do not
+reuse `S4`, and do not rename the live one.
+
+*(The anchor-sensitivity fact itself is not lost — `06_MODEL_CARD.md` §3.2
+carries it as a mandatory disclosure: different anchors move the fitted spend
+parameter by ~2×. It is prose, not a gate, which is what the pre-registration
+asked for. What is missing is the systematic per-baseline sweep.)*
 
 ## Implemented differently from the spec
 
@@ -225,3 +255,72 @@ any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against
 `NPCI_MAX = 4`, so the 5th attempt that trips the counter never occurs. The
 attempt-cap guarantee therefore has no working test behind it, and T7's cap
 clause reads the same counter, so both cap gates are exactly as strong as M1.
+
+**And T7's own mutant is weaker than this document's bar.** Declared 28 Aug
+2026. The bar at the top of this page is "a concrete broken *implementation*".
+T7's mutant (`tests.py:423-426`) is a **hand-edited dictionary** — a real
+result copied, then `cycle_rec` set to 1.5 and `vdetail["cap"]` set to 1. That
+tests the checker function, not the harness. Combined with M1, the attempt-cap
+counter has **no test that runs the simulator at all.**
+
+## ⚠️ M4 IS VACUOUS TOO, AND IT REPORTS PASS. Declared 28 August 2026.
+
+The mutation tier's whole premise is that a mutant creates an illegal *state*
+and a separate piece of code notices. Two of the five mutants increment the
+counter themselves:
+
+```
+harness.py:610-612   if mutate == "pending":    ... V.pending   += 1
+harness.py:331-333   if mutate == "represent":  ... V.represent += 1
+```
+
+Instrumented measurement (portfolio, pop `P`, seed 7):
+
+| mutant | counted | written by the mutant | found independently |
+|---|---|---|---|
+| `pending` | 1066 | **1066** | **0** |
+| `represent` | 608 | 304 | 304 |
+
+`pending`'s only independent detector is `if m["pend"] is not None`
+(`harness.py:607`), and `live` (`harness.py:349-351`) has already filtered
+`m["pend"] is None`, so it is unreachable — the same tautology as the old
+`assert violations == 0`. **M4 has been passing by construction.** M5 still
+binds; it merely double-counts.
+
+**New rule, and it belongs at the top of this page with the others:**
+
+> **A mutant may create illegal state and nothing else.** A mutation branch
+> that writes to a counter is grading itself. Gate **M4B** enforces this by
+> parsing the source, because the harness returns only the integer and from
+> outside a self-written violation is indistinguishable from a real one.
+
+M4B is red and in `sim/known_failures.txt`. The repair is in `harness.py`
+(frozen) and would move T9's reference, so it is a post-5-September job with a
+written procedure in that file.
+
+---
+
+## The agent's gates — added 28 August 2026
+
+`agent/tests/` holds seven gates. They are **not** part of `sim/gate.py`'s
+25-gate suite and none of their numbers is gate-protected in the `--tier full`
+sense; quote them the way the numbers rule requires, by naming the script.
+
+They are held to this document's bar: **a gate earns its place only if you can
+name, in advance, a concrete broken implementation that would make it fail.**
+`test_layer_isolation.py` goes further and actually RUNS its five mutants
+against synthetic source on every invocation, reporting VACUOUS — treated as
+failure — if any rule stops being trippable.
+
+**Errors 14 and 16 were both failures of that bar, in this directory, on the day
+it was written.** One gate's mutant passed because the two arms diverged for a
+defect's reason rather than the property's; two pre-registered checks passed on
+an all-zero metric. Both are written up in `03_ERRORS.md`. The rule that came out
+of them, and which any new agent gate must satisfy:
+
+> **State what the metric reads when the thing being measured is ABSENT, and
+> check that the assertion FAILS on that value.** A prediction satisfied by zero
+> is satisfied by a disconnected wire.
+
+Two agent gates now carry explicit vacuity guards that report VACUOUS rather
+than HELD when the detector never fires.

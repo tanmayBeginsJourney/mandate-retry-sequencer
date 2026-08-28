@@ -33,6 +33,15 @@ How each value was chosen, and by what: `sim/fit_belief.py`. Selection was on
 `c["salary"]` or `c["spend"]`. Everything reported here is on populations the
 fit never saw.
 
+⚠️ **CORRECTED 28 August 2026: `sim/fit_belief.py` CANNOT PRODUCE THIS
+CONSTANT.** The string `prior_floor` appears nowhere in it, and it selects at
+`payday_err=7` only — not "against the mean across `payday_err`" as `w3.py`'s
+comment and this page previously claimed. The config it *can* emit scores
+**94.98%** where `w3.FITTED_BELIEF` scores **95.57%**. The constant's measured
+behaviour is fine (its gain grows with payday uncertainty instead of peaking at
+the fitted point); its **provenance is fiction**. Full write-up: error 12.
+Do not extend the search before 5 September — that re-opens a frozen constant.
+
 **What each constant replaced, and why the old value was wrong:**
 
 | | old | new | why |
@@ -114,6 +123,11 @@ the probability.**
 
 **+9.53 pts (±1.81), gated as S2a.** This is the defensible number.
 
+⚠️ **S2a is measured on the UNFITTED filter** (`sim/tests.py:583-585` passes
+no `bcfg`). The gate-protected moat number is therefore not the shipping
+configuration's; the shipping figure is the ungated +9.61 below. Both agree, so
+the claim is safe — but do not say "gated" and "shipping" in the same breath.
+
 Measured on held-out populations, the moat *survives and grows* when the filter
 is fitted: +8.20 (±0.92) unfitted → **+9.61 (±1.67)** fitted. Pooling was not
 compensating for a bad prior.
@@ -150,6 +164,7 @@ split is not.**
 ## 3. What this has NEVER been tested on
 
 Read this section before quoting anything above to anyone outside the team.
+Eleven items, three of them added by the outside audit on 28 August 2026.
 
 1. **No real data. Ever.** Every number in this project is simulation. No
    Razorpay transaction has been seen, no real mandate, no real decline code.
@@ -166,10 +181,15 @@ Read this section before quoting anything above to anyone outside the team.
    fixed hypothesis index. **Not run.**
 4. **`payday_err` is a knob, not a measurement.** The whole headline is
    conditional on a parameter of Indian salary timing nobody has measured.
-5. **The 0.92 discount is hand-chosen.** Swept (78.7%–83.1% across 0.80–1.00,
-   broad plateau, argmax moves between population sets) but never fitted,
-   because fitting it on the evaluation set is the error that produced error 8.
-   **Every number on this page inherits that ~4-point band.**
+5. **The 0.92 discount is hand-chosen.** ⚠️ **Corrected 28 Aug 2026: the
+   78.7%–83.1% sweep was run on the UNFITTED filter.** On the shipping
+   configuration the spread across 0.80–1.00 is **88.7%–95.6%**. **Every
+   number on this page inherits a ~7-point band, not ~4.** The 0.90–0.96
+   plateau does survive on the fitted filter (94.25–95.57), so the constant is
+   not perched on a spike — but on this grid 0.92 is also the evaluation-set
+   argmax, which is the situation error 8 warns about. Table in
+   `02_RESULTS.md`. Never fitted, because fitting it on the evaluation set is
+   what produced error 8.
 6. **Cross-merchant pooling may not be legal.** Whether a payment aggregator may
    use Merchant A's outcomes to schedule Merchant B's debit for the same
    customer is **unresolved** — `01_FACTS.md` tags it `[GUESS]`. The moat is the
@@ -177,17 +197,35 @@ Read this section before quoting anything above to anyone outside the team.
 7. **Top-up is pinned at 0** in everything except the one `topup_p=0.25` row.
    On the old harness, roughly half the apparent gain was "customers never top
    up". That sweep has **not** been redone properly on `w3`.
-8. **The attempt-cap guarantee has no working test.** Gate M1 is VACUOUS. See
-   below.
+8. **Two of the five Stage 0 guarantees have no working test.** The attempt
+   cap (M1 is VACUOUS) and the pending notification (M4 passes by
+   construction — its mutant increments the counter itself; caught by M4B on
+   28 Aug 2026). See §4 and error 11.
 9. **n=100, 8 populations, one run seed each.** Not a large study.
+10. **Only 2 of 25 gates run this configuration.** `S1_PD` and `S4` pass
+   `bcfg`; every other gate — all mutants, all invariants, the T9 byte-lock
+   and all three S2 arms — runs the *unfitted* filter. T9's exact-output lock
+   in §5 therefore does **not** cover `w3.FITTED_BELIEF`. See error 13.
+11. **The oracle is not clairvoyant about top-ups.** It reads
+   `bal[tt] - drained` (`harness.py:524`) while dispatch reads
+   `bal[t] - drained + topups[t]` (`harness.py:268`). Inert at `topup_p=0`;
+   in the `topup_p=0.25` row above the 100% oracle is not a tight bound.
+   The oracle is the upper bound the whole project is measured against, so a
+   loose one flatters everything — and `topup_p` is exactly the sweep (A1)
+   that is still open.
 
 ---
 
-## 4. The four failing gates, and why each is failing
+## 4. The six failing gates, and why each is failing
 
-The suite is **24 gates: 4 FAIL, 1 VACUOUS, 19 pass.** All five are listed in
+The suite is **25 gates: 5 FAIL, 1 VACUOUS, 19 pass.** All six are listed in
 `sim/known_failures.txt` with a written reason. None may be fixed by loosening a
 threshold.
+
+⚠️ **TWO OF THE FIVE STAGE 0 RULES HAVE NO WORKING TEST** — the attempt cap
+(M1, vacuous) and the pending notification (M4, vacuous-but-green, caught by
+M4B on 28 Aug). Keep both out of the pitch and the architecture doc. Peak-hour,
+notification-lead and Z9 re-presentation are genuinely tested.
 
 | Gate | State | Why it is red |
 |---|---|---|
@@ -196,12 +234,13 @@ threshold.
 | **M1** | VACUOUS | The attempt-cap mutant cannot trip the counter at either operating point: the deepest any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against `NPCI_MAX=4`, so a 5th attempt never happens. **Consequence: the NPCI attempt-cap compliance claim has no working test. Do not put it in the pitch.** Untried fix: run the mutant with `cap_override=2`, which tests the counter mechanism rather than the NPCI-specific value. |
 | **S2b** | FAIL | The placebo control is not neutral (−14.09 pts). A finding about the *control's design*, not a code defect: `solo_placebo` injects observations computed against a different customer's balance, so it is actively misleading rather than merely uninformative. Left visible on purpose. A clean control — label-shuffled observations at the matched base rate — has not been built. |
 | **S2_LEGACY** | FAIL | The retired point-estimate S2, kept unchanged and failing on purpose so the S2 rewrite is auditable rather than looking like test-loosening. Goes only when the point-estimate architecture is formally removed. |
+| **M4B** | FAIL | **Added 28 Aug 2026.** No mutation branch may increment the counter its gate reads. Two do: `mutate="pending"` (`harness.py:610-612`) and `mutate="represent"` (`harness.py:333`). Measured: `pending` is **1066 counted, 1066 self-written, 0 independent** — so **gate M4 is vacuous and has been reporting PASS**. `represent` still binds (304 of 608 found independently); it only double-counts. Repair is in `harness.py`, which is frozen, and would move T9's reference. Procedure written in `sim/known_failures.txt`. |
 
 ---
 
 ## 4b. Reproducing the ungated numbers
 
-`sim/ml_artifacts/` is **gitignored** — it holds a ~4 MB trained model and the
+`sim/ml_artifacts/` is **gitignored** — it holds a ~8 MB trained model and the
 study outputs. Nothing in the gated suite needs it, but the ML and stress tables
 above do. To rebuild from nothing, **in this order**:
 
@@ -230,6 +269,15 @@ re-running the fit does **not** change it. If a re-fit ever disagrees with
 `w3.FITTED_BELIEF`, that is a finding — write it in `NOTES.md` and ask, do not
 edit the constant.
 
+⚠️ **`sim/ml_artifacts/` is gitignored, so none of the tables on this page is
+reproducible from a clean clone without the rebuild above.** Two consequences
+found 28 Aug 2026: (a) `belief_fit.json` — the only stored provenance record
+of the fitted constant — reports **97.53%** for a call signature that measures
+**95.57%**, and nothing reproduces 97.53%; (b) `requirements.txt` pinned only
+numpy until 28 Aug, so the recipe above could not be followed from it. It now
+lists `lightgbm` and `scikit-learn` as well. The gated suite still needs numpy
+alone.
+
 **Anything you write that calls `runner.run_jobs` needs an
 `if __name__ == "__main__":` guard.** Windows spawns rather than forks; without
 the guard multiprocessing raises, and then *hangs instead of exiting*. That cost
@@ -253,11 +301,116 @@ fast tier prints which gates it skipped.
 **Gate T9 is what makes the split safe.** It compares every policy's output
 against `sim/t9_reference.json` at both operating points — 28 configurations, 20
 of them hashed at float level. Metrics catch a changed *decision*;
-`calib_sha256` catches a changed *float* anywhere in the belief filter. Paired
-with a mutant that seeds the worker pool from one shared RNG.
+`calib_sha256` catches a changed *float*. Paired with a mutant that seeds the
+worker pool from one shared RNG.
+
+⚠️ **Corrected 28 Aug 2026: "anywhere in the belief filter" was wrong.** None
+of T9's 28 configs passes `bcfg` (`t9_reference.py:54-56`), so every locked
+configuration is the **unfitted** `BeliefPD` and the fitted-prior branch
+(`w3.py:358-367`) is outside the lock. Read T9 as "anywhere in the *unfitted*
+belief filter". Adding the fitted configs to `t9_reference.POLICIES` and
+re-capturing is the repair, and it is a deliberate re-baseline — after
+5 September. See error 13.
 
 **If you deliberately change behaviour**, re-baseline with
 `python sim/t9_reference.py --recapture`. It prints the full field-level diff
 before writing and tells you to paste it into `NOTES.md`. A reference
 regenerated silently makes T9 a gate that cannot fail — which is the error this
 project has made three times.
+
+---
+
+## 6. THE AGENT — added 28 August 2026. Read this before running anything in `agent/`.
+
+`agent/` is the product. `sim/` is frozen and untouched by all of it. Three
+things below will cost you hours if you skip them.
+
+### 6a. EVERY MEASUREMENT MUST RUN ONE PROCESS PER RUN. This is not optional.
+
+Long-lived Python processes that execute many `agent.batch.run_once` calls back
+to back **crash on this machine** - SIGSEGV, sometimes SIGILL, at a different
+point every time. Isolation performed 28 August 2026:
+
+| probe | result |
+|---|---|
+| a single `harness.run` at n=100 | fine, repeatedly |
+| `import agent, w3, harness` | fine |
+| pure numpy allocation stress | fine |
+| free memory | 8.7 GB of 15.7 GB - not exhaustion |
+| six `run_once` calls in one process | crashed on **all three** code paths, including ones untouched by the new work |
+| `test_parity_vs_harness.py`, byte-identical to the version that passed 24/24 that morning | segfaulted before printing a line |
+
+That last row is the decisive one: **the failing code demonstrably worked hours
+earlier and had not changed.** This is the intermittent `0xC0000005` already
+recorded in `NOTES.md`, not a defect in `agent/`.
+
+⚠️ **WHAT REMAINS UNEXPLAINED.** The root cause was NOT found. We do not know
+whether it is numpy, the CPython build, the machine's memory, or something else,
+and we do not know why it became reproducible on 28 August having been merely
+intermittent before. **It is contained, not fixed.** If a fresh session sees a
+crash in `agent/`, suspect this before suspecting the code - and check CPU, not
+the clock (`03_ERRORS.md` error 10).
+
+The containment is `agent/tests/_parallel.py`:
+`ProcessPoolExecutor(max_tasks_per_child=1)`, one fresh interpreter per run,
+nothing accumulates across runs. Same shape `sim/runner.py` already uses.
+**Anything new that runs a batch of agent runs must go through it.** It also
+**raises if any worker dies**, because a crashed run is a *failed* measurement,
+not a missing one - silently dropping it would change the sample a mean is taken
+over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
+44s.
+
+### 6b. The agent's gates, and what each is worth
+
+| gate | what it proves |
+|---|---|
+| `test_layer_isolation.py` | five import-graph rules, each with a named mutant that is actually run. 5/5 trip. The LLM layer cannot reach the belief, the world, the gate or the timing layer. |
+| `test_parity_vs_harness.py` | degenerate mode reproduces `harness.run("solo_shared_pd", ...)` **bit-exactly, 24/24 runs**, at pe1/pe7, fitted and unfitted. This is what makes every agent number comparable to a gated one. |
+| `test_stage0_enforces.py` | 20/20. The gate refuses all five rules, AND an action injected *below* the gate is independently detected by `auditor.py` from the log alone. |
+| `test_one_belief.py` | 11/11. One `BeliefPD` per CUSTOMER shared by all k mandates; double-`advance` raises. |
+| `test_loop_order_equivalence.py` | customer-major and time-major are bit-identical with the monitor off; the monitor changes the answer with it on; and misusing it raises. |
+| `test_action_ablation.py` | what each agent action is worth. See `02_RESULTS.md`. |
+| `test_outage_detection.py` / `test_outage_ablation.py` | the context layer. See `02_RESULTS.md`. |
+
+Run them from the repo root with the interpreter named in `CLAUDE.md`. None of
+them is part of `sim/gate.py`'s 25-gate suite, and none of their numbers is
+gate-protected in the `--tier full` sense. Quote them the way the numbers rule
+requires: name the script, say "not gate-protected".
+
+### 6c. `NOTIFICATION_CANCELLED` - do not remove it
+
+`agent/constraints/auditor.py` rebuilds Stage 0 legality from the audit log
+alone, sharing no code with the enforcer. In the outage-pause arms it reported
+**45/112/182 `pending` violations** while the gate's own counter reported **0**.
+**The auditor was right.** Pausing dropped a pending notification without
+recording it, so from the log a withdrawn notification is indistinguishable from
+a live one and the next one reads as a second concurrent notification.
+
+`Stage0Gate.clear_pending` now emits `NOTIFICATION_CANCELLED` wherever a
+notification is dropped (outage pause, cycle rollover). The two counts agree at
+0. **If you add another path that drops a pending notification, it must emit
+this event or the auditor will correctly report violations that did not happen.**
+
+### 6d. THE AGENT'S HEADLINE IS A CAPABILITY CLAIM, NOT A RECOVERY NUMBER
+
+Say this plainly and do not let it drift:
+
+- The action space (retry / wait / nudge / escalate / stop) is worth
+  **+1.371 pts at a 120-day horizon**, and that figure is a **curve over the
+  horizon** (+0.563 at 60d, +1.790 at 180d), not a constant. Its entire channel
+  is mandate-death prevention.
+- The context layer (outage detection) is worth **+0.256 pts at severity 0.80**,
+  which is the most extreme setting swept and a pure `[GUESS]`. **Pausing on
+  outage is significantly NEGATIVE at severity 0.40 (-0.529, SIG).**
+- `NUDGE` is worth approximately zero and credits no money. `ESCALATE` is a
+  zero-credit workflow action. `PARTIAL` is a recommendation only - its legality
+  under one mandate is unestablished.
+
+**What is defensible is the capability**: an aggregator detects a rail outage
+with a measured false-alarm rate of **0/48 runs** and TPR **1.00** at n>=100,
+severity 0.40, while a single merchant sees **0.38 attempts per 24h window**
+against a floor of 8 and cannot evaluate the statistic at all. Plus a complete
+audit trail, enforced constraints, and explicit stopping rules.
+
+Do not present either agent number as "money recovered". The money number is
+still the one in section 2, and `payday_wait` is still a permanent row beside it.

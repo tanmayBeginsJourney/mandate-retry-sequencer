@@ -2,6 +2,47 @@
 """
 THE FAIR FIGHT: fit the three hand-set handicaps on the Bayes side.
 
+*** WARNING, ADDED 28 AUGUST 2026: THIS SCRIPT DOES NOT REPRODUCE
+*** w3.FITTED_BELIEF, AND DOCS THAT SAY IT DOES ARE WRONG.
+
+Two of the five values in w3.FITTED_BELIEF cannot come out of this file:
+
+  prior_floor=0.25   The string "prior_floor" appears NOWHERE below. BASE
+                     omits it and none of the three sweeps sets it, so every
+                     configuration this script evaluates inherits BeliefPD's
+                     default prior_floor=1e-6 -- the HARD window that error 8
+                     in docs/03_ERRORS.md identifies as the brittle failure.
+                     The soft floor is described everywhere as "the important
+                     part" and the script that supposedly chose it has no knob
+                     for it.
+
+  the objective      PE = 7 below, and score() passes it unchanged. There is
+                     no loop over payday_err anywhere in this file. w3.py's
+                     comment, ml_artifacts/belief_fit.json's `note` field and
+                     (until today) fair_audit.py's own printed output all say
+                     the config was "re-selected against the MEAN across
+                     payday_err in {1,3,5,7,10,14}". It was not, here.
+
+Measured 28 Aug 2026, identical call signature, eval populations 700-707,
+pe=7:
+
+    95.57%   w3.FITTED_BELIEF  (prior_floor=0.25)  <- what ships, what docs quote
+    94.98%   what this script can emit (floor 1e-6)
+    82.16%   BASE, as shipped before the fit
+
+So re-running this WILL disagree with the frozen constant. Per
+docs/06_MODEL_CARD.md section 4b that disagreement "is a finding" -- it is now
+error 12 in docs/03_ERRORS.md, and it is written up rather than papered over.
+
+DO NOT extend the search to close the gap before 5 September. Adding
+prior_floor to the grid re-opens the fitted constant, which is frozen at tag
+`model-frozen`, and the constant's measured behaviour is fine: the gain grows
+from +2.12 at pe=1 to +19.76 at pe=14 (sim/fair_audit.py) instead of peaking
+at the operating point it was selected on, which is the property error 8 asks
+for. What is broken is the PROVENANCE, not the value. Fixing provenance means
+extending this search AND re-validating, and that is a post-deadline job.
+
+
 The ML model was allowed to fit itself to 800 training customers. The Bayes
 filter was not: its payday grid, its prior and its cross-mandate spend
 correction were all hand-set and never checked. This script gives it the same

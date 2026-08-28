@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
-Audit the fair-fight filter before believing it. It reports 97.53% against a
+Audit the fair-fight filter before believing it. It reports ~95.6% against a
 100% oracle, and `03_ERRORS.md` says a near-zero oracle gap is a symptom, not
-an achievement -- error 5 in this project's own history was exactly that.
+an achievement -- error 5 in this project's own history was exactly that. That
+4.4-point gap IS now the near-zero-oracle-gap condition this project warns
+about, and docs/02_RESULTS.md's "+18.5 to +22.7 pts of headroom" is a stale
+figure from the unfitted filter. See error 13 in docs/03_ERRORS.md.
+
+(This docstring said "97.53%" until 28 Aug 2026. That number is in
+ml_artifacts/belief_fit.json and NOTHING reproduces it -- the identical call
+signature measures 95.57%. Do not propagate it. See error 12.)
 
 Three checks:
 
@@ -81,7 +88,17 @@ def main():
     print("   Every world in the misspecification study uses payday_err=7.")
     print("   A config whose gain PEAKS at the pe it was fitted on is tuned to")
     print("   the harness. The first fit did exactly that and went negative at")
-    print("   pe=14; this one is selected against the mean across pe.")
+    print("   pe=14.")
+    print()
+    print("   *** READ THIS BEFORE QUOTING THE TABLE BELOW. ***")
+    print("   This script used to claim the current config 'is selected against")
+    print("   the mean across pe'. That is NOT what sim/fit_belief.py does:")
+    print("   it selects at PE=7 only (fit_belief.py:35) and has no prior_floor")
+    print("   in its search space at all, so it CANNOT emit w3.FITTED_BELIEF.")
+    print("   The claim was corrected 28 Aug 2026 -- see NOTES.md and error 12")
+    print("   in docs/03_ERRORS.md. The OUTCOME below still holds and is the")
+    print("   thing that matters: the gain grows with payday uncertainty rather")
+    print("   than peaking at pe=7. Trust the measurement, not the provenance.")
     PES = (1, 3, 5, 7, 10, 14)
     jobs = []
     for pe in PES:

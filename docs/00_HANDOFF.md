@@ -3,8 +3,18 @@
 ## Where things stand, 28 August 2026
 
 Research and simulation: **done and FROZEN.** Stop doing it.
-Production code: **none exists.** That is the entire problem.
+Production code: **`agent/` exists and runs end to end.** Constraint layer,
+action space and context layer are built and gated; **the LLM layer is not
+built.** Updated 28 August 2026 — this line previously read "none exists".
 Deadline: **5 September 2026 — 8 days from today.**
+
+Run it: `python -m agent.demo` (see `06_MODEL_CARD.md` §6).
+
+> **The agent's headline is a CAPABILITY claim, not a recovery number.**
+> The action space is worth **+1.371 pts** at a 120-day horizon (a curve over
+> the horizon, not a constant) and outage awareness **+0.256 pts** at the most
+> extreme severity swept. What is defensible is that an aggregator can detect
+> a rail outage that a single merchant structurally cannot. `02_RESULTS.md`.
 
 **If you are the next session, read `docs/07_AGENT_BRIEF.md` first, then
 `docs/06_MODEL_CARD.md`.** Between them they carry everything needed to build
@@ -19,7 +29,7 @@ tested and frozen. The old one (`legacy/`) is defective and frozen.
 |---|---|
 | Track 3, mandate retry sequencing | Razorpay lists it as an example direction |
 | Belief over balance **and** payday | Payday posterior is where the moat lives |
-| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth +9.53 pts (±1.81), gated as S2a |
+| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth +9.61 pts (±1.67) on the FITTED filter (ungated); S2a gates +9.53 on the UNFITTED one — see error 13 |
 | **No** coordinated budgeting | Measured −6 pts twice. Cut. |
 | No LLM on the debit-timing path | ADR-005. Deliberate, defensible. |
 | **Yes** LLM on diagnosis / intervention choice / audit narrative | Needed for the track, and honest |
@@ -43,18 +53,39 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
   unfitted one. `NOTES.md`, 28 August.
 - **Does pooling survive a properly fitted filter?** Yes, and it grows:
   +8.20 → **+9.61 pts (±1.67)**.
-- **Suite runtime.** ~27 min → **~66s full / ~34s fast**, output proved
-  byte-identical by T9.
+- **Suite runtime.** ~27 min → **~81s full / ~34s fast**, output proved
+  byte-identical by T9 — but T9's lock covers only the UNFITTED filter
+  (error 13). "~66s" was wrong; measured twice on 28 Aug.
 - **The 6× LTV multiplier and the 0.92 discount.** Swept. LTV was inert and is
   removed; the discount is live and now reported as a range.
-- **`harness.py:325`** — the placebo policies were scoring mandates 2..k off
-  mandate 1's belief. Fixed; worth 0.42 of S2b's −14.51.
+- **`harness.py:554-560`** (was `:325` when this was written) — the placebo
+  policies were scoring mandates 2..k off
+  mandate 1's belief. Fixed. S2b now reads −14.09 (the −14.51 this line used
+  to quote is stale; see `sim/known_failures.txt`).
 - **Does the day-0 payday prior create a cliff when the population differs?**
   No. 6.95 pts of gentle degradation across `payday_day0_frac` 0.8→0.2, and the
   margin over `ml_index` *grows* from +5.30 to +12.03 as the population moves
   away from the fit.
 
 ## Open — genuinely unresolved
+
+**Added 28 August 2026, from the agent build:**
+
+0a. **Why this machine segfaults on long-lived processes. ROOT CAUSE NOT
+   FOUND.** Many `agent.batch.run_once` calls in one process crash (SIGSEGV,
+   sometimes SIGILL) at a different point each time; a test that passed 24/24
+   in the morning segfaulted before printing a line that afternoon, unchanged.
+   **Contained, not fixed** — every measurement runs one process per run via
+   `agent/tests/_parallel.py`. See `06_MODEL_CARD.md` §6a.
+0b. **What the LLM layer should be scored on.** Aggregate recovery has only
+   ~+0.26 pts of headroom for outage awareness, so scoring an LLM's outage
+   verdict on recovery is close to pointless. Detection quality — latency,
+   false alarms, borderline bursts — is the alternative. Undecided.
+0c. **The rail monitor's constants are unswept.** `min_attempts=8`,
+   `window_h=24`, `hold_h=12` are `[GUESS]`. Detection TPR is non-monotone in
+   population size right at the `min_attempts` cliff, so that constant is the
+   first thing to sweep.
+
 
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and
    still the one fact that decides whether the sophisticated version is worth
@@ -65,11 +96,20 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    Resolution unchanged: make the agent learn payday online and expose its own
    uncertainty, so the posterior width is a product feature rather than an
    assumption. Do not chase the number externally.
-2. **Five gates are red on a clean checkout: S1, S1_PD, M1, S2b, S2_LEGACY.**
+2. **Six gates are red on a clean checkout: S1, S1_PD, M1, M4B, S2b,
+   S2_LEGACY** (25 gates: 5 FAIL, 1 VACUOUS, 19 pass).
+   **M4B is new, 28 Aug, and is the one to read first:** gate M4's mutant
+   increments `V.pending` itself, so the pending-notification constraint has
+   no working test -- 1066 counted, 1066 self-written, 0 independent. With M1
+   already vacuous that makes **two of the five Stage 0 rules unproven**.
+   Neither may be claimed in the pitch. See error 11.
    **S1 measures the wrong filter** — it runs `portfolio`, which carries the
    point-estimate `w3.Belief`, not the `w3.BeliefPD` the project recommends.
    S1_PD was added with the identical threshold on the real filter and also
-   fails (ECE 0.026–0.040, not monotone). The remaining break looks structural:
+   fails. **The gate reports ECE 0.026** (populations Pc0-Pc2); the 0.040 that
+   used to appear beside it is `sim/fair_audit.py`'s number on *different*
+   populations. They are two measurements, not a range. The break looks
+   structural:
    no balance floor at zero, and a fixed 3-tap kernel standing in for the
    world's hourly spend jitter.
    Historical, from the 27 August rebuild:
@@ -112,5 +152,5 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
 - [ ] Stopping rules explicit and demonstrable
 - [ ] One failure handled gracefully, on camera
 - [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the errors (there are ten)
+- [ ] 5-minute pitch video, opening with the errors (there are **sixteen**)
 - [ ] `NOTES.md` full of real mess

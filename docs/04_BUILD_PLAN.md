@@ -6,6 +6,24 @@ the simulation is finished and frozen.** Seven working days remain.
 **Rule: if a task does not move us toward a running agent with an audit trail
 and a measured batch result, it is out of scope.**
 
+## PROGRESS — updated 28 August 2026, end of day
+
+| Day | Planned | State |
+|---|---|---|
+| 3 | `agent/` skeleton, wire in the frozen policy | **DONE.** Bit-exact with `harness.run` on 24/24 runs |
+| 4 | Stage 0 as enforced middleware | **DONE.** Refuses; independent auditor agrees at 0 |
+| 5 | Audit log queryable; stopping rules explicit | **DONE.** Append-only JSONL, 8 stop rules, `python -m agent.demo` |
+| 6 | LLM layer | **NOT STARTED.** See `07_AGENT_BRIEF.md` §8 for the open question |
+| 7 | The batch number | **PARTIAL.** Numbers measured and in `02_RESULTS.md`; top-up sweep still not redone on `w3` |
+| 8 | Architecture doc | not started |
+| 9 | Pitch video | not started |
+
+**Scope added and not in the original plan:** a context layer (rail-outage
+detection), built because the action space measured only +1.371 pts against a
+policy already at 95.31% — the world is saturated at the scheduling task. The
+context layer's own recovery value is +0.256 pts at the most extreme severity
+swept; its defensible claim is a capability, not a number. `02_RESULTS.md`.
+
 ## WHERE WE ACTUALLY ARE, 28 August
 
 Days 1–2 were spent on the simulation, not the agent, and that was the right
@@ -60,8 +78,12 @@ calibration gate pointed at the wrong object. It is now frozen at tag
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the errors** (there are ten; see `03_ERRORS.md`). Lead with
-  error 5, the broken oracle, then error 7, the ML result that reversed.
+- **Open with the errors** (there are **sixteen**; see `03_ERRORS.md`). Lead
+  with error 5, the broken oracle, then error 7, the ML result that reversed,
+  then **error 11** — the mutation test that graded itself, found by an
+  outside reader against a suite built specifically to prevent it. Error 11 is
+  the strongest of the set for the "Failure Recovery" criterion, because the
+  guard (gate M4B) is committed, red, and honest about being blocked.
 - Then the mechanism, then the demo, then the conditional result.
 - The conditional result is a *strength*: it shows we measured whether the
   sophisticated thing was worth it and are prepared to say when it isn't.
