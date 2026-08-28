@@ -2683,3 +2683,262 @@ as-consulted oracle × 4 severities, 4 mutants × severities {0.40, 0.80}.
 Recovery with pausing on — {monitor-off, `min_attempts=8`, oracle} × 4
 severities. G-3's behavioural witness — 4 mutants at severity 0.40, pausing on.
 Eight populations everywhere.
+
+---
+
+# 29 August 2026 — the detection benchmark, measured. 5/8, and the gate found a defect in its own metric
+
+Pre-registration and its amendment are two commits above this one. Nothing below
+was written before the numbers arrived. Reproduce with, from the repo root:
+
+```
+python agent/tests/test_detection_benchmark.py     # ~20 min, 384 runs
+```
+
+**Not gate-protected in the `--tier full` sense.** It is an `agent/` script with
+its own three-gate suite, like the other `agent/` measurements. `sim/` is
+untouched by all of it and `sim/gate.py --tier fast` still reports the same four
+known-bad gates it did this morning.
+
+## The headline, in one line
+
+**Recovery does not saturate — the current detector does.** Perfect outage
+knowledge is worth **+0.916 pts (2 SE 0.433, SIG)** at severity 0.80, against
+the shipping detector's **+0.199 (n.s.)** and the previously measured +0.256
+ceiling for `suppress`. The ceiling was a property of the detector, not of the
+problem. **E-BEN-6 was the prediction that this could not happen, and it broke.**
+
+## Pre-registration record: 5/8
+
+| | |
+|---|---|
+| **E-BEN-1** false alarms at severity 0 | **HELD** — 0/8 runs for all three detectors |
+| **E-BEN-2** latency is quantised, no mass in [1h,23h) | **BROKE** — 26 of 115 detected windows sit in it |
+| **E-BEN-3** LATE > DELAY for the shipping detector | **HELD** — 99.0 vs 4.9 hours |
+| **E-BEN-4** loss monotone in `min_attempts` | **BROKE** — and in the wrong direction |
+| **E-BEN-5** the oracle does not maximise recovery | **HELD** — −0.108 pts at severity 0.40 |
+| **E-BEN-6** perfect detection buys < +0.256 pts | **BROKE** — it buys +0.717 over the shipping detector |
+| **E-BEN-7** every crippled oracle is caught | **HELD** — 4/4, no survivors |
+| **E-BEN-8** G-3 binds in both directions | **HELD** — oracle 0, shipping detector 249/204/168 |
+
+## THE ONE THAT MATTERS: G-1b went red, and it was right
+
+**The gate caught a defect in its own loss function.** G-1b says the
+oracle-as-consulted must weakly dominate every statistical detector on excess
+loss. It does not. At severity 0.15 the oracle scores **72.0** detector-hours
+and the three statistical detectors score **51.9 / 48.1 / 37.5** — the oracle is
+the worst arm on the board. And `M-BLIND`, the mutant that never fires at all,
+scores **24.0**, which is better than the oracle at every severity.
+
+The arithmetic, once looked at:
+
+* A detector that **never fires** accrues at most `MISSED` = 4 windows × 6h =
+  **24 hours**. The window length caps it.
+* A detector that **fires correctly** holds OUTAGE until the next time anybody
+  asks it anything, which is hour 8 the following day — up to **18 hours per
+  window**, so up to **72**. The consultation gap caps it.
+
+**Under an unweighted hour count, silence is cheaper than correctness.** The
+least sensitive detector wins, the blind mutant beats the oracle, and
+`min_attempts=16` looked best in the table precisely because it detected least.
+That is a defect in the loss's **time base**, not in the oracle and not in any
+detector.
+
+**G-1b is not repaired and not deleted.** Repairing a metric after it returns an
+inconvenient answer is indistinguishable from moving a threshold, which is
+rule 1, and this repo already keeps S1, S1_PD, S2b and S2_LEGACY red on exactly
+that principle. It stays red with its diagnosis printed underneath it.
+
+What was added beside it is **G-1c**, the same dominance statement counted on
+**decision-points**: one unit per day, at hour 8, where 99.22% of attempts and
+every scheduling decision land. That is the time base the bandit literature
+already uses — regret is summed over rounds at which the algorithm acts, not
+over wall clock. Hours between 14:00 and the next 08:00, when nobody consults
+the monitor and no dispatch is possible, cost nothing because they change
+nothing. On decision-points the oracle scores **0.00** at every severity and the
+statistical detectors score **4.0–5.4**, and G-1c is what the suite verdict
+reads.
+
+**This is the seventeenth instance of the same shape** — a guardrail whose
+number meant something other than what it was named for. It is the first one
+caught by a gate written in the same session rather than by a reader months
+later, which is the only encouraging thing about it.
+
+## The gates, and which mutant each one catches
+
+| candidate | G-1b hours | G-1c decisions | G-2 inert at sev 0 | G-3 zero attempts | verdict |
+|---|---|---|---|---|---|
+| **ORACLE** | NO | yes | yes | yes | passes every gate the suite reads |
+| `M-BLIND` | yes | yes | yes | **NO** | caught by G-3 |
+| `M-LATE` | yes | yes | yes | **NO** | caught by G-3 |
+| `M-LATCH` | NO | **NO** | yes | yes | caught by G-1c |
+| `M-PHANTOM` | NO | **NO** | **NO** | yes | caught by G-1c, G-2 |
+
+**No gate is idle and no gate catches everything.** G-3 catches BLIND and LATE
+and nothing else; G-1c catches LATCH and PHANTOM and nothing else; G-2 catches
+PHANTOM alone. If any one of the three were deleted a crippled oracle would
+survive, which is the only evidence that a three-gate suite is not two gates and
+a decoration.
+
+**G-3 is the one that matters** and it is the first check in this project whose
+witness is written by different code from the thing it checks:
+`SimExecutor.n_attempts_in_outage` is incremented by the **executor**, from the
+schedule object, and shares no code with any monitor. The oracle executes
+**0** attempts inside a window at every severity; the shipping detector executes
+**249 / 204 / 168**. Both halves are needed — a gate that only ever sees zeros
+is a gate whose null value satisfies it, which is error 16.
+
+`M-LATCH` is worth its own line: under pausing it drops recovery to **3.47%**.
+That is error 14 reproduced deliberately — the rail monitor that latched OUTAGE
+forever and read 1.97% without crashing. The mutant is not a strawman; it is a
+failure this project has actually shipped.
+
+## The three predictions that broke
+
+**E-BEN-2 — latency is not cleanly quantised, and the reason is the mechanism
+we already knew about.** Predicted bimodal at ≈0h and ≈24h with nothing between.
+Measured, over all detected windows: 64 at [0,1)h, 20 at [1,6)h, 6 at [6,12)h,
+0 at [12,23)h, 25 at [23,25)h. The [12,23) gap is real; the [1,12) mass is not
+supposed to be there.
+
+Cause: **technical declines auto-represent** (`harness.py:318`,
+`agent/loop.py`'s TECH branch calls `earliest_legal(day, t+1)`), so a decline at
+hour 8 schedules a fresh attempt **later the same day**. Under an outage those
+re-presentations land back inside the window at hours 9–13 and give the detector
+evidence it would not otherwise have had. **This is the same mechanism as the
+non-monotone TPR result** — detection at low volume happens *because* attempts
+were already burned. The mechanism now explains two separate broken predictions,
+which is more than it was originally invoked for.
+
+**E-BEN-4 — `min_attempts` monotonicity broke, in the wrong direction.**
+Predicted `L(ma4) ≤ L(ma8) ≤ L(ma16)`. Measured on hours at severity 0.80:
+**126.8 / 112.1 / 85.4** — decreasing. That is the G-1b defect again: `ma16`
+detects fewest windows (0.47 per window against `ma4`'s 0.72) and therefore
+accrues least LATE.
+
+**On decision-points it is monotone in the predicted direction at severity 0.80
+only** (4.88 / 5.25 / 5.38) and **non-monotone at 0.15 and 0.40** (4.38 / 4.38 /
+4.00 and 4.62 / 4.88 / 4.62). Scored **BROKE** on the metric it was
+pre-registered against, and the decision-point figures are recorded as post-hoc
+and **not** scored — scoring a prediction against a metric invented after the
+prediction broke is how you get an 8/8 that means nothing. The honest summary is
+that `min_attempts` does not order cleanly at n=100 on either metric, and open
+item 0c is answered with "no clean ordering" rather than with a better constant.
+
+**E-BEN-6 — recovery does not saturate.** This is the important one.
+
+| severity | monitor off | `min_attempts=8` + pause | **oracle + pause** |
+|---|---|---|---|
+| 0.00 | 95.30 | 95.30 (+0.000) | 95.30 (+0.000) |
+| 0.15 | 95.16 | 94.89 (−0.273 n.s.) | 94.75 (**−0.413 SIG**) |
+| 0.40 | 94.86 | 94.33 (**−0.529 SIG**) | 94.75 (−0.108 n.s.) |
+| 0.80 | 93.83 | 94.03 (+0.199 n.s.) | 94.75 (**+0.916 SIG**) |
+
+The `min_attempts=8` column reproduces the published `pause` row of
+`02_RESULTS.md` **exactly** (−0.273 / −0.529 / +0.199), which is the cross-check
+that this table and that one are measuring the same thing.
+
+**Rule 3 says treat a large improvement as a bug until proven otherwise, so:**
+
+1. The oracle arm's `cycle_rec` is **bitwise identical at severities 0.15, 0.40
+   and 0.80** — 0.9716545814, 0.9353135314, … in all three. That is what a
+   policy which makes the outage genuinely invisible must produce, and it is not
+   a property you can get by accident.
+2. The gain decomposes exactly. Outage damage at severity 0.80 is
+   95.2955 − 93.8342 = **1.4612 pts**. The unconditional cost of pausing is
+   94.7502 − 95.2955 = **−0.5453 pts** (the oracle pauses 189 dispatches whether
+   or not anything is wrong). 1.4612 − 0.5453 = **+0.9159**, against a measured
+   **+0.9159**. Four decimal places, no residual.
+
+So the number is real. **What it means is narrower than it looks:** the oracle
+is still *negative* at severity 0.15 (−0.413, SIG) and not significantly
+positive at 0.40. Even perfect knowledge of a rail outage is **net harmful**
+under a pause response until severity passes somewhere between 0.40 and 0.80,
+because pausing costs half a point unconditionally and the outage only costs
+more than that when it is severe. **Pause-on-outage remains a bad unconditional
+default even with an oracle behind it.** The retraction of the
+belief-corruption argument stands and nothing here revives it.
+
+## The false-alarm attribution bug, and it moved a number our way
+
+Found while reading the first run's output. The grader had **two different
+attribution rules for the same episode**: a detection was credited to a window
+if it landed in `[lo, hi+24)`, but an OUTAGE episode's hours were only credited
+to that window if the episode *overlapped* `[lo, hi)`. So a next-day alarm was
+scored simultaneously as "window detected, latency 24h" **and** as "false
+alarm". Fixed to use the grace window in both places.
+
+**This moves the number in our favour and is recorded for that reason.** Before
+the fix the shipping detector showed false-alarm hours at every severity above
+zero — **6.0 / 17.2 / 15.0** at severities 0.15 / 0.40 / 0.80, in 2 to 4 of 8
+runs. After it, **0.0 hours and 0 of 8 runs at every severity**. The pre-fix
+figures are recorded here so both readings exist.
+
+Two things stop this being a convenient redefinition. It **cannot touch severity
+0**, where `W` is empty and there is nothing to attribute to, so the headline
+false-alarm claim — 0/8 runs for all three detectors, on top of the published
+0/48 — is unaffected by it. And the `FALSE_ALARM` bucket is **demonstrably
+reachable**: `M-PHANTOM` scores 48 hours in 8 of 8 runs at every severity. A
+zero in a bucket nothing can fill is a disconnected wire; this one has a witness.
+
+## The machine, again
+
+The first attempt died after **14m38s** with `BrokenProcessPool` — one worker
+gone, all 384 runs lost. Unexplained 0xC0000005, contained not fixed, exactly as
+`06_MODEL_CARD.md` §6a describes. `run_jobs` raised rather than dropping the
+job, which is the behaviour that made the loss visible instead of silent.
+
+`run_chunked` in the benchmark now checkpoints to `_bench_cache.pkl` every 48
+runs and re-runs a crashed chunk in fresh interpreters. **That is not "dropping
+a crashed run":** `run_once` is deterministic in its seeds, so re-running the
+identical job re-measures the same thing rather than resampling it, and the
+sample a mean is taken over is unchanged. Two rules keep it honest — retries are
+**counted and printed** (the second attempt absorbed exactly **1**, a
+`MemoryError`), and they are **capped at 4**, past which it raises, because a
+job that will not complete in five fresh interpreters is a defect rather than a
+fault. The cache also makes re-grading free: the two metric fixes above were
+re-scored in 0.3 seconds against runs already on disk.
+
+## Found in passing: the demo prints compliance violations that did not happen
+
+`python -m agent.demo` printed:
+
+```
+gate refusals        {'cap': 0, 'peak': 0, 'lead': 0, 'pending': 0, 'represent': 0}
+independent recount  {'cap': 24, 'peak': 0, 'lead': 0, 'pending': 282, 'represent': 0}
+executed 3104 money actions, 0 refused, 3104 notifications issued
+```
+
+**The agent is fine. The demo's display is not.** `AuditLog` opens its file in
+`"a"` mode (`agent/audit/log.py:53`) and `demo.py` writes to the fixed paths
+`agent/runs/demo_full.jsonl` and `demo_degenerate.jsonl`. So every invocation
+**appends to the previous one's log**, and `replay(read_rows(...))` then audits
+two concatenated runs as if they were one — the same mandate's cycle appears
+twice, so attempts double against the cap and notifications read as concurrent.
+
+Verified: `demo_full.jsonl` held **2 distinct `run_id`s** (19,205 and 50,265
+rows). Replayed whole: `cap 24, pending 282`. Replayed **per `run_id`: 0 and 0**.
+The "69,470 events" the demo printed is likewise two runs' worth. A fresh clone
+shows clean numbers on the first run and violations on the second, which is why
+nothing caught it.
+
+Not fixed here — it is outside this session's scope and the video is the next
+piece of work, so it is Tanmay's call. The fix is one line: give each demo run a
+unique log path, or truncate before writing. **Whatever happens, this must not
+go on camera as it stands** — "enforced Stage 0" beside an independent recount
+of 282 violations is the worst available slide.
+
+## What this leaves for the LLM layer
+
+Open item **0b** — what an LLM's outage verdict should be scored on — is
+answered. Not recovery: the whole spread between a blind detector and a perfect
+one is 1.46 points, and most of it is eaten by the cost of the response. The
+benchmark scores detection directly, has an oracle at 0, has a mutant per loss
+component, and has 4 of 5 buckets demonstrably reachable (`DROPOUT` never fired
+for any arm and is the one bucket still without a witness — say so rather than
+quoting the partition as fully exercised).
+
+Open item **0c** — sweep `min_attempts` — is done and the answer is "it does not
+order cleanly at n=100 on either metric". The constant stays at 8 because
+nothing measured argues for moving it, which is a weaker reason than the one
+that was hoped for and is the true one.

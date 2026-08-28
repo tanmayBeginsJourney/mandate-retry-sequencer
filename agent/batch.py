@@ -27,6 +27,7 @@ import w3
 from agent.audit.log import AuditLog, EventKind
 from agent.constraints.rules import AttemptLedger
 from agent.constraints.stage0 import Stage0Gate
+from agent.context.oracle_monitor import OracleRailMonitor
 from agent.context.rail_monitor import RailMonitor
 from agent.execution.sim_executor import OutageSchedule, SimExecutor
 from agent.llm.fallback import RetryOnlyDiagnoser, RuleBasedDiagnoser
@@ -64,6 +65,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              diagnoser=None, outage: OutageSchedule | None = None,
              outage_kw: dict | None = None,
              monitor_enabled: bool = False, monitor_kw: dict | None = None,
+             monitor_kind: str = "statistical",
+             oracle_mutant: str | None = None,
              pause_on_outage: bool = False,
              suppress_tech_updates: str = "never",
              time_major: bool = False, collect_calib: bool = False,
@@ -102,8 +105,29 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     gate = Stage0Gate(executor, ledger, log)
     book = BeliefBook(pop[0]["cycle_days"], pop[0]["days"], pop_spend, bcfg)
     # The monitor's base rate is the harness's P_TECH, not a number of ours.
-    monitor = RailMonitor(harness.P_TECH, enabled=monitor_enabled,
-                          **(monitor_kw or {}))
+    #
+    # `monitor_kind="oracle"` swaps in the CLAIRVOYANT monitor, which is handed
+    # the true outage windows and is therefore unreachable by any real
+    # detector. It exists to be an upper bound, never to be a result: the
+    # composition root is the only place that can build one, the windows come
+    # from the schedule object itself rather than from the caller (so the
+    # oracle cannot be graded against a target the world does not share), and
+    # the choice is stamped into provenance below and into every verdict's
+    # reason string in the audit log. `oracle_mutant` applies a named window
+    # transform from `agent/context/oracle_monitor.py` -- the mutants are lists
+    # of numbers, not code branches, which is rule 1a taken literally.
+    if monitor_kind == "oracle":
+        wins = list(outage.windows) if outage is not None else []
+        if oracle_mutant:
+            from agent.context.oracle_monitor import crippled
+            wins = crippled(wins, pop[0]["days"] * w3.HOURS, oracle_mutant)
+        monitor = OracleRailMonitor(wins, enabled=monitor_enabled,
+                                    label=oracle_mutant or "oracle")
+    elif monitor_kind == "statistical":
+        monitor = RailMonitor(harness.P_TECH, enabled=monitor_enabled,
+                              **(monitor_kw or {}))
+    else:
+        raise ValueError(f"unknown monitor_kind {monitor_kind!r}")
 
     prov = dict(
         run_id=run_id, mode=mode, policy="solo_shared_pd",
@@ -119,6 +143,9 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
             json.dumps(bcfg or {}, sort_keys=True).encode()).hexdigest()[:16],
         outage=outage.asdict() if outage else None,
         monitor_enabled=monitor_enabled, monitor_kw=monitor_kw,
+        monitor_kind=monitor_kind, oracle_mutant=oracle_mutant,
+        oracle_windows=(list(monitor.windows)
+                        if monitor_kind == "oracle" else None),
         pause_on_outage=pause_on_outage,
         suppress_tech_updates=suppress_tech_updates, time_major=time_major,
         per_customer_tech_rng=per_customer_tech_rng,

@@ -182,3 +182,52 @@ Read these. They are the most likely place for you to reintroduce an error.
   re-scored against the arm that isolates the mechanism, and then it broke.
   *A plausible mechanism verified in source is not evidence that acting on it
   helps.* That is the general lesson and it belongs next to the other twelve.
+
+---
+
+## External literature — read 29 August 2026, abstracts and where stated full text
+
+Read for **evaluation methodology only**. Neither is ported: both are
+public-health / recommender resource-allocation settings with the wrong state
+space, no money, and no NPCI constraints. Neither has usable public code.
+
+- `[VERIFIED]` **arXiv 2511.09324, "MARBLE: Multi-Armed Restless Bandits in
+  Latent Markovian Environment"** — Amiri, Avrachenkov, El Mimouni, Magnússon.
+  Submitted 12 Nov 2025, revised 9 April 2026. Augments an RMAB with a latent
+  Markov state that switches over time and induces nonstationarity.
+  **The latent state is GLOBAL, not per-arm** — verified from Definition III.2
+  in the PDF, which indexes every arm's transition kernel
+  `p^i_e(s'|s,a) = Pr[S^i_{k+1}=s' | S^i_k=s, A^i_k=a, E_k=e]` by the *same*
+  environment state `E_k`, with one latent chain `{E_k}` and transition matrix
+  `H`. So "a hidden variable switching and affecting all arms at once" is the
+  correct reading and it is the formalisation of our outage.
+  **Three limits on how far it may be cited.** (1) It proposes **no change
+  detection at all**: its algorithm, synchronous Q-learning with Whittle
+  indices, converges to an *environment-averaged* Q-function (Eq. 12) — it
+  marginalises the regime out rather than reacting to it, which is the opposite
+  of what our context layer does. (2) Assumptions III.1 and III.4 require the
+  latent chain to be irreducible, aperiodic and started from its stationary
+  distribution; four 6-hour outages in 120 days is a heavily skewed stationary
+  distribution and an environment-averaged index would essentially ignore it.
+  (3) Its experiments are a recommender-system digital twin. **Cite it for the
+  formalism, never for the method.** No public code found.
+  https://arxiv.org/abs/2511.09324
+- `[VERIFIED]` **arXiv 2604.10177, "A Modularized Framework for
+  Piecewise-Stationary Restless Bandits"** — Li, Lin, Hsieh, Huang, 11 April
+  2026. (The abbreviation "PS-RMAB" names the *problem*, not the method; the
+  method is the modular framework.) Combines an arbitrary RMAB base solver with
+  a change detector and a diminishing-exploration schedule. **This is the
+  methodology we borrowed:** it defines *excess regret* against a
+  **segment-wise oracle that knows the true change points and restarts the base
+  algorithm at each one**, so the base solver's stationary performance factors
+  out and what remains is the cost of exploration and detection. Verified from
+  the abstract and the HTML full text.
+  **What is theirs and what is ours.** Their Theorem 4.1 decomposes the bound
+  into exploration cost, detection delay, and false alarms / missed detections;
+  they instantiate the detector with M-UCB and prove `Õ(√LMKT)`. Our five-way
+  partition (delay / missed / dropout / late resumption / false alarm), the
+  decision-point time base, and the three gates are **ours** and must not be
+  attributed to them. We have no exploration term — the base solver is frozen.
+  A repository exists at `github.com/OliverKuanTa/PS-RMAB` but holds **one
+  commit and an empty README**, so: **no usable public code.**
+  https://arxiv.org/abs/2604.10177

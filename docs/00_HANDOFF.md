@@ -15,6 +15,14 @@ Run it: `python -m agent.demo` (see `06_MODEL_CARD.md` §6).
 > the horizon, not a constant) and outage awareness **+0.256 pts** at the most
 > extreme severity swept. What is defensible is that an aggregator can detect
 > a rail outage that a single merchant structurally cannot. `02_RESULTS.md`.
+>
+> **Added 29 August 2026 — detection is now measurable against an oracle.**
+> `agent/tests/test_detection_benchmark.py` reports the agent as excess loss
+> against a clairvoyant detector, decomposed, gated, with four crippled oracles
+> that all get caught. It also moved the recovery picture: **perfect detection
+> is worth +0.916 pts at severity 0.80**, so the +0.256 was the detector's
+> ceiling and not the problem's. Pausing stays a bad unconditional default —
+> even the oracle is significantly NEGATIVE at severity 0.15.
 
 **If you are the next session, read `docs/07_AGENT_BRIEF.md` first, then
 `docs/06_MODEL_CARD.md`.** Between them they carry everything needed to build
@@ -77,14 +85,33 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    in the morning segfaulted before printing a line that afternoon, unchanged.
    **Contained, not fixed** — every measurement runs one process per run via
    `agent/tests/_parallel.py`. See `06_MODEL_CARD.md` §6a.
-0b. **What the LLM layer should be scored on.** Aggregate recovery has only
-   ~+0.26 pts of headroom for outage awareness, so scoring an LLM's outage
-   verdict on recovery is close to pointless. Detection quality — latency,
-   false alarms, borderline bursts — is the alternative. Undecided.
-0c. **The rail monitor's constants are unswept.** `min_attempts=8`,
-   `window_h=24`, `hold_h=12` are `[GUESS]`. Detection TPR is non-monotone in
-   population size right at the `min_attempts` cliff, so that constant is the
-   first thing to sweep.
+0b. ~~**What the LLM layer should be scored on.**~~ **RESOLVED 29 August 2026:
+   detection, against an oracle at the true change points.** The benchmark is
+   `agent/tests/test_detection_benchmark.py` — excess loss decomposed into
+   detection delay, missed detection, dropout, late resumption and false
+   alarms, three gates, four crippled oracles, none of which survives. The
+   reason recovery is the wrong scoreboard is now measured rather than
+   asserted: the entire spread between a blind detector and a clairvoyant one
+   is **1.46 pts**, and 0.55 of that is eaten by the cost of the response.
+   **What changed the picture: recovery does not saturate — the current
+   detector does.** Perfect detection is worth **+0.916 pts (SIG)** at severity
+   0.80 against the shipping detector's +0.199, so the +0.256 ceiling was a
+   property of the detector, not of the problem. `02_RESULTS.md`.
+0c. ~~**The rail monitor's constants are unswept.**~~ **`min_attempts` SWEPT
+   29 August 2026, and the answer is "no clean ordering".** At n=100, over
+   {4, 8, 16}, loss is non-monotone on decision-points at severities 0.15 and
+   0.40 and monotone only at 0.80; on the hours metric it runs backwards for a
+   reason that turned out to be a defect in that metric. **The constant stays
+   at 8 because nothing measured argues for moving it**, which is a weaker
+   reason than was hoped for and is the true one. `window_h=24` and `hold_h=12`
+   are still `[GUESS]` and still unswept.
+0d. **The demo prints Stage 0 violations that did not happen.** `AuditLog`
+   opens in `"a"` mode and `agent/demo.py` writes to fixed paths, so a second
+   invocation appends to the first and the independent recount audits two
+   concatenated runs as one — `cap 24, pending 282` on screen against the
+   gate's 0. Per `run_id` both are **0**; the agent is fine and the display is
+   not. Found 29 Aug 2026, **not fixed** — one line, and it belongs to whoever
+   owns the video. **It must not go on camera as it stands.**
 
 
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and

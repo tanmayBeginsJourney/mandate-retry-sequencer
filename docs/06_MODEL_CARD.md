@@ -371,6 +371,7 @@ over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
 | `test_loop_order_equivalence.py` | customer-major and time-major are bit-identical with the monitor off; the monitor changes the answer with it on; and misusing it raises. |
 | `test_action_ablation.py` | what each agent action is worth. See `02_RESULTS.md`. |
 | `test_outage_detection.py` / `test_outage_ablation.py` | the context layer. See `02_RESULTS.md`. |
+| `test_detection_benchmark.py` | **added 29 Aug 2026.** Excess loss against a clairvoyant detection oracle, decomposed into delay / missed / dropout / late resumption / false alarms. Three gates, four crippled oracles as **window transforms rather than code branches**, all four caught, none by every gate. **G-1b is deliberately RED** — it found a defect in its own hours-based loss and is kept visible rather than repaired. See `02_RESULTS.md`. |
 
 Run them from the repo root with the interpreter named in `CLAUDE.md`. None of
 them is part of `sim/gate.py`'s 25-gate suite, and none of their numbers is
@@ -411,6 +412,21 @@ with a measured false-alarm rate of **0/48 runs** and TPR **1.00** at n>=100,
 severity 0.40, while a single merchant sees **0.38 attempts per 24h window**
 against a floor of 8 and cannot evaluate the statistic at all. Plus a complete
 audit trail, enforced constraints, and explicit stopping rules.
+
+⚠️ **AMENDED 29 August 2026: "+0.256 is the whole recovery value" was the
+DETECTOR's ceiling, not the problem's.** Measured against an oracle that knows
+onset and recovery exactly, perfect detection is worth **+0.916 pts (2 SE
+0.433, SIG)** at severity 0.80 where the shipping detector gets **+0.199
+(n.s.)**. The gain decomposes with no residual: 1.4612 pts of outage damage
+minus 0.5453 pts of unconditional pausing cost = +0.9159 measured. Quote
++0.256 as what the SHIPPING detector achieves and +0.916 as the headroom above
+it; do not quote either alone.
+
+**None of that makes pausing shippable.** Even the oracle is **significantly
+negative at severity 0.15** (-0.413) and not significantly positive at 0.40,
+because pausing costs half a point whether or not anything is wrong. The
+crossover is between severity 0.40 and 0.80 and severity is a pure `[GUESS]`.
+`02_RESULTS.md`, "THE DETECTION BENCHMARK".
 
 Do not present either agent number as "money recovered". The money number is
 still the one in section 2, and `payday_wait` is still a permanent row beside it.

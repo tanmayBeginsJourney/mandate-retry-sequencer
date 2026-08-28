@@ -601,3 +601,249 @@ every suppressed belief update is in the audit log with its reason.
 - **No oracle row is quoted.** The oracle reads `bal[tt] - drained` with no
   topups (`06_MODEL_CARD.md` §3 item 11) and has no notion of the rail at all,
   so it is not a meaningful upper bound for this experiment.
+
+---
+
+# THE DETECTION BENCHMARK — an oracle at the true change points. Added 29 August 2026.
+
+**Not gate-protected** in the `--tier full` sense. It is an `agent/` script with
+its own three-gate suite. Reproduce with, from the repo root:
+
+```
+python agent/tests/test_detection_benchmark.py    # ~20 min, 384 runs
+```
+
+`sim/` is untouched by all of it. Configuration is **identical to the outage
+ablation above** — n=100, k=5, 8 held-out populations (700–707), 120d,
+`payday_err=7`, `FITTED_BELIEF`, four 6h outages on days 20/50/80/110 at hour 8,
+severities {0.00, 0.15, 0.40, 0.80} — deliberately, so the two tables can be
+read against each other. Pre-registration: `NOTES.md`, 29 August 2026, two
+commits before the code. **Record: 5/8.**
+
+## Why detection replaced recovery as the scoreboard
+
+The recovery channel has a ceiling of **+0.256 pts** and pausing is
+significantly negative at severity 0.40. A metric with that little headroom
+cannot rank detectors — every detector scores about the same because there is
+almost nothing to score. So the agent is measured against an oracle that knows
+outage onset and recovery exactly and acts at the true change points.
+
+The construction is borrowed and cited, not invented: arXiv 2604.10177
+(piecewise-stationary restless bandits, April 2026) measures excess regret
+against "an oracle that restarts the base algorithm at the true change points",
+so the base solver's stationary performance factors out. `[VERIFIED]` from its
+abstract and HTML full text. The five-way decomposition below is ours, not
+theirs. Their framework is not ported — different domain, no money, no NPCI
+constraints. See `01_FACTS.md`.
+
+**The oracle is unreachable by construction, not merely hard to reach.** A
+statistical detector needs evidence; evidence arrives only at dispatch; dispatch
+happens after onset. The oracle has no evidence requirement at all.
+
+## Detection — the primary table
+
+*Excess loss against the analytic oracle, per run, mean over 8 populations,
+**response OFF** (`pause_on_outage=False`) so that pausing does not suppress the
+evidence that produces detection.*
+
+**Two time bases are shown and the difference between them is a finding.**
+`LOSS` counts **detector-hours** of disagreement. `DP` counts
+**decision-points** — one per day at hour 8, where 99.22% of attempts and every
+scheduling decision land. Read the second column. Why, immediately below.
+
+| sev | detector | det/window | latency h | LOSS h | DELAY | MISSED | LATE | FALSE | FA runs | **DP loss** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.00 | `min_attempts=4` | — | — | 0.0 | 0.0 | 0.0 | 0.0 | **0.0** | **0/8** | **0.00** |
+| 0.00 | `min_attempts=8` ← ships | — | — | 0.0 | 0.0 | 0.0 | 0.0 | **0.0** | **0/8** | **0.00** |
+| 0.00 | `min_attempts=16` | — | — | 0.0 | 0.0 | 0.0 | 0.0 | **0.0** | **0/8** | **0.00** |
+| 0.00 | oracle | — | — | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0/8 | 0.00 |
+| 0.15 | `min_attempts=4` | 0.19 | 1.2 | 51.9 | 0.9 | 19.5 | 31.5 | 0.0 | 0/8 | 4.38 |
+| 0.15 | `min_attempts=8` | 0.19 | 8.2 | 48.1 | 1.6 | 19.5 | 27.0 | 0.0 | 0/8 | 4.38 |
+| 0.15 | `min_attempts=16` | 0.09 | 0.0 | 37.5 | 0.0 | 21.8 | 15.8 | 0.0 | 0/8 | 4.00 |
+| 0.15 | **oracle** | **1.00** | **0.0** | 72.0 | 0.0 | 0.0 | 72.0 | 0.0 | 0/8 | **0.00** |
+| 0.40 | `min_attempts=4` | 0.47 | 2.5 | 92.2 | 3.0 | 12.8 | 76.5 | 0.0 | 0/8 | 4.62 |
+| 0.40 | `min_attempts=8` | 0.47 | 7.6 | 87.0 | 4.5 | 12.8 | 69.8 | 0.0 | 0/8 | 4.88 |
+| 0.40 | `min_attempts=16` | 0.34 | 9.3 | 66.0 | 3.8 | 15.8 | 46.5 | 0.0 | 0/8 | 4.62 |
+| 0.40 | **oracle** | **1.00** | **0.0** | 54.0 | 0.0 | 0.0 | 54.0 | 0.0 | 0/8 | **0.00** |
+| 0.80 | `min_attempts=4` | 0.72 | 2.7 | 126.8 | 3.8 | 6.8 | 116.2 | 0.0 | 0/8 | 4.88 |
+| 0.80 | `min_attempts=8` | 0.66 | 5.9 | 112.1 | 4.9 | 8.2 | 99.0 | 0.0 | 0/8 | 5.25 |
+| 0.80 | `min_attempts=16` | 0.47 | 11.0 | 85.4 | 7.4 | 12.8 | 65.2 | 0.0 | 0/8 | 5.38 |
+| 0.80 | **oracle** | **1.00** | **0.0** | 36.0 | 0.0 | 0.0 | 36.0 | 0.0 | 0/8 | **0.00** |
+
+`DROPOUT`, the fifth bucket, is **0.0 for every arm at every severity** and is
+therefore the one bucket in the partition with no witness. Said out loud rather
+than quoting the decomposition as fully exercised.
+
+## ⚠️ G-1b IS RED. The hours metric rewards silence, and its own gate caught it
+
+**Look at the `LOSS h` column for the oracle: 72.0 at severity 0.15, against
+37.5–51.9 for the statistical detectors.** The oracle is the *worst* arm. A
+mutant that never fires at all (`M-BLIND`) scores **24.0**, better than the
+oracle everywhere.
+
+The arithmetic:
+
+* A detector that **never fires** accrues at most `MISSED` = 4 × 6h = **24h**.
+  Capped by the window length.
+* A detector that **fires correctly** holds OUTAGE until the next time anything
+  consults it — hour 8 the following day, up to **18h per window**, so up to
+  **72h**. Capped by the consultation gap.
+
+**Under an unweighted hour count, silence is cheaper than correctness.** That is
+a defect in the loss's time base, not in the oracle and not in any detector, and
+it changes conclusions: it is the entire reason `min_attempts=16` appears best
+in the `LOSS h` column, when in fact it merely detects least.
+
+**The gate is kept red rather than repaired**, for the same reason S1, S1_PD,
+S2b and S2_LEGACY are kept red: repairing a metric after it returns an
+inconvenient answer is indistinguishable from moving a threshold. **G-1c**, the
+same dominance statement counted on decision-points, was added beside it and is
+what the suite verdict reads. On decision-points the oracle scores 0.00
+everywhere and the statistical detectors 4.00–5.38.
+
+## Latency, and why it is not cleanly quantised
+
+*Every detected window, all detectors, severities > 0.*
+
+| bucket | [0,1)h | [1,6)h | [6,12)h | [12,23)h | [23,25)h |
+|---|---|---|---|---|---|
+| windows | **64** | 20 | 6 | **0** | **25** |
+
+The pre-registered prediction was bimodal at ≈0h and ≈24h with nothing between,
+because 99.22% of attempts land at hour 8. **It broke**: 26 of 115 detected
+windows sit in [1,12)h. The [12,23) gap is real and the [23,25) spike is real;
+the [1,12) mass is not supposed to be there.
+
+**Cause — the same mechanism as the non-monotone TPR result.** Technical
+declines auto-represent (`harness.py:318`), so a decline at hour 8 schedules a
+fresh attempt *later the same day*, and under an outage those re-presentations
+land back inside the window at hours 9–13. Detection at low volume happens
+*because attempts were already burned*. That mechanism now explains two
+independently broken predictions.
+
+## The moat's second dividend — reproduced 29 August 2026
+
+Re-run of `python agent/tests/test_outage_detection.py`, unchanged, confirming
+the figures this benchmark is built on:
+
+* At n=100 the aggregator sees **22.5** attempts per 24h window; **one merchant
+  sees 0.38**, and never reaches `min_attempts = 8` at any n from 5 to 200. It
+  **cannot evaluate the statistic at all** — structural unavailability, not
+  difficulty.
+* **False alarms 0 of 48 runs** at severity 0. This benchmark adds 0 of 24 more
+  across a `min_attempts` sweep, at every severity.
+* **TPR is not monotone in n at severity 0.40** — 0.00 → 0.25 → 0.00 → 0.75 →
+  1.00 → 1.00 across n = 5/10/25/50/100/200. The break is at the
+  `min_attempts=8` cliff and the mechanism is the auto-representation cascade
+  above. Kept, not tidied away.
+
+## Recovery — SECONDARY, and the ceiling was the detector's, not the problem's
+
+*Response ON (`pause`). Paired 2 SE against the monitor-off arm at the same
+severity. The previously published ceiling for outage awareness is **+0.256 pts**
+(`suppress`, severity 0.80, SIG) and it is stated here beside every row.*
+
+| severity | monitor off | `min_attempts=8` + pause | **oracle + pause** |
+|---|---|---|---|
+| 0.00 | 95.30 | 95.30 (+0.000) | 95.30 (+0.000) |
+| 0.15 | 95.16 | 94.89 (−0.273, n.s.) | 94.75 (**−0.413, SIG**) |
+| 0.40 | 94.86 | 94.33 (**−0.529, SIG**) | 94.75 (−0.108, n.s.) |
+| 0.80 | 93.83 | 94.03 (+0.199, n.s.) | 94.75 (**+0.916, SIG**) |
+
+The `min_attempts=8` column reproduces the published `pause` row above
+**exactly** (−0.273 / −0.529 / +0.199). That is the cross-check that this table
+and that one measure the same thing.
+
+**Perfect detection is worth +0.916 pts at severity 0.80, against the shipping
+detector's +0.199 and the +0.256 `suppress` ceiling.** So recovery does not
+saturate — **the current detector does**. The pre-registered prediction that
+this could not happen (E-BEN-6) broke.
+
+**Rule 3 applied, because that is a large number in the direction we want:**
+
+1. The oracle arm's `cycle_rec` is **bitwise identical at severities 0.15, 0.40
+   and 0.80**. A policy that makes the outage genuinely invisible must produce
+   exactly that, and it is not obtainable by accident.
+2. It decomposes with no residual. Outage damage at 0.80 = 95.2955 − 93.8342 =
+   **1.4612**. The unconditional cost of pausing (the oracle pauses 189
+   dispatches whether or not anything is wrong) = 94.7502 − 95.2955 =
+   **−0.5453**. 1.4612 − 0.5453 = **+0.9159** against a measured **+0.9159**.
+
+### What this does NOT license
+
+**Pause-on-outage is still a bad unconditional default, even with an oracle
+behind it.** The oracle is *significantly negative* at severity 0.15 (−0.413)
+and not significantly positive at 0.40. Pausing costs half a point whatever
+happens, and the outage only costs more than that when it is severe. The
+crossover sits between severity 0.40 and 0.80, and severity is a pure `[GUESS]`.
+
+**The belief-corruption argument stays retracted.** Nothing here revives it; see
+`01_FACTS.md`, 28 August 2026.
+
+## The gates, and the four crippled oracles
+
+Every gate needs a named mutant that trips it. **The mutants are window
+transforms, not code branches** — a crippled oracle differs from the true one
+only in the list of numbers it is handed, so every arm executes byte-identical
+code and no mutant can touch a counter. That is rule 1a taken literally, after
+error 11.
+
+| candidate | G-1b hours | G-1c decisions | G-2 inert at sev 0 | G-3 zero attempts | caught by |
+|---|---|---|---|---|---|
+| **oracle** | NO *(metric defect, above)* | yes | yes | yes | — passes every gate the suite reads |
+| `M-BLIND` never fires | yes | yes | yes | **NO** | G-3 |
+| `M-LATE` fires one window late | yes | yes | yes | **NO** | G-3 |
+| `M-LATCH` never exits | NO | **NO** | yes | yes | G-1c |
+| `M-PHANTOM` invents two windows | NO | **NO** | **NO** | yes | G-1c, G-2 |
+
+**GATE SUITE: PASS** — 4 of 4 crippled oracles caught, true oracle clean.
+
+**No gate is idle and none catches everything.** Delete any one and a crippled
+oracle survives, which is the only evidence that this is a three-gate suite
+rather than one gate and two decorations.
+
+**G-1a is stated and then ignored.** The *analytic* oracle's loss is zero
+**by construction** — it defines the target. That is precisely the shape of
+error 5's guard gate ("oracle approval ≈ 100%", true whether the oracle worked
+or not) and it carries exactly as much information: none. All the content is in
+the mutants and in G-1b/G-1c, which are claims about a *run*.
+
+**G-3 is the one that matters.** It is the first check in this project whose
+witness is written by different code from the thing it checks:
+`SimExecutor.n_attempts_in_outage` is incremented by the **executor**, from the
+schedule object, and shares no code with any monitor. The oracle executes **0**
+attempts inside a window at every severity > 0; the shipping detector executes
+**249 / 204 / 168**. Both halves are required — a gate that only ever sees zeros
+is satisfied by a disconnected wire, which is error 16.
+
+`M-LATCH` under pausing drops recovery to **3.47%**. That is error 14 reproduced
+deliberately: the monitor that latched OUTAGE forever and returned 1.97% without
+crashing. The mutant is a failure this project has actually shipped, not a
+strawman.
+
+## How this could be biased toward the answer we want
+
+* **Window placement is worst case.** Every window starts at hour 8 where 99.22%
+  of attempts land, so every figure here is an **upper bound** on both the damage
+  and the detectability.
+* **Severity is invented.** Nothing found reports what fraction of UPI AutoPay
+  executions fail during a rail incident. `[GUESS]`, swept.
+* **A false-alarm attribution bug was fixed mid-analysis and it moved a number
+  our way.** The grader credited a next-day alarm as both "window detected,
+  latency 24h" and "false alarm". Before the fix the shipping detector showed
+  6.0 / 17.2 / 15.0 false-alarm hours at severities 0.15 / 0.40 / 0.80 in 2–4 of
+  8 runs; after it, 0.0 in 0 of 8. It cannot affect severity 0, where `W` is
+  empty, so the headline false-alarm claim is untouched — and the bucket is
+  demonstrably reachable, because `M-PHANTOM` fills it with 48 hours in 8 of 8
+  runs. Full write-up in `NOTES.md`.
+* **`min_attempts` does not order cleanly** at n=100 on either metric. Open item
+  0c is answered with "no clean ordering", not with a better constant. The
+  constant stays at 8 because nothing measured argues for moving it.
+* **Detection and recovery come from different runs.** Detection is measured
+  with the response off because pausing suppresses the evidence that produces
+  detection; recovery with it on. The two tables are not two views of one run.
+* **n=100, 8 populations, one run seed each.** Not a large study.
+* **One worker died** in the first attempt (`BrokenProcessPool`, 384 runs lost)
+  and one `MemoryError` was absorbed in the second by re-running the identical
+  deterministic job in a fresh interpreter. Retries are counted and printed. See
+  `06_MODEL_CARD.md` §6a — contained, not fixed.

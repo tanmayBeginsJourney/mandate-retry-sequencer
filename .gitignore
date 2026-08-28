@@ -1,3 +1,4 @@
 __pycache__/
 *.pyc
 sim/ml_artifacts/
+agent/tests/_bench_cache.pkl
