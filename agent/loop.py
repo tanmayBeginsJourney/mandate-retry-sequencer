@@ -66,6 +66,12 @@ class LoopContext:
     days: int
     cyc: int
     discount: float = DEFAULT_DISCOUNT
+    # THE SCHEDULER SEAM. None means the belief-driven index policy, which is
+    # what every existing measurement uses and what the parity gate compares
+    # against the harness. A fixed-schedule baseline plugs in here so it passes
+    # through the SAME Stage 0 gate and the SAME audit trail, which is what
+    # makes its recovery rate comparable. See agent/policy/fixed_schedule.py.
+    scheduler: object = None
     log_ticks: bool = False
     collect_calib: bool = False
     # ---- outage response switches, each measurable in isolation
@@ -88,6 +94,9 @@ class LoopContext:
         "llm": {"att": 0, "ok": 0, "paise": 0},
         "fallback": {"att": 0, "ok": 0, "paise": 0}})
     stops: dict = field(default_factory=lambda: {r.value: 0 for r in StopRule})
+    # {(mandate_uid, cycle): day collected}. A record of outcomes, never an
+    # input to a decision. Feeds the recovery-rate metric; see W0.
+    collected_cycles: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -194,6 +203,13 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             m.collected = True
             m.got_cycles += 1
             ctx.counters["recovered_paise"] += to_paise(m.amount)
+            # WHICH cycle was collected, and on what day. Needed for the
+            # recovery-rate metric (docs/04_BUILD_PLAN.md W0) and for nothing
+            # else -- it records an outcome, it does not influence one, so
+            # degenerate-mode parity with `harness.run` is untouched. The same
+            # facts are independently recoverable from the OUTCOME rows of the
+            # audit log, and `test_recovery_metric.py` checks the two agree.
+            ctx.collected_cycles[(m.ref.uid, m.cycle)] = day
             if bucket is not None:
                 bucket["ok"] += 1
                 bucket["paise"] += to_paise(m.amount)
@@ -355,8 +371,16 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                                 "mandate's remaining billing cycles")
             continue
 
-        td = propose(belief, m.amount, day, t, m.cycle_close, m.attempts_used,
-                     kind=InterventionKind.RETRY, discount=ctx.discount)
+        if ctx.scheduler is None:
+            td = propose(belief, m.amount, day, t, m.cycle_close,
+                         m.attempts_used, kind=InterventionKind.RETRY,
+                         discount=ctx.discount)
+        else:
+            # A baseline arm. It never sees `belief` -- that is the whole
+            # point of the seam, and it is why this branch cannot accidentally
+            # borrow the timing policy's machinery.
+            td = ctx.scheduler(m.amount, day, t, m.cycle_close,
+                               m.attempts_used, kind=InterventionKind.RETRY)
 
         if ctx.log_ticks:
             ctx.log.emit(EventKind.DECISION_TICK, t, mandate_uid=m.ref.uid,
@@ -390,7 +414,8 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
               discount: float = DEFAULT_DISCOUNT, log_ticks: bool = False,
               time_major: bool = False, collect_calib: bool = False,
               pause_on_outage: bool = False,
-              suppress_tech_updates: str = "never") -> dict:
+              suppress_tech_updates: str = "never",
+              scheduler=None) -> dict:
     """Run the agent over a population. Same metric names as `harness.run`."""
     days = pop[0]["days"]
     cyc = pop[0]["cycle_days"]
@@ -402,7 +427,8 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
                       days=days, cyc=cyc, discount=discount,
                       log_ticks=log_ticks, collect_calib=collect_calib,
                       pause_on_outage=pause_on_outage,
-                      suppress_tech_updates=suppress_tech_updates)
+                      suppress_tech_updates=suppress_tech_updates,
+                      scheduler=scheduler)
 
     runtimes = []
     for ci, c in enumerate(pop):
@@ -468,4 +494,7 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
                           for t, lbl, v in ctx.monitor.transitions],
         outcome_by_source={k: dict(v) for k, v in ctx.by_source.items()},
         calib=ctx.calib,
+        # {(mandate_uid, cycle): day}. Combined with the world's at-risk set in
+        # `batch.py` to give the recovery-rate metrics. See agent/metrics.py.
+        collected_cycles=ctx.collected_cycles,
     )

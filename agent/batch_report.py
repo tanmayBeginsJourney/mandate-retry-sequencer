@@ -151,7 +151,50 @@ def main(argv=None) -> int:
     print("  `payday_wait` IS A PERMANENT ROW AND CANNOT BE SWITCHED OFF. It is")
     print("  the five-line heuristic a good rival builds in an afternoon, and at")
     print("  payday_err of about 1 day it BEATS us. The headline is conditional")
-    print("  on that parameter and on nothing else -- docs/06_MODEL_CARD.md 2.")
+    print("  on that parameter, on how poor the world is, and on nothing else")
+    print("  -- docs/06_MODEL_CARD.md 2 and the spend sweep in 02_RESULTS.md.")
+
+    # ------------------------------------------------- the comparable number
+    print()
+    print("=" * 104)
+    print("RECOVERY RATE -- the only number here that can be compared to the "
+          "outside world")
+    print("=" * 104)
+    print("  Cycles collected / cycles due is THIS project's metric and it counts")
+    print("  cycles that never failed. Every published industry figure is a")
+    print("  RECOVERY RATE: of the payments that failed, the share collected.")
+    print("  They are different quantities. docs/04_BUILD_PLAN.md W0.")
+    print()
+    print("  REVENUE AT RISK is defined by the WORLD, not by any policy: the")
+    print("  mandate-cycles a debit on the due date would not have covered.")
+    print("  Identical for every arm, so the arms stay comparable.")
+    print()
+    rec_arms = [n for n in arms if res[(n, pops[0])].get("recovery")]
+    if rec_arms:
+        print(f"{'arm':>22s} {'at risk':>10s} {'recovered':>11s} "
+              f"{'recovery rate':>15s} {'<=10 days':>11s} {'median days':>13s}")
+        for name in rec_arms:
+            rr = [res[(name, s)]["recovery"] for s in pops]
+            at_risk = sum(r["at_risk"] for r in rr)
+            got = sum(r["recovered"] for r in rr)
+            rate = np.mean([r["recovery_rate"] for r in rr])
+            early = np.mean([r["early_share"] for r in rr])
+            med = np.mean([r["median_days_to_recovery"] for r in rr])
+            print(f"{name:>22s} {at_risk:>10d} {got:>11d} "
+                  f"{_pct(rate):>15s} {_pct(early):>11s} {med:>13.1f}")
+        fp = np.mean([res[(rec_arms[0], s)]["recovery"]
+                      ["first_presentation_failure_rate"] for s in pops])
+        print()
+        print(f"  First-presentation failure rate: {_pct(fp)}. A property of the")
+        print("  WORLD -- no policy moves it. Published figures put real UPI")
+        print("  AutoPay failure at 8-15% (docs/01_FACTS.md, all [REPORTED],")
+        print("  all from vendors selling recovery software).")
+        print()
+        print("  THE AT-RISK SET EXCLUDES technical declines and the decline")
+        print("  taxonomy, both properties of the rail rather than of funding.")
+        print("  That makes it SMALLER than a real failed-payment population and")
+        print("  so it FLATTERS every recovery rate above. Said here rather than")
+        print("  in a footnote.")
 
     # --------------------------------------------------------- stopping rules
     print()

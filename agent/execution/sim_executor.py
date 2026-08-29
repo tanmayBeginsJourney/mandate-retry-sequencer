@@ -356,6 +356,87 @@ class SimExecutor:
         # Drawn from its OWN generator, so this consumes nothing from `rng`.
         self.dstate = DeclineState(self.declines, pop, seed, self.days)
 
+    # ---- what the WORLD says about revenue at risk, before any policy acts
+    def at_risk_cycles(self) -> dict[tuple[str, int], int]:
+        """Mandate-cycles a debit on the due date would NOT have covered.
+
+        Returns `{(mandate_uid, cycle): due_day}`.
+
+        WHY THIS LIVES HERE. It is a question about the world, not about a
+        policy: `w3.balance_trace` is deterministic in `(pop, seed)`, so every
+        arm run on the same population sees the identical trace and therefore
+        the identical at-risk set. That is what makes recovery rates from
+        different arms comparable -- a denominator taken from each arm's own
+        first attempt would move between arms, and would score the agent on a
+        denominator its own waiting had shrunk.
+
+        It also has to live here because nothing else may read a balance.
+        Gate I2 forbids every module under `agent/` except
+        `constraints/stage0.py` and the composition root from importing
+        `agent.execution` at all, so a metrics module cannot reach the world;
+        the world has to answer for itself.
+
+        THE WALK. Every mandate presents exactly once per cycle, on its
+        `cycle_open` day -- which IS its due date, since
+        `cycle_open = due_day + cycle * cycle_days` -- at `w3.DECISION_HOUR`.
+        Drain accumulates inside a payday epoch and resets at each payday,
+        which is `attempt()`'s rule reproduced rather than re-derived.
+
+        TWO THINGS IT DELIBERATELY DOES NOT MODEL, both of which make this set
+        SMALLER than a real failed-payment population and therefore flatter
+        every recovery rate computed against it:
+
+          * technical declines (`P_TECH`) and rail outages. Those are
+            properties of the rail, not of funding. Including them would make
+            the denominator depend on an RNG draw and on the outage schedule,
+            so two arms with different outage settings would no longer share a
+            denominator.
+          * the decline taxonomy -- frozen accounts, revoked mandates, limit
+            hits. Same reason, and it is off by default.
+
+        Both are counted separately by the loop and reported beside this.
+        """
+        at_risk: dict[tuple[str, int], int] = {}
+        for ci, c in enumerate(self.pop):
+            w = self.worlds[ci]
+            drained = 0.0
+            epoch: int | None = None
+            # (day, mandate index) in mandate-list order, which is the order
+            # `harness.run` dispatches a customer's mandates in. Two mandates
+            # can fall due on the same day, and then the order decides which
+            # one drains first; it is arbitrary and it is not neutral.
+            due: list[tuple[int, int, float, int, bool]] = []
+            for mi, m in enumerate(c["mandates"]):
+                # Cycles that CLOSE inside the horizon, matching
+                # `MandateState.cycles_due` exactly -- the denominator this
+                # metric is reported against. A trailing cycle that opens
+                # before the horizon ends but closes after it is NOT due.
+                n_due = max(0, (self.days - m["due_day"]) // self.cyc)
+                cycle = 0
+                while True:
+                    day = m["due_day"] + cycle * self.cyc
+                    if day >= self.days:
+                        break
+                    # Trailing presentations still DRAIN -- another mandate's
+                    # due cycle can fall after them in the same payday epoch --
+                    # but they are never recorded as at risk.
+                    due.append((day, mi, m["amount"], cycle, cycle < n_due))
+                    cycle += 1
+            due.sort(key=lambda r: (r[0], r[1]))
+
+            for day, mi, amount, cycle, counts in due:
+                ep = (day - w.payday) // self.cyc
+                if epoch is None or ep != epoch:
+                    drained = 0.0
+                    epoch = ep
+                t = day * w3.HOURS + w3.DECISION_HOUR
+                avail = max(w.bal[t] - drained, 0.0)
+                if avail >= amount:
+                    drained += amount
+                elif counts:
+                    at_risk[(f"c{ci}m{mi}", cycle)] = day
+        return at_risk
+
     # ---- what the loop is allowed to read: the NOISY estimates only.
     def estimates(self, customer_id: int) -> tuple[float, int]:
         """(est_salary, est_payday). Never the true salary, payday or balance.

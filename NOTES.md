@@ -4071,3 +4071,498 @@ under a different name. Pre-existing, unrelated to this work, found by the
 path-existence check. And `03_ERRORS.md` said "error 1, thirteen months later",
 an invented timespan, in an entry about not asserting things you have not
 checked.
+
+---
+
+# 2026-08-29 (later still) — the calibration anchor, and how much of the headline is the world being poor
+
+Tanmay asked what the highest-value remaining work is, and whether the
+simulation models reality well enough. Chasing that turned up the largest
+open question in the project, and it is not a bug — it is a number nobody had
+looked at from the outside.
+
+## The world is much harsher than the public numbers for the real rail
+
+`pop_spend` sets how much of a salary a customer spends per cycle. Everything
+this project reports is at **1.05**, chosen years-of-argument ago so that the
+documented UPI retry schedule reproduces **~30% per-attempt approval**, the one
+`[REPORTED]` external anchor in `01_FACTS.md`.
+
+Reading `w3.balance_trace` directly, with no policy involved — for every
+mandate-cycle, could the account have covered the debit on its due date?
+
+| `pop_spend` | due-date success | best day in the cycle |
+|---|---|---|
+| 1.05 (what ships) | **46.8%** | 100% |
+| 0.80 (`harness.run`'s own default) | 95.2% | 100% |
+| 0.60 | 96.0% | 100% |
+
+**So the shipping world fails a debit on its due date 53% of the time.**
+Secondary sources read 29 August 2026 put real UPI AutoPay failure at
+**8–20%** — an order of magnitude apart. Sources in `01_FACTS.md`; all of them
+are trade blogs rather than an operator's disclosure, including Razorpay's own,
+which discusses failure rates at length and **publishes no number**.
+
+## What that costs the headline — measured, not argued
+
+`sim/spend_sweep.py`, 96 runs, ~40s. Nothing frozen is touched: `pop_spend` is
+already an argument of `harness.run` and the script only reads.
+
+*n=100, 8 held-out populations (700–707), 120d, `payday_err=7`, `FITTED_BELIEF`.*
+
+| `pop_spend` | baseline | agent | oracle | agent − baseline | baseline approval |
+|---|---|---|---|---|---|
+| 0.60 | 96.48% | 99.98% | 100% | **+3.51** ±0.88 SIG | 93.2% |
+| 0.80 | 93.21% | 99.50% | 100% | **+6.29** ±1.42 SIG | 84.6% |
+| 0.90 | 82.96% | 97.70% | 100% | **+14.73** ±1.83 SIG | 66.2% |
+| **1.05** | 59.14% | 95.57% | 100% | **+36.43** ±3.37 SIG | 39.7% |
+
+**Two things fall out of that table and they point opposite ways.**
+
+**The bad one.** The +36.66 headline is a statement about a world where 60% of
+debits fail. Move the world to the approval rate the public sources describe
+and **the gap is +6.29 points, not +36.** Every figure in `02_RESULTS.md`
+inherits that, and the page and README quote the +36 number in the first
+screen. A Razorpay judge holds the real approval rate in their head and will
+reach this objection before the end of the first slide.
+
+**The good one, and it is better than the bad one is bad.** At `pop_spend=0.80`
+the baseline's per-attempt approval is **84.6%**, which is inside the band the
+public sources report for the real rail — and at that operating point the
+agent is worth **+6.29 points (2 SE 1.42)**. `CLAUDE.md` rule 3 says the
+published industry benchmark for retry optimisation is a **6–8% uplift** and
+that anything far outside it is a defect until proven otherwise. **Pointed at
+the real operating point, this model lands inside the benchmark.** That is the
+first time anything in this project has agreed with an external number it was
+not fitted to, and it was not designed to.
+
+So the honest framing is not "our number is +36". It is: **the uplift is a
+curve in how hard the world is, it runs from +3.5 to +36.4 across a plausible
+range of that hardness, and at the hardness the public record suggests it sits
+at +6.3, inside the published benchmark.** That is a stronger claim than +36,
+because +36 invites the objection and this answers it.
+
+## The oracle is 100% at every spend level, and that is a modelling gap
+
+Every mandate-cycle in this world is winnable on *some* day, at every
+calibration tested. There is **no customer who simply cannot pay** — no
+insolvency, no account that stays empty for a whole cycle. So the agent is
+solving a pure *timing* problem and never a *collectability* problem, and the
+oracle is 100% by construction rather than by measurement.
+
+Real recovery is both problems. This is the most defensible thing to say about
+what the simulation does not model, and it explains the 4-point oracle gap that
+`06_MODEL_CARD.md` §3 item 11 already flags as suspicious: with no insolvent
+customers, a good scheduler *should* get close to 100%, and closeness to the
+oracle measures how well the filter matches the world rather than how well it
+schedules.
+
+## What I did NOT do
+
+**I did not change `pop_spend`.** The model is frozen and re-anchoring it
+re-runs every number in the repo six days from the deadline, which is the exact
+situation `CLAUDE.md`'s freeze rule was written for. The sweep is additive and
+reports a curve, which is what this project already does with `p_limit`, the
+0.92 discount and `payday_err`.
+
+**I did not retract the ~30% anchor.** It may well be right for the population
+it describes. There is a real ambiguity nobody has resolved: **~30% approval on
+*retries of already-failed debits* is a completely different statement from
+~30% approval on *all debits*, and the world implements the second.** If the
+anchor was ever meant as the first, `pop_spend=1.05` is modelling the wrong
+population and the honest calibration is nearer 0.80. That question is now the
+single most valuable unresolved item in the project and it is one afternoon of
+reading, not a re-fit.
+
+## `sim/spend_sweep.py` is a new file in a frozen directory
+
+It imports `w3`, `harness` and `runner` and writes only
+`sim/ml_artifacts/spend_sweep.json`, which is gitignored. It changes no frozen
+byte and adds no constant. Flagged rather than assumed: if the freeze is meant
+to cover *adding* read-only scripts to `sim/` as well as editing it, move it to
+`scripts/` — nothing depends on its path.
+
+---
+
+# 2026-08-30 — the four gaps are a build item, not a caveat
+
+Tanmay's correction, and it is right: yesterday's entry wrote up four gaps in
+the world — the calibration anchor, no insolvent customers, no
+customer-initiated cancellation, no decay of debit success over months — and
+then filed them as *limitations to disclose*. They should have been filed as
+*work to do*. Reporting a gap you intend to close is worse than closing it, and
+it teaches a reader to discount everything else on the page.
+
+The measurement stands (the spend sweep is real and reproducible). What changed
+is what it is for: it is **how the new operating point gets chosen**, not a
+disclaimer bolted onto the old one. The caveat framing has been removed from
+`00_HANDOFF.md` and `02_RESULTS.md`; the spec is now in `04_BUILD_PLAN.md`.
+
+Second correction, same conversation: I had proposed showing one customer where
+the agent fails alongside one where it wins. **On a public page that ratio is
+wrong.** Honesty about the failure cases belongs in `docs/`, where a reader has
+come to audit; the public artifacts should show the agent working, several
+times, and use a failure case for calibration rather than for penance. More
+honesty is not automatically more impact.
+
+Third: **a rule against calendar management is now in `CLAUDE.md`.** Twice in
+two days I ranked work by whether it fit before the deadline, on a project that
+was built in under three days. That estimate was never mine to make.
+
+## Fact-check: is there a public benchmark to report against?
+
+Tanmay asked me to check the claim that no appropriate benchmark exists. It
+holds, with a distinction that turns out to matter.
+
+**There is no public evaluation dataset or leaderboard for payment retry
+scheduling.** Nothing of the SWE-bench / GLUE shape: no shared task, no held-out
+set, no published baselines a third party could re-run. Searched academic
+sources, RL benchmark suites and dataset repositories; the only formal
+artifacts in the space are **patents** on machine-learned dunning, which
+describe methods and publish no data.
+
+**But published aggregate statistics do exist**, and they are targets a
+simulator can be scored against even though they are not a dataset:
+
+| published figure | value | source class |
+|---|---|---|
+| recovery with no retries | ~0-10% | vendor benchmark |
+| recovery, basic fixed-interval retries | ~20-40% | vendor benchmark |
+| industry median recovery, mixed approaches | ~47.6% | vendor benchmark |
+| recovery, smart retries + card updater + email | 70-85% | vendor benchmark |
+| smart retry timing alone vs fixed intervals | ~+25% relative | vendor benchmark |
+| share of recoveries inside the first 10 days | ~90% | vendor benchmark |
+| card failure rate / ACH-direct-debit failure rate | ~15% / 3-5% | vendor benchmark |
+| UPI AutoPay failure rate | 8-15% | trade blog |
+| involuntary share of total subscription churn | 20-40% | vendor benchmark |
+
+Every one is `[REPORTED]` at best. They come from companies selling recovery
+software, they aggregate non-comparable customer bases, and one of them says so
+in its own methodology note. **They are not ground truth and must never be
+quoted as if they were.** What they are is a set of independent numbers this
+project did not fit to, which means a world that reproduces several of them at
+once is doing something a world tuned to one anchor cannot fake.
+
+**The metric mismatch that has to be fixed first.** Every figure above is a
+*recovery rate*: of the payments that failed, what fraction was eventually
+collected. This project reports *cycles collected / cycles due*, which counts
+cycles that never failed at all. **They are not the same number and cannot be
+compared.** Adding the recovery-rate metric is a prerequisite for any of this,
+and it is derivable from the audit log with no change to the policy.
+
+---
+
+# 2026-08-30 — PRE-REGISTER: W0, the recovery-rate metric. Written before any code runs.
+
+`04_BUILD_PLAN.md` W0. The project reports *cycles collected / cycles due*;
+every published figure in the industry is a *recovery rate* — of the payments
+that failed, the fraction eventually collected. They are different quantities,
+so nothing this project reports can currently be compared to anything outside
+it. This adds the missing metric.
+
+## The definition, and why this one
+
+**The at-risk set is a property of the WORLD, not of a policy.** For every
+mandate-cycle, ask whether a debit presented on its due date would have cleared:
+walk every mandate once, on its `cycle_open` day (which *is* its due date —
+`MandateState.cycle_open = due_day + cycle * cycle_days`) at
+`w3.DECISION_HOUR`, accumulating drain within a payday epoch and resetting it at
+each payday exactly as `SimExecutor.attempt` does. If `avail < amount`, that
+cycle is **at risk**.
+
+**Why not define it from a policy's own first attempt.** `w3.balance_trace` is
+deterministic in `(pop, seed)` and every arm on the same population sees the
+identical trace, so a world-derived denominator is *the same set for every
+arm* and all comparisons stay paired. A denominator taken from each arm's own
+behaviour would move between arms, and the agent — whose entire strategy is to
+not present into an empty account — would be scored on a denominator it had
+itself shrunk.
+
+**Two exclusions, both deliberate, both making the at-risk set SMALLER than a
+real failed-payment population.** Technical declines (`P_TECH = 0.008`) are a
+property of the rail, not of funding, and including them would make the
+denominator depend on an RNG draw and on outage settings. The decline taxonomy
+(frozen accounts, revoked mandates, limit hits) is excluded for the same reason
+and is off by default anyway. Both are reported separately. **This flatters
+recovery rate**, because a technical decline that later succeeds is not counted
+as a recovery.
+
+## Predictions. These are the falsifiable ones.
+
+**R-1.** First-presentation failure rate at `pop_spend=1.05` lands in
+**53–68%**. A drain-free read of the trace gave 53.2% failure; drain can only
+tighten funding, so the true figure is at least that.
+
+**R-2.** First-presentation failure rate at `pop_spend=0.80` lands in **5–25%**.
+Drain-free read gave 4.8%. **If it lands inside 8–15% it hits validation target
+V1 without having been fitted to it** — that would be the second external
+agreement in the project and it is not the reason the number was chosen.
+
+**R-3.** `payday_wait` recovery rate at 1.05 lands in **15–35%**. From algebra
+on the known cycle figures: `cycle_rec` 0.577 with an at-risk fraction near
+0.57 implies roughly 0.26. **The published fixed-interval band is 20–40%.**
+
+**R-4.** The agent's recovery rate at 1.05 lands in **85–97%**. Same algebra
+from `cycle_rec` 0.9436 gives roughly 0.90. The published smart-retry band is
+70–85%, so **the agent is predicted to come in ABOVE the published band, not
+inside it** — at this calibration the world is far harsher than the one those
+figures describe, and a number above the band is a reason to distrust the
+world, not to celebrate the agent.
+
+**R-5. V7 fails at 1.05.** The published figure is ~90% of recoveries inside
+the first 10 days. The agent deliberately waits for payday and payday is
+roughly uniform across a 30-day cycle, so I expect **50–70%** inside 10 days.
+Registering this as a predicted FAILURE up front: if it passes, that is a
+surprise to investigate, not a result to quote.
+
+**R-6.** The loop's own record of which cycles were collected and an
+independent replay of the same facts from the audit log agree **exactly**, 0
+disagreements, over every run tested. If they disagree, **believe the log** —
+that is the rule the Stage 0 auditor already runs under, and it was right the
+one time the two disagreed.
+
+## How this could be biased toward the answer I want
+
+- The exclusions above shrink the denominator, which raises every recovery rate.
+- The reference presentation is at hour 8. 99.22% of real attempts land there,
+  but the true first presentation could be at another hour against a slightly
+  different balance.
+- Mandates of one customer can fall due on the same day. Drain then depends on
+  the order they are walked in; I use the population's mandate list order,
+  matching the harness's dispatch order. It is arbitrary and it is not neutral
+  between mandates.
+- Every published band this is compared against comes from a company selling
+  recovery software. Landing inside one is corroboration, never validation.
+
+---
+
+# 2026-08-30 — W0 RESULT: the recovery-rate metric, and 2/4 on the pre-registration
+
+Built, gated and measured. `agent/metrics.py`,
+`SimExecutor.at_risk_cycles()`, `agent/tests/test_recovery_metric.py` (the
+gate, 5 checks / 5 mutants), `agent/tests/test_recovery_rates.py` (the
+measurement). Wired into `batch_report.py`.
+
+**Parity and isolation both survive it.** `test_parity_vs_harness.py` is still
+bit-exact 24/24 and `test_layer_isolation.py` is still 5/5 — the loop only
+*records* which cycle it collected, it never reads that record, so no decision
+changed. The batch headline is byte-identical: 94.36% against 57.70%, +36.66.
+
+## The measurement
+
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`FITTED_BELIEF`, degenerate mode. Not gate-protected; reproduce with*
+`python agent/tests/test_recovery_rates.py` *(16 runs, ~74s).*
+
+| `pop_spend` | cycle_rec | 1st-presentation failure | recovery rate | ≤10 days | median days |
+|---|---|---|---|---|---|
+| 1.05 | 95.56% | **68.71%** ±2.13 | **90.55%** ±1.63 | 37.0% | 13.9 |
+| 0.80 | 99.67% | **13.68%** ±0.73 | **97.38%** ±1.06 | 41.8% | 12.8 |
+
+## Scoring the pre-registration: 2/4
+
+**R-2 HELD, and it is the result.** First-presentation failure at
+`pop_spend=0.80` is **13.68%**. The published band for real UPI AutoPay is
+**8–15%**. It lands inside, and **nothing was fitted to make it**: 0.80 is
+`harness.run`'s own default from long before any of this, the prediction band I
+registered was a loose 5–25%, and the quantity did not exist as a measurable
+number until today. That is validation target **V1 hit on the first attempt**
+and it is the second time this project has agreed with an external figure it
+never saw.
+
+**R-4 HELD.** Recovery rate 90.55% at 1.05, inside the registered 85–97%.
+Worth noting what I registered alongside it: the published smart-retry band is
+**70–85%**, so the agent coming in *above* it was predicted, and predicted as a
+reason to distrust the world rather than to celebrate the agent.
+
+**R-1 BROKE.** 68.71% against a registered 53–68%. The drain-free probe that
+produced the 53% lower bound ignored the fact that five mandates drain one
+salary, and drain costs ~15 points of due-date funding rather than the ~5 I
+assumed. The break is in the direction that makes the world look **harsher**,
+not kinder, so it is not the usual failure mode — but the estimate was still
+wrong and the reasoning behind it was lazy.
+
+**R-5 BROKE, and worse than predicted.** Early share is **36.95%** against a
+registered 50–70%, where the published figure is ~90% of recoveries inside 10
+days. The agent's median wait is ~14 days. I predicted this check would fail
+and it failed by more than I allowed for.
+
+## What the two breaks are telling us, and it is the same thing twice
+
+**Recovery rate is too HIGH and it is too SLOW, and both have one cause: in
+this world the money always arrives eventually.** The oracle is 100% at every
+calibration, so every at-risk cycle is winnable if you wait long enough. A
+policy that waits therefore recovers nearly everything (90–97%, above the
+published 70–85%) and takes a long time doing it (37% inside 10 days against a
+published ~90%).
+
+Real recovery is bounded from above because **some customers never pay**, and
+it is fast because **most real failures are transient**. This world has neither
+property. So:
+
+- **W2 (insolvent customers) is now evidenced, not assumed.** It is what pulls
+  recovery rate down off 97% and into the published band. Prediction to
+  register before building it: with a realistic uncollectable fraction,
+  recovery at `pop_spend=0.80` lands in **70–85%**.
+- **W4 (decay) and the shape of failure are what the early-share miss is
+  pointing at.** Our failures are all "wait for payday" with payday roughly
+  uniform over a 30-day cycle; real failures are mostly resolved in days.
+
+Two pre-registered checks broke and both broke *toward the same missing
+mechanism*. That is more useful than either would have been alone, and it is
+the first time this project's world has been falsified against an outside
+number rather than against itself.
+
+## R-3 is DEFERRED, not dropped
+
+`payday_wait`'s recovery rate — predicted 15–35%, against a published
+fixed-interval band of 20–40% — could not be measured. The baselines live in
+the **frozen** `sim/harness.py`, which emits no per-cycle record, and the
+recovery metric needs one. Implementing `baseline_doc` as an agent arm is the
+validation suite's first task and R-3 travels with it.
+
+That is also the more interesting arm: `baseline_doc` is a faithful rendering
+of Razorpay's own documented schedule, and the harness already measures it
+racking up 974 re-presentation violations. Run through Stage 0 as an *enforcing*
+gate rather than a counting one, those retries get **refused**. The documented
+schedule is not legally executable, and the agent's constraint layer is what
+demonstrates it.
+
+## How this could be biased toward the answer I want
+
+- The at-risk set excludes technical declines and the decline taxonomy, so it
+  is smaller than a real failed-payment population and **every recovery rate
+  above is flattered.**
+- The reference presentation is at hour 8. 99.22% of real attempts land there,
+  but a first presentation at another hour would meet a different balance.
+- Same-day due-date collisions drain in mandate-list order. Arbitrary, and not
+  neutral between mandates.
+- V1 landing inside 8–15% is one number agreeing with one band from vendors
+  selling recovery software. It is corroboration. It is not validation, and the
+  other eight targets are unmeasured.
+
+---
+
+# 2026-08-30 (later) — the fixed-schedule arm, and two published bands hit without fitting
+
+The freeze is lifted; `scripts/spend_sweep.py` moved out of `sim/`; `CLAUDE.md`
+rewritten around it. Then the validation suite's first task: a fixed-interval
+baseline that produces an audit log, so its recovery rate exists.
+
+## What was built
+
+`agent/policy/fixed_schedule.py` — a scheduler with no belief, no forecast and
+no index. `agent/loop.py` gained a **scheduler seam**: `ctx.scheduler is None`
+means the belief-driven index, which is what every existing measurement uses.
+`run_once(mode="doc_legal")` swaps it and **forces** `RetryOnlyDiagnoser`,
+because a fixed schedule that could also nudge, escalate or stop is not a fixed
+schedule — it would smuggle part of the agent's action space into its own
+control.
+
+**Parity survived it: bit-exact 24/24.** The seam is genuinely inert by default.
+
+`batch.at_risk_cycles()` was added so tests can ask the world its opinion
+without holding an executor. **Gate I2 caught the first version of the test
+importing `SimExecutor` directly** and it was right to: the exempt list is for
+tests that must BUILD an executor to drive the gate, and this needs the
+*world's opinion*, which is a different thing. Routing through the composition
+root was the correct fix and the exempt list is unchanged. That is twice now
+that an import-graph rule has caught something real rather than decorating a
+slide.
+
+## THE DOCUMENTED SCHEDULE CANNOT BE EXECUTED COMPLIANTLY
+
+Razorpay documents charge on T, then retry T+1, T+2, T+3. A mandate only becomes
+actionable when its cycle opens on day T (`loop.py`: `cycle_open <= day <
+cycle_close`), and NPCI wants ≥24h between notification and debit. **So the
+earliest legal presentation is T+1, and the compliant rendering of the
+documented schedule is T+1…T+4.**
+
+The pre-debit notification requirement **costs a full day off the front of every
+retry window, on every mandate, forever.** That is a compliance-versus-recovery
+tension nobody in this project had noticed, and it is measured rather than
+argued.
+
+⚠️ **It also means the agent forfeits the due date by construction**, on every
+mandate, because it only starts thinking on day T. A real merchant knows the due
+date a month ahead and notifies before it. Fixing that needs a notification
+issued for cycle N+1 while cycle N is still open, which collides with the
+one-pending-notification rule. **Not built. Recorded as the next open question
+about the agent rather than about the world.**
+
+## The measurement
+
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`FITTED_BELIEF`. 32 runs, ~106s.*
+`python agent/tests/test_recovery_rates.py`
+
+| spend | arm | cycle_rec | 1st-pres fail | recovery | ≤10 days | survival |
+|---|---|---|---|---|---|---|
+| 1.05 | agent | 95.56% | 68.71% | **90.55%** ±1.63 | 37.0% | 97.2% |
+| 1.05 | fixed schedule | 33.92% | 68.71% | **16.35%** ±1.41 | 100.0% | **32.1%** |
+| 0.80 | agent | 99.67% | 13.68% | **97.38%** ±1.06 | 41.8% | 99.8% |
+| 0.80 | fixed schedule | 76.64% | 13.68% | **27.85%** ±1.92 | 100.0% | 76.6% |
+
+## Two validation targets hit, neither fitted
+
+At `pop_spend=0.80`:
+
+| | measured | published | |
+|---|---|---|---|
+| **V1** first-presentation failure | **13.68%** | 8–15% | **HIT** |
+| **V3** recovery, fixed-interval retries | **27.85%** | 20–40% | **HIT** |
+| V5 recovery, smart retries | 97.38% | 70–85% | MISS, too high |
+| V7 recoveries inside 10 days | 41.84% | 85–95% | MISS, too slow |
+
+**Two independent published bands, from sources this project never fitted to,
+both hit at the same calibration.** V1 is a property of the world; V3 is a
+property of a baseline policy running in it. They are different quantities from
+different parts of the model and they agree with the outside record together.
+That is the strongest evidence this project has produced that the world is
+worth anything, and it is worth more than the +36 headline it has been leading
+with.
+
+**The two misses are one missing mechanism, and it is the same one W0 already
+pointed at.** Recovery is too high AND too slow because the money always
+arrives eventually — the oracle is 100% at every calibration, so no customer is
+ever unable to pay. **W2 is now indicated by four separate measurements.**
+
+## MANDATE DEATH is the mechanism, and it is the business story
+
+The fixed schedule spends all four attempts inside four days of the due date,
+hits the NPCI cap while the account is still empty, and the mandate dies —
+forfeiting every remaining billing cycle.
+
+**Survival: 32.1% for the fixed schedule against 97.2% for the agent** at
+spend 1.05; 76.6% against 99.8% at 0.80. At the realistic calibration the fixed
+schedule destroys **23.4%** of mandates over 120 days, against a published
+~18% mandate cancellation rate — the right order of magnitude, from a mechanism
+nothing was fitted to.
+
+**"Dunning harder costs you the customer" is now measured rather than asserted**,
+and it is the argument for the agent that does not depend on the +36 number at
+all.
+
+## R-3 corrected
+
+R-3 was registered against `payday_wait` and the 20–40% fixed-interval band.
+**That was a mis-assignment**: `payday_wait` times its attempts to an estimated
+payday, so it is a *smart* baseline and belongs against the 70–85% band, not
+the fixed-interval one. The 20–40% band belongs to `doc_legal`, which is what
+was measured. `payday_wait` still has no recovery rate — it lives in the
+harness, which emits no per-cycle record.
+
+## How this could be biased toward the answer I want
+
+- V1 and V3 are two bands from vendors selling recovery software, one of which
+  states in its own methodology note that its figures are ranges rather than
+  laws. Hitting both is **corroboration**. It is not validation, seven targets
+  remain unmeasured, and a third band (V5) is missed by 12 points.
+- `pop_spend=0.80` was not chosen to hit these bands, but it is now the
+  calibration two hits are being claimed at, and **the next person to tune
+  anything at 0.80 will be fitting to them**. Say so before touching it.
+- The at-risk denominator still excludes technical declines and the decline
+  taxonomy, so every recovery rate here is flattered.
+- The fixed-schedule arm cannot present on the due date. A real card-dunning
+  system can, and the published 20–40% band comes from systems that do — so
+  V3's hit is against a baseline handicapped in a way the published one is not.

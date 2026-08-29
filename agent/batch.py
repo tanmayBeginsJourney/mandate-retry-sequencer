@@ -33,6 +33,7 @@ from agent.execution.sim_executor import (DeclineMix, OutageSchedule,
                                           SimExecutor)
 from agent.llm.fallback import RetryOnlyDiagnoser, RuleBasedDiagnoser
 from agent.loop import run_agent
+from agent import metrics
 from agent.policy.belief_book import BeliefBook
 from agent.policy.timing import DEFAULT_DISCOUNT
 
@@ -53,6 +54,21 @@ def make_pop(n: int, k: int, pop_seed: int, spend: float = 1.05,
     """Deterministic in its seed, exactly as `sim/runner.py` relies on."""
     return w3.make_pop(n, k, np.random.default_rng(pop_seed), days=days,
                        spend=spend, **kw)
+
+
+def at_risk_cycles(pop, seed: int, payday_err: int = 7) -> dict:
+    """The world's revenue-at-risk set, without running a policy.
+
+    Exposed HERE rather than imported from `agent.execution` by the caller,
+    because gate I2 permits only this module and `constraints/stage0.py` to
+    hold an executor -- and the right answer to "a test needs the world" is to
+    route it through the composition root, not to widen the exempt list. The
+    exempt list is for tests that must BUILD an executor to exercise the gate;
+    this needs the world's opinion, which is a different thing.
+
+    {(mandate_uid, cycle): due_day}. See `SimExecutor.at_risk_cycles`.
+    """
+    return SimExecutor(pop, seed, payday_err).at_risk_cycles()
 
 
 def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
@@ -143,6 +159,22 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                 fallback=diagnoser, log=log,
                 max_live_calls=llm_max_calls)
 
+    # THE BASELINE ARM. `mode="doc_legal"` swaps the belief-driven index for a
+    # fixed daily schedule. Everything else -- Stage 0, the audit trail, the
+    # recovery metric -- is identical, which is the only way its recovery rate
+    # is comparable to the agent's. It still builds a BeliefBook it never
+    # consults, so that the RNG stream and the loop shape are unchanged and the
+    # two arms differ in exactly one thing.
+    scheduler = None
+    if mode == "doc_legal":
+        from agent.policy.fixed_schedule import propose_fixed
+        scheduler = propose_fixed
+        # FORCED, not defaulted. The diagnoser was already chosen above, and a
+        # fixed schedule that could also nudge, escalate or stop is not a fixed
+        # schedule -- it would carry part of the agent's action space into the
+        # arm it is supposed to be the control for.
+        diagnoser = RetryOnlyDiagnoser()
+
     book = BeliefBook(pop[0]["cycle_days"], pop[0]["days"], pop_spend, bcfg)
     # The monitor's base rate is the harness's P_TECH, not a number of ours.
     #
@@ -206,7 +238,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                     discount=discount, log_ticks=log_ticks,
                     time_major=time_major, collect_calib=collect_calib,
                     pause_on_outage=pause_on_outage,
-                    suppress_tech_updates=suppress_tech_updates)
+                    suppress_tech_updates=suppress_tech_updates,
+                    scheduler=scheduler)
     res["run_id"] = run_id
     res["log_path"] = log_path
     res["mode"] = mode
@@ -217,6 +250,28 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     res["exec_tech_total"] = executor.n_tech
     res["exec_code_counts"] = dict(executor.code_counts)
     res["exec_terminal_attempts"] = executor.n_terminal_attempts
+
+    # ---- RECOVERY-RATE METRICS (docs/04_BUILD_PLAN.md W0)
+    # The composition root is the only module that holds both the world and the
+    # policy's result, which is exactly why the join happens here: gate I2
+    # forbids anything else under `agent/` from importing `agent.execution`,
+    # so `agent/metrics.py` is arithmetic over two dicts and never sees either.
+    # `at_risk_cycles()` depends only on (pop, seed), so every arm on the same
+    # population shares this denominator and the arms stay comparable.
+    if hasattr(executor, "at_risk_cycles"):
+        amounts = {f"c{ci}m{mi}": m["amount"]
+                   for ci, c in enumerate(pop)
+                   for mi, m in enumerate(c["mandates"])}
+        rec = metrics.compute(executor.at_risk_cycles(),
+                              res.pop("collected_cycles"),
+                              res["cycles_due"], amounts)
+        res["recovery"] = rec.as_dict()
+    else:
+        # A backend that is not the simulation cannot answer the counterfactual
+        # "would a due-date debit have cleared" -- only the real rail knows, and
+        # it was never asked. Absent, rather than zero.
+        res.pop("collected_cycles", None)
+        res["recovery"] = None
     st = getattr(diagnoser, "stats", None)
     if st is not None:
         res["llm_n_llm"] = st["n_llm"]
