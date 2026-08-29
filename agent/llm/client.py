@@ -40,25 +40,66 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
+def _load_dotenv() -> None:
+    """Read `.env` from the repo root into os.environ, without overwriting.
+
+    A key belongs in a file that is gitignored, not in a shell history and not
+    in a source file. `.env` is in `.gitignore`; this reads it once at import so
+    that `python agent/eval/run_eval.py --llm` works without the caller having
+    to export anything, and an already-set environment variable always wins so
+    a deliberate override is never silently ignored.
+
+    NOTHING HERE EVER PRINTS A KEY. The only thing any output says about it is
+    whether one was found.
+    """
+    import agent as _a
+    path = os.path.join(_a._PKG_ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, val = line.partition("=")
+                k, val = k.strip(), val.strip().strip("\"'")
+                if k and k not in os.environ:
+                    os.environ[k] = val
+    except OSError:
+        pass
+
+
 DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4"
 DIAGNOSER_MODEL = "glm-5.3-flash"
 JUDGE_MODEL = "glm-5.3"
 
-#: USD per million tokens, (input, output). [REPORTED] from Z.ai's published
-#: pricing, 29 August 2026, INCLUDING the promotional halving that runs to
-#: 9 September 2026 and therefore covers this project's whole window. Cached
-#: input is $0.015/Mtok for the Flash SKU.
+#: USD per million tokens, (input, output).
 #:
-#: The judge SKU's price is NOT recorded here as a number we are confident in.
-#: `glm-5.3` is the larger model and costs more; the exact figure was not
-#: verified, so `report_cost` prints the token counts unconditionally and marks
-#: any cost computed from an unverified price as an ESTIMATE. Rule 5: a
-#: constant with no source is not quoted as if it had one.
+#: [VERIFIED] 29 August 2026 from https://docs.z.ai/guides/overview/pricing
+#: read directly:
+#:   glm-5.3-flash  $0.075 in / $0.25 out, cached input $0.015. That is a 50%
+#:                  promotional discount off $0.15 / $0.50 / $0.03, running to
+#:                  24:00 on 9 September 2026 (UTC+8) -- which covers this
+#:                  project's whole window, so the promo price is the one that
+#:                  applies and the list price is recorded beside it.
+#:   glm-5.3        $1.4 in / $4.4 out, cached input $0.26. Standard pricing;
+#:                  no promotion. THE JUDGE IS ~19x THE DIAGNOSER PER INPUT
+#:                  TOKEN, which is why it runs once per case and the diagnoser
+#:                  runs on everything.
+#:
+#: This table was `(None, None)` for the judge until the price was actually
+#: read. An unpriced call is reported as unpriced rather than estimated --
+#: rule 5, a constant with no source is not quoted as if it had one.
 PRICES_USD_PER_MTOK = {
-    DIAGNOSER_MODEL: (0.075, 0.25),          # [REPORTED], promo price
-    JUDGE_MODEL: (None, None),               # not verified. Tokens only.
+    DIAGNOSER_MODEL: (0.075, 0.25),          # [VERIFIED], promo to 9 Sep 2026
+    JUDGE_MODEL: (1.4, 4.4),                 # [VERIFIED], standard pricing
 }
-CACHED_INPUT_USD_PER_MTOK = {DIAGNOSER_MODEL: 0.015}
+LIST_PRICES_USD_PER_MTOK = {                 # what it costs after the promo
+    DIAGNOSER_MODEL: (0.15, 0.50),
+    JUDGE_MODEL: (1.4, 4.4),
+}
+CACHED_INPUT_USD_PER_MTOK = {DIAGNOSER_MODEL: 0.015, JUDGE_MODEL: 0.26}
 
 
 @dataclass
@@ -164,6 +205,8 @@ class ZaiClient:
                  temperature: float = 1.0, top_p: float = 0.95,
                  timeout_s: float = 60.0, max_retries: int = 2):
         self.model = model
+        if not api_key:
+            _load_dotenv()
         self.api_key = api_key or os.environ.get("ZAI_API_KEY", "")
         self.base_url = (base_url or os.environ.get("ZAI_BASE_URL")
                          or DEFAULT_BASE_URL).rstrip("/")
