@@ -50,9 +50,6 @@ where the simple baseline wins. Static page, no build step:
 
 ## Does the simulation resemble reality?
 
-This is the question that decides whether anything above is worth reading, and
-it deserves an answer better than "trust me."
-
 There is **no public benchmark** for payment retry scheduling — no shared
 dataset, no held-out set, no leaderboard. What exists is a set of aggregate
 statistics published by companies that sell recovery software. They are
