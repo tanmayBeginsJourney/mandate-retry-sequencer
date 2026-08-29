@@ -266,8 +266,8 @@ counter has **no test that runs the simulator at all.**
 ## ⚠️ M4 IS VACUOUS TOO, AND IT REPORTS PASS. Declared 28 August 2026.
 
 The mutation tier's whole premise is that a mutant creates an illegal *state*
-and a separate piece of code notices. Two of the five mutants increment the
-counter themselves:
+and a separate piece of code notices. Two of the five mutants USED TO increment
+the counter themselves (**both repaired 30 August 2026; M4B is green**):
 
 ```
 harness.py:610-612   if mutate == "pending":    ... V.pending   += 1

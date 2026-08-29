@@ -23,9 +23,10 @@ these is a mistake you can make while every test still passes.
    mandate. That sharing *is* the cross-merchant moat. Build it per-mandate and
    you have silently built `solo_pop_pd` — the arm the moat is measured
    against — and you are **9.53 points worse** with nothing to tell you. §3.
-2. **Two of the five Stage 0 rules have no working test** — the attempt cap
-   and the pending notification. Do not claim either in the pitch, and do not
-   treat the harness's counters for them as a spec you can port. §4.
+2. ~~**Two of the five Stage 0 rules have no working test**~~ ✅ **RESOLVED
+   30 August 2026.** M1 runs at `cap_override=2`; the `pending` and
+   `represent` mutants no longer grade themselves. All five rules are tested
+   and the suite has 0 vacuous gates. §4.
 3. **Do not say "within 4.4 points of a clairvoyant oracle."** The oracle gap
    is now that small, and this project's error 5 was *exactly* a near-zero
    oracle gap produced by a broken oracle. `02_RESULTS.md` under "Other
@@ -424,6 +425,8 @@ have no working test.** Peak-hour, notification-lead and Z9 re-presentation are
 genuinely tested and are safe to claim. See `06_MODEL_CARD.md` §4 and
 `sim/known_failures.txt` under `M4B`.
 
+✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
+
 ---
 
 ## 5. The freeze
@@ -536,12 +539,13 @@ scripts/prove_stage0_refuses.py  Stage 0 refusing a real Razorpay debit,
 2. **RUN EVERY BATCH THROUGH `agent/tests/_parallel.py`.** One process per run,
    `max_tasks_per_child=1`. Long-lived processes crash on this machine and the
    root cause is unknown. `06_MODEL_CARD.md` §6a has the evidence.
-3. **Two of the five Stage 0 rules still have no working test in `sim/`** (the
-   attempt cap and the pending notification). `agent/` now has its own working
-   tests for both, written from the rule text in `01_FACTS.md` rather than
-   ported from the harness - `test_stage0_enforces.py`. Those are the only
-   working tests either rule has anywhere in this repo. **The pitch ban stands
-   for the `sim/` claims.**
+3. ~~**Two of the five Stage 0 rules still have no working test in `sim/`**~~
+   ✅ **RESOLVED 30 August 2026.** M1 runs its mutant at `cap_override=2` so
+   the attempt-cap counter binds, and the `pending` and `represent` mutants
+   create illegal state instead of writing the counters they are graded on.
+   **All five rules are now tested in `sim/` as well as in `agent/`
+   (`test_stage0_enforces.py`), M4B is green, and the suite has 0 vacuous
+   gates. The pitch ban is lifted.**
 4. **The agent's headline is a CAPABILITY claim, not a recovery number.**
    `06_MODEL_CARD.md` §6d. Do not let it drift into "money recovered".
 

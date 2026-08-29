@@ -1,49 +1,49 @@
 # 04 — BUILD PLAN
 
-Deadline **5 September 2026**. Day 1 was 27 August; **today is 29 August.**
-The simulation is finished and frozen, and `agent/` is complete. Seven days
-remain and the remaining work is all presentation.
+**Deadline 5 September 2026. Read `docs/00_HANDOFF.md` first for state; this
+file is what to DO.**
 
-**Rule: if a task does not move us toward a running agent with an audit trail
-and a measured batch result, it is out of scope.**
+---
 
-## PROGRESS — updated 29 August 2026, end of day
+# THE QUEUE — start at the top. Updated 30 August 2026.
 
-**The plan below is running about five days ahead of itself.** Days 3-7 are
-done; what is left is the architecture doc and the pitch.
+Ordered by how much each moves the submission, not by how interesting it is.
+**Every item below is fixable.** Things that genuinely are not fixable live in
+the README's Limitations section and nowhere else.
 
-| Day | Planned | State |
-|---|---|---|
-| 3 | `agent/` skeleton, wire in the frozen policy | **DONE.** Bit-exact with `harness.run` on 24/24 runs |
-| 4 | Stage 0 as enforced middleware | **DONE.** Refuses; `prove_stage0_refuses.py` shows it refusing a REAL Razorpay debit with zero network |
-| 5 | Audit log queryable; stopping rules explicit | **DONE.** Append-only JSONL, 8 stop rules, `python -m agent.demo` |
-| 6 | LLM layer | **DONE.** `glm-5.3-flash` diagnosing, `glm-5.3` judging, $0.26 spent, caches committed so it replays offline for $0 |
-| 7 | The batch number | **DONE.** 94.36% vs `payday_wait` 57.70%, +36.66 pts, reproduced on a clean clone in 47s. Top-up sweep still not redone on `w3` (A1, still open) |
-| 8 | Architecture doc | **not started** — the last real deliverable |
-| 9 | Pitch video | **not started** |
-
-**Also done, and not in any plan:** a second executor backend against
-Razorpay's real API (`agent/execution/razorpay_executor.py`, gated offline,
-never called Razorpay), a static public page (`docs/index.html`), and a README.
-**Both the README and the page were rewritten on 29 August and are no longer
-drafts.**
-
-## What is actually left, 29 August 2026, end of day
-
-Ordered by what a judge sees first, not by what is most interesting to build.
-
-| # | Item | State | Why it ranks here |
+| # | Item | Why it ranks here | State |
 |---|---|---|---|
-| 1 | **Push to a public GitHub remote** | `git remote -v` is **empty** | A public repo is a stated deliverable. 28 commits, including the PRE-REGISTER ones, are invisible until this happens. Minutes of work. |
-| 2 | **Restate the headline as conditional on world hardness** | not started | The README and the page both open with `+36.66 pts`, measured in a world where 60% of debits fail. `02_RESULTS.md` now has the sweep; the two judge-facing artifacts do not. A Razorpay judge reaches this objection unaided. |
-| 3 | **Architecture doc** | not started | The last unstarted judged deliverable. |
-| 4 | **A judge-facing entry point to `docs/`** | not started | Eight files, 4,600 lines, all written for the next engineer. Nothing tells a judge which three to open. |
-| 5 | **Pitch video** | not started | |
-| 6 | Adjudicate the 19 judge-vs-author disagreements | open item 0b | The eval's only validation step. |
-| 7 | Sweep `reasoning_effort` | open item 0c | Every LLM score is at `low`; 10/21 may be a floor. |
+| **1** | **W7 — transient failures** | The only item that moves **three** validation targets at once (V3, V5, V7). Also the answer to why a 4-day fixed schedule recovers 20–40% in the real world and ~19% here. | specced below, registered |
+| **2** | **W5 — decline taxonomy ON by default** | Nearly free; `DeclineMix` already exists and the headline batch runs it at zero. It is why the LLM does not move the money: with every failure being insufficient funds there is nothing to diagnose. Turning it on makes the diagnosis layer load-bearing. | code exists, switched off |
+| **3** | **W9 — measure the non-pooled configuration** | Cross-merchant pooling is worth +9.53 pts and its legality is unresolved (`01_FACTS.md`). `solo_pop_pd` already exists, so the compliant-by-default number is one run away. Ship pooling as consent-gated with a measured price rather than as an assumption. | policy arm exists |
+| **4** | **W1 — declare the operating point** | Do this *after* W7, not before: transients change the failure mix, so any calibration chosen now is chosen against a world that is about to move. | blocked by W7 |
+| **5** | **Architecture doc** | A judged deliverable and the only one never started. | not started |
+| **6** | **W6 — due dates that cluster near paydays** | Fixes V7's remaining gap. Partly subsumed by W7; re-measure before building. | specced below |
+| **7** | **W8 — simulate the two Razorpay decline states** | `funds_blocked_by_mandate` and `deemed_transaction` are routed by the diagnosis layer but modelled by nothing. Add them to `DeclineMix` at swept rates, exactly like every other family. | not started |
+| **8** | **The agent forfeits the due date** | It only becomes actionable on day T and needs 24h notice, so it can never present on T. A real merchant notifies ahead of a due date it has known for a month. Needs a notification for cycle N+1 while cycle N is open, which collides with the one-pending-notification rule. | diagnosed, not built |
+| **9** | **Pitch video** | | not started |
+| 10 | Sweep `reasoning_effort` | Every LLM score is at `low`; 10/21 may be a floor. | not started |
+| 11 | Adjudicate the 19 judge-vs-author disagreements | The eval's only validation step. | not started |
 
-**Leave `sim/` frozen.** The spend sweep that produced item 2 is additive and
-read-only (`scripts/spend_sweep.py`); it changes no frozen byte.
+**Recently closed, so nobody re-opens them:**
+
+- **W0 — the recovery-rate metric.** Done. `agent/metrics.py`,
+  `test_recovery_metric.py` (5 checks, 5 mutants), `test_recovery_rates.py`.
+- **W2 — insolvent customers.** Done, 5/5 pre-registered.
+  `p_missed_credit`, guarded and inert at 0.0.
+- **The fixed-schedule baseline.** Done. `agent/policy/fixed_schedule.py`.
+- **M1 and M4B — the two Stage 0 rules with no working test.** **FIXED
+  30 August 2026.** M1 runs its mutant at `cap_override=2` so the attempt-cap
+  counter actually binds; the `pending` and `represent` mutants no longer
+  increment the counters they are graded on. **The suite went from 6 red gates
+  to 4, and from 1 vacuous to 0.** All four remaining reds are findings, not
+  debt — see `sim/known_failures.txt`.
+
+**Do not re-add an item to the README's Limitations section because it is
+open.** Open work belongs here. The README lists only what cannot be fixed from
+where this project stands: no obtainable real data, unpublished decline
+frequencies, unresolved law, two structurally-unfittable calibration gates, and
+compute-bound sample size.
 
 ---
 
@@ -95,24 +95,6 @@ the next thing to build.
 
 ### The original statement of W0, kept
 
-## W0. The recovery-rate metric — prerequisite for everything else
-
-Every published figure in the space is a **recovery rate**: of the payments
-that *failed*, what fraction was eventually collected. This project reports
-**cycles collected / cycles due**, which counts cycles that never failed at
-all. **The two cannot be compared, and the project currently has no number that
-maps onto any external figure.**
-
-Add, derived from the audit log, changing no policy:
-
-- `recovery_rate` — of mandate-cycles whose first presentation failed, the
-  fraction collected before the cycle closed
-- `days_to_recovery` — the distribution, so the "~90% of recoveries land inside
-  10 days" figure becomes checkable
-- `first_presentation_failure_rate` — the world's headline realism number
-
-Cost: no re-runs. It is a second read over trails that already exist.
-
 ## W1. A declared operating point, rather than an emergent one
 
 Today the first-presentation failure rate is a *side effect* of `pop_spend`,
@@ -133,7 +115,12 @@ Cost: every headline re-runs. The sweep in `02_RESULTS.md` already shows the
 shape, so there are no surprises waiting — at ~15% failure the agent is worth
 about +6 points, at ~60% about +36.
 
-## W2. Customers who genuinely cannot pay
+## W2. Customers who genuinely cannot pay — ✅ DONE 30 August 2026
+
+*Built as `p_missed_credit`, swept {0.00, 0.03, 0.08}, guarded so it is
+inert at 0.0. 5/5 pre-registered. `agent/tests/test_insolvency_sweep.py`.
+The result argued against adopting it as the default calibration — see
+`NOTES.md`, 30 August. Spec kept below for the reasoning.*
 
 Today the oracle is **100% at every calibration tested**: every mandate-cycle
 is winnable on some day, so the agent solves a pure *timing* problem and never
@@ -236,6 +223,39 @@ dates near paydays makes the world easier — more debits succeed on the due dat
 so the at-risk set shrinks and **the agent has less left to win**. Expect the
 headline gap to fall. That is the correct direction: the current uniform offset
 is quietly inflating the problem the agent is solving.
+
+## W8. Simulate the two Razorpay decline states
+
+`funds_blocked_by_mandate` (the money is there and another mandate has claimed
+it) and `deemed_transaction` (the response was lost; the customer may already
+have been charged) are routed by the diagnosis layer and modelled by nothing.
+Add both to `DeclineMix` at **swept** rates, exactly as `p_account_shut`,
+`p_mandate_broken` and `p_limit` already are. No source gives a frequency for
+either, which is an argument for sweeping — not for leaving them unmodelled.
+
+Both are cases a timing score cannot express, so they are where the diagnosis
+layer's value should show up. `deemed_transaction` in particular has an
+asymmetric cost: retrying risks a double debit, which is worse than not
+collecting.
+
+## W9. Measure the non-pooled configuration, and make pooling consent-gated
+
+Cross-merchant pooling — one belief per **customer** rather than per mandate —
+is worth **+9.53 pts** and is the largest single component of the result. Its
+legality is unresolved, and the review recorded in `01_FACTS.md` (LLM-generated,
+unverified, treat with care) points at merchant segregation under the RBI PA
+Directions 2025 and at per-merchant mandate identity under NPCI's October 2025
+Merchant Identifier Code circular.
+
+**`solo_pop_pd` already exists** — one belief per mandate, no pooling. So:
+
+1. Run it beside the shipping policy and report both numbers everywhere.
+2. Make the non-pooled arm the **default** configuration, with pooling an
+   explicit opt-in gated on consent.
+3. State the price of compliance in points rather than leaving it implied.
+
+That turns an unresolved legal question from a hole in the argument into a
+product decision with a measured cost, and it is one run away.
 
 ---
 

@@ -7,8 +7,21 @@
 # reason and only while someone intends to fix it. Adding a line here to make
 # a red suite go green is the same offence as loosening a threshold.
 #
-# Baseline 2026-08-28, after the handoff audit added M4B:
-# 25 gates, 5 FAIL, 1 VACUOUS, 19 pass.  Verified by a --tier full run.
+# Baseline 2026-08-30, after M1 and M4B were FIXED:
+# 25 gates, 4 FAIL, 0 VACUOUS, 21 pass.  Verified by a --tier full run.
+#
+# M1 and M4B were removed from this file on 30 August 2026 because they were
+# repaired, not tolerated. M1 now runs its mutant at cap_override=2, so the
+# attempt-cap counter is exercised instead of never binding. The `pending` and
+# `represent` mutants no longer increment the counters they are graded on --
+# they create illegal state and the harness's own independent checks catch it,
+# which is what CLAUDE.md rule 1a requires. Both Stage 0 rules that previously
+# had NO working test in sim/ now have one.
+#
+# The four that remain are findings, not debt: two calibration gates that fail
+# on monotonicity for structural reasons no parameter can fix, one retired
+# architecture kept red on purpose, and one negative control that turned out
+# not to be neutral.
 #
 # Every figure quoted in the reasons below is from a --tier full run on
 # 28 August 2026. They were stale once: this file carried S2b at -14.51,
@@ -30,27 +43,6 @@ S1
 # overconfident at the top (predicted 0.998, actual 0.919 at n=5873).
 # Unchanged by the 27 August rebuild. Untouched, still the one failure the
 # handoff declared.
-
-# ---------------------------------------------------------------------------
-M1
-# "5th attempt in a cycle" mutant.  Status: VACUOUS at BOTH pe=1 and pe=7.
-#
-# Diagnosed 2026-08-27: the mutant works, but the attempt cap is never the
-# binding constraint. The deepest any mandate-cycle reaches is 3 attempts at
-# pe=1 and 4 at pe=7, against NPCI_MAX=4, so the 5th attempt that would trip
-# the counter never happens. Moving the gate to the contended operating point
-# was tried and did NOT fix it -- this was predicted in advance, see the
-# pre-registration in NOTES.md.
-#
-# Consequence, unchanged: the cap-violation counter in sim/harness.py
-# (`if ledger[lk] >= cap:`) is the ONLY detector of a 5th attempt, M1 is the
-# only gate that proves that detector works, and T7's cap clause reads the
-# same counter -- so both cap gates are exactly as strong as M1, i.e. unproven.
-# Do not quote the NPCI attempt-cap compliance claim until this is fixed.
-#
-# Next thing to try (NOT yet done, needs sign-off): run the mutant with
-# cap_override=2, where the cap does bind at this operating point. That tests
-# the counter mechanism rather than the NPCI-specific value of 4.
 
 # ---------------------------------------------------------------------------
 S2b
@@ -133,59 +125,3 @@ S1_PD
 # Do NOT loosen the 0.10 bound; ECE is already well inside it. The gate fails
 # on monotonicity and raising the ECE bound would only hide which half is
 # broken.
-
-# ---------------------------------------------------------------------------
-M4B
-# "no mutant writes the counter it is graded on".
-# Currently FAIL: M4(pending->V.pending), M5(represent->V.represent).
-#
-# ADDED 2026-08-28 by the handoff audit. This is the fourth time this project
-# has shipped a guardrail that passed by construction, and the first time the
-# guardrail was a MUTATION test -- the thing whose entire job is to be
-# adversarial.
-#
-# M1-M5 each run a mutant and require vdetail[field] to move. That is evidence
-# only if the mutant creates an illegal STATE and a DIFFERENT piece of code
-# notices. Two of the five increment the counter themselves:
-#
-#   sim/harness.py:610-612   mutate == "pending"   -> V.pending += 1
-#   sim/harness.py:331-333   mutate == "represent" -> V.represent += 1
-#
-# Measured on an instrumented copy of the harness (portfolio, pop P, seed 7):
-#
-#   mutate='pending'    1066 counted, 1066 self-written, 0 independent.
-#                       The independent branch is `if m["pend"] is not None`
-#                       at harness.py:607, and `live` at harness.py:349-351
-#                       has ALREADY filtered `m["pend"] is None`, so it is
-#                       unreachable for every policy. M4 IS VACUOUS and has
-#                       been reporting PASS.
-#   mutate='represent'   608 counted, 304 self-written, 304 independent.
-#                       M5 still binds -- the dispatch-time check at
-#                       harness.py:262 finds it -- but the reported count is
-#                       inflated 2x.
-#
-# CONSEQUENCE, and it is the same shape as M1's: the one-pending-notification
-# constraint has NO working test. Do not put pending-notification compliance
-# in the pitch or the architecture doc, for exactly the reason the attempt cap
-# is already banned. Two of the five Stage 0 rules are now unproven.
-#
-# WHY IT IS NOT FIXED HERE. The fix is in sim/harness.py -- delete the two
-# self-writes and make the pending check independent of `live` -- and
-# sim/harness.py is FROZEN until 5 September (CLAUDE.md, tag `model-frozen`).
-# Removing the self-writes would also change M4/M5's reported counts, which
-# would move gate T9's reference. That is a model change, not a doc fix, and
-# it needs sign-off from Tanmay.
-#
-# WHEN THE FREEZE LIFTS, in this order:
-#   1. delete `V.pending += 1` from the mutate branch (harness.py:612) and
-#      `V.represent += 1` from harness.py:333.
-#   2. give `pending` a detector that `live` cannot pre-satisfy -- count at
-#      dispatch, from the harness's own record, the way cap/peak/lead do.
-#   3. re-run M4. If it now reports VACUOUS, that is the TRUE state and it
-#      belongs in this file under its own heading, not hidden by a self-write.
-#   4. re-baseline T9 with sim/t9_reference.py --recapture and paste the diff
-#      into NOTES.md.
-#
-# Do NOT "fix" M4B by deleting it, by exempting a mutant, or by making the
-# detector stop looking at `represent`. It reports VACUOUS if it ever flags
-# all five, which is its own falsifiability check.

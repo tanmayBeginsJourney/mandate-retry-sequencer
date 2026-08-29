@@ -160,12 +160,26 @@ def paired(a, b):
     return float(d.mean()), float(2 * se)
 
 
+# (id, mutation, counter it is graded on, description, operating point, extra kw)
+#
+# M1 CARRIES cap_override=2, AND THAT IS THE WHOLE GATE. Fixed 30 August 2026,
+# after the freeze lifted. At the NPCI cap of 4 the deepest any mandate-cycle
+# reaches is 4 attempts, so a "5th attempt" mutant can never create illegal
+# state and M1 reported VACUOUS from 27 August onward -- the attempt-cap
+# constraint had no working test anywhere in sim/. Lowering the cap to 2 makes
+# a 3rd attempt illegal, which the mutant does reach.
+#
+# WHAT THIS TRADES. The gate now proves the cap COUNTER binds, not that the
+# specific value 4 is enforced. That is strictly more than it proved before
+# (nothing) and strictly less than the NPCI-specific claim, so read it as
+# "the mechanism works at whatever cap it is given". w3.NPCI_MAX = 4 is
+# asserted separately by sim/verify_brief.py.
 MUTANTS = [
-    ("M1", "cap", "cap", "5th attempt in a cycle", PE_CONT),
-    ("M2", "peak", "peak", "dispatch inside a peak hour", PE_FLAT),
-    ("M3", "lead", "lead", "<24h notification lead", PE_FLAT),
-    ("M4", "pending", "pending", "second pending notification", PE_FLAT),
-    ("M5", "represent", "represent", "Z9 re-presented under old notice", PE_FLAT),
+    ("M1", "cap", "cap", "attempt past the cap", PE_CONT, dict(cap_override=2)),
+    ("M2", "peak", "peak", "dispatch inside a peak hour", PE_FLAT, {}),
+    ("M3", "lead", "lead", "<24h notification lead", PE_FLAT, {}),
+    ("M4", "pending", "pending", "second pending notification", PE_FLAT, {}),
+    ("M5", "represent", "represent", "Z9 re-presented under old notice", PE_FLAT, {}),
 ]
 
 T9_POLICIES = t9_reference.POLICIES
@@ -182,9 +196,9 @@ def plan_jobs(tier):
                      POP_SPECS[pop_key], seed, kw))
 
     # Tier 1 mutants
-    for _tid, mut, _f, _d, pe in MUTANTS:
-        J("portfolio", "P", 7, payday_err=pe)
-        J("portfolio", "P", 7, mutate=mut, payday_err=pe)
+    for _tid, mut, _f, _d, pe, kw in MUTANTS:
+        J("portfolio", "P", 7, payday_err=pe, **kw)
+        J("portfolio", "P", 7, mutate=mut, payday_err=pe, **kw)
     J("portfolio", "P", 7)
     J("portfolio", "P", 7, mutate="leak_bal")
     J("oracle", "P", 7)
@@ -236,9 +250,10 @@ def plan_jobs(tier):
 # ============================================================ TIER 1: MUTANTS
 def tier1():
     print("\n--- Tier 1: mutation tests (do the gates actually fire?) ---")
-    for tid, mut, field, desc, pe in MUTANTS:
-        clean = R("portfolio", "P", 7, payday_err=pe)["vdetail"][field]
-        dirty = R("portfolio", "P", 7, mutate=mut, payday_err=pe)["vdetail"][field]
+    for tid, mut, field, desc, pe, kw in MUTANTS:
+        clean = R("portfolio", "P", 7, payday_err=pe, **kw)["vdetail"][field]
+        dirty = R("portfolio", "P", 7, mutate=mut, payday_err=pe,
+                  **kw)["vdetail"][field]
         if clean != 0:
             record(tid, desc, FAIL, f"pe={pe}: clean run already violates ({clean})")
         elif dirty == 0:
@@ -339,9 +354,9 @@ def gate_m4b():
     `model-frozen`). Listed in sim/known_failures.txt until 5 September.
     """
     self_written = mutant_written_counters()
-    fields = {tid: field for tid, _mut, field, _d, _pe in MUTANTS}
+    fields = {tid: field for tid, _mut, field, _d, _pe, _kw in MUTANTS}
     flagged, clean = [], []
-    for tid, mut, field, _desc, _pe in MUTANTS:
+    for tid, mut, field, _desc, _pe, _kw in MUTANTS:
         if field in self_written.get(mut, set()):
             flagged.append(f"{tid}({mut}->V.{field})")
         else:

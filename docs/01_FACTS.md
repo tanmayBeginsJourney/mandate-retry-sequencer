@@ -269,8 +269,53 @@ difference between `[VERIFIED]` and "it works".
   before repeating.**
 - `[GUESS]` Whether a payment aggregator may use Merchant A's transaction
   outcomes to schedule Merchant B's debit for the same customer. **This is the
-  legal basis for our entire moat and it is unresolved.** Nobody has read
-  Razorpay's privacy policy, their merchant terms, or the RBI PA/PG directions.
+  legal basis for the moat and it is unresolved.**
+
+  ### What a legal review turned up, 30 August 2026
+
+  ⚠️ **SOURCE DISCIPLINE FIRST. The analysis below is LLM-generated and was not
+  written by a lawyer or checked against the primary documents.** It is
+  `[REPORTED]` at best, every citation in it is unverified, and it must not be
+  presented as legal advice or as a settled reading. It is recorded because it
+  is more specific than the previous "nobody has read the terms", and because
+  it changes what the project should ship.
+
+  - `[REPORTED]` **No single Indian statute or RBI circular states the
+    prohibition directly.** There is no Indian analogue to the Visa
+    "transaction laundering" rule for this scenario.
+  - `[REPORTED]` **UPI AutoPay mandates are structurally per-merchant.** Each
+    is bound to a merchant identity, reportedly validated through a Merchant
+    Identifier Code derived from PAN (NPCI circular, October 2025), and the
+    1-execution-plus-3-retries framework applies to each mandate in isolation.
+    **The NPCI specification contains no cross-mandate or cross-merchant retry
+    logic** — a Spotify mandate and a Netflix mandate are separate instructions
+    to the payer's bank, and the architecture provides no hook for one to
+    influence the other.
+  - `[REPORTED]` **RBI's consolidated Payment Aggregator Directions, 2025**
+    impose data sovereignty, consumer-protection and transparency obligations,
+    and **merchant segregation** across onboarding, KYC and transaction
+    monitoring. Using one merchant's outcomes to schedule another's debits is
+    cross-merchant data utilisation the framework does not contemplate.
+  - `[REPORTED]` **The Account Aggregator framework signals the philosophy**:
+    sharing a customer's financial data between entities requires prior,
+    specific, revocable consent with purpose and duration defined up front.
+  - `[REPORTED]` **Practical exposure** even absent a specific prohibition:
+    merchant service agreements scope each mandate to its own billing cycle;
+    RBI Ombudsman and NPCI grievance routes exist; the IT Act s43A and the DPDP
+    Act require personal data be processed for specified, legitimate purposes.
+
+  **What this means for the project, and it is not "give up".** The pooled
+  configuration is worth **+9.53 points** and it is the single largest component
+  of the result. The response is to stop treating pooling as the default and
+  start treating it as **consent-gated**, with the non-pooled configuration
+  measured and reported beside it. `solo_pop_pd` — one belief per mandate rather
+  than per customer — already exists as a policy arm, so the compliant-by-default
+  number is measurable today rather than hypothetical. Queued as **W9** in
+  `04_BUILD_PLAN.md`.
+
+  Still unread, and now specifically named: Razorpay's merchant terms and
+  privacy policy, the RBI PA Directions 2025 text, and the October 2025 NPCI
+  circular on Merchant Identifier Codes.
 - `[GUESS]` India's Account Aggregator framework may be a useful precedent — an
   RBI-regulated pattern for consented cross-institution financial data sharing.
   Worth an hour. Not yet read.

@@ -4727,3 +4727,122 @@ ahead of W6, because it is the only one that moves three targets.
   it is the only reason the trap was visible.
 - `p_missed_credit` remains a pure `[GUESS]`. No source gives a rate for how
   often an Indian salaried account receives no inflow in a month.
+
+---
+
+# 2026-08-30 (end of day) — stop filing defects instead of fixing them
+
+Tanmay's review, and it is the sharpest correction this project has had:
+**five items in the README's Limitations section were things we could fix and
+had not.** Written up carefully, tagged, sourced, and left. A limitation the
+author could remove and has not is not honesty, it is an excuse with citations.
+
+Fixed today rather than re-documented:
+
+* **M1** — vacuous since 27 August. Now runs at `cap_override=2`.
+* **M4B** — the `pending` mutant graded itself, 1066 counted and 1066
+  self-written. It now drops the pending filter and lets the harness's own
+  check catch the second notification. `represent` no longer double-writes.
+* **Suite: 6 red -> 4 red, 1 vacuous -> 0.** Both Stage 0 rules that had no
+  working test now have one. Parity still bit-exact 24/24.
+* **requirements.txt**, 44 lines for 4 packages -> 8.
+* **The README** no longer tells the reader how to feel, and finally has a
+  section on where the language model is and is not.
+
+Still open, and now in the queue rather than in Limitations: the two Razorpay
+decline states are unsimulated (W8), the agent forfeits the due date (item 8),
+the LLM has nothing to diagnose because the taxonomy is off (W5).
+
+**The rule going forward, now in `CLAUDE.md`:** the README's Limitations
+section lists only what cannot be fixed from here. Everything else is work.
+
+## The pooling moat has a real legal problem
+
+An LLM legal review — recorded as such, unverified, not advice — says no Indian
+statute addresses cross-merchant reuse directly, but mandates are structurally
+per-merchant (Merchant Identifier Code from PAN, NPCI Oct 2025), the RBI PA
+Directions 2025 require merchant segregation, and the Account Aggregator regime
+establishes that financial data is not reusable across counterparties without
+consent.
+
+It is worth +9.53 pts and it is the largest single component of the result.
+**W9**: `solo_pop_pd` already exists, so measure the non-pooled configuration,
+ship it as the default, and make pooling consent-gated with its price stated in
+points. A priced decision beats an assumption nobody checked.
+
+## Handoff
+
+`00_HANDOFF.md` rewritten as a one-page cold start. `04_BUILD_PLAN.md` opens
+with an ordered queue. `CLAUDE.md` header fixed — it still said the model was
+frozen and pointed at the wrong reading order. Seven documents carried the
+"two of five untested" claim; all seven now carry the resolution beside the
+original text rather than having it deleted.
+
+## TEST-SUITE TRIPWIRE ENTRY — required by scripts/pre-commit, 30 August 2026
+
+This commit edits `sim/tests.py` and `sim/known_failures.txt`. The hook demands
+the gate, the old number, the new number, and why the OLD test was wrong.
+
+### M1 — "5th attempt in a cycle" -> "attempt past the cap"
+
+* **Was:** `VACUOUS`. Mutant produced **0** counted violations at pe=1 and pe=7.
+* **Now:** `clean=0 -> mutant=277` at pe=7, running with `cap_override=2`.
+* **Why the old test was wrong:** it could not create illegal state. At
+  `NPCI_MAX=4` the deepest any mandate-cycle reaches is 4 attempts, so the 5th
+  attempt the mutant needed never happened. The gate tested nothing and said so
+  honestly for three days, which is why it was VACUOUS rather than green.
+* **What was traded:** the gate now proves the cap *counter* binds, not that
+  the value 4 specifically is enforced. `sim/verify_brief.py` asserts
+  `w3.NPCI_MAX == 4` separately. Strictly more than nothing, strictly less than
+  the NPCI-specific claim, and the docstring says so.
+
+### M4 — "second pending notification"
+
+* **Was:** `mutant=1066`, of which **1066 were written by the mutation branch
+  itself and 0 by any independent check.** Gate M4 passed by construction.
+* **Now:** `mutant=5`, all of them from the harness's own check at the commit
+  site (`if m["pend"] is not None: V.pending += 1`).
+* **Why the old test was wrong:** `mutate="pending"` incremented `V.pending`
+  and then the gate read `V.pending` and required it to move. The mutant was
+  grading itself. That is CLAUDE.md rule 1a, and it is the error M4B exists to
+  catch.
+* **The fix:** the mutant now DROPS the pending filter in `live` and does
+  nothing else, so a mandate with a notification outstanding is let back into
+  scheduling and genuinely receives a second one.
+
+⚠️ **5 is a much weaker signal than 1066 and that must not be glossed.** The
+old number was inflated by self-writing; the new one is real but small, because
+the illegal state only arises when a mandate is re-scheduled while a
+notification is still open, which is rare at these operating points. The gate
+binds (clean=0, mutant>0) but it is **thin**, and a future change could take it
+to 0 and turn M4 vacuous again in the ordinary way. **If that happens, do not
+delete the gate — find an operating point where it binds properly**, the way M1
+was repaired with `cap_override=2`.
+
+### M5 — "Z9 re-presented under old notice"
+
+* **Was:** `mutant=608`, of which 304 self-written and 304 independent.
+* **Now:** `mutant=304`, all independent. **The count halved to exactly the
+  number the 28 August instrumented analysis predicted was real**, which is the
+  best evidence available that the repair is correct rather than merely green.
+* **Why the old test was wrong:** double-counting. It still bound, so this was
+  a correctness problem in the number rather than a vacuous gate.
+
+### M4B — "no mutant writes the counter it is graded on"
+
+* **Was:** `FAIL` — flagged `M4(pending->V.pending)`, `M5(represent->V.represent)`.
+* **Now:** `PASS` — "all 5 Stage-0 mutants create state only".
+* It went green because the two mutants were repaired, **not** because the
+  detector was narrowed. M4B still parses `sim/harness.py` and would flag either
+  branch the moment a `V.<field> += 1` returned to it.
+
+### `sim/known_failures.txt`
+
+**Lines were REMOVED, not added** — M1 and M4B. Nobody needs assigning; they
+are fixed. Suite went **25 gates / 5 FAIL / 1 VACUOUS** to **25 gates / 4 FAIL /
+0 VACUOUS**, verified by a `--tier full` run. The four remaining reds are
+unchanged and each still carries its written reason.
+
+**Parity re-verified after the harness edit: bit-exact 24/24.** T9 passes — all
+28 configs exact, 20 at float level — because every change sits inside a
+`mutate` branch or is conditioned on one.

@@ -160,6 +160,11 @@ the old `assert violations == 0`, which `live` had already guaranteed.
 *Consequence:* two of the five Stage 0 rules — `cap` (error via M1) and
 `pending` — have **no working test**. The pending-notification compliance claim
 joins the attempt-cap claim in being **banned from the pitch**.
+✅ **FIXED 30 August 2026, once the freeze lifted.** The `pending` mutant now
+drops the pending filter in `live` so a second notification is genuinely
+issued and the harness's own check counts it; `represent` no longer
+double-writes; M1 runs at `cap_override=2`. Both bans are lifted and M4B is
+green.
 *Guard:* gate **M4B**, added 28 Aug 2026. It parses `sim/harness.py` and fails
 if any `V.<field> += 1` sits inside a `mutate == ...` branch. It is static
 because the harness returns only the counter, so from outside a self-written

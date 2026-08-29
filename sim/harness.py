@@ -327,10 +327,15 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
                     if nt is not None and nt < cycle_close(m) * HOURS:
                         m["pend"] = (None, nt, True)
                 if mutate == "represent" and code == Z9 and m["alive"] and m["n"] < cap:
+                    # Re-present a Z9 under NO fresh notification. Illegal, and
+                    # the independent check at dispatch (`notif_t is None and
+                    # prev_code != TECH`) is what counts it. This branch used to
+                    # increment V.represent itself as well, which double-counted
+                    # every violation it created -- 608 counted for 304 real.
+                    # Rule 1a: a mutant creates illegal state and nothing else.
                     nt = earliest_legal(day, t + 1)
                     if nt is not None:
-                        m["pend"] = (None, nt, True)   # no fresh notification: illegal
-                        V.represent += 1
+                        m["pend"] = (None, nt, True)
 
             # ---- cycle rollover ---------------------------------------------
             if hour == 0:
@@ -346,8 +351,17 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
             if hour != DECISION_HOUR:
                 continue
 
+            # `mutate="pending"` DROPS THE PENDING FILTER and does nothing
+            # else. That is the whole mutation: a mandate that already has a
+            # notification outstanding is allowed back into scheduling, so it
+            # receives a second one and the independent check at the commit
+            # site below sees `m["pend"] is not None` and counts it. Before
+            # 30 August 2026 the mutant instead incremented `V.pending`
+            # itself, which made gate M4 pass by construction -- 1066 counted,
+            # 1066 self-written, 0 independent. See CLAUDE.md rule 1a.
             live = [m for m in mands
-                    if m["alive"] and not m["collected"] and m["pend"] is None
+                    if m["alive"] and not m["collected"]
+                    and (m["pend"] is None or mutate == "pending")
                     and cycle_open(m) <= day < cycle_close(m) and m["n"] < cap]
             if not live:
                 continue
@@ -607,9 +621,6 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
                 if m["pend"] is not None:
                     V.pending += 1
                 m["pend"] = (notif, tt, False)
-                if mutate == "pending":
-                    m["pend"] = (notif, tt, False)
-                    V.pending += 1
 
         for m in mands:
             # every cycle window that CLOSED inside the horizon is due, whether

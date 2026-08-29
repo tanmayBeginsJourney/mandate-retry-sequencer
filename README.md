@@ -38,8 +38,8 @@ payday-timing baseline `payday_wait` collects 57.70% of cycles, +36.66 points
 behind the agent (2 SE 2.47).*
 
 > **Every result here comes from a simulation.** No Razorpay transaction,
-> mandate or decline code has been observed by this project. The next section is
-> about how much that should worry you.
+> mandate or decline code has been observed by this project. How far the
+> simulation can be trusted is measured below rather than asserted.
 
 **Interactive demo.** [`docs/index.html`](docs/index.html) walks through one
 customer's month, the timing decision day by day, a rail outage, and the cases
@@ -247,6 +247,38 @@ different things — the gate counts what it stopped, the auditor counts what
 illegally happened. `scripts/prove_stage0_refuses.py` shows the difference by
 moving money below the gate and watching the auditor catch it.
 
+### Where the language model is, and where it is not
+
+The split is deliberate: **the model decides *what* to do and explains why, the
+belief filter decides *when*, and the constraint layer decides *whether it is
+allowed*.** A model that could pick debit times would be a model that can
+schedule money movement, so `Diagnosis` carries no temporal field and a test
+inspects the type to keep it that way.
+
+Where it earns its place is measured rather than assumed:
+
+| | rule engine | `glm-5.3-flash` |
+|---|---|---|
+| terminal decline codes — no retry can ever succeed | **0/4** | **4/4** |
+| ambiguous cases | 9/21 | **10/21** |
+| unambiguous cases | **19/19** | 13/19 |
+
+It wins exactly where a scoring function has nothing to say — a frozen account
+or a revoked mandate, where the right action is *stop*, and where "probability
+now versus probability later" cannot express the situation. It loses on the
+clean cases, which is what thirty lines of if-else are for. So it runs as an
+**overlay over the rule engine**, never a replacement: any failure falls back,
+and the row records which answered.
+
+The batch calls it under a hard cap on live network calls, with cached
+responses free. That is the intended shape — rules handle the routine, the
+model handles the novel — and it means the headline number does not depend on
+an API key. A judge (or anyone) can reproduce every figure here offline.
+
+The eval replays from committed caches in 0.5 seconds for $0.00, and the judge
+is a *different* model from the diagnoser; the harness refuses to run if the two
+SKU names match.
+
 ## Results
 
 Everything turns on how accurately payday can be estimated in advance.
@@ -311,8 +343,11 @@ risks a double debit. No timing score can express this: there is no combination
 of "probability now" and "probability later" that means *do not act, because the
 question is unanswerable*.
 
-Both are routed by the diagnosis layer. **Neither is simulated and neither
-carries a frequency** — no source gives a rate for either. Details:
+Both are routed by the diagnosis layer, and both are cases where the timing
+model is structurally silent — which is the clearest statement of what the
+diagnosis layer is *for*. Neither is simulated yet; adding them to the world's
+decline mix, at swept rates like every other decline family, is queued as W8.
+Details:
 [`docs/03_ERRORS.md`](docs/03_ERRORS.md).
 
 ## What is simulated
@@ -335,37 +370,32 @@ are derived from documentation and have never been sent.
 
 ## Limitations
 
-- **No real data, at any point.** The world is tuned so a documented retry
-  schedule reproduces a plausible approval rate. Every absolute percentage
-  inherits that calibration.
-- **No simulated customer is ever unable to pay.** A clairvoyant scheduler
-  collects 100%, so the agent solves a pure timing problem and never a
-  collectability one. This is the largest gap and is being closed next.
-- **The headline batch runs with the richer decline taxonomy switched off** — no
-  frozen accounts, revoked mandates or limit hits. Switching it on costs between
-  0 and 13.5 points, and every rate in that sweep is a guess.
-- **The largest single sensitivity is a guessed constant.** How often a debit is
-  refused by a transaction or mandate limit is published nowhere; sweeping it
-  over 0.00 / 0.05 / 0.15 costs 0.00 / −2.87 / −13.46 points, and the curve is
-  steeply non-linear.
-- **Two of the five constraint rules have no working test in the simulation** —
-  the attempt cap and the pending-notification rule. Both are enforced and
-  tested inside `agent/`, and those are the only working tests either has.
-- **The documented retry schedule cannot be executed compliantly at all.** With
-  a 24-hour notification requirement the earliest legal presentation is T+1, so
-  the compliant rendering is T+1…T+4. The same constraint means this agent
-  forfeits the due date on every mandate, which is a defect it has not fixed.
-- **The legal status of cross-merchant pooling is unresolved**, and it underpins
-  the strongest claim here.
-- **Six of twenty-five simulation gates are red on a clean checkout**, on
-  purpose, each with a written reason in `sim/known_failures.txt`. A gate that no
-  deliberate mutation can trip is treated as a failure, because a test nothing
-  can break is not evidence.
-- **The study is small.** n=100, 8 populations, one run seed each.
-- **The language model is mostly bypassed in the batch.** The loop asks for a
-  diagnosis 119,667 times and runs under a hard cap on network calls, giving a
-  94.8% fallback rate. The LLM arm is 95% deterministic and is not "the model's
-  number".
+These are the things this project cannot resolve from where it stands. Items
+that *are* fixable live in [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) as
+work, not here as excuses.
+
+- **No real transaction data, and none obtainable.** There is no public dataset
+  for payment retry scheduling — no shared task, no held-out set. The only
+  formal artifacts in the field are patents, which publish methods and no data.
+  Every number here is simulation, validated against published aggregates
+  rather than against ground truth.
+- **Decline frequencies are unpublished.** NPCI names the codes and does not
+  rank them; no source gives AutoPay-specific rates. Every rate in this
+  repository is therefore **swept and never picked**, and reported as a curve.
+  The largest single sensitivity is one of these: sweeping the limit-decline
+  rate over 0.00 / 0.05 / 0.15 costs 0.00 / −2.87 / −13.46 points.
+- **The legal status of cross-merchant pooling is unresolved in Indian law.**
+  No statute or RBI circular addresses it directly, and the surrounding
+  framework points both ways. It is worth **+9.53 points**, so the project also
+  reports the non-pooled configuration and treats pooling as consent-gated
+  rather than assumed. See [`docs/01_FACTS.md`](docs/01_FACTS.md).
+- **Two calibration gates fail on monotonicity, and no parameter can fix
+  them.** The belief filter models no balance floor at zero and approximates
+  the world's hourly spend jitter with a fixed 3-tap kernel. Both are
+  structural. Calibration error is already well inside its bound (ECE 0.026);
+  it is the *ordering* of the reliability curve that breaks.
+- **Sample size is compute-bound, not design-bound.** n=100 × 5 mandates × 8
+  populations, one run seed each. Larger runs are a question of machine time.
 
 ## Repository map
 

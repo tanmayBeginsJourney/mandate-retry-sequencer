@@ -217,6 +217,8 @@ Eleven items, three of them added by the outside audit on 28 August 2026.
    cap (M1 is VACUOUS) and the pending notification (M4 passes by
    construction — its mutant increments the counter itself; caught by M4B on
    28 Aug 2026). See §4 and error 11.
+   ✅ **RESOLVED 30 August 2026 — both repaired. All five rules are now
+   tested in `sim/` and the suite has 0 vacuous gates.**
 9. **n=100, 8 populations, one run seed each.** Not a large study.
 10. **Only 2 of 25 gates run this configuration.** `S1_PD` and `S4` pass
    `bcfg`; every other gate — all mutants, all invariants, the T9 byte-lock

@@ -1,64 +1,104 @@
 # 00 — HANDOFF
 
-## Where things stand, 29 August 2026 (updated end of day)
+## If you are a fresh session, read this page and then `docs/04_BUILD_PLAN.md`. Nothing else is required to start.
 
-Research and simulation: **done and FROZEN.** Stop doing it.
-Production code: **`agent/` is complete and every layer is measured.**
-Constraint layer, action space, context layer, detection benchmark, decline
-taxonomy and **the LLM layer** all exist, all run, and all have numbers.
-Added later on 29 August: a **second executor backend** against Razorpay's real
-API, a **public page**, and a **README**.
-Deadline: **5 September 2026 — 7 days from today.**
+**State, 30 August 2026.**
 
-**The commands that matter:**
+| | |
+|---|---|
+| The agent | **complete and measured.** Policy, constraints, context, execution, LLM layer, eval, batch report, and a second executor backend against Razorpay's real API. |
+| The world | **actively being extended.** `sim/` is NOT frozen. `04_BUILD_PLAN.md` carries the queue. |
+| The public artifacts | `README.md` and `docs/index.html`, both rewritten 29–30 August. Not drafts. |
+| The repo | public, `mandate-retry-sequencer`. |
+| Test suite | 25 gates, **4 red, 0 vacuous**. All four are findings with written reasons in `sim/known_failures.txt`. |
+
+### The four commands that matter
 
 ```
-python -m agent.batch_report --pops 4      # THE DELIVERABLE. ~50s, no key.
-python -m agent.batch_report --llm         # the LLM overlay. ~15 min, needs a key.
-python agent/eval/run_eval.py --llm --judge --replay   # the eval, offline, $0
-python scripts/prove_stage0_refuses.py     # Stage 0 vs the REAL Razorpay client
-python agent/tests/test_razorpay_mapping.py            # the backend gates, 44/44
-python scripts/build_page_data.py --check  # the page's data is reproducible
+python -m agent.batch_report --pops 4                  # THE DELIVERABLE. ~50s, no key.
+python agent/tests/test_recovery_rates.py              # recovery vs the published bands
+python agent/tests/test_insolvency_sweep.py            # W2, 5/5 pre-registered
+python scripts/prove_stage0_refuses.py                 # Stage 0 vs the REAL Razorpay client
 ```
 
-**Only `--llm` needs a key.** Everything else in that list runs on a fresh
-clone with numpy alone: no network, no model download, no credentials. The
-eval's model responses are committed as caches, so `--replay` reproduces the
-whole thing offline for $0.00. `--llm` wants a Z.ai key in `.env` at the repo
-root (`ZAI_API_KEY=...`, gitignored, read automatically); without one its LLM
-arm silently becomes the deterministic arm, and the report says so.
-`07_AGENT_BRIEF.md` §0 has the full table.
+Everything above runs on a clean clone with numpy alone: no network, no
+credentials, no model download. Only `--llm` needs a key.
 
-⚠️ **`prove_stage0_refuses.py` needs no RAZORPAY key either**, which is the
-point of it: Stage 0 adjudicates before the executor is reached, so the refusal
-can be shown against the real client with the network unplugged.
+### What is true about the numbers
 
-> **THE BATCH NUMBER.** 100 customers x 5 mandates over 4 held-out populations,
-> 120 days, `payday_err=7`: **94.36% of billing cycles collected against
-> `payday_wait`'s 57.70% — +36.66 pts (2 SE 2.47, SIG), Rs 5,994,430**, with
-> **zero Stage 0 refusals and an independent recount of zero over 8,954
-> executed money actions**. `payday_wait` is a permanent row and **at
-> `payday_err` of about +/-1 day it BEATS us.**
+> **THE BATCH.** 100 customers × 5 mandates, 4 held-out populations, 120 days,
+> `payday_err=7`, `pop_spend=1.05`: **94.36% of billing cycles collected against
+> `payday_wait`'s 57.70%**, +36.66 pts (2 SE 2.47), ₹5,994,430, **zero Stage 0
+> refusals with an independent recount of zero over 8,954 money actions.**
 >
-> **THE LLM.** `glm-5.3-flash` diagnosing, `glm-5.3` judging (a different SKU;
-> the harness refuses to run if they are equal). It **beats the rule engine on
-> ambiguous cases 10/21 vs 9/21 and on terminal decline codes 4/4 vs 0/4**,
-> loses on clean cases 13/19 vs 19/19, and **does not move the batch money**
-> (94.33% vs 94.36%). $0.26 spent. **Every LLM score is at
-> `reasoning_effort=low`, which is unswept.**
+> **THE HEADLINE IS CONDITIONAL ON TWO PARAMETERS, NOT ONE.** `payday_err` was
+> always known. `pop_spend` was found on 29 August: at 1.05 the account cannot
+> cover the debit on its due date 53% of the time, against a published real
+> rate of 8–15%. The agent's edge runs **+3.51 → +36.43** across the plausible
+> range. At `pop_spend=0.80` it is **+6.29**, inside the published 6–8%
+> industry benchmark, and nothing was tuned to land there.
 >
-> **THE CAPABILITY CLAIM, unchanged.** An aggregator detects a rail outage a
-> single merchant structurally cannot: 22.5 attempts per 24h window against
-> 0.38, against a floor of 8. `02_RESULTS.md`.
+> **THE VALIDATION SUITE is what replaces a public benchmark, because none
+> exists.** At `pop_spend=0.80`: due-date failure **13.68%** (published 8–15%,
+> HIT) and fixed-interval recovery **27.85%** (published 20–40%, HIT), neither
+> fitted. Smart-retry recovery 97.38% (published 70–85%, MISS) and recoveries
+> inside 10 days 41.84% (published 85–95%, MISS).
+>
+> **THE MECHANISM THAT SELLS IT.** The fixed schedule spends all four attempts
+> within four days of the due date, hits the NPCI cap while the account is
+> empty, and the mandate dies. **Survival 32.1% against the agent's 97.2%.**
+> Dunning harder costs the customer, measured.
 
-**If you are the next session, read `docs/07_AGENT_BRIEF.md` first, then
-`docs/06_MODEL_CARD.md`.** Between them they carry everything needed to build
-the agent without reading the simulation code.
+### The three traps a fresh session will otherwise walk into
 
-Four simulation harnesses have been written. The current one (`sim/`) is sound,
-tested and frozen. The old one (`legacy/`) is defective and frozen.
+1. **Do not report 3/4 validation targets by mixing calibrations.** Insolvency
+   brings V5 into band at `p_missed_credit=0.08`, but V1 breaks there. A
+   (0.70, 0.08) calibration satisfies both and then **misses both targets it
+   was not fitted to.** Two hits from turning two dials are a curve fit.
+   `pop_spend=0.80, p_missed_credit=0.00` remains the reported calibration.
+2. **ONE BELIEF PER CUSTOMER, shared by all k mandates.** Build it per-mandate
+   and you have silently built `solo_pop_pd`, which is 9.53 points worse, and
+   nothing will tell you. `agent/policy/belief_book.py` enforces it.
+3. **Every batch measurement runs one process per run** via
+   `agent/tests/_parallel.py`. Long-lived processes segfault on this machine and
+   the root cause was never found. `06_MODEL_CARD.md` §6a.
+
+### What changed on 30 August, so you do not re-derive it
+
+- **The freeze is lifted.** `sim/` is open. `CLAUDE.md` keeps what the freeze
+  got right as ordinary discipline.
+- **W0 landed**: the recovery-rate metric, which is the first quantity this
+  project has ever produced that is comparable to a published figure.
+- **W2 landed**: insolvent customers, 5/5 pre-registered.
+- **M1 and M4B were FIXED.** Both Stage 0 rules that had no working test in
+  `sim/` now have one. The suite went 6 red → 4 red, 1 vacuous → 0. **Do not
+  reintroduce the old caveat that "two of the five constraint rules are
+  untested" — it is no longer true.**
+- **The pooling moat has a specific legal problem**, not a vague one.
+  `01_FACTS.md` has the analysis and W9 has the response: measure the
+  non-pooled configuration and make pooling consent-gated.
+- **Two claims were corrected after being asserted without checking**: that
+  both validation misses shared one cause (they are two), and that the
+  documented retry schedule's compliance gap was unfixable (it is queued as
+  item 8). Both are in `NOTES.md`.
+
+### Where things live
+
+| | |
+|---|---|
+| What to do next | `docs/04_BUILD_PLAN.md` — **the queue is the first section** |
+| What ships and what it is worth | `docs/06_MODEL_CARD.md` |
+| Every result with its bias analysis | `docs/02_RESULTS.md` |
+| Every external fact with a source tag | `docs/01_FACTS.md` |
+| Errors found in this project's own work | `docs/03_ERRORS.md` |
+| The interface between agent and simulation | `docs/07_AGENT_BRIEF.md` |
+| The append-only decision log | `NOTES.md` |
+| The rules you must follow | `CLAUDE.md` |
+
+---
 
 ## Decided — do not relitigate
+
 
 | Decision | Why |
 |---|---|
@@ -225,6 +265,9 @@ the architecture document and the pitch, not more code. See `CLAUDE.md`.
    no working test -- 1066 counted, 1066 self-written, 0 independent. With M1
    already vacuous that makes **two of the five Stage 0 rules unproven**.
    Neither may be claimed in the pitch. See error 11.
+
+
+✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
    **S1 measures the wrong filter** — it runs `portfolio`, which carries the
    point-estimate `w3.Belief`, not the `w3.BeliefPD` the project recommends.
    S1_PD was added with the identical threshold on the real filter and also

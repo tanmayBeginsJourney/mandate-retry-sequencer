@@ -1,44 +1,8 @@
-# Pinned so the suite is reproducible. The handoff numbers were produced on an
-# UNKNOWN numpy version -- nobody recorded it -- so small numeric differences
-# between docs/02_RESULTS.md and a local run are currently unattributable.
-# See NOTES.md, 2026-08-27.
-#
-# Verified working: CPython 3.12.0 on Windows.
-# Note the `python` and `python3` on PATH here are msys2 builds with no numpy
-# and no pip; sim/gate.py and the pre-commit hook probe for an interpreter that
-# can actually import numpy.
-numpy==2.4.2
+numpy==2.4.2          # the 25-gate suite and the agent need only this
+pyyaml==6.0.3         # agent/eval/ reads golden_cases.yaml
+lightgbm==4.6.0       # sim/ml_study.py, sim/ml_diagnose.py -- the ML baseline
+scikit-learn==1.8.0   # same
 
-# THE GATED SUITE NEEDS ONLY NUMPY. `python sim/gate.py --tier full` imports
-# nothing below this line, and sim/harness.py never imports a model library --
-# it takes `ml_predict` as a plain callable.
-#
-# The UNGATED scripts do need more, and this list was missing until
-# 28 August 2026, which made docs/06_MODEL_CARD.md section 4b's "reproduce
-# from nothing" recipe impossible to follow from requirements.txt alone:
-#
-#   sim/ml_study.py      train / eval   lightgbm, scikit-learn
-#   sim/ml_diagnose.py                  lightgbm, scikit-learn
-#   sim/stress_day0.py                  via sim/mlmodel.py -> the pickled GBDT
-#   sim/headline.py, sim/fair_audit.py, sim/fit_belief.py, sim/verify_brief.py
-#                                       numpy only
-#
-# Versions are what this machine has, NOT a reproducibility claim: the trained
-# model in sim/ml_artifacts/ is gitignored and was built here, so a different
-# lightgbm will not reproduce it bit-for-bit. Rebuild it, do not assume it.
-lightgbm==4.6.0
-scikit-learn==1.8.0
-
-# ---------------------------------------------------------------------------
-# agent/eval NEEDS PyYAML. Nothing else in the repo does, and the GATED SUITE
-# STILL NEEDS NUMPY ALONE -- `sim/gate.py` does not import agent/ at all.
-#
-# Added 29 August 2026, and it is a deliberate reversal. `agent/eval/cases.py`
-# shipped with a hand-rolled parser for the subset of YAML the case file uses,
-# precisely so a fresh clone would not need a second install. Its self-test
-# compared it against PyYAML on the very first run and THEY DISAGREED -- the
-# hand parser produced no `cases` key at all. A parser that silently mis-reads
-# a case corrupts an eval score in a way nothing downstream can detect, and a
-# second implementation exercised only when the first is missing is a code path
-# nobody has ever run. So the parser was deleted rather than debugged.
-pyyaml==6.0.3
+# Verified on CPython 3.12.0, Windows. `python sim/gate.py --tier full` imports
+# nothing below the first line. Notes on rebuilding the ML artifacts:
+# docs/06_MODEL_CARD.md section 4b.

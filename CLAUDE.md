@@ -8,28 +8,43 @@ layer, the LLM layer, the eval, the batch report, and a second executor backend
 against Razorpay's real API are all built and all measured. Do not rebuild what
 is already there.
 
-**The live work is the WORLD.** `docs/04_BUILD_PLAN.md` carries the World v2
-spec (W0–W5) and the validation suite that replaces a public benchmark. W0 is
-done. `sim/` is no longer frozen — see below.
+**The live work is the WORLD.** `docs/04_BUILD_PLAN.md` opens with **THE
+QUEUE** — an ordered list of what to build next. Start there. `sim/` is no
+longer frozen; see below.
 
-**Read `docs/07_AGENT_BRIEF.md` first, then `docs/06_MODEL_CARD.md`.** Between
-them they carry the interface, the evidence and the limits, and you do not need
-to read `sim/` to use any of it.
+**Read `docs/00_HANDOFF.md` first.** It is one page and it carries the state,
+the four commands that matter, and the three traps a fresh session otherwise
+walks into.
 
-Then read `docs/00_HANDOFF.md`, `docs/01_FACTS.md`, `docs/02_RESULTS.md` and
-`docs/03_ERRORS.md`. That is not optional.
+⚠️ **Two things in older docs are now FALSE and you will meet them:**
+"two of the five Stage 0 rules have no working test" (**fixed 30 August** —
+M1 and M4B are repaired, the suite has 0 vacuous gates) and "the model is
+frozen" (**lifted 30 August**).
+
+After `00_HANDOFF.md` and the queue, read in this order:
+`docs/07_AGENT_BRIEF.md` (the interface — you do not need to read `sim/` to use
+it), `docs/06_MODEL_CARD.md` (what ships and what it is worth),
+`docs/01_FACTS.md` (every external claim, source-tagged),
+`docs/02_RESULTS.md` (every number with its bias analysis) and
+`docs/03_ERRORS.md`.
 
 ✅ **`README.md` and `docs/index.html` were rewritten on 29 August 2026 and are
 no longer drafts.** They are the two judge-facing artifacts. If they disagree
 with `docs/`, `docs/` still wins and the disagreement is a bug in the rewrite —
 fix it rather than leaving both.
 
-⚠️ **Added 29 August 2026: both currently lead with `+36.66 pts`, and that
-number is conditional on `pop_spend=1.05` as well as on `payday_err=7`.** The
-spend sweep in `02_RESULTS.md` shows the uplift running +3.51 → +36.43 across a
-plausible range of world hardness. **Do not restate the headline in either
-artifact until the world work in `04_BUILD_PLAN.md` lands** — the operating
-point is being changed, and rewriting the number twice is wasted work.
+⚠️ **The headline is conditional on `pop_spend` as well as on `payday_err`.**
+The uplift runs **+3.51 → +36.43** across the plausible range of world hardness
+and is **+6.29** at `pop_spend=0.80`, where the world's failure rate matches the
+published record. Both artifacts now say so. **The operating point moves again
+when W7 lands, so expect to restate these once more — and do it in every place
+at once.** `grep -rn "36.66\|36.43\|94.36" README.md docs/` finds them.
+
+⚠️ **The README's Limitations section lists ONLY what cannot be fixed from
+here** — unobtainable data, unpublished decline rates, unresolved law,
+structurally-unfittable calibration gates, compute-bound sample size. Open work
+goes in the queue, never there. A limitation the project could fix and has not
+reads as an excuse, and there were five of them until 30 August.
 
 ---
 
@@ -121,11 +136,16 @@ the most valuable asset in the repo. Treat it as read-mostly.
 2026 after error 11. If a `mutate == ...` branch increments a violation
 counter, the gate that reads that counter is grading the mutant, not the
 harness — it passes by construction. Gate **M4B** parses `sim/harness.py` and
-fails if any `V.<field> += 1` sits inside a mutation branch. Two do today
-(`pending`, `represent`). **The freeze no longer blocks the repair** — it is
-now ordinary open work, and it matters, because with M1 vacuous it is why two
-of the five Stage 0 rules have no working test in `sim/`. **Never make M4B
-green by exempting a mutant or by narrowing what it looks at.**
+fails if any `V.<field> += 1` sits inside a mutation branch.
+
+✅ **FIXED 30 August 2026, and M4B is green.** `mutate="pending"` now drops the
+pending filter in `live` so the mandate receives a second notification and the
+harness's own check counts it; `mutate="represent"` no longer double-writes.
+M1 was vacuous for a different reason — the cap never bound — and now runs at
+`cap_override=2`. **Both Stage 0 rules that had no working test now have one.**
+**Never make M4B green by exempting a mutant or by narrowing what it looks
+at** — the only legitimate repair is the one taken: make the mutant create
+state and let independent code notice.
 
 ### 2. Never report a number without stating how it could be wrong
 Before presenting any simulation result, state:
@@ -452,6 +472,8 @@ pass). Full reasons in `sim/known_failures.txt`; the short version:
 and the pending notification (M4/M4B). Keep BOTH out of the pitch and the
 architecture doc.** Peak-hour, notification-lead and Z9 re-presentation are
 genuinely tested and are safe to claim.
+
+✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
 
 ⚠️ **Only 2 of 25 gates run the configuration that ships** (`S1_PD` and `S4`).
 Everything else — every mutant, every invariant, the T9 byte-lock, and all
