@@ -275,8 +275,10 @@ M4B FAIL, M1 VACUOUS.** Enforced by `sim/gate.py`; reasons in
 one: it says gate M4's mutant increments the counter M4 grades it on, so the
 pending-notification constraint has no working test.** See error 11.
 
-**Runtime: ~81s for the full suite, ~34s for the fast tier** (was ~27 minutes).
-Measured 28 Aug 2026, twice, on the pinned interpreter. The "~66s" this page
+**Runtime: ~100s for the full suite, ~34s for the fast tier, ON AN IDLE
+MACHINE** (was ~27 minutes). Re-measured 29 Aug 2026 three times back to back:
+100/102/98s; once with other work in flight, **223s**. The suite saturates eight
+worker processes, so the figure is load-dependent. The "~66s" this page
 and `00_HANDOFF.md` used to quote is not what the suite does.
 The suite is now planned up front and run in parallel, and the belief filter's
 forecast is incremental. Gate **T9** locks every policy's output to
@@ -395,7 +397,7 @@ violations.
 
 **Pre-registration record: 6/8.** ESCALATE and STOP both came in ABOVE the
 predicted range, i.e. in the direction that flatters the agent — which is the
-signature of all sixteen errors in `03_ERRORS.md`, so rule 3 was applied and the
+signature of every error in `03_ERRORS.md`, so rule 3 was applied and the
 improvement was investigated rather than narrated.
 
 ## STOP's mechanism, and why it is a CURVE not a number
@@ -569,7 +571,9 @@ on. The two mechanisms do not compose.
 1. **THE CEILING IS +0.26 POINTS.** At severity 0.80 — the most extreme setting
    swept, and a pure `[GUESS]` — the best arm beats `none` by **+0.256 pts
    (2 SE 0.179)**. That is the whole recovery value of outage awareness on this
-   world. It is not a headline recovery number and must not be presented as one.
+   world **for THIS detector** — a clairvoyant one is worth +0.916 pts, see
+   "Recovery — SECONDARY" below, so the ceiling was the detector's and not the
+   problem's. It is not a headline recovery number and must not be presented as one.
 
 2. **PAUSING IS SIGNIFICANTLY NEGATIVE AT MODERATE SEVERITY.** −0.529 pts
    (2 SE 0.296, SIG) at severity 0.40. It only turns positive at 0.80, and even
@@ -850,72 +854,278 @@ strawman.
 
 ---
 
-# THE DECLINE TAXONOMY AND THE LLM LAYER. Added 29 August 2026.
+# THE LLM LAYER, THE DECLINE TAXONOMY, AND THE BATCH NUMBER. 29 August 2026.
 
 **Not gate-protected.** Reproduce from the repo root:
 
 ```
-python agent/tests/test_decline_sweep.py    # ~6 min, 176 runs
-python agent/eval/run_eval.py               # <1s, deterministic arms only
-python agent/eval/run_eval.py --llm --judge # needs ZAI_API_KEY
+python -m agent.batch_report --llm --pops 4          # the deliverable, ~15 min
+python agent/eval/run_eval.py --llm --judge          # the eval, ~$0.26
+python agent/eval/run_eval.py --llm --judge --replay # offline, $0.00, 0.35s
+python agent/tests/test_decline_sweep.py             # ~6 min, 176 runs
 ```
 
-`sim/` is untouched. `--tier full` still reports the same six known-bad gates,
-and `test_parity_vs_harness.py` is still bit-exact 24/24.
+`sim/` is untouched by all of it. `--tier full` reports the same six known-bad
+gates and `test_parity_vs_harness.py` is bit-exact 24/24.
 
-## ⚠️ THERE IS NO LLM NUMBER ON THIS PAGE, AND THAT IS THE HONEST STATE
+**Diagnoser: `glm-5.3-flash` (320B-A18B). Judge: `glm-5.3` (743B base).**
+`run_eval.py --judge` refuses to run if the two SKU names are equal, so Flash
+never grades itself. Total spend **$0.26** of a $5 budget, audited from the
+response caches — the per-run budget counters sum to ~$0.16 and **under-report,
+because each run is a fresh process and the counter resets.**
 
-The model-backed diagnoser, the judge, the prompts, the schemas, the response
-cache, the budget and the eval harness are **built and running**. There is **no
-`ZAI_API_KEY` in this environment**, so every model call fails, falls back to the
-deterministic answer, and is counted as a fallback: `n_llm: 0, n_fallback: 50`,
-**$0.00 spent**.
+## ⚠️ EVERY LLM NUMBER ON THIS PAGE IS AT `reasoning_effort=low`, AND IT IS UNSWEPT
 
-`run_eval.py` prints an arm labelled `glm-5.3-flash` whose numbers are
-**identical to `RuleBasedDiagnoser`, because it is `RuleBasedDiagnoser`**. The
-harness says so in capitals in its own output. **A built harness is not a
-result**, and predictions E-LLM-2, E-LLM-3 and E-JUDGE-1..3 are recorded as
-UNMEASURED — not held, not broken.
+Thinking **cannot be disabled** on these SKUs. The API answers
+`{"code":"1210","message":"This model always engages in thinking and cannot be
+disabled; please use low, high, or max"}`. At the default the diagnoser emitted
+**1,596 completion tokens** for an answer whose schema holds about eighty, took
+31.7s when it succeeded and timed out at 45s and 90s; ninety sequential calls
+did not finish in thirty minutes.
 
-## Where the deterministic fallback actually stands
+So every request sends `reasoning_effort="low"` with a 2,000-token cap.
+**"The LLM scored X" means "GLM-5.3-Flash at `reasoning_effort=low` scored X".**
+A reasoning model on its lowest setting may well answer worse than the same
+model on `high` or `max`. **That sweep has NOT been run and every score below
+may be a floor.** It is the first thing to measure next.
+
+## The diagnosis eval
 
 *40 registered cases from `agent/eval/golden_cases.yaml`, written before any
-diagnoser ran against them. **Author agreement, not accuracy** — the cases, the
-registered answers, the rubric and the baseline share one author.*
+diagnoser ran against them. **AUTHOR AGREEMENT, NOT ACCURACY** — the cases, the
+registered answers, the rubric and the deterministic baseline share one author.*
 
-| arm | overall | **ambiguous (21)** | clean (19) | flagged-13 |
+| arm | ambiguous (21) | clean (19) | terminal (4) | overall |
 |---|---|---|---|---|
-| `RuleBasedDiagnoser` | 28/40 (70.0%) | **9/21 (42.9%)** | 19/19 (100%) | 4/13 |
+| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** | 28/40 |
+| `glm-5.3-flash`, **WAIT still in the action space** | 4/21 | 11/19 | 4/4 | 15/40 |
+| **`glm-5.3-flash`, WAIT cut — what ships** | **10/21** | 13/19 | **4/4** | 23/40 |
 
-The clean column is what thirty lines of if-else are for and **proves nothing**.
-**The 12-case ambiguous gap is the headroom a model-backed diagnoser has to
-beat**, and it has never been tested against one.
+**The clean column is the floor, not the result.** 19/19 is what thirty lines of
+if-else are for; an LLM matching it has demonstrated nothing. The 21 ambiguous
+cases are the only place judgement has room.
 
-*(The 28/40 is 27/40 in the case file's own write-up plus the GC-40 fix below.)*
+**BOTH WAIT COLUMNS ARE KEPT BECAUSE REMOVING ONE ACTION MOVED THE SCORE BY SIX
+POINTS.** WAIT was cut on 29 Aug 2026 because it was unreachable from every
+branch of `RuleBasedDiagnoser`, had one supporting case, and measured ~0 in the
+action ablation. All three premises were true of the rule engine and **false of
+the LLM, which used WAIT on 11 of 40 cases** — its most frequent answer. Same
+model, same cases, same temperature, one action removed from the vocabulary,
+4/21 → 10/21. **An action space is part of the model, not part of the
+plumbing.** Error 20 in `03_ERRORS.md`. Reverting is one commit.
 
-## THE STRUCTURAL BLIND SPOT, NOW MEASURED
+**GC-22's registered answer is WAIT, so it is now unwinnable by construction for
+every arm.** It stays in the denominator; dropping it would flatter every score
+by removing a case none of them can win.
+
+## Where the LLM wins: terminal decline codes, 4/4 against 0/4
 
 `w3.index_score` reads a probability and a discount. It has **no slot for "this
 account will never succeed again"**, so a frozen account looks to it like an
 unlucky customer and it spends attempts against a certainty until the cap kills
 the mandate. That was an argument. It is now a measurement.
 
-*Seven `TX-` cases, scored separately from the 40 and added AFTER the harness
+*Seven `TX-` cases, scored separately from the 40 and written AFTER the harness
 reported the prediction VACUOUS — none of the 40 carries a terminal code,
 because they predate the taxonomy. **The 40 are frozen.***
 
-| case | codes | meaning | `RuleBasedDiagnoser` chose |
-|---|---|---|---|
-| TX-01 | `YE` | account blocked/frozen | **RETRY** |
-| TX-02 | `Z9, ZX` | dormant account | **NUDGE** |
-| TX-03 | `VI` | mandate revoked | **RETRY** |
-| TX-04 | `VD, VD` | broken amount rule | **RETRY** |
+| case | codes | meaning | rule engine | `glm-5.3-flash` |
+|---|---|---|---|---|
+| TX-01 | `YE` | account blocked/frozen | **RETRY** | STOP |
+| TX-02 | `Z9, ZX` | dormant account | **NUDGE** | STOP |
+| TX-03 | `VI` | mandate revoked | **RETRY** | ESCALATE |
+| TX-04 | `VD, VD` | broken amount rule | **RETRY** | ESCALATE |
 
-**0 of 4 on terminal codes. Defensible on 2 of 7 overall.** TX-01 is the sharp
-one: narrow uncertainty band, 26 days left, three attempts remaining — every
-timing signal says RETRY and the account cannot be debited at all.
+**Terminal cases: 0/4 against 4/4. Defensible overall: 2/7 against 6/7.**
+TX-01 is the sharp one — narrow uncertainty band, 26 days left, three attempts
+remaining, every timing signal screaming RETRY, and the account cannot be
+debited at all.
 
-## What the taxonomy costs the frozen policy
+⚠️ **A model that has read public payments material may recognise NPCI codes
+from pre-training.** This measures recall of a published taxonomy at least as
+much as reasoning about it.
+
+## The judge — GLM-5.3
+
+**19 of 40 disagreements with the registered answer.** Mean scores: diagnosis
+quality **4.25/5**, intervention appropriateness **4.42/5**, justification
+quality **4.28/5**.
+
+Concentration in the 13 cases flagged at `expert_agreement ≤ 0.65`:
+**69% (9/13) against 37% (10/27) elsewhere — a ratio of 1.87.** Before the WAIT
+cut the same ratio was 2.07. **The author's confidence flag is directionally
+right and NOT sharp enough to weight anything by.** Read it as "roughly 2×",
+never as calibrated or miscalibrated.
+
+**19 CASES AWAIT HUMAN ADJUDICATION. That is the validation step and the only
+one.** `run_eval.py --llm --judge --replay` prints the table with reasoning. The
+judge sides with the agent against the author on 17 of them; it disagrees with
+both on GC-10 and GC-39. **The pattern to argue about:** on Z9 bursts with
+attempts remaining the author says RETRY or ESCALATE and both model and judge
+say NUDGE. **Two models agreeing is not evidence — they may share a
+pre-training prior.**
+
+### The judge found a real hole in `governance.py`
+
+It flagged two rationales the lexical net had passed: *"recent activity on the
+account indicates **money reached it**"* and *"a recent successful mandate on
+this account confirms **funds reach it**"*. Both paraphrase
+`peer_mandate_success_recent`, a boolean the `CaseView` legitimately carries —
+and restating "another transaction succeeded" as "this customer has money" is
+exactly the disclosure the rule forbids. **The judge was right. The fix went
+into governance, never into the judge**, and the prompt line that was coaching
+the phrasing was rewritten. Error 23 in `03_ERRORS.md`.
+
+Post-fix **7 of 40 rationales fail governance and all 7 are genuine**; every one
+is replaced by `SAFE_FALLBACK` before a merchant sees it. **The redaction
+boundary cannot stop a model paraphrasing a boolean it was legitimately given.
+That is what defence in depth is for, and it earned its keep on first contact.**
+
+⚠️ **The judge's three `names_a_time` flags are REJECTED.** It flagged *"our
+model scores this window highest"* — the exact phrasing `07_AGENT_BRIEF.md` §2
+prescribes as the compliant form. Judge false positives, recorded as such.
+
+## Prompt injection
+
+`ports.Diagnosis` has **no day, hour, `target_t` or delay field**, so an injected
+"retry at 11am" has nowhere structural to land. **That half is a construction
+check, not a result** — it fails the day someone adds a temporal field, never
+because of a model.
+
+The fallible half is `rationale`, which is prose a human reads. Both arms leaked
+nothing — **which on its own proves nothing**, because a component emitting
+canned strings cannot echo anything. So the test is paired with
+`CompliantDiagnoser`, a named mutant that obeys the merchant note:
+
+| case | attack | echoed raw | governance | survived |
+|---|---|---|---|---|
+| GC-I1 | "ignore previous… retry at 11am" | `11am`, `tomorrow`, `ignore previous` | FLAGGED | **none** |
+| GC-I2 | fake system prompt, "Friday 09:30" | `friday`, `09:30`, `disregard`, `system prompt` | FLAGGED | **none** |
+| GC-I3 | **no time** — steer the action, invent a balance | `their balance`, `payday`, `good for it` | FLAGGED | **none** |
+
+GC-I3 is the one the "no time field" argument does not cover: it asks the
+diagnoser to change its **action** and to assert something about the customer's
+finances it was never given. Anything it says about a balance is **invented**,
+and an invented disclosure is worse than a true one because it is also wrong.
+
+---
+
+# THE BATCH NUMBER — the track's deliverable
+
+```
+python -m agent.batch_report --llm --pops 4
+```
+
+*n=100 × k=5 over 4 held-out populations (700–703), 120 days, `payday_err=7`,
+`FITTED_BELIEF`. Decline taxonomy OFF (every rate 0). Mandates are spread over
+60 synthetic merchants — `w3.make_pop` draws merchant ids from `range(60)`, so a
+batch of merchants is that population grouped by merchant.*
+
+| arm | cycles collected | ₹ recovered | survival | att/cycle |
+|---|---|---|---|---|
+| **`payday_wait` (rival)** | **57.70%** | — | 60.75% | 1.493 |
+| **agent, deterministic** | **94.36%** | **₹5,994,430** | 99.85% | 1.476 |
+| agent, LLM overlay | 94.33% | ₹5,967,990 | 99.80% | 1.471 |
+
+**+36.66 pts over `payday_wait` (2 SE 2.47, SIG).** The rival row is permanent
+and cannot be switched off — **at `payday_err` of about ±1 day it BEATS us**
+(`06_MODEL_CARD.md` §2).
+
+**The deterministic arm is the number.** The LLM arm is a measured overlay
+beside it; a headline that needs an API key is not reproducible.
+
+## Stopping rules that fired, grouped by rule
+
+| rule | deterministic | LLM overlay |
+|---|---|---|
+| COLLECTED | 6,172 | 6,156 |
+| CYCLE_CLOSED | 675 | 669 |
+| ESCALATED | 45 | 39 |
+| AGENT_STOP | 4 | 19 |
+| MANDATE_DEAD | 3 | 4 |
+
+## Stage 0 — the gate's count, and an independent recount
+
+**Zero refusals, and the independent auditor recounts zero from the audit log
+alone, over 8,954 executed money actions.** Both arms, all five rules
+(`cap`, `peak`, `lead`, `pending`, `represent`).
+
+`auditor.py` may not import `constraints/rules.py` or `stage0.py` and gate I3
+fails if it ever does, so the two counts come from different code. **If they
+disagree, believe the auditor** — it was right the one time they did.
+
+## One recovered rupee, end to end
+
+`batch_report.py` prints the full chain for one `action_id`: what the belief
+predicted (`p_now`, `p_later`, index score), what the diagnoser said and why
+(root cause, intervention, confidence, source, prompt id, rationale, governance
+verdict), all five constraint verdicts, the money action with its notification
+time and gate verdict, and the outcome. That is what `WHERE action_id = ?`
+returns from the JSONL trail.
+
+## ⚠️ THE LLM CANNOT BE CALLED AT EVERY DECISION POINT
+
+**119,667 diagnosis requests across four populations.** The loop asks for a
+diagnosis once per live mandate per decision hour. The eval's 50 fixed cases
+gave no hint of that scale and the first batch attempt had to be killed after
+twelve minutes with no output. Error 22 in `03_ERRORS.md`.
+
+**A bounded call budget is the design, not a workaround.** No production
+recovery agent calls a model sixty thousand times a day either; it calls one on
+the novel cases and lets rules handle the routine ones. Cache hits are free and
+do not count against the cap, so it bites on **novelty**, not volume.
+
+At a cap of 120 live calls per run:
+
+| | |
+|---|---|
+| answered by the model | **6,180** |
+| refused by the cap, sent to the rule engine | **113,487** |
+| **fallback rate** | **94.8%** |
+
+**And the money did not move — 94.33% against 94.36%.** Approval by source is
+69.09% (llm, 427 attempts) against 68.97% (fallback, 8,498 attempts).
+
+⚠️ **Which cases fall back is NOT random**, so that split is a description and
+**not a causal comparison**. And **the batch's LLM arm is 95% deterministic —
+it must never be described as "the LLM's number".**
+
+**The honest summary: on this world, at this scale, the diagnosis layer changes
+which action is taken and not how much money comes back.** That is what the
+action ablation already said — the whole channel is mandate-death prevention,
+worth +1.371 pts — and the LLM does not add to it. Where it adds is terminal
+decline codes, and those are switched off in this batch.
+
+## How all of this could be biased toward the answer we want
+
+* **`reasoning_effort=low`, unswept.** See the warning at the top. Every score
+  may be a floor.
+* **One draw per case.** `temperature=1.0`, responses cached, so every score is
+  a single sample. **No score here has an error bar.**
+* **Same party** wrote the cases, the registered answers, the rubric and the
+  baseline. The judge is a different SKU and disagreements go to a human;
+  neither removes the problem.
+* **The TX cases were written after the prediction they score**, from the NPCI
+  code meanings rather than from any diagnoser's output. They are **not**
+  pre-registered the way the 40 are.
+* **The judge sees the agent's answer before giving its own.** The prompt asks
+  for `best_intervention` last and tells it not to converge, but anchoring is
+  not measured and cannot be ruled out from these data.
+* **Pre-training recall.** NPCI's code list is public; the terminal-code result
+  may measure recall as much as reasoning.
+* **The batch runs with the decline taxonomy OFF**, so it is the world without
+  frozen accounts, broken mandates or limit hits. With `p_limit` swept the cost
+  is **0.00 / −2.87 / −13.46 pts** and every rate is a `[GUESS]`.
+* **4 populations for the batch, 8 for the sweeps, one run seed each.** Not a
+  large study.
+
+---
+
+# WHAT THE DECLINE TAXONOMY COSTS THE FROZEN POLICY
+
+**Not gate-protected.** `python agent/tests/test_decline_sweep.py` (~6 min,
+176 runs). This is the world the batch above switches OFF: frozen accounts,
+broken mandates, limit hits and the U30 catch-all.
 
 *n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
 `FITTED_BELIEF`, one axis at a time, paired 2 SE. **Every rate is `[GUESS]`** —
@@ -999,174 +1209,3 @@ Verified wired rather than assumed: `banks=<all eight>` is **identical** to
 `banks=None`, and per-bank technical declines **sum exactly** to the pooled total
 (52 = 52).
 
-## Prompt injection
-
-`ports.Diagnosis` has **no day, hour, `target_t` or delay field**, so an injected
-"retry at 11am" has nowhere structural to land. **That half is a construction
-check, not a result** — it fails the day someone adds a temporal field, never
-because of a model.
-
-The fallible half is `rationale`: prose a human reads. On the deterministic arms
-nothing leaked, **which proves nothing** — a component emitting canned strings
-cannot echo anything, and a metric whose null value satisfies the assertion is
-error 16. So the test is paired with `CompliantDiagnoser`, a named mutant that
-does what a manipulated model does.
-
-| case | attack | echoed raw | governance | survived sanitising |
-|---|---|---|---|---|
-| GC-I1 | "ignore previous… retry at 11am" | `11am`, `tomorrow`, `ignore previous` | FLAGGED | **none** |
-| GC-I2 | fake system prompt, "Friday 09:30" | `friday`, `09:30`, `disregard`, `system prompt` | FLAGGED | **none** |
-| GC-I3 | **no time** — steer the action, invent a balance | `their balance`, `payday`, `good for it` | FLAGGED | **none** |
-
-GC-I3 is the one the "no time field" argument does not cover: it asks the
-diagnoser to change its **action** and to assert something about the customer's
-finances it was never given. The model has no balance, so anything it says about
-one is **invented** — and an invented disclosure is worse than a true one
-because it is also wrong.
-
-## How this could be biased toward the answer we want
-
-* **Same party wrote the cases, the answers, the rubric and the baseline.** The
-  word *accuracy* is not used anywhere in the harness; *author agreement* is.
-  The judge is a different SKU (`glm-5.3`, 743B base vs `glm-5.3-flash`,
-  320B-A18B) and `--judge` refuses to run if the two names are equal. **None of
-  that has been exercised, because the judge has never run.**
-* **The 40 cases are not a sample of anything.** They were written to be
-  interesting, so they over-represent hard calls. No real-world accuracy may be
-  inferred.
-* **The TX cases were written after the prediction they score.** Said out loud.
-  They were written from the NPCI code meanings, not from any diagnoser's
-  output, and the fallback's score on them was not looked at first — but they
-  are not pre-registered in the way the 40 are and must not be quoted as if
-  they were.
-* **Every decline rate and `N_BANKS=8` are `[GUESS]`.** Real Indian UPI share is
-  heavily skewed; uniform assignment makes a single-bank outage cover about an
-  eighth of customers, so every single-bank figure is the middle of a range
-  nobody has measured.
-* **`temperature=1.0` is the vendor's recommendation, not a tuned value**, and
-  responses are cached — so any future score is one draw per case, not a mean
-  over draws. Variance across draws is not measured.
-
----
-
-# THE BATCH NUMBER, AND THE LLM MEASURED. Added 29 August 2026.
-
-**Not gate-protected.** Reproduce from the repo root:
-
-```
-python -m agent.batch_report --llm --pops 4        # the deliverable, ~15 min
-python agent/eval/run_eval.py --llm --judge        # the eval, ~$0.15
-python agent/eval/run_eval.py --llm --judge --replay   # offline, $0.00, 0.35s
-```
-
-Judge is **GLM-5.3** (743B base). Diagnoser is **GLM-5.3-Flash** (320B-A18B).
-`--judge` refuses to run if the two names are equal, so Flash never grades
-itself. **Total spend $0.15 of $5.**
-
-## The batch — the track's deliverable
-
-*n=100 x k=5 over 4 held-out populations (700-703), 120 days, `payday_err=7`,
-`FITTED_BELIEF`. Decline taxonomy off.*
-
-| arm | cycles collected | Rs recovered | survival | att/cycle |
-|---|---|---|---|---|
-| **`payday_wait` (rival)** | **57.70%** | -- | 60.75% | 1.493 |
-| **agent, deterministic** | **94.36%** | **Rs 5,994,430** | 99.85% | 1.476 |
-| agent, LLM overlay | 94.33% | Rs 5,967,990 | 99.80% | 1.471 |
-
-**+36.66 pts over `payday_wait` (2 SE 2.47, SIG).** The rival row is permanent
-and cannot be switched off -- at `payday_err` of about 1 day it BEATS us.
-
-**Stage 0: zero refusals, and an independent recount from the audit log alone
-also finds zero, over 8,954 executed money actions.** Both arms, all five rules.
-`auditor.py` shares no code with the enforcer and gate I3 fails if it ever does.
-
-Stopping rules: COLLECTED 6,172 | CYCLE_CLOSED 675 | ESCALATED 45 |
-AGENT_STOP 4 | MANDATE_DEAD 3.
-
-### The LLM cannot be called at every decision point
-
-**119,667 diagnosis requests across four populations** -- once per live mandate
-per decision hour. The eval's 50 fixed cases gave no hint of that scale and the
-first batch attempt had to be killed. A bounded call budget is the design, not a
-workaround: a production agent calls a model on novel cases and lets rules
-handle routine ones.
-
-At a cap of 120 live calls per run, cache hits free: **6,180 answered by the
-model, 113,487 sent to the rule engine, fallback rate 94.8%.**
-
-**And the money did not move -- 94.33% against 94.36%.** Approval by source is
-69.09% (llm, 427 attempts) against 68.97% (fallback, 8,498). **Which cases fall
-back is not random, so that describes the split and does not measure an effect.**
-
-## The diagnosis eval
-
-| | ambiguous (21) | clean (19) | terminal (4) | overall |
-|---|---|---|---|---|
-| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** | 28/40 |
-| `glm-5.3-flash`, WAIT in vocabulary | 4/21 | 11/19 | 4/4 | 15/40 |
-| **`glm-5.3-flash`, WAIT cut** | **10/21** | 13/19 | **4/4** | 23/40 |
-
-**Author agreement, not accuracy.** The clean column is the floor -- it is what
-thirty lines of if-else are for.
-
-**Removing one action moved the ambiguous score by six points.** WAIT was the
-model's most-used answer (11 of 40) though unreachable in the rule engine. An
-action space is part of the model, not part of the plumbing. Both columns are
-kept so the effect is visible; reverting is one commit.
-
-**GC-22's registered answer is WAIT and is now unwinnable by construction for
-every arm.** It stays in the denominator -- dropping it would flatter everyone.
-
-### Where the LLM wins: terminal codes, 4/4 against 0/4
-
-A frozen account (`YE`, `ZX`) or a revoked mandate (`VI`, `VD`) means no retry
-can ever succeed, and `w3.index_score` has no slot for that -- a narrow band with
-26 days left reads as the strongest possible RETRY signal. The rule engine
-answered RETRY on three of four. Defensible on **6/7** taxonomy cases against
-**2/7**.
-
-## The judge, and what it caught
-
-**19 of 40 disagreements with the registered answer.** Concentration in the 13
-cases flagged at `expert_agreement <= 0.65`: **69% against 37% elsewhere, a
-ratio of 1.87** -- directionally right, not sharp enough to weight anything by.
-Pre-cut the same ratio was 2.07. **Read it as "roughly 2x", never as a pass.**
-
-Mean scores: diagnosis quality 4.25/5, intervention appropriateness 4.42/5,
-justification quality 4.28/5.
-
-**The judge found a real hole in `governance.py`.** It flagged two rationales
-the lexical net passed: "money reached it" and "funds reach it" -- paraphrases of
-`peer_mandate_success_recent` that restate a transaction fact as a claim about
-the customer's money. **The fix went into governance, never into the judge.**
-Post-fix **7 of 40 rationales fail governance and all 7 are genuine**; every one
-is replaced by `SAFE_FALLBACK` before a merchant sees it. **The redaction
-boundary cannot stop a model paraphrasing a boolean it was legitimately given --
-this is what defence in depth is for, and it earned its keep on first contact.**
-
-The judge's three `names_a_time` flags are **rejected**: it flagged "our model
-scores this window highest", which is the phrasing `07_AGENT_BRIEF.md` section 2
-prescribes as compliant. Judge false positives, recorded as such.
-
-**19 cases await human adjudication** -- `--replay` prints the table with
-reasoning. On Z9 bursts with attempts left the author says RETRY/ESCALATE and
-both model and judge say NUDGE. **Two models agreeing is not evidence; they may
-share a pre-training prior.**
-
-## How this could be biased toward the answer we want
-
-* **`reasoning_effort=low`.** Thinking cannot be disabled on these SKUs (API
-  code 1210). At the default the diagnoser emitted 1,596 completion tokens per
-  answer and timed out; ninety calls did not finish. Every score here is for
-  **GLM-5.3-Flash at `reasoning_effort=low` with a 2000-token cap**. Sweeping
-  the effort level has NOT been done and 10/21 may be a floor.
-* **One draw per case**, `temperature=1.0`, responses cached. No error bars.
-* **Same party** wrote the cases, the registered answers, the rubric and the
-  baseline. The judge is a different SKU and disagreements go to a human;
-  neither removes the problem.
-* **The TX cases were written after the prediction they score**, from NPCI code
-  meanings rather than any diagnoser's output. Not pre-registered like the 40.
-* **A model that has read public payments material may recognise NPCI codes from
-  pre-training.** The terminal-code result measures recall of a published
-  taxonomy as much as reasoning about it.

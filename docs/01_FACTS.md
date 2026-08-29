@@ -231,3 +231,78 @@ space, no money, and no NPCI constraints. Neither has usable public code.
   A repository exists at `github.com/OliverKuanTa/PS-RMAB` but holds **one
   commit and an empty README**, so: **no usable public code.**
   https://arxiv.org/abs/2604.10177
+
+---
+
+## The models we use, and what they cost — 29 August 2026
+
+- `[VERIFIED]` **Z.ai pricing, read directly from
+  https://docs.z.ai/guides/overview/pricing on 29 August 2026.**
+  USD per million tokens:
+
+  | SKU | input | cached input | output |
+  |---|---|---|---|
+  | `glm-5.3-flash` (diagnoser) | **$0.075** | $0.015 | **$0.25** |
+  | `glm-5.3` (judge) | **$1.4** | $0.26 | **$4.4** |
+
+  The Flash figures are a **50% promotional discount** off list ($0.15 / $0.03 /
+  $0.50) running to **24:00 on 9 September 2026 (UTC+8)**, which covers this
+  project's whole window. `glm-5.3` carries no promotion. **The judge is ~19x
+  the diagnoser per input token**, which is why it runs once per case and the
+  diagnoser runs on everything.
+  **After 9 September the Flash half of any cost estimate doubles.**
+
+- `[VERIFIED]` **Thinking cannot be disabled on either SKU.** Sending
+  `thinking={"type":"disabled"}` returns
+  `{"error":{"code":"1210","message":"This model always engages in thinking and
+  cannot be disabled; please use low, high, or max"}}`. Read from the API's own
+  response, not from documentation.
+  **Consequence, measured:** at the default effort the diagnoser returned
+  **1,596 completion tokens** for an answer whose schema holds about eighty,
+  took 31.7s when it succeeded, and timed out at 45s and 90s on two other
+  probes. Ninety sequential calls did not finish in thirty minutes. Every
+  request therefore sends `reasoning_effort="low"` with a 2,000-token cap, and
+  **every LLM number in `02_RESULTS.md` is a number for that setting.** The
+  effort sweep has not been run.
+
+- `[REPORTED]` `glm-5.3` is described as a 743B base model and
+  `glm-5.3-flash` as 320B-A18B. Used here only to establish that **the judge and
+  the diagnoser are different SKUs**, which `run_eval.py --judge` enforces by
+  refusing to run when the two model names are equal. The parameter counts
+  themselves are not load-bearing for any claim.
+
+## NPCI decline families — what the codes mean, and what we do NOT know
+
+- `[VERIFIED]` **NPCI publishes "UPI Error and Response Codes" v2.9**, and
+  section 3.1 covers the codes a failed AutoPay mandate execution actually
+  carries, each classified TD (technical decline) or BD (business decline). Read
+  via `pdftotext` from a CDN mirror and cross-checked against an Axis Bank
+  mirror of identical content. **Neither URL is `npci.org.in`**, and that should
+  be said. Full sourcing in `agent/eval/golden_cases.yaml`'s `research` block.
+
+  The families the agent models, all `[VERIFIED]` as to **meaning**:
+
+  | family | codes | what it means for a retry |
+  |---|---|---|
+  | insufficient funds | `Z9` | wait for money. The only one `sim/w3.py` models. |
+  | technical | `TECH` | the rail glitched. May re-present under the same notification. |
+  | account shut | `ZX`, `YE` | **no retry can ever succeed.** Dormant, blocked or frozen. |
+  | mandate broken | `VD`, `VI`, `VF` | **no retry can ever succeed.** The merchant must re-authorise. |
+  | limit hit | `Z8`, `IE` | **the money IS there.** A smaller debit would work. |
+  | ambiguous | `U30` | a catch-all. It names nothing. |
+
+- `[GUESS]` **HOW OFTEN each family occurs is not known and no source was
+  found.** The NPCI document names the codes and does not rank them; nothing
+  found gives AutoPay-specific decline frequencies. Every rate in
+  `agent/execution/sim_executor.py:DeclineMix` is therefore **swept, never
+  picked**, and reported as a curve — `02_RESULTS.md`. **`p_limit` is the
+  largest single sensitivity in the agent (0.00 / 0.05 / 0.15 →
+  0.00 / −2.87 / −13.46 pts) and must never be quoted as a point.**
+
+- `[GUESS]` **Bank assignment.** `agent/ports.py` spreads customers uniformly
+  over `N_BANKS = 8` handles. Real Indian UPI share is heavily skewed and
+  nothing found gives **per-bank AutoPay mandate share**, so a skew we invented
+  would be a constant with no source. Uniform makes a single-bank outage cover
+  about an eighth of customers; a realistic skew would make the largest bank's
+  incident more detectable and the smallest bank's less. **Every single-bank
+  detection figure is the middle of a range nobody has measured.**

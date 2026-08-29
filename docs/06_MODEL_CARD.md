@@ -394,7 +394,7 @@ over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
 | `test_action_ablation.py` | what each agent action is worth. See `02_RESULTS.md`. |
 | `test_outage_detection.py` / `test_outage_ablation.py` | the context layer. See `02_RESULTS.md`. |
 | `test_decline_sweep.py` | **added 29 Aug 2026.** What a richer decline taxonomy costs the frozen policy, and whether a bank-shaped outage is invisible to a monitor that pools banks. 2/2 pre-registered. Every rate is `[GUESS]` and swept. |
-| `eval/run_eval.py` | **added 29 Aug 2026.** 40 registered cases + 7 taxonomy cases + 3 injection cases, deterministic arms and (when a key exists) `glm-5.3-flash` with a `glm-5.3` judge. **No LLM number exists yet** - see `02_RESULTS.md`. |
+| `eval/run_eval.py` | **added 29 Aug 2026.** 40 registered cases + 7 taxonomy cases + 3 injection cases; deterministic arms always, `glm-5.3-flash` with a `glm-5.3` judge under `--llm --judge`. **Measured** - section 7 and `02_RESULTS.md`. |
 | `test_detection_benchmark.py` | **added 29 Aug 2026.** Excess loss against a clairvoyant detection oracle, decomposed into delay / missed / dropout / late resumption / false alarms. Three gates, four crippled oracles as **window transforms rather than code branches**, all four caught, none by every gate. **G-1b is deliberately RED** — it found a defect in its own hours-based loss and is kept visible rather than repaired. See `02_RESULTS.md`. |
 
 Run them from the repo root with the interpreter named in `CLAUDE.md`. None of
@@ -454,3 +454,96 @@ crossover is between severity 0.40 and 0.80 and severity is a pure `[GUESS]`.
 
 Do not present either agent number as "money recovered". The money number is
 still the one in section 2, and `payday_wait` is still a permanent row beside it.
+
+**UPDATED 29 August 2026 - there is now a measured batch number, in section
+7b:** **94.36% against `payday_wait`'s 57.70%, +36.66 pts (2 SE 2.47, SIG)**,
+Rs 5,994,430, zero Stage 0 refusals with an independent recount of zero. Run it
+with `python -m agent.batch_report --llm`. The capability claim in this section
+stands unchanged beside it.
+
+---
+
+## 7. THE LLM LAYER — added 29 August 2026. Built, measured, and bounded.
+
+### 7a. What exists
+
+| module | what it is |
+|---|---|
+| `agent/llm/client.py` | Z.ai transport. Cache keyed `(model, prompt_id, case_hash)`, hard budget, **never raises**. Reads `.env` from the repo root; `.env` is gitignored. |
+| `agent/llm/prompts.py` | Versioned prompts. **The ID is part of the cache key**, so a prompt edit misses the cache and shows as a diff. Currently `glm-diag-v2` and `glm-judge-v2`. |
+| `agent/llm/model_diagnoser.py` | `ModelDiagnoser`. An **overlay**, never a replacement. Any failure falls back to `RuleBasedDiagnoser`, emits `LLM_FAILURE`, and the row still says `source="fallback"`. |
+| `agent/eval/golden_cases.yaml` | 40 registered cases + 7 `TX-` taxonomy cases + 3 `GC-I` injection cases. |
+| `agent/eval/run_eval.py` | The eval. Deterministic arms always; `--llm`, `--judge`, `--replay`. |
+| `agent/batch_report.py` | **The track deliverable.** Not `batch.py`, which is the composition root. |
+| `agent/tests/test_decline_sweep.py` | What the decline taxonomy costs; bank-shaped outage detectability. |
+
+**Diagnoser `glm-5.3-flash`, judge `glm-5.3`.** `run_eval.py --judge` **refuses
+to run if the two SKU names are equal.** Flash never grades itself.
+
+### 7b. What is measured
+
+*Full tables in `02_RESULTS.md`. Author agreement, **not** accuracy — the cases,
+the registered answers, the rubric and the baseline share one author.*
+
+| | ambiguous (21) | clean (19) | terminal (4) |
+|---|---|---|---|
+| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** |
+| `glm-5.3-flash` (WAIT cut, what ships) | **10/21** | 13/19 | **4/4** |
+
+**The clean column is the floor, not the result.** Where the LLM earns its place
+is **terminal decline codes, 4/4 against 0/4** — a frozen account or a revoked
+mandate, where no retry can ever succeed and `w3.index_score` has no slot for
+the fact.
+
+**Batch:** deterministic **94.36%** against `payday_wait` **57.70%**,
+**+36.66 pts (2 SE 2.47, SIG)**, ₹5,994,430 recovered, **zero Stage 0 refusals
+with the independent auditor recounting zero over 8,954 executed money
+actions**. The LLM overlay is 94.33% — **the diagnosis layer changes which
+action is taken, not how much money comes back.**
+
+**Spend: $0.26** of a $5 budget, audited from the response caches. The per-run
+budget counters sum to ~$0.16 and **under-report**, because each run is a fresh
+process and the counter resets.
+
+### 7c. THREE THINGS THAT BOUND EVERY LLM NUMBER
+
+**1. `reasoning_effort=low`, and it is UNSWEPT.** Thinking cannot be disabled on
+these SKUs — the API answers code `1210`. At the default the diagnoser emitted
+**1,596 completion tokens** for an ~80-token answer and timed out; ninety
+sequential calls did not finish in thirty minutes. **"The LLM scored X" means
+"GLM-5.3-Flash at `reasoning_effort=low` scored X", and a higher setting may
+score better. 10/21 may be a floor.** This is the first thing to sweep.
+
+**2. One draw per case.** `temperature=1.0`, responses cached, so every score is
+a **single sample with no error bar.**
+
+**3. The LLM cannot be called at every decision point.** The loop asks for a
+diagnosis once per live mandate per decision hour — **119,667 times** over a
+four-population batch. It runs under a hard per-run cap on **network** calls
+(cache hits are free), giving a **94.8% fallback rate**. That is the design, not
+a workaround — but it means **the batch's LLM arm is 95% deterministic and must
+never be described as "the LLM's number".**
+
+### 7d. What is open
+
+* **19 judge-vs-author disagreements await human adjudication.** That is the
+  validation step and the only one. `run_eval.py --llm --judge --replay` prints
+  the table with reasoning, offline, for $0.00.
+* **`reasoning_effort` unswept** (7c).
+* **`WAIT` was cut on 29 Aug and the premise was wrong.** It was unreachable in
+  the rule engine and was the LLM's *most-used* answer; removing it moved the
+  ambiguous score 4/21 → 10/21. Both columns are in `02_RESULTS.md`; reverting
+  is one commit. Error 20.
+* **Judge false positives are real.** It flagged the approved phrasing "our
+  model scores this window highest" as naming a time, three times. **An
+  independent checker is a source of hypotheses, not of truth.**
+
+### 7e. Reproducing it without a key
+
+```
+python agent/eval/run_eval.py --llm --judge --replay
+```
+
+**Byte-identical output in 0.35s, no network, $0.00 spent** — only the budget
+line differs, correctly reporting zero. The caches are committed. That is what
+makes an LLM number quotable under the numbers rule.

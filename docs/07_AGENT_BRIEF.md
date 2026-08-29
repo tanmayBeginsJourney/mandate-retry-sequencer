@@ -59,6 +59,19 @@ The `python` on PATH is an msys2 build with **no numpy**. Use:
 The repo root is `/c/codeing/razorpay/razorpay_handoff/pkg`, which is *not*
 where the shell starts. Full environment notes are in `CLAUDE.md`.
 
+
+### Running the LLM parts — what you need, and what you do not
+
+| you want to | you need |
+|---|---|
+| `run_eval.py --llm --judge --replay` | **nothing.** The response caches in `agent/eval/_cache/` are **committed**, so a clean clone reproduces the whole eval offline, byte-identical, in 0.35s, for $0.00. |
+| `run_eval.py --llm --judge` (live) | a Z.ai key in **`.env` at the repo root** as `ZAI_API_KEY=...`. `.env` is gitignored and is read automatically — you do not need to export anything. Without one every call falls back to the rule engine and the harness says so in capitals. |
+| `batch_report.py --llm` | the same. Without a key the LLM arm is the deterministic arm under a different label, which the report states. |
+| anything in `agent/eval/` | **PyYAML.** `pip install -r requirements.txt`. **The GATED suite still needs numpy alone** — `sim/gate.py` does not import `agent/` at all. |
+
+**Cost, if you run it live:** ~$0.15 per full eval at the prices in
+`01_FACTS.md`. The whole session that produced these numbers spent **$0.26**.
+
 ### Building a population
 
 ```python
@@ -119,7 +132,7 @@ Judged on, among other things — `[REPORTED]`, see `01_FACTS.md`:
 
 Applicants are explicitly asked to **explain what broke during development and
 how they recovered**. That is why `NOTES.md` and `03_ERRORS.md` exist and why
-they are judged deliverables, not housekeeping. `03_ERRORS.md` has **sixteen**
+they are judged deliverables, not housekeeping. `03_ERRORS.md` has **twenty-three**
 entries with mechanisms and guards. **Open the pitch with them.** Errors 11-13
 were found by an outside reader checking `docs/` against `sim/` on 28 Aug --
 all three in the measuring apparatus, all three past a suite built to stop
@@ -135,7 +148,9 @@ exactly that. That is the strongest Failure-Recovery material in the repo.
 
 An LLM must **never** be on the path that decides whether to debit a specific
 customer at a specific moment. That is a deliberate architectural choice
-(ADR-005) and it is defensible under the "AI Judgment" criterion — but *only*
+(**ADR-005** — there is no ADR document; it is written out in full in
+`00_HANDOFF.md`) and it is defensible under the "AI Judgment" criterion — but
+*only*
 because there is a real agent layer doing real work elsewhere. **Do not quietly
 delete either half.** An agent that is only a constraint checker fails the
 track; an agent that lets an LLM pick debit times fails the architecture.
@@ -444,7 +459,7 @@ That is how the last four defects were found.
 1. `06_MODEL_CARD.md` — what ships, what it is worth, what it was never tested
    on. Especially §3, before you quote any number to anyone.
 2. `CLAUDE.md` — the ten hard rules, the environment, the numbers rule.
-3. `03_ERRORS.md` — sixteen errors with mechanisms. Pitch material.
+3. `03_ERRORS.md` — twenty-three errors with mechanisms. Pitch material.
 4. `01_FACTS.md` — every external fact with its source tag. **Nothing outside
    this file is established**, and the legality of the cross-merchant moat is
    still `[GUESS]`.
@@ -472,7 +487,11 @@ agent/
   execution/          sim_executor.py - the world, incl. OutageSchedule
   audit/              log.py - append-only JSONL, one row per event
   llm/                caseview.py (redaction boundary), fallback.py (deterministic),
-                      governance.py, schema in ports.py. NO MODEL-BACKED DIAGNOSER YET.
+                      governance.py, client.py (Z.ai transport), prompts.py
+                      (versioned), model_diagnoser.py (the LLM overlay)
+  eval/               golden_cases.yaml (40 + 7 taxonomy + 3 injection),
+                      cases.py, injection.py, run_eval.py, _cache/
+  batch_report.py     THE TRACK DELIVERABLE. Not batch.py, the composition root.
   tests/              _parallel.py + seven gates. See 06_MODEL_CARD.md §6b.
 ```
 
@@ -504,43 +523,67 @@ crashing. It now raises `NonMonotonicTime` instead. Error 14.
 `NOTIFICATION_CANCELLED`.** Otherwise `auditor.py` correctly reports `pending`
 violations that did not happen. `06_MODEL_CARD.md` §6c.
 
-### UPDATED 29 AUGUST 2026 - the LLM layer is built and unmeasured
+### THE LLM LAYER IS BUILT AND MEASURED. 29 August 2026.
 
-`agent/llm/client.py` (Z.ai transport, cache, budget), `prompts.py` (versioned,
-IDs in the cache key), `model_diagnoser.py` (an OVERLAY, never a dependency) and
-`agent/eval/` (case loader, injection cases, judge, harness) all exist and all
-run. **There is no `ZAI_API_KEY` here, so every call falls back to the
-deterministic answer and NO LLM NUMBER EXISTS.** Run
-`python agent/eval/run_eval.py --llm --judge` with a key to produce them; the
-responses cache by `(model, prompt_id, case_hash)` and replay offline afterwards.
+```
+python -m agent.batch_report --llm                      # THE DELIVERABLE
+python agent/eval/run_eval.py --llm --judge --replay    # the eval, offline, $0
+```
 
-**The two numbers the LLM has to beat, both measured:** the deterministic
-fallback scores **9/21 on the ambiguous cases** and **0/4 on terminal decline
-codes** (a frozen account or a revoked mandate, where no retry can ever work and
-`w3.index_score` has no slot for the fact). `02_RESULTS.md`.
+`agent/llm/client.py` (Z.ai transport, cache, hard budget, **never raises**),
+`prompts.py` (versioned - **the ID is part of the cache key**, so a prompt edit
+misses the cache and shows as a diff), `model_diagnoser.py` (an OVERLAY, never a
+dependency) and `agent/eval/` (case loader, 40 registered + 7 taxonomy + 3
+injection cases, judge, harness).
 
-**Two things that must stay true.** `Diagnosis` still has no temporal field -
+**Diagnoser `glm-5.3-flash`. Judge `glm-5.3`.** `run_eval.py --judge` refuses to
+run if the two SKU names are equal, so Flash never grades itself. **$0.26 spent.**
+
+| | ambiguous (21) | clean (19) | terminal (4) |
+|---|---|---|---|
+| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** |
+| `glm-5.3-flash` | **10/21** | 13/19 | **4/4** |
+
+**The clean column is the floor, not the result** - it is what thirty lines of
+if-else are for. Where the model earns its place is **terminal decline codes**:
+a frozen account (`ZX`, `YE`) or a revoked mandate (`VI`, `VD`), where no retry
+can ever succeed and `w3.index_score` has no slot for the fact. **It does not
+move the batch money** - 94.33% against the deterministic 94.36%.
+
+**Full tables and every caveat: `02_RESULTS.md`. Summary and the three things
+that bound every LLM number: `06_MODEL_CARD.md` section 7.**
+
+### THE FOUR THINGS MOST LIKELY TO MISLEAD YOU ABOUT THESE NUMBERS
+
+1. **`reasoning_effort=low`, and it is UNSWEPT.** Thinking cannot be disabled on
+   these SKUs (the API answers code `1210`); at the default the diagnoser emitted
+   1,596 completion tokens for an answer whose schema holds about eighty, and
+   timed out. **Every score is for that setting and 10/21 may be a floor.**
+   First thing to sweep.
+2. **The LLM cannot be called at every decision point.** The loop asks for a
+   diagnosis once per live mandate per decision hour - **119,667 times** over a
+   four-population batch. It runs under a hard per-run cap on network calls, so
+   **the batch's LLM arm is 95% deterministic.** Never call it "the LLM's
+   number". Error 22.
+3. **`WAIT` was cut on 29 August and the premise was wrong.** It was unreachable
+   in the rule engine and was the LLM's *most-used* answer; removing it moved the
+   ambiguous score from 4/21 to 10/21. **An action space is part of the model,
+   not part of the plumbing.** Error 20. The action space is now four: RETRY,
+   NUDGE, ESCALATE, STOP.
+4. **Author agreement is not accuracy.** The cases, the registered answers, the
+   rubric and the deterministic baseline share one author. **19 judge-vs-author
+   disagreements await human adjudication** and that is the validation step.
+
+### Two hard requirements that have not changed
+
+`Diagnosis` still has **no temporal field** -
 `agent/eval/injection.py:diagnosis_has_temporal_field()` asserts it by
-inspecting the type. And the judge must stay a different SKU from the diagnoser;
-`run_eval.py --judge` refuses to run if the two model names are equal.
+inspecting the type, so an injected "retry at 11am" has nowhere to land. And the
+**judge must stay a different SKU from the diagnoser**: same-model-grading-itself
+is the same-party failure this project has now hit twenty-three times.
 
-### What is NOT built, and what the open question is
-
-No model-backed diagnoser. Everything measured so far comes from
-`RuleBasedDiagnoser` / `RetryOnlyDiagnoser`, deterministic and offline **on
-purpose**: the batch number must never depend on a network call, or it is not
-reproducible and the numbers rule forbids quoting it.
-
-The eval harness for an LLM layer is also not built. The open design question,
-recorded so the next session does not have to rediscover it: **the aggregate
-recovery ceiling for outage awareness is now known to be about +0.26 pts**, so
-scoring an LLM's outage verdict on recovery has almost no headroom. The
-alternative is to score it on **detection quality** - latency, false alarms, and
-the ambiguous bursts where the binomial test sits near its threshold and a
-judgement call has room to matter. That decision has not been made.
-
-Whatever is built there: the diagnoser must never see a balance (the `CaseView`
-redaction boundary in `agent/llm/caseview.py` is what guarantees it), `Diagnosis`
-must keep having no temporal field, and the judge must be a different model from
-the diagnoser - same-model-grading-itself is the same-party failure this project
-has now hit sixteen times.
+**The deterministic fallback stays the default and produces the gated number.**
+The LLM is an overlay measured against it. A headline that needs an API key is
+not reproducible and the numbers rule forbids quoting it - which is why every
+response is cached by `(model, prompt_id, case_hash)` and `--replay` reproduces
+the whole eval offline, byte-identical, in 0.35 seconds, for **$0.00**.

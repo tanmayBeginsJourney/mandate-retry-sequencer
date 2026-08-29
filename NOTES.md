@@ -3760,3 +3760,69 @@ checking.
 0.00 / −2.87 / −13.46 pts. It is a pure `[GUESS]`, the curve is steeply
 superlinear so interpolating the middle is unsafe, and quoting −13.46 alone
 would be quoting the top of a guessed range as the finding.
+
+---
+
+# 29 August 2026 — docs updated to reflect the session, then read cold
+
+Docs now carry **latest state only**; the history of how they got there is
+above, in this file. Five files changed: `00_HANDOFF.md`, `01_FACTS.md`,
+`02_RESULTS.md`, `03_ERRORS.md`, `06_MODEL_CARD.md`, plus `07_AGENT_BRIEF.md`,
+`04_BUILD_PLAN.md` and `CLAUDE.md` for stale counts.
+
+## The errors doc had a numbering hole
+
+It jumped from 16 straight to my new entries. **Errors 17, 18 and 19 had been
+found earlier the same day and never written up**: the excess-loss metric that
+rewarded silence (caught by its own gate), the demo's append-mode log printing
+phantom Stage 0 violations, and `RuleBasedDiagnoser` proposing a second debit on
+a collected cycle. Written up, and the LLM-session entries renumbered 20-23.
+**Twenty-three now**, and every doc that quoted "sixteen" was corrected.
+
+## What the cold read found
+
+Read `docs/` as a stranger, mechanically and then by eye. Mechanical checks:
+**28 commands, 73 backticked paths and every numbered error cross-reference all
+resolve** — nothing named in the docs is missing from the repo. Seventeen
+headline numbers appear in two to six files each with **no contradictions**.
+
+By eye, four things a reader would have had to guess:
+
+**1. `ADR-005` was cited in three files and defined in none.** There is no ADR
+document in this repo and never was. It is now written out in full, once, in
+`00_HANDOFF.md`, and the two other citations say where to find it and that the
+document does not exist. **A reference that resolves to nothing is worse than no
+reference** — it tells a reader there is a document to go and find.
+
+**2. How to supply the API key existed in one table cell**, deep in
+`06_MODEL_CARD.md` §7a. A reader running `--llm` without a key gets a silent
+fallback to the rule engine. There is now a table in `07_AGENT_BRIEF.md` §0
+saying what each command needs, and the handoff says it beside the command.
+
+**3. Nothing said the response caches are COMMITTED**, which is the entire
+reason `--replay` works from a clean clone with no key and no network. Said now,
+in three places.
+
+**4. Nothing said `agent/eval` needs PyYAML** while the gated suite needs numpy
+alone. Said now, beside the command that needs it.
+
+## Two stale sections that survived until the cold read
+
+`07_AGENT_BRIEF.md` still said "the LLM layer is built and unmeasured", "NO
+MODEL-BACKED DIAGNOSER YET" in its repo tree, and "the eval harness for an LLM
+layer is also not built". `00_HANDOFF.md`'s Open list still carried five items
+that had been resolved that day, struck through — **history sitting in the place
+a reader looks for what is open.** Moved to a Resolved section; Open now has
+four items and all four are genuinely open.
+
+Also caught: a splice that **duplicated sections 7 and 8** of the agent brief,
+because the replacement used `s[:i] + NEW + s[j:]` with `i > j`. Rebuilt the
+file from `HEAD` and patched once. `sim/verify_brief.py` passes, which is what
+proves the brief still matches the code rather than just reading well.
+
+## Verified after
+
+`--tier full` 25 gates, 6 bad, all known. Isolation 5/5 mutants, 45 files.
+Parity bit-exact. Stage 0 20/20. One-belief 11/11. Loop-order pass.
+`verify_brief` pass. Case loader self-test OK. **Eval replays offline at 6/8,
+$0.00.**

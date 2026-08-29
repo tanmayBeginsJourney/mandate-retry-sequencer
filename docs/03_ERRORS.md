@@ -1,7 +1,11 @@
-# 03 — THE SIXTEEN ERRORS
+# 03 — THE TWENTY-THREE ERRORS
 
-Every one of these made the project look **better** than it was. Read them
-before you optimise anything, because they are the shapes you will reintroduce.
+**Errors 1-18 all made the project look BETTER than it was.** Errors 19-23,
+added 29 August 2026, break the streak: 19 and 23 were latent defects that had
+not yet flattered anything, and 20 was a decision taken for unrelated reasons
+that then moved a headline six points in the flattering direction. Read all of
+them before you optimise anything, because they are the shapes you will
+reintroduce.
 
 They are also the strongest asset for the panel, who explicitly ask what broke
 and how you recovered.
@@ -14,8 +18,8 @@ improvements as bugs — and made them anyway.
 **Errors 14–16 were found on 28 August 2026 while building `agent/`'s context
 layer, and all three are the SAME SHAPE as 1–13: a guardrail that reported
 green while measuring nothing.** One went green *underneath a paragraph I had
-just written explaining why it was green*. The count is now sixteen and the
-pattern has not changed once.
+just written explaining why it was green*. The count stood at sixteen when
+that was written and the pattern has not changed once since.
 
 **Errors 11–13 were found earlier the same day, by a reader who had been given
 `docs/` and told to check it against `sim/` — and they are the sharpest of the
@@ -339,7 +343,7 @@ Both checks carry explicit **vacuity guards** that report VACUOUS rather than
 HELD when the detector never fires anywhere. **A pre-registered prediction that
 a null result satisfies is not a prediction.**
 
-## The tally after sixteen
+## The tally at sixteen — SUPERSEDED, see "The tally after twenty-three" at the end
 
 | gate | suite | why it could never fail |
 |---|---|---|
@@ -360,7 +364,7 @@ gate" and "a mutant may create illegal state and nothing else":
 
 ### The one that did work: the independent auditor caught a real hole
 
-Not an error in the sixteen, but the counter-example worth recording. In the
+Not one of the numbered errors, but the counter-example worth recording. In the
 outage-pause arms `agent/constraints/auditor.py` reported **45/112/182 `pending`
 violations** while `Stage0Gate`'s own counter reported **0**. The auditor was
 right: pausing dropped a pending notification without writing anything to the
@@ -372,3 +376,296 @@ the two counts agree at 0. **The fix went into the trail, never into the
 auditor.** This is the first time the deliberate two-implementation split - the
 auditor shares no code with the enforcer, enforced by an import-graph gate - has
 caught anything, and it caught something real on its first outing.
+
+---
+
+# Errors 17-19 — found 29 August 2026, building the detection benchmark
+
+---
+
+**17. An excess-loss metric that rewarded silence, caught by its own gate.**
+
+The detection benchmark reports the agent as excess loss against an oracle that
+knows the true outage windows, counted in **detector-hours of disagreement**.
+Gate G-1b says the oracle must weakly dominate every statistical detector. It
+did not: at severity 0.15 the oracle scored **72.0** hours against the
+detectors' 37.5-51.9, and `M-BLIND` — a crippled oracle that never fires at
+all — scored **24.0**, better than the real oracle at every severity.
+
+The arithmetic, once looked at. A detector that **never fires** accrues at most
+`MISSED` = 4 windows × 6h = **24 hours**, capped by the window length. A detector
+that **fires correctly** holds OUTAGE until the next time anything consults it —
+hour 8 the following day, up to **18 hours per window**, so up to 72. **Under an
+unweighted hour count, silence is cheaper than correctness**, the least
+sensitive detector wins, and `min_attempts=16` looked best precisely because it
+detected least.
+
+*Mechanism:* the loss's **time base** was wall clock, but the monitor is only
+consulted when the loop has work to do. Hours between 14:00 and the next 08:00,
+when nobody asks the monitor anything and no dispatch is possible, were being
+counted as errors that changed nothing. A metric named for a property
+("disagreement with the truth") rather than for the decisions it affects.
+
+*Guard:* **G-1b is kept RED and is NOT repaired.** Repairing a metric after it
+returns an inconvenient answer is indistinguishable from moving a threshold
+(rule 1), and this repo already keeps S1, S1_PD, S2b and S2_LEGACY red on
+exactly that principle. **G-1c** was added beside it — the same dominance claim
+counted on **decision-points**, one per day at hour 8, which is the time base the
+bandit literature already uses (regret is summed over rounds at which the
+algorithm acts). On decision-points the oracle scores 0.00 everywhere and the
+detectors 4.00-5.38, and G-1c is what the suite verdict reads.
+
+*The encouraging half:* **the gate found a defect in its own metric**, in the
+same session that wrote it, rather than an outside reader finding it months
+later. That is the first time on this project.
+
+---
+
+**18. The demo printed compliance violations that never happened.**
+
+`python -m agent.demo` displayed:
+
+```
+gate refusals        {'cap': 0, ..., 'pending': 0}
+independent recount  {'cap': 24, ..., 'pending': 282}
+```
+
+`AuditLog` opens its file in `"a"` mode — deliberately, because append-only is a
+property a reader can check by eye — and `demo.py` wrote to the **fixed** paths
+`agent/runs/demo_full.jsonl` and `demo_degenerate.jsonl`. So every invocation
+appended to the previous one's log, and `auditor.replay`, whose only input is
+the file, audited **two concatenated runs as if they were one**: the same
+mandate's cycle appears twice, so attempts double against the cap and a
+notification from run A reads as concurrent with one from run B.
+
+Verified: the file held **2 distinct `run_id`s**. Replayed whole: `cap 24,
+pending 282`. Replayed **per `run_id`: 0 and 0**. The agent was fine; the display
+was not.
+
+*Mechanism:* "one log file is one run" was an assumption every reader of a log
+makes — `replay` sorts by `seq`, and `seq` restarts at 1 for each run — and
+**nothing enforced it**. A fresh clone looked clean on its first run and lied on
+its second, which is why nothing caught it. This is error 14's shape: a
+component returning a confident wrong number instead of failing.
+
+*Guard:* `agent/audit/log.py:LogFileNotEmpty` makes it an **exception at open
+time** anywhere in the repo, and `demo.py` clears its two fixed paths first. The
+one legitimate append — `test_stage0_enforces` Half B, which models a rogue
+writer inside **one** run — passes `allow_append=True` explicitly. Verified by
+running the demo twice in a row: clean both times.
+
+---
+
+**19. A correctness property that lived in the caller instead of the component.**
+
+`RuleBasedDiagnoser` returned **RETRY on a billing cycle that had already
+collected** (golden case GC-40). Its first branch tested only for `TECH`, so an
+`OK` fell through to the peer-success branch, which fires on
+`peer_mandate_success_recent` plus a non-wide band and proposes a second debit.
+**Charging a customer twice is the worst outcome this system can produce** —
+worse than never collecting, because it costs a refund, a complaint and probably
+the mandate.
+
+It was harmless in production only because `agent/loop.py` filters
+`not m.collected` out of `live` before it ever calls a diagnoser.
+
+*Mechanism:* a component with a `Protocol` interface was correct only under an
+assumption **its single current caller happened to satisfy and nothing stated**.
+That is the same shape as every vacuous gate in this document — the check and
+the thing checked sharing an assumption neither writes down. A second caller, or
+a reordering of `live`, would have shipped a double debit.
+
+*Guard:* fixed **in the component**, as a first branch guarded on
+`attempts_used >= 1` so it is correct under both readings of `decline_history`'s
+scope (the loop clears it at rollover; the golden-case convention says it may
+span cycles). Confirmed the defect was masked rather than latent: **full mode is
+unchanged at four populations after the fix.** GC-40 is the anchor case that
+keeps it visible — any diagnoser returning RETRY there fails the set outright
+whatever it scores elsewhere.
+
+---
+
+# Errors 20-23 — found 29 August 2026, building and running the LLM layer
+
+Four more, and the pattern has still not changed. Two are guardrails that
+measured nothing; one is a decision taken on a premise that was true of the
+wrong component; one is a hole an *independent checker on a different model*
+found in a lexical net we wrote ourselves.
+
+**20 and 22 are the two most expensive shapes in this list for a fresh session
+to reintroduce**, because both look like housekeeping while you are doing them.
+
+---
+
+**20. A decision taken on a premise that was true of one component and false of
+the other.**
+
+`WAIT` was cut from the action space on three grounds: unreachable from every
+branch of `RuleBasedDiagnoser`, exactly one supporting golden case (GC-22), and
+measured at approximately zero by the action ablation. All three are true. All
+three are statements about **the rule engine**.
+
+They are false of the model. In the first live eval `WAIT` was
+`glm-5.3-flash`'s **most-used answer — 11 of 40 registered cases**. Removing it
+moved the model's ambiguous-case score from **4/21 to 10/21**: same model, same
+cases, same temperature, one word removed from a prompt's list and from an
+enum. The change flipped the headline comparison from "the LLM is much worse
+than thirty lines of if-else" to "the LLM beats it".
+
+*Mechanism:* a property was measured on the component that had it (the rule
+engine, where WAIT was dead code) and generalised to the component that did not
+(the model, where it was live and load-bearing). Nothing in the process asked
+"dead for whom?". The ablation number that justified it — `~0` — was measured
+before a model-backed diagnoser existed, so it could not have been about one.
+*This is error 9's shape at the level of a DECISION rather than a gate:* a
+finding named after a concept ("WAIT is worth nothing") rather than after the
+subject it was measured on.
+
+*What is NOT wrong:* cutting it may still be right. The simpler action space is
+defensible and the six points may be an artefact of a model over-reaching for
+"do nothing today". The defect is that the decision was taken **without that
+being a question**.
+
+*Guard:* both columns — WAIT-in and WAIT-out — are kept side by side in
+`02_RESULTS.md` rather than the old one being replaced, so the size of the
+effect is visible to anyone who reads the table. GC-22, whose registered answer
+is now unreachable, **stays in the denominator**: dropping it would flatter every
+arm by removing a case none of them can win, and `agent/eval/cases.py`'s
+self-test prints the orphan rather than crashing on it. **New rule: before
+removing anything from a shared vocabulary, measure it on every consumer of that
+vocabulary, not on the one that made it look dead.**
+
+---
+
+**21. The judge-disagreement count was computed twice, by two pieces of code,
+and they disagreed.**
+
+The eval's summary block printed **18 judge-vs-author disagreements**. The
+pre-registered check, forty lines later, scored **19**. Both were reading the
+same forty judge verdicts.
+
+The cause: the summary built a list `dis` and the check built its own, and both
+then tested membership with `row in dis` — where `row` is a dict containing
+dataclass instances. That comparison is by value, not identity, so it did not
+mean what it looked like it meant. E-JUDGE-2's concentration ratio was therefore
+computed against a denominator **the reader never saw**, and the ratio decides
+whether the case file's `expert_agreement` flag can be trusted.
+
+*Mechanism:* the same quantity derived independently in two places, which is
+this project's signature failure — the auditor-versus-gate split is the
+*deliberate* version of it and the whole point is that it is deliberate. This
+one was an accident, and it was **in the code doing the checking**, which is
+where a self-audit is blindest (see errors 11-13).
+
+*Guard:* `agent/eval/run_eval.py:judge_disagreements()` computes it **once**, keys
+by case id rather than by object identity, and both consumers read its result.
+Its docstring says why it exists. **New rule: a number printed in a summary and
+a number scored in a check must come from the same call, not from two
+expressions that look alike.**
+
+---
+
+**22. An LLM wired into a loop that asks for a diagnosis 119,667 times.**
+
+`agent/loop.py` calls `diagnoser.diagnose()` once per **live mandate** per
+**decision hour**. The eval exercises fifty fixed cases, so it ran in seconds
+and gave no hint of anything. The batch report, at n=100 × k=5 over four
+populations and 120 days, asks for **119,667 diagnoses**. Wired to a network
+call at 2-8 seconds each, that is days of wall clock and an unbounded bill; the
+first attempt was killed after twelve minutes having produced no output, and it
+had already made ~165 unplanned paid calls.
+
+*Mechanism:* a component was validated on the harness that exercises it
+**cheaply** and then deployed into the loop that exercises it **exhaustively**,
+with nothing in between asking how many times it would be called. The eval's
+fifty calls and the batch's hundred and nineteen thousand differ by three orders
+of magnitude and the interface is identical, so the code gave no warning. Same
+family as error 10 — a cost that is obvious once measured and invisible until
+then.
+
+*What is NOT wrong:* the fix is not a faster model. No production recovery agent
+calls an LLM sixty thousand times a day either; it calls one on the novel cases
+and lets rules handle the routine ones. **A bounded call budget IS the design.**
+
+*Guard:* `ModelDiagnoser(max_live_calls=...)` is a hard per-run cap on **network**
+calls; cache hits are free and do not count, so it bites on novelty rather than
+volume. Every refusal is a logged `LLM_FAILURE` with its reason, and
+`batch_report.py` prints the resulting **fallback rate (94.8%)** beside the money
+rather than burying it. **The LLM arm of the batch is 95% deterministic and the
+report says so — it must never be described as "the LLM's number".**
+Two supporting fixes came out of the same incident: the response cache is now
+written **as results arrive** (the first live run lost thirty minutes of paid
+calls because it saved only at the end), and calls run concurrently with
+progress printed, because thirty minutes of silence is indistinguishable from a
+hang.
+
+---
+
+**23. The lexical net had a hole, the prompt was coaching it, and a different
+model found both.**
+
+`agent/llm/governance.py` exists to catch a merchant-facing rationale that
+discloses the customer's financial state. GLM-5.3, judging, flagged two
+rationales that `governance.check` had passed:
+
+* *"recent activity on the account indicates **money reached it** recently"*
+* *"a recent successful mandate on this account confirms **funds reach it**"*
+
+Both are paraphrases of `peer_mandate_success_recent`, a boolean the `CaseView`
+legitimately carries and which `caseview.py` defends on the grounds that it
+"names no merchant and no amount". **Restating "another transaction succeeded"
+as "this customer has money" converts a transaction fact into a claim about a
+person, which is precisely the thing the rule forbids** — and the net had no
+pattern for it.
+
+Worse: the diagnoser's own prompt contained the line *"means money reached the
+account"*. **We were coaching the phrasing we were failing to catch.**
+
+*Mechanism:* the redaction boundary's guarantee is "the narrative layer cannot
+leak a number it was never given", and that guarantee is intact — the model has
+no balance. It simply **inferred** one from a field it was allowed to see and
+said it out loud. The lexical net was written against the disclosures we
+imagined, which were possessive ("their balance") rather than inferential
+("funds reach it"). A checker written by the same party that wrote the thing
+checked, again.
+
+*Guard:* patterns added for `money/funds/cash reach*`, `is funded`, `has funds`,
+`good for it`, `can pay`; the prompt line rewritten to forbid restating the
+boolean. **The fix went into governance and into the prompt, never into the
+judge** — the same principle as `NOTIFICATION_CANCELLED`, where the fix went into
+the audit trail and never into the auditor. Post-fix **7 of 40 rationales fail
+governance and all 7 are genuine**, each replaced by `SAFE_FALLBACK` before a
+merchant sees it.
+
+*And the judge was not simply right.* Three of its `names_a_time` flags were
+**rejected**: it flagged *"our model scores this window highest"*, which is the
+exact phrasing `07_AGENT_BRIEF.md` §2 prescribes as compliant. **An independent
+checker is a source of hypotheses, not a source of truth**, and adopting its
+verdicts wholesale would have broken the approved wording. Accepted on leakage,
+rejected on time, both recorded.
+
+---
+
+## The tally after twenty-three
+
+The seven guardrails that measured nothing are unchanged (`assert violations
+== 0`; peak hours unrepresentable; oracle approval ~100%; **M1**; **M4**; the
+loop-order mutant; **E-DET-2/3**). Errors 17-23 add four more shapes that are not
+vacuous gates:
+
+| shape | instance |
+|---|---|
+| a metric whose time base counted moments that changed nothing | **17** (G-1b hours) |
+| an invariant every reader assumed and nothing enforced | **18** (one log, one run) |
+| a correctness property living in the caller, not the component | **19** (GC-40) |
+| a property measured on one component and generalised to another | **20** (WAIT) |
+| one quantity derived twice, in two places, disagreeing | **21** (judge count) |
+| a component validated cheaply and deployed exhaustively | **22** (119,667 calls) |
+| a checker written by the party that wrote the thing checked | **23** (governance) |
+
+**The one encouraging line in this section:** error 22 was found by an
+independent checker running on a *different model family*, on its first outing,
+in the measuring apparatus — which is exactly where `CLAUDE.md` says self-audit
+is blindest. The two-implementation discipline has now caught something twice:
+once with `auditor.py` versus `Stage0Gate`, and once with GLM-5.3 versus our own
+regex list.

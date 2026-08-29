@@ -13,7 +13,7 @@ Then read `docs/00_HANDOFF.md`, `docs/01_FACTS.md`, `docs/02_RESULTS.md` and
 
 The single most important thing about this project:
 
-> **It has found sixteen significant errors in its own work. Every single one
+> **It has found twenty-three significant errors in its own work. Every single one
 > made the project look BETTER than it was.** That is not coincidence. It is
 > what happens when the same party builds the measuring stick and the thing
 > being measured. You are now that party. Behave accordingly.
@@ -184,7 +184,8 @@ interventions, and writes a human-readable justification for every money action.
 
 An LLM must never be on the path that decides whether to debit a specific
 customer at a specific moment. That is a deliberate architectural choice
-(ADR-005) and it is defensible under the "AI Judgment" judging criterion —
+(**ADR-005** — there is no ADR document; it is written out in full in
+`docs/00_HANDOFF.md`) and it is defensible under the "AI Judgment" criterion —
 but only because there IS a real agent layer elsewhere. Do not quietly delete
 either half.
 
@@ -200,7 +201,7 @@ docs/
                        (start at 07_AGENT_BRIEF.md if you are building the agent)
   01_FACTS.md          every external fact, with source and confidence
   02_RESULTS.md        gated simulation results. See also 06_MODEL_CARD.md.
-  03_ERRORS.md         SIXTEEN errors, with mechanism + guard. Pitch material.
+  03_ERRORS.md         TWENTY-THREE errors, with mechanism + guard. Pitch material.
   04_BUILD_PLAN.md     what is left, dated
   05_TEST_DESIGN.md    test philosophy, written BEFORE the harness on purpose
   06_MODEL_CARD.md     WHAT SHIPS. Read this before touching sim/ or agent/.

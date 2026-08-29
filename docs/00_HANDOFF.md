@@ -1,30 +1,42 @@
 # 00 — HANDOFF
 
-## Where things stand, 28 August 2026
+## Where things stand, 29 August 2026
 
 Research and simulation: **done and FROZEN.** Stop doing it.
-Production code: **`agent/` exists and runs end to end.** Constraint layer,
-action space and context layer are built and gated. **The LLM layer is BUILT
-AND MEASURED** (29 Aug 2026; GLM-5.3-Flash diagnosing, GLM-5.3 judging, $0.15
-spent, replayable offline). Run the deliverable:
-`python -m agent.batch_report --llm`.
-Deadline: **5 September 2026 — 8 days from today.**
+Production code: **`agent/` is complete and every layer is measured.**
+Constraint layer, action space, context layer, detection benchmark, decline
+taxonomy and **the LLM layer** all exist, all run, and all have numbers.
+Deadline: **5 September 2026 — 7 days from today.**
 
-Run it: `python -m agent.demo` (see `06_MODEL_CARD.md` §6).
+**The two commands that matter:**
 
-> **The agent's headline is a CAPABILITY claim, not a recovery number.**
-> The action space is worth **+1.371 pts** at a 120-day horizon (a curve over
-> the horizon, not a constant) and outage awareness **+0.256 pts** at the most
-> extreme severity swept. What is defensible is that an aggregator can detect
-> a rail outage that a single merchant structurally cannot. `02_RESULTS.md`.
+```
+python -m agent.batch_report --llm         # THE DELIVERABLE. ~15 min.
+python agent/eval/run_eval.py --llm --judge --replay   # the eval, offline, $0
+```
+
+**The second needs nothing** — the model response caches are committed, so it
+replays offline with no key. **The first needs a Z.ai key in `.env` at the repo
+root** (`ZAI_API_KEY=...`, gitignored, read automatically) or its LLM arm
+silently becomes the deterministic arm. `07_AGENT_BRIEF.md` §0 has the table.
+
+> **THE BATCH NUMBER.** 100 customers x 5 mandates over 4 held-out populations,
+> 120 days, `payday_err=7`: **94.36% of billing cycles collected against
+> `payday_wait`'s 57.70% — +36.66 pts (2 SE 2.47, SIG), Rs 5,994,430**, with
+> **zero Stage 0 refusals and an independent recount of zero over 8,954
+> executed money actions**. `payday_wait` is a permanent row and **at
+> `payday_err` of about +/-1 day it BEATS us.**
 >
-> **Added 29 August 2026 — detection is now measurable against an oracle.**
-> `agent/tests/test_detection_benchmark.py` reports the agent as excess loss
-> against a clairvoyant detector, decomposed, gated, with four crippled oracles
-> that all get caught. It also moved the recovery picture: **perfect detection
-> is worth +0.916 pts at severity 0.80**, so the +0.256 was the detector's
-> ceiling and not the problem's. Pausing stays a bad unconditional default —
-> even the oracle is significantly NEGATIVE at severity 0.15.
+> **THE LLM.** `glm-5.3-flash` diagnosing, `glm-5.3` judging (a different SKU;
+> the harness refuses to run if they are equal). It **beats the rule engine on
+> ambiguous cases 10/21 vs 9/21 and on terminal decline codes 4/4 vs 0/4**,
+> loses on clean cases 13/19 vs 19/19, and **does not move the batch money**
+> (94.33% vs 94.36%). $0.26 spent. **Every LLM score is at
+> `reasoning_effort=low`, which is unswept.**
+>
+> **THE CAPABILITY CLAIM, unchanged.** An aggregator detects a rail outage a
+> single merchant structurally cannot: 22.5 attempts per 24h window against
+> 0.38, against a floor of 8. `02_RESULTS.md`.
 
 **If you are the next session, read `docs/07_AGENT_BRIEF.md` first, then
 `docs/06_MODEL_CARD.md`.** Between them they carry everything needed to build
@@ -41,10 +53,28 @@ tested and frozen. The old one (`legacy/`) is defective and frozen.
 | Belief over balance **and** payday | Payday posterior is where the moat lives |
 | `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth +9.61 pts (±1.67) on the FITTED filter (ungated); S2a gates +9.53 on the UNFITTED one — see error 13 |
 | **No** coordinated budgeting | Measured −6 pts twice. Cut. |
-| No LLM on the debit-timing path | ADR-005. Deliberate, defensible. |
+| No LLM on the debit-timing path | **ADR-005** (below). Deliberate, defensible. |
 | **Yes** LLM on diagnosis / intervention choice / audit narrative | Needed for the track, and honest |
 | Cycle-based metric, no LTV constant | Death priced automatically |
 | `payday_wait` is a permanent baseline row | It is what a good rival builds in an afternoon |
+
+## ADR-005 — the one architectural decision cited by number
+
+**There is no ADR document in this repo.** The number is cited in `CLAUDE.md`,
+`07_AGENT_BRIEF.md` and the table above, so here it is in full, once:
+
+> **An LLM must never be on the path that decides whether to debit a specific
+> customer at a specific moment.** The LLM decides *what* to do and explains
+> *why*; the bandit policy decides *when*; the constraint layer decides
+> *whether it is allowed*.
+
+It is enforced by construction, not by review: `ports.Diagnosis` has **no
+temporal field**, so the narrative layer's only output type physically cannot
+express a debit time. `agent/eval/injection.py:diagnosis_has_temporal_field()`
+asserts that by inspecting the type, and fails the day someone adds one.
+`agent/llm/governance.py` scans the merchant-facing prose for times separately,
+because a justification that recommends an hour is an LLM on the timing path via
+the merchant's eyeballs.
 
 ## THE MODEL IS FROZEN (tag `model-frozen`, 28 August 2026)
 
@@ -63,9 +93,10 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
   unfitted one. `NOTES.md`, 28 August.
 - **Does pooling survive a properly fitted filter?** Yes, and it grows:
   +8.20 → **+9.61 pts (±1.67)**.
-- **Suite runtime.** ~27 min → **~81s full / ~34s fast**, output proved
-  byte-identical by T9 — but T9's lock covers only the UNFITTED filter
-  (error 13). "~66s" was wrong; measured twice on 28 Aug.
+- **Suite runtime.** ~27 min → **~100s full / ~34s fast on an idle machine**,
+  output proved byte-identical by T9 — but T9's lock covers only the UNFITTED
+  filter (error 13). The full-tier figure is **load-dependent**: 100/102/98s
+  idle, 223s with other work in flight. `CLAUDE.md` has the measurement.
 - **The 6× LTV multiplier and the 0.92 discount.** Swept. LTV was inert and is
   removed; the discount is live and now reported as a range.
 - **`harness.py:554-560`** (was `:325` when this was written) — the placebo
@@ -77,9 +108,29 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
   margin over `ml_index` *grows* from +5.30 to +12.03 as the population moves
   away from the fit.
 
-## Open — genuinely unresolved
+## Resolved 29 August 2026
 
-**Added 28 August 2026, from the agent build:**
+- **What should the LLM layer be scored on?** Detection, against an oracle at
+  the true change points — `agent/tests/test_detection_benchmark.py`. Then the
+  diagnosis eval against 40 registered cases. Both built and measured.
+- **`min_attempts` swept.** At n=100 over {4, 8, 16} the loss does **not order
+  cleanly** on either metric. It stays at 8 because nothing measured argues for
+  moving it — a weaker reason than was hoped for, and the true one.
+  `window_h=24` and `hold_h=12` remain `[GUESS]` and unswept.
+- **The demo printed Stage 0 violations that never happened.** `AuditLog`
+  append-mode plus a fixed path meant a second run audited two concatenated
+  runs as one. `LogFileNotEmpty` now makes it an exception at open time.
+  Error 18.
+- **The LLM layer is measured.** `glm-5.3-flash` diagnosing, `glm-5.3` judging.
+  10/21 ambiguous (rule engine 9/21), 4/4 terminal (rule engine 0/4), 13/19
+  clean. **It does not move the batch money.** $0.26 spent.
+- **`WAIT` cut** — and the premise was true only of the rule engine. Error 20.
+- **`RuleBasedDiagnoser` proposed a second debit on a collected cycle** (GC-40).
+  Fixed in the component; the property had been living in the caller. Error 19.
+- **The detection benchmark's own gate found a defect in its own metric.**
+  G-1b is kept RED; G-1c reads the verdict. Error 17.
+
+## Open — genuinely unresolved
 
 0a. **Why this machine segfaults on long-lived processes. ROOT CAUSE NOT
    FOUND.** Many `agent.batch.run_once` calls in one process crash (SIGSEGV,
@@ -87,64 +138,23 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    in the morning segfaulted before printing a line that afternoon, unchanged.
    **Contained, not fixed** — every measurement runs one process per run via
    `agent/tests/_parallel.py`. See `06_MODEL_CARD.md` §6a.
-0b. ~~**What the LLM layer should be scored on.**~~ **RESOLVED 29 August 2026:
-   detection, against an oracle at the true change points.** The benchmark is
-   `agent/tests/test_detection_benchmark.py` — excess loss decomposed into
-   detection delay, missed detection, dropout, late resumption and false
-   alarms, three gates, four crippled oracles, none of which survives. The
-   reason recovery is the wrong scoreboard is now measured rather than
-   asserted: the entire spread between a blind detector and a clairvoyant one
-   is **1.46 pts**, and 0.55 of that is eaten by the cost of the response.
-   **What changed the picture: recovery does not saturate — the current
-   detector does.** Perfect detection is worth **+0.916 pts (SIG)** at severity
-   0.80 against the shipping detector's +0.199, so the +0.256 ceiling was a
-   property of the detector, not of the problem. `02_RESULTS.md`.
-0c. ~~**The rail monitor's constants are unswept.**~~ **`min_attempts` SWEPT
-   29 August 2026, and the answer is "no clean ordering".** At n=100, over
-   {4, 8, 16}, loss is non-monotone on decision-points at severities 0.15 and
-   0.40 and monotone only at 0.80; on the hours metric it runs backwards for a
-   reason that turned out to be a defect in that metric. **The constant stays
-   at 8 because nothing measured argues for moving it**, which is a weaker
-   reason than was hoped for and is the true one. `window_h=24` and `hold_h=12`
-   are still `[GUESS]` and still unswept.
-0d. ~~**The demo prints Stage 0 violations that did not happen.**~~ **FIXED
-   29 August 2026.** `AuditLog` opened `"a"` and `demo.py` wrote fixed paths, so
-   a second invocation appended to the first and the independent recount audited
-   two concatenated runs as one — `cap 24, pending 282` against the gate's 0.
-   Per `run_id` both were **0**. `agent/audit/log.py:LogFileNotEmpty` now makes
-   that an exception at open time anywhere in the repo, and the demo clears its
-   two fixed paths first. Verified by running the demo twice in a row: clean
-   both times.
-0e. ~~**NO LLM NUMBER EXISTS.**~~ **MEASURED 29 August 2026.**
-   GLM-5.3-Flash diagnosing, GLM-5.3 judging, $0.15 spent, and
-   `run_eval.py --llm --judge --replay` reproduces it offline in 0.35s for
-   $0.00. The model **beats the rule engine on ambiguous cases 10/21 vs 9/21**
-   and on **terminal decline codes 4/4 vs 0/4**, loses on clean cases 13/19 vs
-   19/19, and **does not move the batch money** (94.33% vs 94.36%).
-   `02_RESULTS.md`.
-0f. ~~**`WAIT` is unreachable.**~~ **CUT 29 August 2026 -- and the premise was
-   only true of the rule engine.** WAIT was the LLM's MOST-USED answer, 11 of 40
-   registered cases. Removing it moved the LLM's ambiguous score from **4/21 to
-   10/21**. **An action space is part of the model, not part of the plumbing.**
-   GC-22's registered answer was WAIT, so it is now unwinnable by construction
-   and stays in the denominator. Reverting is one commit; both columns are in
-   `02_RESULTS.md`.
-0g. **19 judge-vs-author disagreements await human adjudication.** That is the
+0b. **19 judge-vs-author disagreements await human adjudication.** That is the
    validation step and the only one. `python agent/eval/run_eval.py --llm
-   --judge --replay` prints the table with GLM-5.3's reasoning. The pattern to
-   argue about: on Z9 bursts with attempts left the author says RETRY/ESCALATE
-   and BOTH model and judge say NUDGE. Two models agreeing is not evidence --
-   they may share a pre-training prior.
-0h. **`reasoning_effort` is unswept, and every LLM score depends on it.**
-   Thinking cannot be disabled on these SKUs (API code 1210), and at the default
-   the diagnoser emitted 1,596 completion tokens per answer and timed out. Every
-   score is for `reasoning_effort=low` with a 2000-token cap. A higher setting
-   may score better; **10/21 may be a floor.** First thing to sweep.
-0i. **The LLM is called 119,667 times over a 4-population batch** -- once per
+   --judge --replay` prints the table with GLM-5.3's reasoning, offline, for
+   $0.00. **The pattern to argue about:** on Z9 bursts with attempts left the
+   author says RETRY/ESCALATE and BOTH model and judge say NUDGE. Two models
+   agreeing is not evidence — they may share a pre-training prior.
+0c. **`reasoning_effort` is unswept, and every LLM score depends on it.**
+   Thinking cannot be disabled on these SKUs (API code 1210), so every score is
+   for `low` with a 2,000-token cap. A higher setting may score better;
+   **10/21 may be a floor.** First thing to sweep.
+0d. **The LLM is called 119,667 times over a 4-population batch** — once per
    live mandate per decision hour. It runs under a hard cap of 120 live calls
    per run with the rule engine handling the rest, giving a **94.8% fallback
    rate**. That is the design, not a workaround, but it means the batch's LLM
-   arm is 95% deterministic and must never be described as "the LLM's number".
+   arm is **95% deterministic** and must never be described as "the LLM's
+   number".
+
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and
    still the one fact that decides whether the sophisticated version is worth
    building. What IS now measured is where the crossover sits: the system
@@ -210,5 +220,5 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
 - [ ] Stopping rules explicit and demonstrable
 - [ ] One failure handled gracefully, on camera
 - [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the errors (there are **sixteen**)
+- [ ] 5-minute pitch video, opening with the errors (there are **twenty-three**)
 - [ ] `NOTES.md` full of real mess
