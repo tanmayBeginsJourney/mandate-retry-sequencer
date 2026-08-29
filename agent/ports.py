@@ -115,6 +115,44 @@ def family_of(code: str) -> str:
     return CODE_FAMILY.get(code, FAMILY_AMBIGUOUS)
 
 
+# ------------------------------------------------------------------- banks
+# Added 29 August 2026. Lives here, not in `agent/execution/`, because gate I2
+# forbids anything outside `constraints/stage0.py` importing `agent.execution`
+# and the sweep needs these. `bank_of` is a pure function of a customer index
+# and `BANK_HANDLES` is a table of strings: neither is execution, both are
+# vocabulary, and ports.py imports nothing.
+#
+# `N_BANKS` and the UNIFORM assignment are [GUESS]. Real Indian UPI share is
+# heavily skewed and nothing found gives per-bank AutoPay MANDATE share, so a
+# skew we invented would be a constant with no source (rule 5). Uniform makes a
+# single-bank outage cover about an eighth of customers; a realistic skew would
+# make the largest bank's incident bigger and the smallest bank's smaller, so
+# every single-bank number is the middle of a range nobody has measured.
+N_BANKS = 8
+
+#: Handles a merchant would already recognise: in real UPI the payer's VPA
+#: carries the bank on its face (`@oksbi`, `@ybl`), so the remitter bank is
+#: something the merchant can already see on their own transaction report. That
+#: is why it is allowed across the redaction boundary -- `agent/llm/caseview.py`
+#: has the argument, and `agent/llm/governance.py` still forbids NAMING it in
+#: merchant-facing prose.
+BANK_HANDLES = ("@oksbi", "@ybl", "@okhdfcbank", "@okicici", "@okaxis",
+                "@paytm", "@ibl", "@upi")
+
+
+def bank_of(customer_id: int, n_banks: int = N_BANKS) -> str:
+    """Which bank holds this customer's account.
+
+    Derived from a stable hash of the customer index rather than from any RNG,
+    so it is identical across every run, seed and process and consumes nothing
+    from the money path's stream. A bank assignment that moved with the seed
+    would make a bank-scoped outage unreproducible."""
+    import hashlib
+    h = hashlib.blake2b(str(customer_id).encode(), digest_size=8).digest()
+    return BANK_HANDLES[int.from_bytes(h, "big") % min(n_banks,
+                                                       len(BANK_HANDLES))]
+
+
 # ---------------------------------------------------------------------- time
 @dataclass(frozen=True, order=True)
 class Clock:

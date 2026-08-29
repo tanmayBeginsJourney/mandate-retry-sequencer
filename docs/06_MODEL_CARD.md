@@ -377,6 +377,8 @@ over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
 | `test_loop_order_equivalence.py` | customer-major and time-major are bit-identical with the monitor off; the monitor changes the answer with it on; and misusing it raises. |
 | `test_action_ablation.py` | what each agent action is worth. See `02_RESULTS.md`. |
 | `test_outage_detection.py` / `test_outage_ablation.py` | the context layer. See `02_RESULTS.md`. |
+| `test_decline_sweep.py` | **added 29 Aug 2026.** What a richer decline taxonomy costs the frozen policy, and whether a bank-shaped outage is invisible to a monitor that pools banks. 2/2 pre-registered. Every rate is `[GUESS]` and swept. |
+| `eval/run_eval.py` | **added 29 Aug 2026.** 40 registered cases + 7 taxonomy cases + 3 injection cases, deterministic arms and (when a key exists) `glm-5.3-flash` with a `glm-5.3` judge. **No LLM number exists yet** - see `02_RESULTS.md`. |
 | `test_detection_benchmark.py` | **added 29 Aug 2026.** Excess loss against a clairvoyant detection oracle, decomposed into delay / missed / dropout / late resumption / false alarms. Three gates, four crippled oracles as **window transforms rather than code branches**, all four caught, none by every gate. **G-1b is deliberately RED** — it found a defect in its own hours-based loss and is kept visible rather than repaired. See `02_RESULTS.md`. |
 
 Run them from the repo root with the interpreter named in `CLAUDE.md`. None of

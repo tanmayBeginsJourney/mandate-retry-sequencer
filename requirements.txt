@@ -28,3 +28,17 @@ numpy==2.4.2
 # lightgbm will not reproduce it bit-for-bit. Rebuild it, do not assume it.
 lightgbm==4.6.0
 scikit-learn==1.8.0
+
+# ---------------------------------------------------------------------------
+# agent/eval NEEDS PyYAML. Nothing else in the repo does, and the GATED SUITE
+# STILL NEEDS NUMPY ALONE -- `sim/gate.py` does not import agent/ at all.
+#
+# Added 29 August 2026, and it is a deliberate reversal. `agent/eval/cases.py`
+# shipped with a hand-rolled parser for the subset of YAML the case file uses,
+# precisely so a fresh clone would not need a second install. Its self-test
+# compared it against PyYAML on the very first run and THEY DISAGREED -- the
+# hand parser produced no `cases` key at all. A parser that silently mis-reads
+# a case corrupts an eval score in a way nothing downstream can detect, and a
+# second implementation exercised only when the first is missing is a code path
+# nobody has ever run. So the parser was deleted rather than debugged.
+pyyaml==6.0.3

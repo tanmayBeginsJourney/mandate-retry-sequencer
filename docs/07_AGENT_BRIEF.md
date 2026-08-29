@@ -504,6 +504,26 @@ crashing. It now raises `NonMonotonicTime` instead. Error 14.
 `NOTIFICATION_CANCELLED`.** Otherwise `auditor.py` correctly reports `pending`
 violations that did not happen. `06_MODEL_CARD.md` §6c.
 
+### UPDATED 29 AUGUST 2026 - the LLM layer is built and unmeasured
+
+`agent/llm/client.py` (Z.ai transport, cache, budget), `prompts.py` (versioned,
+IDs in the cache key), `model_diagnoser.py` (an OVERLAY, never a dependency) and
+`agent/eval/` (case loader, injection cases, judge, harness) all exist and all
+run. **There is no `ZAI_API_KEY` here, so every call falls back to the
+deterministic answer and NO LLM NUMBER EXISTS.** Run
+`python agent/eval/run_eval.py --llm --judge` with a key to produce them; the
+responses cache by `(model, prompt_id, case_hash)` and replay offline afterwards.
+
+**The two numbers the LLM has to beat, both measured:** the deterministic
+fallback scores **9/21 on the ambiguous cases** and **0/4 on terminal decline
+codes** (a frozen account or a revoked mandate, where no retry can ever work and
+`w3.index_score` has no slot for the fact). `02_RESULTS.md`.
+
+**Two things that must stay true.** `Diagnosis` still has no temporal field -
+`agent/eval/injection.py:diagnosis_has_temporal_field()` asserts it by
+inspecting the type. And the judge must stay a different SKU from the diagnoser;
+`run_eval.py --judge` refuses to run if the two model names are equal.
+
 ### What is NOT built, and what the open question is
 
 No model-backed diagnoser. Everything measured so far comes from

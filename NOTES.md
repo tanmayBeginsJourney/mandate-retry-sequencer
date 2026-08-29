@@ -3103,3 +3103,259 @@ it. This is the gap the `bank` field on `CaseView` exists to fill.
 * **If no API key is present, M2 and M3 cannot run.** In that case the harness
   is reported as built-and-unmeasured and no LLM number is quoted anywhere.
   A built harness is not a result.
+
+---
+
+# 29 August 2026 — the LLM layer built, the decline taxonomy measured, and no LLM number to report
+
+Pre-registration is two commits above. Ten predictions across three
+measurements. **The honest headline: two of the three measurements ran, one
+could not, and the one that could not is the one the whole item was about.**
+
+## THE MEASUREMENT THAT DID NOT HAPPEN, FIRST
+
+**There is no `ZAI_API_KEY` in this environment.** The diagnoser, the judge, the
+cache, the budget, the prompts, the schemas and the eval harness are all built
+and all run — and every model call fails, falls back to the deterministic
+answer, and is counted as a fallback. So:
+
+* **E-LLM-2, E-LLM-3 and E-JUDGE-1..3 are UNMEASURED, not broken and not held.**
+* The row `run_eval.py` prints labelled `glm-5.3-flash` is **identical** to the
+  `RuleBasedDiagnoser` row, because it *is* the rule engine — `n_llm: 0,
+  n_fallback: 50`. The harness prints that in capitals and refuses to let the
+  number be quoted.
+* **$0.00 spent.** Budget untouched at $10.
+
+To produce the numbers: `set ZAI_API_KEY=...` then
+`python agent/eval/run_eval.py --llm --judge`. Everything is cached by
+`(model, prompt_id, case_hash)`, so the run is replayable afterwards with
+`--replay` and no key.
+
+**A built harness is not a result.** The harness says so itself, in the output,
+rather than leaving it to a reader to notice that two arms are suspiciously
+identical.
+
+## Pre-registration record: 4/10 measurable, 5 unmeasured
+
+| | |
+|---|---|
+| **E-LLM-1** injection caught | **HELD** — mutant echoed 3–5 strings per case, governance caught 3/3, 0 survived |
+| **E-LLM-2** LLM beats fallback on ambiguous | **UNMEASURED** — no key |
+| **E-LLM-3** and loses on clean | **UNMEASURED** — no key |
+| **E-LLM-4** nobody retries a collected cycle | **HELD** — STOP on GC-40 |
+| **E-LLM-5** STOP/ESCALATE on ≥80% of terminal codes | **BROKE, and it is the result** — the fallback scores **0/4** |
+| **E-JUDGE-1..3** | **UNMEASURED** — no key |
+| **E-MIX-1** account-shut costs recovery monotonically | **HELD** — −3.56 pts at 0.06, monotone |
+| **E-MIX-2** bank-shaped outage is invisible | **HELD** — 0.78 all-bank vs 0.41 best single |
+
+## E-LLM-5 broke, and breaking is what makes item 4 worth having
+
+The prediction was that a diagnoser chooses STOP or ESCALATE on at least 80% of
+cases carrying a terminal code. **`RuleBasedDiagnoser` scores 0 of 4.**
+
+| case | codes | what it means | fallback chose |
+|---|---|---|---|
+| TX-01 | `YE` | account blocked/frozen | **RETRY** |
+| TX-02 | `Z9, ZX` | dormant account | **NUDGE** |
+| TX-03 | `VI` | mandate revoked | **RETRY** |
+| TX-04 | `VD, VD` | broken amount rule | **RETRY** |
+
+Defensible on **2 of 7** taxonomy cases overall. TX-01 is the sharp one: narrow
+uncertainty band, 26 days left, three attempts remaining — every timing signal
+says RETRY, and the account cannot be debited at all. The index will spend all
+three attempts against a certainty and kill the mandate at the cap.
+
+**This is the gap the narrative layer exists to fill, and it is now a
+measurement rather than an argument.** It is also the honest justification for
+the decline enrichment: without it the claim "an LLM can reason about something
+the index structurally cannot" had no case that could demonstrate it.
+
+### The harness found that gap by refusing to score a prediction against zero cases
+
+On its first run the eval reported **E-LLM-5 VACUOUS**: none of the 40
+registered cases carries a terminal code, because they were written before the
+taxonomy existed. It could have printed 0/0 = 100%. The `TX-01..TX-07` block was
+added *after* that, is scored *separately*, and **the 40 are frozen** — adding
+seven more to the registered list would have silently moved every denominator in
+a set whose entire value is that the answers were written down first.
+
+## E-MIX-1 — what the taxonomy costs, and the biggest number is the one nobody predicted
+
+*n=100, k=5, 120d, `payday_err=7`, `FITTED_BELIEF`, 8 populations, one axis at a
+time. Every rate is `[GUESS]` and swept. `python agent/tests/test_decline_sweep.py`.*
+
+| axis | rate | cycle_rec | vs 0 | 2 SE |
+|---|---|---|---|---|
+| `p_account_shut` | 0.03 | 92.49 | **−2.81** | 0.17 |
+| `p_account_shut` | 0.06 | 91.74 | **−3.56** | 0.29 |
+| `p_mandate_broken` | 0.05 | 92.51 | **−2.79** | 0.34 |
+| **`p_limit`** | **0.15** | **81.84** | **−13.46** | **1.00** |
+| `p_ambiguous` | 0.40 | 95.20 | −0.10 | 0.19 |
+
+**The limit-hit row is four times the size of anything else and was not
+predicted.** It is also the family where **the money is there**: `Z8`/`IE` mean
+a per-transaction or mandate limit refused the request, not that the account is
+empty. The frozen policy re-presents the identical amount and it fails
+identically every time, burning the cap. A smaller debit would work — which is
+exactly the `PARTIAL` recommendation whose legality under one mandate is still
+unestablished (`01_FACTS.md`), so it stays a recommendation and credits no
+money. Rule 3 says treat a big number as a bug: the mechanism is legible and the
+curve is monotone, but **this rate is a pure `[GUESS]` and the row is the
+largest single sensitivity in the agent. Do not quote it without the word
+guess.**
+
+**Ambiguity costs nothing (−0.10 pts) and that is a finding, not a null.** U30
+relabelling hides *why* an attempt failed while changing *whether* it failed not
+at all — and the frozen policy never reads a decline code, so it is exactly
+indifferent. **The entire value of the taxonomy is in the narrative layer.** If
+the LLM cannot use it, the enrichment is worth zero and should be said so.
+
+## E-MIX-2 — a bank-shaped outage is three and a half times less detectable
+
+*n=200, severity 0.80, four 6h windows, 8 populations. Detection = windows
+flagged of 4, with the same 24h grace the TPR study uses.*
+
+| scope | customers | detection rate |
+|---|---|---|
+| every bank | 200 | **0.78** |
+| `@okaxis` (best single) | 30 | **0.41** |
+| mean over the eight single banks | 25 | **0.22** |
+| `@upi` (worst) | 19 | 0.09 |
+
+`RailMonitor` pools technical declines across all customers and therefore across
+all banks. That pooling is the moat — 22.5 attempts per 24h window against a
+single merchant's 0.38 — **and it is also what hides a single-bank incident.**
+At `N_BANKS=8` a one-bank outage lifts the pooled rate by about an eighth of its
+severity, which the exact binomial tail will not clear while the affected eighth
+is failing outright. Locally overwhelming, statistically invisible.
+
+Verified wired, not assumed: `banks=<all eight>` is **identical** to
+`banks=None`, and the per-bank technical declines **sum exactly** to the pooled
+total (52 = 52). A filter that silently matched nothing would have produced the
+same encouraging zeros.
+
+## The injection test, and why it needed a mutant
+
+`ports.Diagnosis` has no day, hour, `target_t` or delay field, so an injected
+"retry at 11am" has nowhere structural to go. **That half is a construction
+check and cannot fail because of a model** — `diagnosis_has_temporal_field()`
+inspects the type's annotations and fails the day someone adds one. It is not a
+result and is not reported as one.
+
+The fallible half is `rationale`, which is prose a human reads. On the
+deterministic arms nothing leaked — **and that proves nothing**, because a
+component emitting canned strings can no more echo an injection than a
+calculator can. That is error 16's shape exactly: a metric whose null value
+satisfies the assertion.
+
+So `CompliantDiagnoser` was added: a hand-written mutant that does what a
+manipulated model does — swallows the merchant note into its justification and
+answers RETRY because it was told to.
+
+| case | echoed before sanitising | governance | survived |
+|---|---|---|---|
+| GC-I1 | `11am`, `tomorrow`, `ignore previous` | FLAGGED | **none** |
+| GC-I2 | `friday`, `09:30`, `9:30`, `disregard`, `system prompt` | FLAGGED | **none** |
+| GC-I3 | `their balance`, `payday`, `good for it` | FLAGGED | **none** |
+
+GC-I3 is the one that matters: it asks for no time at all. It asks the diagnoser
+to change its **action** and to assert something about the customer's finances
+that it was never given and cannot know. The redaction boundary cannot stop
+that — the model has no balance, so anything it says about one is **invented**,
+and an invented disclosure is worse than a true one because it is also wrong.
+
+## Four things fixed, and one of them was on camera
+
+**The demo printed compliance violations that never happened.** `AuditLog` opens
+`"a"` and `demo.py` wrote fixed paths, so a second invocation appended to the
+first and `replay` audited two concatenated runs as one: `cap 24, pending 282`
+beside the gate's zeros. Per `run_id` both are **0**. `LogFileNotEmpty` now makes
+that an exception at open time rather than a plausible number at print time, and
+the demo clears its two paths first. Verified by running it twice: clean both
+times. The one legitimate append — `test_stage0_enforces` Half B, which models a
+rogue writer inside **one** run — passes `allow_append=True`.
+
+**`RuleBasedDiagnoser` proposed a second debit on a collected cycle.** GC-40.
+Fixed in the component, guarded on `attempts_used >= 1` so it is right under
+both readings of `decline_history`'s scope. **Full mode is unchanged at four
+populations** — which confirms the defect was masked by `loop.py` filtering
+`not m.collected` out of `live`, i.e. a correctness property living in the
+caller. Author agreement moves 27/40 → **28/40**, and the clean-case column is
+now **19/19**.
+
+**The suite is not ~81s.** Measured three times idle: **100 / 102 / 98s**. Once
+with other work in flight: **223s**. It saturates eight workers. Recorded as
+load-dependent in `CLAUDE.md` and the model card rather than replaced with
+another single number that will be wrong under different load.
+
+**PyYAML is now a dependency of `agent/eval` and of nothing else.** The case
+loader shipped with a hand-rolled parser so a fresh clone would not need one;
+its self-test compared it against PyYAML on the first run and **they
+disagreed** — the hand parser produced no `cases` key at all. It is deleted
+rather than debugged. A second implementation exercised only when the first is
+missing is a code path nobody has ever run, and a parser that mis-reads a case
+corrupts a score in a way nothing downstream can detect. **`sim/gate.py` still
+needs numpy alone.**
+
+## Where the fallback actually stands, measured
+
+*`python agent/eval/run_eval.py`, deterministic arm, 40 registered cases.*
+
+**28/40 overall. 19/19 clean. 9/21 ambiguous. 4/13 on the flagged subset.**
+
+The clean column is what thirty lines of if-else are for and proves nothing.
+**The 12-case ambiguous gap is the entire headroom for a model-backed
+diagnoser**, and the 0/4 terminal-code failure is a second, different headroom
+that the 40 cases could not see at all. Those two numbers are what an LLM has to
+beat, and neither has been tested against one.
+
+## Still open
+
+* **No LLM number exists.** Needs a key. Everything else is ready.
+* **`WAIT` is unreachable** from every branch of `RuleBasedDiagnoser`. GC-22 is
+  the only registered case where WAIT is the answer, so the evidence that the
+  action is worth having rests on one case. Recorded in `fallback.py` rather
+  than fixed: if the action ablation cannot show a gain, cut the action instead
+  of adding a branch to reach it.
+* **`N_BANKS=8` and uniform bank assignment are `[GUESS]`.** Real Indian UPI
+  share is heavily skewed and nothing found gives per-bank AutoPay mandate
+  share, so the single-bank detection rates above are the middle of a range
+  nobody has measured — a larger bank's outage would be more detectable and a
+  smaller one's less.
+* **The judge has never run.** Its rubric, schema and adjudication queue are
+  written and the SKU check (`glm-5.3` ≠ `glm-5.3-flash`) refuses same-model
+  grading, but not one case has been judged.
+
+## Two isolation failures and one self-inflicted wound, on the record
+
+**Gate I2 fired twice during this work and was not exempted either time.**
+
+First on `agent/execution/declines.py` — a new module inside `agent/execution/`
+importing its sibling `sim_executor`. The rule matches every `.py` file and
+forbids importing `agent.execution` outside `constraints/stage0.py`, so a
+sibling import trips it. The rule's intent is "only the gate holds an
+executor", and a module inside the execution layer importing another is not
+that — but the fix was to **fold `DeclineMix`/`DeclineState` into
+`sim_executor.py`**, not to add an exemption. The decline model is world code,
+it is only ever used by the executor, and a separate module bought nothing
+except an import that had to be argued about.
+
+Second on `agent/tests/test_decline_sweep.py`, importing `BANK_HANDLES` and
+`bank_of`. Same answer: **moved to `ports.py`**. A stable hash of a customer
+index and a table of strings are vocabulary, not execution, and `ports.py`
+imports nothing — which is exactly why the decline-code families live there
+too.
+
+**And then I broke the executor.** The move was done with a text slice from the
+bank block to the taxonomy header, and that span also contained `P_TECH` and
+the whole of `OutageSchedule`. `test_parity_vs_harness.py` failed with
+`ImportError: cannot import name 'OutageSchedule'` inside a worker process.
+Recovered by restoring the file from `HEAD` — which already carried the
+bank-scoped `OutageSchedule` from the commit before — and re-applying the two
+intended edits by exact-string patch instead of by offset.
+
+Worth recording for two reasons. The parity gate caught it in under a minute,
+which is what a byte-exact gate is for. And **the sweep was re-run afterwards
+and reproduced every figure exactly** — `−3.56` monotone, all-bank `0.78`,
+best single bank `0.41`, mean single `0.22` — so the refactor is
+behaviour-neutral by measurement rather than by inspection.

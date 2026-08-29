@@ -4,8 +4,14 @@
 
 Research and simulation: **done and FROZEN.** Stop doing it.
 Production code: **`agent/` exists and runs end to end.** Constraint layer,
-action space and context layer are built and gated; **the LLM layer is not
-built.** Updated 28 August 2026 — this line previously read "none exists".
+action space and context layer are built and gated. **The LLM layer is
+BUILT and UNMEASURED** — updated 29 August 2026: the diagnoser
+(`glm-5.3-flash`), the judge (`glm-5.3`, a different SKU), the prompts,
+the response cache, the budget and the eval harness all exist and all
+run, but there is **no `ZAI_API_KEY` in this environment**, so every call
+falls back to the deterministic path and **no LLM number exists**.
+`python agent/eval/run_eval.py --llm --judge` produces them the moment a
+key is present.
 Deadline: **5 September 2026 — 8 days from today.**
 
 Run it: `python -m agent.demo` (see `06_MODEL_CARD.md` §6).
@@ -105,13 +111,23 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    at 8 because nothing measured argues for moving it**, which is a weaker
    reason than was hoped for and is the true one. `window_h=24` and `hold_h=12`
    are still `[GUESS]` and still unswept.
-0d. **The demo prints Stage 0 violations that did not happen.** `AuditLog`
-   opens in `"a"` mode and `agent/demo.py` writes to fixed paths, so a second
-   invocation appends to the first and the independent recount audits two
-   concatenated runs as one — `cap 24, pending 282` on screen against the
-   gate's 0. Per `run_id` both are **0**; the agent is fine and the display is
-   not. Found 29 Aug 2026, **not fixed** — one line, and it belongs to whoever
-   owns the video. **It must not go on camera as it stands.**
+0d. ~~**The demo prints Stage 0 violations that did not happen.**~~ **FIXED
+   29 August 2026.** `AuditLog` opened `"a"` and `demo.py` wrote fixed paths, so
+   a second invocation appended to the first and the independent recount audited
+   two concatenated runs as one — `cap 24, pending 282` against the gate's 0.
+   Per `run_id` both were **0**. `agent/audit/log.py:LogFileNotEmpty` now makes
+   that an exception at open time anywhere in the repo, and the demo clears its
+   two fixed paths first. Verified by running the demo twice in a row: clean
+   both times.
+0e. **NO LLM NUMBER EXISTS.** The layer is built and unmeasured for want of a
+   `ZAI_API_KEY`. The measured headroom it has to beat: the deterministic
+   fallback scores **9/21 on the ambiguous cases** and **0/4 on terminal decline
+   codes**. `02_RESULTS.md`.
+0f. **`WAIT` is unreachable from every branch of `RuleBasedDiagnoser`.** GC-22
+   is the only registered case where WAIT is the answer, so the evidence that
+   the action is worth having rests on one case. Recorded in `fallback.py`
+   rather than fixed: if the action ablation cannot show a gain from it, cut the
+   action instead of adding a branch to reach it.
 
 
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and

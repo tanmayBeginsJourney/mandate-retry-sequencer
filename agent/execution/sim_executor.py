@@ -37,42 +37,20 @@ having to hold an executor.
 """
 from __future__ import annotations
 
-import hashlib
-
 import numpy as np
 
 import agent  # noqa: F401  -- puts sim/ on the path
 import harness
 import w3
 
-from agent.ports import (FAMILY_ACCOUNT_SHUT, FAMILY_CODES, FAMILY_LIMIT,
-                         FAMILY_MANDATE_BROKEN, OK, TECH, Z9,
-                         AttemptOutcome, MandateRef, Rupees)
-
-#: How many remitter banks the population is spread across. [GUESS], and the
-#: assignment is UNIFORM -- real Indian UPI share is heavily skewed but nothing
-#: found gives per-bank AutoPay mandate share, and a skew we invented would be a
-#: constant with no source (rule 5). Swept rather than argued about.
-N_BANKS = 8
-
-#: Handles a merchant would already recognise: in real UPI the payer's VPA
-#: carries the bank (`@oksbi`, `@ybl`), so the remitter bank is information the
-#: merchant can already see on their own transaction. That is why it is
-#: allowed across the redaction boundary -- see `agent/llm/caseview.py`.
-BANK_HANDLES = ("@oksbi", "@ybl", "@okhdfcbank", "@okicici", "@okaxis",
-                "@paytm", "@ibl", "@upi")
-
-
-def bank_of(customer_id: int, n_banks: int = N_BANKS) -> str:
-    """Which bank holds this customer's account.
-
-    Derived from a stable hash of the customer index rather than from any RNG,
-    so it is identical across every run, seed and process and consumes nothing
-    from the money path's stream. A bank assignment that moved with the seed
-    would make a bank-scoped outage unreproducible."""
-    h = hashlib.blake2b(str(customer_id).encode(), digest_size=8).digest()
-    return BANK_HANDLES[int.from_bytes(h, "big") % min(n_banks,
-                                                       len(BANK_HANDLES))]
+# BANK_HANDLES / bank_of / N_BANKS moved to ports.py on 29 Aug 2026:
+# gate I2 forbids anything outside constraints/stage0.py importing
+# agent.execution, and the decline sweep needs them. A hash of a customer
+# index and a table of strings are vocabulary, not execution.
+from agent.ports import (BANK_HANDLES, FAMILY_ACCOUNT_SHUT, FAMILY_CODES,
+                         FAMILY_LIMIT, FAMILY_MANDATE_BROKEN, N_BANKS,
+                         OK, TECH, Z9, AttemptOutcome, MandateRef,
+                         Rupees, bank_of)
 
 P_TECH = harness.P_TECH             # 0.008
 
@@ -492,7 +470,7 @@ class SimExecutor:
         `topup_mult=1.15`, which is the harness's constant for an unprompted
         top-up, not a measured response to a prompt. And at `nudge_p > 0` the
         oracle stops being a tight upper bound -- it reads `bal[tt] - drained`
-        with no topups (docs/06_MODEL_CARD.md §3, item 11), so any oracle row
+        with no topups (docs/06_MODEL_CARD.md Â§3, item 11), so any oracle row
         quoted beside a nudge curve is loose.
         """
         self.n_nudges += 1
