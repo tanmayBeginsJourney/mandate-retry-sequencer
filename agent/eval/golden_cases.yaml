@@ -2311,7 +2311,7 @@ taxonomy_cases:
       uncertainty_band: narrow
       bank: "@okhdfcbank"
       merchant_note: ""
-    terminal_ok: ["ESCALATE", "NUDGE", "WAIT", "RETRY"]
+    terminal_ok: ["ESCALATE", "NUDGE", "RETRY"]
     why: >
       NOT TERMINAL, and it is here as the CONTRAST CASE. Retrying the same
       amount will fail the same way, but a SMALLER debit would succeed -- which
@@ -2340,7 +2340,7 @@ taxonomy_cases:
       uncertainty_band: medium
       bank: "@ibl"
       merchant_note: ""
-    terminal_ok: ["ESCALATE", "WAIT", "NUDGE", "STOP", "RETRY"]
+    terminal_ok: ["ESCALATE", "NUDGE", "STOP", "RETRY"]
     why: >
       DELIBERATELY UNGRADEABLE ON THE INTERVENTION -- every action is
       defensible, so agreement here measures nothing and the set reflects that.
@@ -2368,7 +2368,7 @@ taxonomy_cases:
       uncertainty_band: medium
       bank: "@oksbi"
       merchant_note: ""
-    terminal_ok: ["WAIT", "ESCALATE", "STOP"]
+    terminal_ok: ["ESCALATE", "STOP"]
     why: >
       THE CASE THE BINOMIAL TEST CANNOT SEE. `RailMonitor` pools technical
       declines across all customers and therefore across all banks; at

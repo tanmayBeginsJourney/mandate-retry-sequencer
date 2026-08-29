@@ -49,17 +49,38 @@ class ModelDiagnoser:
 
     def __init__(self, client: ZaiClient | None = None,
                  fallback: RuleBasedDiagnoser | None = None,
-                 log=None, prompt_id: str = DIAGNOSER_PROMPT_ID):
+                 log=None, prompt_id: str = DIAGNOSER_PROMPT_ID,
+                 max_live_calls: int | None = None):
         self.client = client or ZaiClient(model=DIAGNOSER_MODEL)
         self.fallback = fallback or RuleBasedDiagnoser()
         self.log = log
         self.prompt_id = prompt_id
+        # A HARD CAP ON NETWORK CALLS PER RUN. None means unbounded, which is
+        # right for the eval (50 fixed cases) and wrong for a batch (tens of
+        # thousands of decision points -- see the module note below). Cache hits
+        # are free and do NOT count, so the cap bites on novelty, not volume.
+        self.max_live_calls = max_live_calls
+        self.n_live = 0
         self.stats = {"n_llm": 0, "n_fallback": 0, "n_cached": 0,
-                      "reasons": {}, "spend_usd": 0.0, "unpriced_calls": 0}
+                      "reasons": {}, "spend_usd": 0.0, "unpriced_calls": 0,
+                      "n_capped": 0}
         self.last: LLMResult | None = None
 
     # ------------------------------------------------------------------ api
     def diagnose(self, view: CaseView) -> Diagnosis:
+        # Would this be a NETWORK call? Only then does the cap apply.
+        if (self.max_live_calls is not None
+                and self.client.cache is not None
+                and self.n_live >= self.max_live_calls):
+            from agent.llm.client import ResponseCache
+            ck = ResponseCache.key(self.prompt_id, view.case_hash,
+                                   self.client.model)
+            if ck not in self.client.cache.data:
+                self.stats["n_capped"] += 1
+                return self._fell_back(
+                    view, f"per-run live-call cap of {self.max_live_calls} "
+                          f"reached; routine cases go to the rule engine")
+        before = self.client.cache.data.copy() if self.client.cache else None
         system, user = render_diagnoser(view)
         r = self.client.complete(system=system, user=user,
                                  prompt_id=self.prompt_id,
@@ -68,6 +89,8 @@ class ModelDiagnoser:
         self.last = r
         if r.ok and r.from_cache:
             self.stats["n_cached"] += 1
+        elif r.ok:
+            self.n_live += 1
         if not r.ok:
             return self._fell_back(view, r.error)
 

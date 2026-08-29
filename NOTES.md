@@ -3189,6 +3189,7 @@ time. Every rate is `[GUESS]` and swept. `python agent/tests/test_decline_sweep.
 | `p_account_shut` | 0.03 | 92.49 | **−2.81** | 0.17 |
 | `p_account_shut` | 0.06 | 91.74 | **−3.56** | 0.29 |
 | `p_mandate_broken` | 0.05 | 92.51 | **−2.79** | 0.34 |
+| `p_limit` | 0.05 | 92.42 | **−2.87** | 0.38 |
 | **`p_limit`** | **0.15** | **81.84** | **−13.46** | **1.00** |
 | `p_ambiguous` | 0.40 | 95.20 | −0.10 | 0.19 |
 
@@ -3531,3 +3532,231 @@ single sensitivity in the agent. From here it is quoted as a curve —
   from pre-training.** That is not leakage of *our* answers, but it does mean
   the terminal-code result measures recall of a published taxonomy as much as
   reasoning about it.
+
+---
+
+# 29 August 2026 — the eval ran for real. 6/8, and cutting WAIT flipped the headline
+
+Pre-registration is one commit above. **Total spend $0.15 of a $5 budget.**
+
+## THE RESULT THAT MATTERS, AND IT DEPENDS ON A DECISION TAKEN MID-STREAM
+
+| | ambiguous (21) | clean (19) | terminal (4) | overall |
+|---|---|---|---|---|
+| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** | 28/40 |
+| `glm-5.3-flash`, **WAIT still in the action space** | **4/21** | 11/19 | **4/4** | 15/40 |
+| `glm-5.3-flash`, **WAIT cut** | **10/21** | 13/19 | **4/4** | 23/40 |
+
+**With WAIT available the LLM was much worse than thirty lines of if-else —
+4/21 against 9/21. With WAIT removed it beats them, 10/21.** Same model, same
+cases, same temperature, one action removed from the vocabulary.
+
+The mechanism is visible in the first run's answer distribution: **WAIT was the
+model's most-used intervention, 11 of 40 registered cases.** It reached for
+"do nothing today" on cases where the registered answer was RETRY or NUDGE.
+Remove the option and those answers land on actions that are right more often.
+
+**This is not a tuning result to be pleased about. It is a warning.** A
+diagnoser's score moved by six points on the headline metric because of a
+vocabulary change nobody thought was substantive — the action was cut because it
+was *unreachable in the rule engine and measured at ~0 in the ablation*. That
+justification was about a different component entirely. The lesson: **an action
+space is part of the model, not part of the plumbing.**
+
+## Cutting WAIT — and the premise that turned out to be false
+
+The instruction was: unreachable from every branch, one supporting case,
+measured at ~0, so remove it rather than adding a branch to reach it. All three
+premises are true **of `RuleBasedDiagnoser`**. None is true of the LLM, which
+used it constantly. The cut was made as instructed and the eval re-run to
+measure the effect, which is the only reason the effect is known.
+
+**GC-22's registered answer is WAIT, so it is now unwinnable by construction for
+every arm.** It stays in the denominator. Dropping it would flatter every score
+by removing a case none of them can win, and `cases.py`'s self-test now prints
+the orphan rather than crashing on it.
+
+**Reverting is one commit** if the six points are judged to be worth more than
+the simpler action space. `docs/02_RESULTS.md` carries both columns.
+
+## Pre-registration record: 6/8
+
+| | |
+|---|---|
+| **E-LIVE-1** the model answers ≥90% | **HELD** — 50/50, zero fallbacks |
+| **E-LIVE-2** beats the fallback on ambiguity | **HELD** (post-cut) — 10/21 vs 9/21. **BROKE pre-cut at 4/21.** |
+| **E-LIVE-3** does not beat it on clean cases | **HELD** — 13/19 against 19/19 |
+| **E-LIVE-4** nobody retries a collected cycle | **HELD** — both STOP on GC-40 |
+| **E-LIVE-5** terminal codes are where it wins | **HELD** — 4/4 against the fallback's 0/4 |
+| **E-JUDGE-1** judge disagrees on 5..20 of 40 | **HELD** — 19 |
+| **E-JUDGE-2** disagreement ≥2× in the flagged 13 | **BROKE** — 1.87× |
+| **E-JUDGE-3** zero leaks after sanitisation | **BROKE** — 2 of 40 |
+| **E-CUT-1** the cut moves the score by 0 or 1 | **BROKE, and it is the finding** — it moved 6 |
+| **E-BATCH-1** LLM arm within ±1.0 pt on money | **HELD** — 94.33 vs 94.36, a gap of 0.03 |
+| **E-BATCH-2** auditor agrees with the gate | **HELD** — 0 and 0 over 8,954 executed actions |
+
+## Where the LLM wins, and it is not where an LLM is usually sold
+
+**Terminal codes: 4/4 against 0/4.** A frozen account (`YE`, `ZX`) or a revoked
+mandate (`VI`, `VD`) means no retry can ever succeed, and `w3.index_score` has
+no slot for that fact — a narrow uncertainty band with 26 days left reads as the
+strongest possible RETRY signal. The rule engine answered RETRY on three of the
+four and NUDGE on the fourth. The model answered STOP, STOP, ESCALATE, ESCALATE.
+Defensible on **6 of 7** taxonomy cases against the fallback's **2 of 7**.
+
+That is the structural blind spot argued for since the decline taxonomy was
+built, and it is now measured rather than asserted.
+
+## E-JUDGE-2 broke, and the honest reading is "about 2×, not reliably above it"
+
+Judge-versus-author disagreement: **9 of the 13 flagged cases (69%)** against
+**10 of the other 27 (37%)**. Ratio **1.87**, predicted ≥2.0.
+
+**The author's `expert_agreement` is directionally right and not sharp enough to
+weight anything by.** In the pre-cut run the same ratio was 2.07 and the
+prediction HELD; after the cut it is 1.87 and it BROKE. A prediction whose
+verdict flips on a vocabulary change is a prediction with a threshold too sharp
+for the sample. Recorded as "roughly 2×" rather than as a pass or a fail.
+
+## E-JUDGE-3 broke, and the judge found a real hole in governance
+
+The judge flagged 2 of 40 rationales as leaking customer financial state that
+`governance.check` had passed:
+
+* GC-01 — "recent activity on the account indicates **money reached it**"
+* GC-30 — "a recent successful mandate on this account confirms **funds reach it**"
+
+Both are paraphrases of `peer_mandate_success_recent`, a boolean the `CaseView`
+legitimately carries. **Restating "another transaction succeeded" as "this
+customer has money" is exactly the disclosure the rule forbids**, and the
+lexical net had no pattern for it. The judge is right.
+
+**The fix went into governance, never into the judge** — same principle as
+`NOTIFICATION_CANCELLED`. Patterns added for `money/funds/cash reach*`,
+`is funded`, `has funds`, `good for it`, `can pay`. And the *prompt* was
+coaching it: the guidance line read "means money reached the account", which is
+now rewritten to forbid restating it.
+
+Post-fix, **7 of 40 rationales fail governance and all 7 are genuine**:
+GC-08, 16, 29, 31, 33, 34 on funds-reaching paraphrases, GC-35 on "the customer
+has told us **their income** schedule shifted". Every one is replaced by
+`SAFE_FALLBACK` before it reaches a merchant. **Defence in depth earned its keep
+on its first live outing: the redaction boundary cannot stop a model
+paraphrasing a boolean it was legitimately given.**
+
+**The judge's `names_a_time` flags are NOT accepted.** It flagged "our model
+scores this window highest" — the exact phrasing `07_AGENT_BRIEF.md` §2
+prescribes as the compliant form. Recorded as a judge false positive, three of
+them, rather than as a governance gap.
+
+## The adjudication queue — 19 cases, and they are yours to settle
+
+`python agent/eval/run_eval.py --llm --judge --replay` prints the full table
+with the judge's reasoning. The 19 where GLM-5.3 disagrees with the registered
+answer:
+
+**Judge and agent agree against the author (16):** GC-02, 06, 07, 08, 12, 15,
+18, 22, 23, 26, 27, 29, 32, 33, 34, 36, 37 — the judge sided with the model's
+answer over the author's on all but three.
+
+**Judge disagrees with both (3):** GC-10 (author NUDGE, agent NUDGE, judge
+RETRY), GC-39 (author RETRY, agent RETRY, judge ESCALATE).
+
+**The pattern worth arguing about:** on Z9 bursts with attempts remaining, the
+author says RETRY or ESCALATE and both model and judge say NUDGE. Either the
+author systematically under-values a zero-cost action that addresses the
+observed cause, or both models share a bias toward the safe non-money option.
+**Two models agreeing is not evidence — they may share a prior from
+pre-training. This needs the human.**
+
+## The batch number
+
+*n=100 × k=5 over 4 held-out populations, 120 days, `payday_err=7`. Decline
+taxonomy off. `python -m agent.batch_report --llm --pops 4`.*
+
+| arm | cycles collected | ₹ recovered | survival | att/cycle |
+|---|---|---|---|---|
+| `payday_wait` (rival) | 57.70% | — | 60.75% | 1.493 |
+| **agent, deterministic** | **94.36%** | **₹5,994,430** | 99.85% | 1.476 |
+| agent, LLM overlay | 94.33% | ₹5,967,990 | 99.80% | 1.471 |
+
+**+36.66 pts over `payday_wait` (2 SE 2.47, SIG)**, and `payday_wait` is a
+permanent row that cannot be switched off.
+
+**Stage 0: zero refusals, and the independent auditor recounts zero from the log
+alone, over 8,954 executed money actions.** Both arms, all five rules.
+
+Stopping rules: COLLECTED 6,172 · CYCLE_CLOSED 675 · ESCALATED 45 ·
+AGENT_STOP 4 · MANDATE_DEAD 3.
+
+### The batch found something the eval could not: the LLM cannot be called
+
+**119,667 diagnosis requests across four populations.** The loop asks for a
+diagnosis once per live mandate per decision hour. The eval's 50 fixed cases
+gave no hint of the scale; the first batch attempt was killed after twelve
+minutes with no output.
+
+**A bounded call budget is the design, not a workaround.** No production
+recovery agent calls a model sixty thousand times a day either — it calls one on
+the novel cases and lets rules handle the routine ones. With a cap of 120 live
+calls per run and free cache hits:
+
+* answered by the model: **6,180**
+* refused by the cap and sent to the rule engine: **113,487**
+* **fallback rate 94.8%**
+
+**And the money did not move: 94.33% against 94.36%.** Approval by source is
+69.09% (llm) against 68.97% (fallback) — a gap of 0.12 points on 427 versus
+8,498 attempts. **Which cases fall back is not random, so this describes the
+split and does not measure an effect.** It is printed with that caveat attached.
+
+The honest summary: **on this world, at this scale, the diagnosis layer changes
+which action is taken and not how much money comes back.** That is what the
+action ablation already said — the whole channel is mandate-death prevention,
+worth +1.371 pts — and the LLM does not add to it. Where it adds is the terminal
+codes, and those are switched off in this batch.
+
+## Cost, and one lesson about reasoning models
+
+**$0.15 total. 90 calls in the first eval ($0.079), 50 + 45 in the second
+($0.072), ~165 stray calls from the killed batch (~$0.02).** Budget $5.
+
+**The transport had to be fixed before anything ran.** GLM-5.3 and Flash are
+reasoning models: the first probe returned **1,596 completion tokens** for an
+answer whose schema holds about eighty, took 31.7s when it succeeded, and timed
+out at 45s and 90s on the other two. Ninety sequential calls did not finish in
+thirty minutes.
+
+Thinking cannot be switched off on these SKUs — the API answers
+`{"code":"1210","message":"This model always engages in thinking and cannot be
+disabled; please use low, high, or max"}`. So `reasoning_effort="low"` with a
+2000-token cap, and the calls run 2–8s. **Every score here is a score for
+`GLM-5.3-Flash at reasoning_effort=low`.** Sweeping the effort level is the
+obvious next measurement and has not been done — a model on its lowest reasoning
+setting may well answer worse, and the 10/21 could be a floor.
+
+**The first live run persisted nothing.** The cache was written only after the
+last prediction was scored, so thirty minutes of paid calls were lost when it
+was killed. Now written as results arrive.
+
+## `--replay` reproduces it offline
+
+`python agent/eval/run_eval.py --llm --judge --replay` — **byte-identical
+output in 0.35 seconds, no network, $0.00 spent.** The only line that differs is
+the budget line, which correctly reports zero. That is what makes an LLM number
+quotable under the numbers rule: anyone with the cache file reproduces it.
+
+## Two defects found in my own scoring code
+
+**Judge disagreement was computed twice and the two disagreed** — the summary
+printed 18, the pre-registered check scored 19, because the check tested
+`row in dis` on dicts holding dataclass instances. E-JUDGE-2's ratio was being
+computed against a denominator the reader never saw. Computed once now, keyed by
+case id. **A quantity computed twice by two pieces of code that disagree is this
+project's signature failure**, and this time it was in the code doing the
+checking.
+
+**`p_limit` is now a curve everywhere it appears** — 0.00 / 0.05 / 0.15 →
+0.00 / −2.87 / −13.46 pts. It is a pure `[GUESS]`, the curve is steeply
+superlinear so interpolating the middle is unsafe, and quoting −13.46 alone
+would be quoting the top of a guessed range as the finding.

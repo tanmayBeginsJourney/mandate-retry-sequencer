@@ -931,12 +931,35 @@ picked.*
 | `p_mandate_broken` | 0.05 | 92.51 | **−2.79** | 0.34 |
 | `p_limit` | 0.05 | 92.42 | −2.87 | 0.38 |
 | **`p_limit`** | **0.15** | **81.84** | **−13.46** | **1.00** |
+
+> ### ⚠️ `p_limit` IS A CURVE, NOT A POINT, EVERYWHERE IT APPEARS
+>
+> | `p_limit` | cycle_rec | vs 0 | 2 SE |
+> |---|---|---|---|
+> | **0.00** | 95.30 | **+0.000** | — |
+> | **0.05** | 92.42 | **−2.87** | 0.38 |
+> | **0.15** | 81.84 | **−13.46** | 1.00 |
+>
+> Three grid points, `[GUESS]` throughout, and **no source anywhere gives an
+> AutoPay limit-decline frequency** — the NPCI document names `Z8` and `IE` and
+> does not say how often they fire. The curve is steeply superlinear: tripling
+> the rate costs nearly five times the points, so the midpoint of the range is
+> not the midpoint of the damage and interpolating is not safe.
+>
+> **This is the largest single sensitivity in the agent** and the mechanism is
+> the one that makes it worth fixing: `Z8`/`IE` are the only family where **the
+> money is there**, and the frozen policy re-presents the identical amount until
+> the cap kills the mandate. Quoting −13.46 alone would be quoting the top of a
+> guessed range as if it were the finding.
+
 | `p_ambiguous` | 0.15 | 95.26 | −0.03 | 0.13 |
 | `p_ambiguous` | 0.40 | 95.20 | −0.10 | 0.19 |
 
 **Two rows carry the argument.**
 
-**The limit-hit row is four times anything else and was not predicted.** `Z8`
+**The limit-hit row is four times anything else and was not predicted — and
+it is quoted as the range 0.00 / −2.87 / −13.46 across `p_limit`
+0.00 / 0.05 / 0.15, never as its endpoint.** `Z8`
 and `IE` are the one family where **the money is there** — a per-transaction or
 mandate limit refused the request. The frozen policy re-presents the identical
 amount and it fails identically every time. A smaller debit would work, which is
@@ -1023,3 +1046,127 @@ because it is also wrong.
 * **`temperature=1.0` is the vendor's recommendation, not a tuned value**, and
   responses are cached — so any future score is one draw per case, not a mean
   over draws. Variance across draws is not measured.
+
+---
+
+# THE BATCH NUMBER, AND THE LLM MEASURED. Added 29 August 2026.
+
+**Not gate-protected.** Reproduce from the repo root:
+
+```
+python -m agent.batch_report --llm --pops 4        # the deliverable, ~15 min
+python agent/eval/run_eval.py --llm --judge        # the eval, ~$0.15
+python agent/eval/run_eval.py --llm --judge --replay   # offline, $0.00, 0.35s
+```
+
+Judge is **GLM-5.3** (743B base). Diagnoser is **GLM-5.3-Flash** (320B-A18B).
+`--judge` refuses to run if the two names are equal, so Flash never grades
+itself. **Total spend $0.15 of $5.**
+
+## The batch — the track's deliverable
+
+*n=100 x k=5 over 4 held-out populations (700-703), 120 days, `payday_err=7`,
+`FITTED_BELIEF`. Decline taxonomy off.*
+
+| arm | cycles collected | Rs recovered | survival | att/cycle |
+|---|---|---|---|---|
+| **`payday_wait` (rival)** | **57.70%** | -- | 60.75% | 1.493 |
+| **agent, deterministic** | **94.36%** | **Rs 5,994,430** | 99.85% | 1.476 |
+| agent, LLM overlay | 94.33% | Rs 5,967,990 | 99.80% | 1.471 |
+
+**+36.66 pts over `payday_wait` (2 SE 2.47, SIG).** The rival row is permanent
+and cannot be switched off -- at `payday_err` of about 1 day it BEATS us.
+
+**Stage 0: zero refusals, and an independent recount from the audit log alone
+also finds zero, over 8,954 executed money actions.** Both arms, all five rules.
+`auditor.py` shares no code with the enforcer and gate I3 fails if it ever does.
+
+Stopping rules: COLLECTED 6,172 | CYCLE_CLOSED 675 | ESCALATED 45 |
+AGENT_STOP 4 | MANDATE_DEAD 3.
+
+### The LLM cannot be called at every decision point
+
+**119,667 diagnosis requests across four populations** -- once per live mandate
+per decision hour. The eval's 50 fixed cases gave no hint of that scale and the
+first batch attempt had to be killed. A bounded call budget is the design, not a
+workaround: a production agent calls a model on novel cases and lets rules
+handle routine ones.
+
+At a cap of 120 live calls per run, cache hits free: **6,180 answered by the
+model, 113,487 sent to the rule engine, fallback rate 94.8%.**
+
+**And the money did not move -- 94.33% against 94.36%.** Approval by source is
+69.09% (llm, 427 attempts) against 68.97% (fallback, 8,498). **Which cases fall
+back is not random, so that describes the split and does not measure an effect.**
+
+## The diagnosis eval
+
+| | ambiguous (21) | clean (19) | terminal (4) | overall |
+|---|---|---|---|---|
+| `RuleBasedDiagnoser` | **9/21** | 19/19 | **0/4** | 28/40 |
+| `glm-5.3-flash`, WAIT in vocabulary | 4/21 | 11/19 | 4/4 | 15/40 |
+| **`glm-5.3-flash`, WAIT cut** | **10/21** | 13/19 | **4/4** | 23/40 |
+
+**Author agreement, not accuracy.** The clean column is the floor -- it is what
+thirty lines of if-else are for.
+
+**Removing one action moved the ambiguous score by six points.** WAIT was the
+model's most-used answer (11 of 40) though unreachable in the rule engine. An
+action space is part of the model, not part of the plumbing. Both columns are
+kept so the effect is visible; reverting is one commit.
+
+**GC-22's registered answer is WAIT and is now unwinnable by construction for
+every arm.** It stays in the denominator -- dropping it would flatter everyone.
+
+### Where the LLM wins: terminal codes, 4/4 against 0/4
+
+A frozen account (`YE`, `ZX`) or a revoked mandate (`VI`, `VD`) means no retry
+can ever succeed, and `w3.index_score` has no slot for that -- a narrow band with
+26 days left reads as the strongest possible RETRY signal. The rule engine
+answered RETRY on three of four. Defensible on **6/7** taxonomy cases against
+**2/7**.
+
+## The judge, and what it caught
+
+**19 of 40 disagreements with the registered answer.** Concentration in the 13
+cases flagged at `expert_agreement <= 0.65`: **69% against 37% elsewhere, a
+ratio of 1.87** -- directionally right, not sharp enough to weight anything by.
+Pre-cut the same ratio was 2.07. **Read it as "roughly 2x", never as a pass.**
+
+Mean scores: diagnosis quality 4.25/5, intervention appropriateness 4.42/5,
+justification quality 4.28/5.
+
+**The judge found a real hole in `governance.py`.** It flagged two rationales
+the lexical net passed: "money reached it" and "funds reach it" -- paraphrases of
+`peer_mandate_success_recent` that restate a transaction fact as a claim about
+the customer's money. **The fix went into governance, never into the judge.**
+Post-fix **7 of 40 rationales fail governance and all 7 are genuine**; every one
+is replaced by `SAFE_FALLBACK` before a merchant sees it. **The redaction
+boundary cannot stop a model paraphrasing a boolean it was legitimately given --
+this is what defence in depth is for, and it earned its keep on first contact.**
+
+The judge's three `names_a_time` flags are **rejected**: it flagged "our model
+scores this window highest", which is the phrasing `07_AGENT_BRIEF.md` section 2
+prescribes as compliant. Judge false positives, recorded as such.
+
+**19 cases await human adjudication** -- `--replay` prints the table with
+reasoning. On Z9 bursts with attempts left the author says RETRY/ESCALATE and
+both model and judge say NUDGE. **Two models agreeing is not evidence; they may
+share a pre-training prior.**
+
+## How this could be biased toward the answer we want
+
+* **`reasoning_effort=low`.** Thinking cannot be disabled on these SKUs (API
+  code 1210). At the default the diagnoser emitted 1,596 completion tokens per
+  answer and timed out; ninety calls did not finish. Every score here is for
+  **GLM-5.3-Flash at `reasoning_effort=low` with a 2000-token cap**. Sweeping
+  the effort level has NOT been done and 10/21 may be a floor.
+* **One draw per case**, `temperature=1.0`, responses cached. No error bars.
+* **Same party** wrote the cases, the registered answers, the rubric and the
+  baseline. The judge is a different SKU and disagreements go to a human;
+  neither removes the problem.
+* **The TX cases were written after the prediction they score**, from NPCI code
+  meanings rather than any diagnoser's output. Not pre-registered like the 40.
+* **A model that has read public payments material may recognise NPCI codes from
+  pre-training.** The terminal-code result measures recall of a published
+  taxonomy as much as reasoning about it.

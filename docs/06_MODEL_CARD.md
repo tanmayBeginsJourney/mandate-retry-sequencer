@@ -161,6 +161,22 @@ split is not.**
 
 ---
 
+### ⚠️ The largest sensitivity in the agent is a guessed constant
+
+`p_limit` — how often a debit is refused by a per-transaction or mandate limit
+rather than by an empty account — costs, swept:
+
+| `p_limit` | 0.00 | 0.05 | 0.15 |
+|---|---|---|---|
+| vs rate 0 | **+0.000** | **−2.87** | **−13.46** |
+
+`[GUESS]` throughout; the NPCI code list names `Z8` and `IE` without saying how
+often they fire. **Never quote −13.46 on its own** — it is the top of a guessed
+range, the curve is steeply superlinear, and interpolating the middle is not
+safe. `02_RESULTS.md` has the mechanism: it is the one failure family where the
+money IS there, and the frozen policy re-presents the same amount until the cap
+kills the mandate.
+
 ## 3. What this has NEVER been tested on
 
 Read this section before quoting anything above to anyone outside the team.

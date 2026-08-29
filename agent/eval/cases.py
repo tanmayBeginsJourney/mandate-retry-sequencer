@@ -181,8 +181,15 @@ def _selftest() -> int:
     vocab = {k.value for k in InterventionKind}
     unknown = sorted({c.correct_intervention for c in cases} - vocab)
     if unknown:
-        print(f"FAIL registered answers outside the action space: {unknown}")
-        bad += 1
+        # NOT A FAILURE, AND NOT HIDDEN. WAIT was cut from the action space on
+        # 29 Aug 2026, so GC-22's registered answer became unreachable by
+        # construction. The case stays in the denominator -- dropping it would
+        # flatter every arm's score by removing a case none of them can win --
+        # and the cost of the cut is reported instead of absorbed.
+        orphan = [c.id for c in cases if c.correct_intervention in unknown]
+        print(f"  NOTE registered answers no longer in the action space: "
+              f"{unknown} -> cases {orphan}. Unwinnable by construction for "
+              f"every arm; kept in the denominator on purpose.")
     tx = load_taxonomy_cases()
     print(f"  taxonomy cases: {len(tx)} "
           f"({sum(t.terminal for t in tx)} carrying a terminal code)")

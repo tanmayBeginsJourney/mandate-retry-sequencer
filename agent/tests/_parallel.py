@@ -74,6 +74,7 @@ def agent_job(spec):
             from agent.constraints.auditor import replay
             a = replay(read_rows(r["log_path"]))
             r["audit_violations"] = a.total()
+            r["audit_detail_counts"] = a.asdict()
             r["audit_executed"] = a.executed
             r["audit_recovered_paise"] = a.recovered_paise
         r.pop("log_path", None)

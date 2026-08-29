@@ -73,7 +73,9 @@ from agent.llm.client import (DIAGNOSER_MODEL, JUDGE_MODEL, Budget,
                               ResponseCache, ZaiClient, case_key)
 from agent.llm.fallback import RuleBasedDiagnoser
 from agent.llm.model_diagnoser import ModelDiagnoser
-from agent.llm.prompts import (JUDGE_PROMPT_ID, JUDGE_SCHEMA, render_judge)
+from agent.llm.prompts import (DIAGNOSER_PROMPT_ID, DIAGNOSIS_SCHEMA,
+                               JUDGE_PROMPT_ID, JUDGE_SCHEMA,
+                               render_diagnoser, render_judge)
 from agent.ports import TERMINAL_CODES
 
 CACHE_DIR = os.path.join(HERE, "_cache")
@@ -81,6 +83,57 @@ CACHE_DIR = os.path.join(HERE, "_cache")
 
 def _cache(model: str) -> ResponseCache:
     return ResponseCache(os.path.join(CACHE_DIR, f"{model}.json"))
+
+
+def prewarm(client, views, prompt_id, schema, render, label):
+    """Issue every model call CONCURRENTLY, then let scoring read the cache.
+
+    `ModelDiagnoser.diagnose` is a one-case-at-a-time interface, which is right
+    for the recovery loop -- it is called once per mandate per decision hour and
+    a thread pool inside it would be absurd. But an eval makes ninety
+    independent calls up front, and ninety sequential round trips at 2-8s each
+    is fifteen minutes of waiting for no reason.
+
+    So the calls are made here, in parallel, purely to POPULATE THE CACHE. The
+    scoring pass afterwards is unchanged and every lookup is a hit. Nothing
+    about the measurement changes: same prompts, same cache keys, same
+    responses. Only the wall clock moves.
+
+    The first live run did this sequentially, produced no output for thirty
+    minutes, and had to be killed -- and because the cache was only written at
+    the very end, every paid call in it was lost. Both halves of that are fixed:
+    concurrency here, incremental cache writes in `client.py`.
+    """
+    jobs = []
+    for v in views:
+        system, user = render(v)
+        jobs.append(dict(system=system, user=user, prompt_id=prompt_id,
+                         case_hash=_hash_for(v), schema=schema))
+    if not jobs:
+        return
+    print(f"  prewarming {len(jobs)} {label} calls, 8 at a time...", flush=True)
+    client.complete_many(jobs, workers=8, label=f"{label} ")
+
+
+def _hash_for(v):
+    """CaseViews carry their own hash; judge payloads bring theirs."""
+    return v.case_hash if hasattr(v, "case_hash") else v[0]
+
+
+def judge_disagreements(judge_rows):
+    """(judged, disagreeing_case_ids). THE ONLY PLACE THIS IS COMPUTED.
+
+    Keyed by case id, not by object identity: the previous version tested
+    `row in dis` on dicts containing dataclass instances, which made the
+    summary and the pre-registered check disagree by one -- 18 printed against
+    19 scored. Two computations of one quantity is the defect this repo keeps
+    finding in other people's code.
+    """
+    ok = [j for j in judge_rows if j["verdict"]]
+    bad = {j["case"].id for j in ok
+           if j["verdict"].get("best_intervention")
+           != j["case"].correct_intervention}
+    return ok, bad
 
 
 # ------------------------------------------------------------------ scoring
@@ -157,6 +210,13 @@ def main(argv=None) -> int:
                   "deterministic answer. The harness still runs and the "
                   "fallback arm is still measured, but NO LLM NUMBER MAY BE "
                   "QUOTED from this run -- a built harness is not a result.\n")
+
+    if model_diag is not None and model_diag.client.available:
+        all_views = ([c.view for c in cases]
+                     + [t.view for t in load_taxonomy_cases()]
+                     + [i.view for i in inj])
+        prewarm(model_diag.client, all_views, model_diag.prompt_id,
+                DIAGNOSIS_SCHEMA, render_diagnoser, "diagnoser")
 
     results = {name: score_arm(cases, d) for name, d in arms.items()}
 
@@ -296,6 +356,20 @@ def main(argv=None) -> int:
         if a.replay:
             jclient.api_key = ""
         target = f"{DIAGNOSER_MODEL}" if model_diag else "RuleBasedDiagnoser"
+        if jclient.available:
+            jjobs = []
+            for r in results[target]:
+                c, d = r["case"], r["diag"]
+                system, user = render_judge(c.view, d)
+                jjobs.append(dict(
+                    system=system, user=user, prompt_id=JUDGE_PROMPT_ID,
+                    case_hash=case_key(JUDGE_PROMPT_ID, dict(
+                        case=c.id, action=d.intervention.value,
+                        cause=d.root_cause.value, rationale=d.rationale)),
+                    schema=JUDGE_SCHEMA))
+            print(f"  prewarming {len(jjobs)} judge calls, 8 at a time...",
+                  flush=True)
+            jclient.complete_many(jjobs, workers=8, label="judge ")
         for r in results[target]:
             c, d = r["case"], r["diag"]
             system, user = render_judge(c.view, d)
@@ -314,15 +388,14 @@ def main(argv=None) -> int:
             print("  NO JUDGE OUTPUT. Every call failed -- most likely no key. "
                   "E-JUDGE-1..3 are UNMEASURED, not held.")
         else:
-            dis = [j for j in ok
-                   if j["verdict"].get("best_intervention")
-                   != j["case"].correct_intervention]
+            ok, bad_ids = judge_disagreements(judge_rows)
+            dis = [j for j in ok if j["case"].id in bad_ids]
             print(f"  judge disagrees with the registered answer on "
                   f"{len(dis)}/{len(ok)}")
             lowset = [j for j in ok if j["case"].low_confidence]
-            lowdis = [j for j in lowset if j in dis]
+            lowdis = [j for j in lowset if j["case"].id in bad_ids]
             hi = [j for j in ok if not j["case"].low_confidence]
-            hidis = [j for j in hi if j in dis]
+            hidis = [j for j in hi if j["case"].id in bad_ids]
             print(f"  among the 13 flagged at expert_agreement<=0.65: "
                   f"{len(lowdis)}/{len(lowset)} "
                   f"({100*len(lowdis)/max(len(lowset),1):.0f}%)")
@@ -446,16 +519,15 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
               + ("" if live else "   (deterministic arm -- the LLM answered "
                                  "nothing, so this is the FALLBACK's score)")))
 
-    ok = [j for j in judge_rows if j["verdict"]]
-    if ok:
-        dis = [j for j in ok if j["verdict"].get("best_intervention")
-               != j["case"].correct_intervention]
+    if [j for j in judge_rows if j["verdict"]]:
+        ok, bad_ids = judge_disagreements(judge_rows)
         v.append(("E-JUDGE-1 the judge disagrees with the author on 5..20 of 40",
-                  5 <= len(dis) <= 20, f"{len(dis)} disagreements"))
+                  5 <= len(bad_ids) <= 20, f"{len(bad_ids)} disagreements"))
         lowset = [j for j in ok if j["case"].low_confidence]
-        lowr = len([j for j in lowset if j in dis]) / max(len(lowset), 1)
+        lowr = len([j for j in lowset
+                    if j["case"].id in bad_ids]) / max(len(lowset), 1)
         hi = [j for j in ok if not j["case"].low_confidence]
-        hir = len([j for j in hi if j in dis]) / max(len(hi), 1)
+        hir = len([j for j in hi if j["case"].id in bad_ids]) / max(len(hi), 1)
         v.append(("E-JUDGE-2 disagreement is >=2x concentrated in the flagged 13",
                   hir > 0 and lowr >= 2 * hir,
                   f"flagged {lowr:.0%} vs rest {hir:.0%}"))

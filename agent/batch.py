@@ -73,7 +73,9 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              time_major: bool = False, collect_calib: bool = False,
              per_customer_tech_rng: bool | None = None,
              declines: DeclineMix | None = None,
-             decline_kw: dict | None = None) -> dict:
+             decline_kw: dict | None = None,
+             use_llm: bool = False,
+             llm_max_calls: int | None = 150) -> dict:
     """One agent run over one population.
 
     `mode="degenerate"` is retry-only with the deterministic diagnoser: the
@@ -93,12 +95,6 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     if declines is None and decline_kw:
         declines = DeclineMix(**decline_kw)
 
-    if diagnoser is None:
-        diagnoser = (RetryOnlyDiagnoser() if mode == "degenerate"
-                     else RuleBasedDiagnoser(allow_nudge=allow_nudge,
-                                             allow_escalate=allow_escalate,
-                                             allow_stop=allow_stop))
-
     # Defaults to the loop order, but is separable so the order-equivalence
     # gate can hold the RNG fixed and vary ONLY the iteration order. Without
     # that separation the gate would be comparing two things at once.
@@ -111,6 +107,31 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)
+    if diagnoser is None:
+        diagnoser = (RetryOnlyDiagnoser() if mode == "degenerate"
+                     else RuleBasedDiagnoser(allow_nudge=allow_nudge,
+                                             allow_escalate=allow_escalate,
+                                             allow_stop=allow_stop))
+        if use_llm and mode != "degenerate":
+            # THE LLM IS AN OVERLAY WRAPPED AROUND THE DETERMINISTIC ANSWER,
+            # never a replacement for it. `ModelDiagnoser` falls back to the
+            # rule engine on any failure and marks the row `source="fallback"`,
+            # so a batch run cannot silently become half one thing and half
+            # another without the audit trail saying which.
+            #
+            # The cache is the eval's cache, on purpose: a case the eval has
+            # already paid for is answered here for free and IDENTICALLY, which
+            # is what makes a batch number reproducible offline.
+            from agent.llm.client import DIAGNOSER_MODEL, ResponseCache, ZaiClient
+            from agent.llm.model_diagnoser import ModelDiagnoser
+            cache_path = os.path.join(agent._PKG_ROOT, "agent", "eval",
+                                      "_cache", f"{DIAGNOSER_MODEL}.json")
+            diagnoser = ModelDiagnoser(
+                client=ZaiClient(model=DIAGNOSER_MODEL,
+                                 cache=ResponseCache(cache_path)),
+                fallback=diagnoser, log=log,
+                max_live_calls=llm_max_calls)
+
     book = BeliefBook(pop[0]["cycle_days"], pop[0]["days"], pop_spend, bcfg)
     # The monitor's base rate is the harness's P_TECH, not a number of ours.
     #
@@ -151,6 +172,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
             json.dumps(bcfg or {}, sort_keys=True).encode()).hexdigest()[:16],
         outage=outage.asdict() if outage else None,
         declines=declines.asdict() if declines else None,
+        use_llm=use_llm, llm_max_calls=llm_max_calls,
         monitor_enabled=monitor_enabled, monitor_kw=monitor_kw,
         monitor_kind=monitor_kind, oracle_mutant=oracle_mutant,
         oracle_windows=(list(monitor.windows)
@@ -184,6 +206,14 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     res["exec_tech_total"] = executor.n_tech
     res["exec_code_counts"] = dict(executor.code_counts)
     res["exec_terminal_attempts"] = executor.n_terminal_attempts
+    st = getattr(diagnoser, "stats", None)
+    if st is not None:
+        res["llm_n_llm"] = st["n_llm"]
+        res["llm_n_fallback"] = st["n_fallback"]
+        res["llm_reasons"] = dict(st["reasons"])
+        res["llm_spend_usd"] = st["spend_usd"]
+        res["llm_n_capped"] = st.get("n_capped", 0)
+        prov["llm_spend_usd"] = st["spend_usd"]
 
     _skip = ("stops", "gate_refusals", "calib", "rail_transitions")
     log.emit(EventKind.RUN_END, 0,

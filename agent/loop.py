@@ -80,6 +80,13 @@ class LoopContext:
         "paused_dispatch": 0, "paused_decisions": 0,
         "tech_updates_suppressed": 0, "tech_declines": 0,
         "attempts_wasted_on_tech": 0})
+    # Attempts and money split by WHO DIAGNOSED the mandate that produced them.
+    # The executor never sees a `source`, so this compares like with like --
+    # but which cases fall back is NOT random, so it describes the split and
+    # does not measure an effect. `batch_report.py` says so where it prints it.
+    by_source: dict = field(default_factory=lambda: {
+        "llm": {"att": 0, "ok": 0, "paise": 0},
+        "fallback": {"att": 0, "ok": 0, "paise": 0}})
     stops: dict = field(default_factory=lambda: {r.value: 0 for r in StopRule})
 
 
@@ -170,6 +177,10 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
         outcome = decision.outcome
         ctx.monitor.record(t, outcome.code)     # EVERY customer feeds this
         ctx.counters["n_att"] += 1
+        src = getattr(m, "_source", "fallback")
+        bucket = ctx.by_source.get(src)
+        if bucket is not None:
+            bucket["att"] += 1
         m.attempts_used += 1
         m.total_attempts += 1
         m.prev_code = outcome.code
@@ -183,6 +194,9 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             m.collected = True
             m.got_cycles += 1
             ctx.counters["recovered_paise"] += to_paise(m.amount)
+            if bucket is not None:
+                bucket["ok"] += 1
+                bucket["paise"] += to_paise(m.amount)
             rt.recent_success.append((day, m.ref.uid))
             ctx.stops[StopRule.COLLECTED.value] += 1
         else:
@@ -305,6 +319,7 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                      governance_reasons=list(gov.reasons) or None,
                      recommendations=list(diag.recommendations) or None)
         m._did = diag.diagnosis_id
+        m._source = diag.source
         kind = diag.intervention
 
         if kind is InterventionKind.NUDGE:
@@ -338,9 +353,6 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                          terminal=False,
                          detail="held back before the cap to preserve the "
                                 "mandate's remaining billing cycles")
-            continue
-        elif kind is InterventionKind.WAIT:
-            ctx.counters["waits"] += 1
             continue
 
         td = propose(belief, m.amount, day, t, m.cycle_close, m.attempts_used,
@@ -454,5 +466,6 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
         # detection study can EXPLAIN a firing instead of guessing at it.
         rail_transitions=[(t, lbl, v.n_attempts, v.n_tech, v.p_value)
                           for t, lbl, v in ctx.monitor.transitions],
+        outcome_by_source={k: dict(v) for k, v in ctx.by_source.items()},
         calib=ctx.calib,
     )

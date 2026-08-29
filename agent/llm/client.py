@@ -24,6 +24,41 @@ WHAT THIS FILE GUARANTEES TO ITS CALLER:
     `PRICES_USD_PER_MTOK` below. A cost we computed ourselves would be a number
     with no source.
 
+REASONING EFFORT IS SET TO "low", AND THAT IS A MEASUREMENT DECISION NOT A
+TUNING ONE.
+
+GLM-5.3 and Flash are reasoning models: left alone they emit a long chain of
+thought before the JSON. Timed on one real case, 29 Aug 2026 -- a diagnoser call
+returned **1596 completion tokens** for an answer whose schema holds about
+eighty, took 31.7s when it succeeded, and TIMED OUT at 45s and 90s on the other
+two probes. Ninety such calls do not finish.
+
+Thinking cannot be switched off on these SKUs. The API answers
+`{"code":"1210","message":"This model always engages in thinking and cannot be
+disabled; please use low, high, or max"}`. So the request sends
+`thinking={"type":"enabled"}` with `reasoning_effort="low"`, plus a
+`max_tokens` cap. Three consequences, said out loud because they bound every
+number this transport produces:
+  * it is CHEAPER -- output tokens are the expensive half, 4.4 USD/Mtok on the
+    judge SKU, and 1596 of them per call was most of the projected spend;
+  * it is FASTER, which is what makes ninety calls finish at all;
+  * it is a DIFFERENT MODEL CONFIGURATION from the default. A reasoning model
+    on its lowest reasoning setting may well answer worse than the same model
+    on "high". Every score from this harness is a score for *this*
+    configuration, and "the LLM scored X" means "GLM-5.3-Flash at
+    reasoning_effort=low with a 2000-token cap scored X". Sweeping the effort
+    level is the obvious next measurement and has NOT been done.
+
+CALLS RUN IN A THREAD POOL. They are independent, network-bound HTTP requests;
+threads are the right tool and this is NOT the multiprocessing path that
+segfaults on this machine (`docs/06_MODEL_CARD.md` 6a) -- no numpy, no worker
+processes, nothing shared but a lock-guarded cache dict.
+
+THE CACHE IS WRITTEN AS RESULTS ARRIVE, NOT AT THE END. The first live run
+spent thirty minutes on paid calls, was killed, and persisted NOTHING, because
+`save()` was only called after the last prediction was scored. Money that has
+been spent is written to disk before anything else can go wrong.
+
 THE BUDGET IS A HARD STOP, NOT A WARNING. `Budget.spend` raises nothing; it
 refuses, and the refusal becomes a failed `LLMResult` that falls back to the
 deterministic diagnoser. A run that quietly kept spending past its cap would be
@@ -36,6 +71,7 @@ import hashlib
 import json
 import os
 import time
+import threading as _threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -203,7 +239,9 @@ class ZaiClient:
                  cache: ResponseCache | None = None,
                  budget: Budget | None = None,
                  temperature: float = 1.0, top_p: float = 0.95,
-                 timeout_s: float = 60.0, max_retries: int = 2):
+                 timeout_s: float = 120.0, max_retries: int = 2,
+                 reasoning_effort: str = "low", max_tokens: int = 2000,
+                 autosave_every: int = 5):
         self.model = model
         if not api_key:
             _load_dotenv()
@@ -219,6 +257,13 @@ class ZaiClient:
         self.top_p = top_p
         self.timeout_s = timeout_s
         self.max_retries = max_retries
+        # See the module docstring. Off by default and reported wherever a
+        # score from this client is quoted.
+        self.reasoning_effort = reasoning_effort
+        self.max_tokens = max_tokens
+        self.autosave_every = autosave_every
+        self._since_save = 0
+        self._lock = _threading.Lock()
 
     @property
     def available(self) -> bool:
@@ -255,6 +300,9 @@ class ZaiClient:
                          {"role": "user", "content": user}],
             "temperature": self.temperature,
             "top_p": self.top_p,
+            "max_tokens": self.max_tokens,
+            "thinking": {"type": "enabled"},
+            "reasoning_effort": self.reasoning_effort,
         }
         if schema is not None:
             # Structured output. The model returns an object matching `schema`,
@@ -287,13 +335,22 @@ class ZaiClient:
                     completion_tokens=int(usage.get("completion_tokens", 0)),
                     cached_tokens=int(det.get("cached_tokens", 0)),
                     latency_s=round(time.time() - t0, 3))
-                self.budget.charge(r)
+                with self._lock:
+                    self.budget.charge(r)
                 if self.cache is not None:
-                    self.cache.put(ck, dict(
-                        text=r.text, parsed=r.parsed,
-                        prompt_tokens=r.prompt_tokens,
-                        completion_tokens=r.completion_tokens,
-                        cached_tokens=r.cached_tokens))
+                    # WRITTEN AS IT ARRIVES. A paid call that is not on disk is
+                    # money that a Ctrl-C throws away, and that has already
+                    # happened once.
+                    with self._lock:
+                        self.cache.put(ck, dict(
+                            text=r.text, parsed=r.parsed,
+                            prompt_tokens=r.prompt_tokens,
+                            completion_tokens=r.completion_tokens,
+                            cached_tokens=r.cached_tokens))
+                        self._since_save += 1
+                        if self._since_save >= self.autosave_every:
+                            self._since_save = 0
+                            self.cache.save()
                 return r
             except urllib.error.HTTPError as e:
                 detail = ""
@@ -310,6 +367,41 @@ class ZaiClient:
             if attempt < self.max_retries:
                 time.sleep(1.5 * (attempt + 1))
         return LLMResult(ok=False, model=self.model, error=last)
+
+
+    def complete_many(self, jobs, workers: int = 8, label: str = ""):
+        """Run many `complete` calls concurrently. Returns results in order.
+
+        Network-bound and independent, so a thread pool is the right tool. This
+        is NOT the multiprocessing path that segfaults on this machine: no
+        numpy, no worker processes, nothing shared but a lock-guarded dict.
+
+        Progress prints as results land, because the first live run gave no
+        output for thirty minutes and there was no way to tell a slow call from
+        a hung one without killing it.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        jobs = list(jobs)
+        out = [None] * len(jobs)
+        done = [0]
+
+        def one(i_kw):
+            i, kw = i_kw
+            r = self.complete(**kw)
+            with self._lock:
+                done[0] += 1
+                n = done[0]
+            if n % 5 == 0 or n == len(jobs):
+                print(f"    {label}{n}/{len(jobs)} "
+                      f"(${self.budget.spent_usd:.4f})", flush=True)
+            return i, r
+
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            for i, r in ex.map(one, list(enumerate(jobs))):
+                out[i] = r
+        if self.cache is not None:
+            self.cache.save()
+        return out
 
 
 def _parse(text: str) -> dict | None:

@@ -185,6 +185,21 @@ class MandateRef:
 class InterventionKind(Enum):
     """What the agent can decide to do about a mandate.
 
+    WAIT WAS CUT ON 29 AUGUST 2026. It was unreachable from every branch of
+    `RuleBasedDiagnoser`, had exactly one supporting golden case (GC-22), and
+    the action ablation measured it at approximately zero. Removing it was
+    preferred to adding a branch to reach it.
+
+    ONE MEASURED CAVEAT, recorded because it complicates the decision rather
+    than supporting it: WAIT was unreachable for the RULE ENGINE, but in the
+    first live eval it was `glm-5.3-flash`'s MOST-USED answer -- 11 of 40
+    registered cases. So this removed an action one diagnoser never reached and
+    the other reached constantly, and the eval was re-run to measure what that
+    did. Waiting still happens; it is just no longer an INTERVENTION the
+    narrative layer can name. The timing layer's own "the future looks better
+    than now" verdict is `policy.timing.Reason.WAIT` and is untouched -- that is
+    the frozen index doing its job, not a diagnosis.
+
     PARTIAL is deliberately absent. Whether a partial debit is permitted under
     one UPI AutoPay mandate is not established in docs/01_FACTS.md, and a
     merchant-acceptance rate for it would be an invented constant (rule 5).
@@ -192,7 +207,6 @@ class InterventionKind(Enum):
     credits zero money and never reaches the gate.
     """
     RETRY = "RETRY"           # money action: attempt a debit
-    WAIT = "WAIT"             # no action today; re-decide tomorrow
     NUDGE = "NUDGE"           # non-money: ask the customer to fund the account
     ESCALATE = "ESCALATE"     # non-money: hand to a human / merchant queue
     STOP = "STOP"             # no further money action this cycle

@@ -4,14 +4,10 @@
 
 Research and simulation: **done and FROZEN.** Stop doing it.
 Production code: **`agent/` exists and runs end to end.** Constraint layer,
-action space and context layer are built and gated. **The LLM layer is
-BUILT and UNMEASURED** — updated 29 August 2026: the diagnoser
-(`glm-5.3-flash`), the judge (`glm-5.3`, a different SKU), the prompts,
-the response cache, the budget and the eval harness all exist and all
-run, but there is **no `ZAI_API_KEY` in this environment**, so every call
-falls back to the deterministic path and **no LLM number exists**.
-`python agent/eval/run_eval.py --llm --judge` produces them the moment a
-key is present.
+action space and context layer are built and gated. **The LLM layer is BUILT
+AND MEASURED** (29 Aug 2026; GLM-5.3-Flash diagnosing, GLM-5.3 judging, $0.15
+spent, replayable offline). Run the deliverable:
+`python -m agent.batch_report --llm`.
 Deadline: **5 September 2026 — 8 days from today.**
 
 Run it: `python -m agent.demo` (see `06_MODEL_CARD.md` §6).
@@ -119,17 +115,36 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    that an exception at open time anywhere in the repo, and the demo clears its
    two fixed paths first. Verified by running the demo twice in a row: clean
    both times.
-0e. **NO LLM NUMBER EXISTS.** The layer is built and unmeasured for want of a
-   `ZAI_API_KEY`. The measured headroom it has to beat: the deterministic
-   fallback scores **9/21 on the ambiguous cases** and **0/4 on terminal decline
-   codes**. `02_RESULTS.md`.
-0f. **`WAIT` is unreachable from every branch of `RuleBasedDiagnoser`.** GC-22
-   is the only registered case where WAIT is the answer, so the evidence that
-   the action is worth having rests on one case. Recorded in `fallback.py`
-   rather than fixed: if the action ablation cannot show a gain from it, cut the
-   action instead of adding a branch to reach it.
-
-
+0e. ~~**NO LLM NUMBER EXISTS.**~~ **MEASURED 29 August 2026.**
+   GLM-5.3-Flash diagnosing, GLM-5.3 judging, $0.15 spent, and
+   `run_eval.py --llm --judge --replay` reproduces it offline in 0.35s for
+   $0.00. The model **beats the rule engine on ambiguous cases 10/21 vs 9/21**
+   and on **terminal decline codes 4/4 vs 0/4**, loses on clean cases 13/19 vs
+   19/19, and **does not move the batch money** (94.33% vs 94.36%).
+   `02_RESULTS.md`.
+0f. ~~**`WAIT` is unreachable.**~~ **CUT 29 August 2026 -- and the premise was
+   only true of the rule engine.** WAIT was the LLM's MOST-USED answer, 11 of 40
+   registered cases. Removing it moved the LLM's ambiguous score from **4/21 to
+   10/21**. **An action space is part of the model, not part of the plumbing.**
+   GC-22's registered answer was WAIT, so it is now unwinnable by construction
+   and stays in the denominator. Reverting is one commit; both columns are in
+   `02_RESULTS.md`.
+0g. **19 judge-vs-author disagreements await human adjudication.** That is the
+   validation step and the only one. `python agent/eval/run_eval.py --llm
+   --judge --replay` prints the table with GLM-5.3's reasoning. The pattern to
+   argue about: on Z9 bursts with attempts left the author says RETRY/ESCALATE
+   and BOTH model and judge say NUDGE. Two models agreeing is not evidence --
+   they may share a pre-training prior.
+0h. **`reasoning_effort` is unswept, and every LLM score depends on it.**
+   Thinking cannot be disabled on these SKUs (API code 1210), and at the default
+   the diagnoser emitted 1,596 completion tokens per answer and timed out. Every
+   score is for `reasoning_effort=low` with a 2000-token cap. A higher setting
+   may score better; **10/21 may be a floor.** First thing to sweep.
+0i. **The LLM is called 119,667 times over a 4-population batch** -- once per
+   live mandate per decision hour. It runs under a hard cap of 120 live calls
+   per run with the rule engine handling the rest, giving a **94.8% fallback
+   rate**. That is the design, not a workaround, but it means the batch's LLM
+   arm is 95% deterministic and must never be described as "the LLM's number".
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and
    still the one fact that decides whether the sophisticated version is worth
    building. What IS now measured is where the crossover sits: the system

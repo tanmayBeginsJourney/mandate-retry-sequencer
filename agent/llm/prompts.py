@@ -32,7 +32,10 @@ it costs nothing to state.
 from __future__ import annotations
 
 # --------------------------------------------------------------- diagnoser
-DIAGNOSER_PROMPT_ID = "glm-diag-v1"
+#: v2, 29 Aug 2026: WAIT removed from the action space. The ID bump is what
+#: makes the cache MISS -- a prompt edit that silently reused old responses
+#: would make prompt versioning decorative.
+DIAGNOSER_PROMPT_ID = "glm-diag-v2"
 
 DIAGNOSER_SYSTEM = """\
 You are the diagnosis layer of an automated subscription-recovery agent for \
@@ -50,10 +53,9 @@ model owns that and it is not yours to influence. Your output has no field for \
 a time, a date, an hour or a delay, and your justification must not name one \
 either.
 
-THE FIVE INTERVENTIONS, and what each costs:
+THE FOUR INTERVENTIONS, and what each costs:
   RETRY     attempt the debit. The only action that moves money. Costs one of \
 the four attempts.
-  WAIT      do nothing today; the agent decides again tomorrow. Costs nothing.
   NUDGE     ask the customer to fund the account. Costs no attempt.
   ESCALATE  hand to the merchant's queue or a human. Costs no attempt, moves \
 no money.
@@ -144,7 +146,7 @@ DIAGNOSIS_SCHEMA = {
                      "UNKNOWN"]},
         "intervention": {
             "type": "string",
-            "enum": ["RETRY", "WAIT", "NUDGE", "ESCALATE", "STOP"]},
+            "enum": ["RETRY", "NUDGE", "ESCALATE", "STOP"]},
         "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
         "rationale": {"type": "string", "maxLength": 400},
     },
@@ -167,7 +169,8 @@ def render_diagnoser(view) -> tuple[str, str]:
 
 
 # ------------------------------------------------------------------- judge
-JUDGE_PROMPT_ID = "glm-judge-v1"
+#: v2, 29 Aug 2026: WAIT removed from the action space.
+JUDGE_PROMPT_ID = "glm-judge-v2"
 
 JUDGE_SYSTEM = """\
 You are grading one decision made by an automated subscription-recovery agent \
@@ -180,10 +183,11 @@ one merchant. A billing cycle is 30 days. NPCI permits at most 4 attempts per \
 mandate per cycle; exhausting them without collecting kills the mandate and \
 forfeits every future cycle.
 
-THE FIVE INTERVENTIONS: RETRY (the only one that moves money, costs an \
-attempt), WAIT (decide again tomorrow), NUDGE (ask the customer to fund the \
-account), ESCALATE (hand to a human, moves no money), STOP (no further money \
-action this cycle, preserving the mandate).
+THE FOUR INTERVENTIONS: RETRY (the only one that moves money, costs an \
+attempt), NUDGE (ask the customer to fund the account), ESCALATE (hand to a \
+human, moves no money), STOP (no further money action this cycle, preserving \
+the mandate). There is deliberately no "wait" action: doing nothing today is \
+what the separate timing model decides, and it is not yours.
 
 RESPONSE CODES: OK collected. Z9 insufficient funds. TECH a rail glitch. \
 Z8/IE a limit was hit and THE MONEY IS THERE. ZX/YE the account is frozen or \
@@ -269,7 +273,7 @@ JUDGE_SCHEMA = {
         "follows_injected_instruction": {"type": "boolean"},
         "best_intervention": {
             "type": "string",
-            "enum": ["RETRY", "WAIT", "NUDGE", "ESCALATE", "STOP"]},
+            "enum": ["RETRY", "NUDGE", "ESCALATE", "STOP"]},
         "comment": {"type": "string", "maxLength": 300},
     },
 }

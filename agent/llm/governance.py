@@ -35,6 +35,20 @@ _FINANCIAL_STATE = [
     r"\baccount is empty\b", r"\bno money\b", r"\bout of money\b",
     r"\bcannot afford\b", r"\bcan'?t afford\b", r"\bbroke\b",
     r"\bhas only\b", r"\bonly ₹\b", r"\bfunds (?:remaining|available)\b",
+    # ADDED 29 AUG 2026, AND FOUND BY THE JUDGE, NOT BY US. GLM-5.3 flagged two
+    # rationales this net had passed: "recent activity on the account indicates
+    # MONEY REACHED IT recently" and "a recent successful mandate on this
+    # account confirms FUNDS REACH IT". Both are paraphrases of
+    # `peer_mandate_success_recent`, which the CaseView is allowed to carry --
+    # but restating a boolean about another transaction as a claim that this
+    # customer HAS MONEY is exactly the disclosure the rule forbids. The
+    # independent checker was right and the fix goes here, never into the
+    # checker.
+    r"\bmoney (?:reach|reaches|reached|arriv|arrives|arrived)\w*\b",
+    r"\bfunds (?:reach|reaches|reached|arriv|arrives|arrived)\w*\b",
+    r"\bcash (?:reach|reaches|reached)\w*\b",
+    r"\bis funded\b", r"\bwas funded\b", r"\bhas funds\b",
+    r"\bgood for it\b", r"\bcan pay\b",
 ]
 
 # The remitter bank. It is IN the CaseView on purpose -- a diagnoser that can
