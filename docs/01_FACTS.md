@@ -52,6 +52,89 @@ Tags: `[VERIFIED]` primary source read directly · `[REPORTED]` secondary ·
   Read from their docs, but see the RETRACTIONS below — we now believe this
   schedule may not be legally executable post-August 2025.
 
+### ⚠️ How often does a real AutoPay debit actually fail? Added 29 August 2026
+
+**This is the anchor the whole world model hangs on, and the public record is
+thin, second-hand and inconsistent with the value in use.**
+
+- `[REPORTED]` **UPI AutoPay debit failure is 8–15%**, against 2–3% for card
+  e-mandates. Source: trade-blog summaries read 29 August 2026
+  (`bighelpers.in`, `productgrowth.in`). ⚠️ Neither is an operator disclosure
+  and neither cites one.
+- `[REPORTED]` **Subscription debits succeed ~85% in month 1, decaying to ~70%
+  by month 6**, with ~20% debit failure and ~18% mandate cancellation quoted
+  alongside. Same class of source, same caveat. The *decay* is the interesting
+  half and this project models nothing like it.
+- `[VERIFIED]` **Razorpay's own comparison page discusses mandate completion,
+  drop-off, retry cost and revenue leakage and publishes no failure rate at
+  all.** Read 29 August 2026,
+  <https://razorpay.com/blog/upi-autopay-vs-card-e-mandates/>. The only number
+  it gives is that card e-mandate "failure rates spiked to 20%+ in some
+  categories" after RBI's 2021 authentication rules. **The operator being
+  pitched to does not publish the number this project most needs.**
+- `[GUESS]` **That the ~30% per-attempt approval anchor below describes ALL
+  debits rather than RETRIES of already-failed ones.** The world implements the
+  first. If it was ever meant as the second, `pop_spend=1.05` is calibrated
+  against the wrong population. **Nobody has resolved which.** This is now the
+  highest-value unresolved question in the project — see `NOTES.md`,
+  29 August, and the spend sweep in `02_RESULTS.md`.
+### Recovery-rate benchmarks — the validation targets. Added 30 August 2026.
+
+**There is no public benchmark dataset for payment retry scheduling.** Checked
+30 August 2026: no shared task, no held-out set, no leaderboard, nothing of the
+SWE-bench shape. The only formal artifacts in the space are **patents** on
+machine-learned dunning, which describe methods and publish no data. So the
+project cannot report on a benchmark, and the validation suite in
+`04_BUILD_PLAN.md` exists in its place.
+
+**These are the targets that suite scores against.** All `[REPORTED]`, all from
+companies that sell recovery software, aggregating non-comparable customer
+bases. One source states in its own methodology note that its figures are
+"ranges drawn from publicly reported subscription-billing data, not laws."
+**They are corroboration, never ground truth, and must never be quoted as a
+result.** Their value is that this project did not fit to them.
+
+| target | published value |
+|---|---|
+| recovery rate, no retries | ~0–10% |
+| recovery rate, basic fixed-interval retries | ~20–40% |
+| recovery rate, industry median across mixed approaches | ~47.6% |
+| recovery rate, smart retries + card updater + email | 70–85% |
+| smart retry timing alone vs fixed intervals | ~+25% relative |
+| share of recoveries landing inside the first 10 days | ~90% |
+| card failure rate / ACH & direct-debit failure rate | ~15% / 3–5% |
+| involuntary share of total subscription churn | 20–40% |
+| average subscription churn (voluntary / involuntary) | 3.27% (2.41 / 0.86) |
+| median annual involuntary churn | 1.25% |
+| subscription revenue lost to failed payments, 2025 | ~$129B |
+
+Sources, read 30 August 2026: `retentionlens.com/state-of-involuntary-churn`,
+`baremetrics.com/blog/subscription-payment-recovery-benchmarks`,
+`recurly.com/research/churn-rate-benchmarks/`, `slickerhq.com`. Baremetrics
+states a sample of 119 active Recover customers, May 2026; the others do not
+state one.
+
+⚠️ **METRIC MISMATCH, and it blocks every comparison above.** Each figure is a
+*recovery rate* — of payments that failed, the fraction eventually collected.
+This project reports *cycles collected / cycles due*, which counts cycles that
+never failed. **They are different quantities.** W0 in `04_BUILD_PLAN.md` adds
+the recovery-rate metric; until it lands, none of this table may be compared to
+anything the project reports.
+
+- `[REPORTED]` **~120 million UPI AutoPay mandates are created every month in
+  India.** Razorpay's own comparison page, read 29 August 2026. ⚠️ The same
+  page also says "3 million UPI Autopay mandates created monthly" — **the two
+  figures are inconsistent and the page does not reconcile them.** Use for
+  order-of-magnitude framing only, and say which figure you used.
+
+- `[VERIFIED]` **What the calibration costs, measured.** At `pop_spend=1.05` the
+  simulated account cannot cover the debit on its due date **53%** of the time
+  and the agent beats the baseline by **+36.43** pts. At `pop_spend=0.80` the
+  baseline's per-attempt approval is **84.6%** — inside the band the sources
+  above report — and the agent is worth **+6.29** pts (2 SE 1.42), which is
+  inside the 6–8% industry benchmark below. Reproduce with
+  `python scripts/spend_sweep.py`. Table in `02_RESULTS.md`.
+
 ## UPI rail outages — added 28 August 2026, for the agent's context layer
 
 - `[REPORTED]` UPI suffered roughly **995 minutes of total downtime across ~17

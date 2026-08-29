@@ -1,14 +1,16 @@
 # CLAUDE.md — read this fully before your first action
 
-You are joining a project with a finished, frozen simulation behind it. **You
+You are joining a project with a large body of measured work behind it. **You
 do not have that context.** This file, plus `docs/`, is all of it.
 
-**`sim/` is frozen and `agent/` is COMPLETE.** Every layer is built and
-measured: the constraint layer, the action space, the context layer, the LLM
-layer, the eval, the batch report, and a second executor backend against
-Razorpay's real API. **What actually remains is the architecture document and
-the pitch** — see `docs/04_BUILD_PLAN.md`, which names the next three things in
-order. Do not start rebuilding what is already there.
+**`agent/` is COMPLETE** — the constraint layer, the action space, the context
+layer, the LLM layer, the eval, the batch report, and a second executor backend
+against Razorpay's real API are all built and all measured. Do not rebuild what
+is already there.
+
+**The live work is the WORLD.** `docs/04_BUILD_PLAN.md` carries the World v2
+spec (W0–W5) and the validation suite that replaces a public benchmark. W0 is
+done. `sim/` is no longer frozen — see below.
 
 **Read `docs/07_AGENT_BRIEF.md` first, then `docs/06_MODEL_CARD.md`.** Between
 them they carry the interface, the evidence and the limits, and you do not need
@@ -17,8 +19,43 @@ to read `sim/` to use any of it.
 Then read `docs/00_HANDOFF.md`, `docs/01_FACTS.md`, `docs/02_RESULTS.md` and
 `docs/03_ERRORS.md`. That is not optional.
 
-⚠️ **`README.md` and `docs/index.html` are DRAFTS Tanmay is rewriting.** Do not
-polish either. If they disagree with `docs/`, `docs/` wins.
+✅ **`README.md` and `docs/index.html` were rewritten on 29 August 2026 and are
+no longer drafts.** They are the two judge-facing artifacts. If they disagree
+with `docs/`, `docs/` still wins and the disagreement is a bug in the rewrite —
+fix it rather than leaving both.
+
+⚠️ **Added 29 August 2026: both currently lead with `+36.66 pts`, and that
+number is conditional on `pop_spend=1.05` as well as on `payday_err=7`.** The
+spend sweep in `02_RESULTS.md` shows the uplift running +3.51 → +36.43 across a
+plausible range of world hardness. **Do not restate the headline in either
+artifact until the world work in `04_BUILD_PLAN.md` lands** — the operating
+point is being changed, and rewriting the number twice is wasted work.
+
+---
+
+## DO NOT MANAGE TANMAY'S CALENDAR. Added 30 August 2026.
+
+**You do not get a vote on what fits in the time available.** This project went
+from nothing to a complete, measured agent in under three days. Any estimate you
+form about what is "too big for the time left" is calibrated on a rate of work
+you have not observed and cannot see.
+
+Concretely, you may not:
+
+- refuse, defer, or down-rank a piece of work because of how close the deadline is
+- describe something as "a Day-1 decision, not a Day-25 one", or any variant
+- pad an answer with time estimates that were not asked for
+- treat the freeze as a reason to stop *thinking* about a change — it governs
+  what gets committed to `sim/`, not what may be proposed or specced
+
+**Answer the WHAT. Tanmay owns the WHEN.** If a piece of work is genuinely
+large, say what it involves and what it costs in re-runs, and then let him
+decide. "This is a big change and here is exactly how big" is useful. "There
+isn't time for this" is not, and it has been wrong every time it has been said
+here.
+
+The question you should be optimising is **"does this make the project more
+interesting to a judge?"** — not "does this fit before Friday."
 
 The single most important thing about this project:
 
@@ -43,27 +80,31 @@ them.
 
 ---
 
-## THE MODEL IS FROZEN — tag `model-frozen`, 28 August 2026
+## THE FREEZE IS LIFTED — 30 August 2026
 
-**Do not change `sim/w3.py`, `sim/harness.py`, or the fitted constants
-(`w3.FITTED_BELIEF`, the `0.92` discount) before 5 September without explicit
-approval from Tanmay.** Not to tidy them, not to squeeze another point out of
-them, not because a better idea turned up. The simulation model is done.
+**`sim/` is no longer frozen. Nothing in this repository is.** The freeze was
+declared on 28 August on the assumption that there would be no time for further
+model work. That assumption is withdrawn: the world model is now the main line
+of work, and `docs/04_BUILD_PLAN.md` (World v2, W0-W5) is the spec.
 
-Everything from here is `agent/`. The probability engine is `w3.BeliefPD`
-configured with `w3.FITTED_BELIEF` — wire it in, do not rewrite it.
+Tag `model-frozen` still marks the 28 August state and is still the reference
+point for "what the reported numbers were measured on". **When you change
+`sim/w3.py`, `sim/harness.py` or a fitted constant, every number measured
+against them is stale until re-run** — that is a cost to budget, not a reason
+not to do it.
 
-What is still open and still allowed: `agent/`, `docs/`, `README.md`,
-`scripts/`, `NOTES.md`, the pitch, and the architecture document.
-`sim/tests.py` may gain gates but no gate's threshold may move.
+**What the freeze got right, and what survives it as ordinary discipline:**
 
-Why this rule exists: the model went through four significant corrections in a
-single day (a dead LTV multiplier, a placebo forecast defect, an unfitted
-belief, and a fitted-then-brittle prior that had to be refitted). Each was
-worth making. None of them is worth making on 4 September with a deadline on
-the 5th and no time to re-run the suite.
-
----
+- **Re-run before you re-quote.** A changed model invalidates every table that
+  depended on it. `sim/t9_reference.py --recapture` is a deliberate
+  re-baseline and it prints the full field-level diff before writing; paste
+  that diff into `NOTES.md`.
+- **One change at a time, measured.** The model went through four significant
+  corrections in a single day because they were made together and untangled
+  afterwards.
+- **Do not fit a constant on the evaluation set.** That is error 8 and it is
+  the reason the 0.92 discount was never fitted.
+- **A big improvement is a defect until proven otherwise** (rule 3 below).
 
 ## Hard rules. These are not preferences.
 
@@ -81,8 +122,10 @@ the most valuable asset in the repo. Treat it as read-mostly.
 counter, the gate that reads that counter is grading the mutant, not the
 harness — it passes by construction. Gate **M4B** parses `sim/harness.py` and
 fails if any `V.<field> += 1` sits inside a mutation branch. Two do today
-(`pending`, `represent`); the repair is blocked by the freeze. **Never make
-M4B green by exempting a mutant or by narrowing what it looks at.**
+(`pending`, `represent`). **The freeze no longer blocks the repair** — it is
+now ordinary open work, and it matters, because with M1 vacuous it is why two
+of the five Stage 0 rules have no working test in `sim/`. **Never make M4B
+green by exempting a mutant or by narrowing what it looks at.**
 
 ### 2. Never report a number without stating how it could be wrong
 Before presenting any simulation result, state:
@@ -218,8 +261,8 @@ docs/
   index.html           the public page. Static, GitHub Pages from /docs.
   data/scenarios.json  every scenario the page shows, pre-computed.
 sim/
-  w3.py                world + belief filters + FITTED_BELIEF. FROZEN.
-  harness.py           policies, Stage 0 violation counters, run(). FROZEN.
+  w3.py                world + belief filters + FITTED_BELIEF
+  harness.py           policies, Stage 0 violation counters, run()
   tests.py             the 25-gate suite. Tripwired: see "Before you commit".
   gate.py              runs tests.py, decides if a commit is allowed
   runner.py            parallel driver (spawn-safe). Read its docstring first.
@@ -253,10 +296,10 @@ agent/                 THE PRODUCT. Complete: every layer built and measured.
                        lawful home. See error 24.
   loop.py batch.py     the recovery loop; batch.py is the composition root
                        and the ONE place the executor backend is chosen
-  policy/              ONE BeliefPD per CUSTOMER + the index. Wraps frozen sim/.
+  policy/              ONE BeliefPD per CUSTOMER + the index. Wraps sim/.
   constraints/         Stage 0 ENFORCED, plus an independent auditor
   context/             rail_monitor.py — cross-customer outage detection
-  execution/           sim_executor.py (the frozen world) and
+  execution/           sim_executor.py (the simulated world) and
                        razorpay_executor.py + razorpay_downtime.py (the real
                        API, UNTESTED pending credentials)
   audit/               append-only JSONL, one row per event

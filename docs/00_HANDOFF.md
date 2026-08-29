@@ -278,5 +278,17 @@ the architecture document and the pitch, not more code. See `CLAUDE.md`.
 - [ ] Architecture doc, one page
 - [ ] 5-minute pitch video, opening with the errors (there are **twenty-six**)
 - [x] `NOTES.md` full of real mess
-- [x] A public page — `docs/index.html`, static, Pages from `/docs`
-      **(Tanmay is rewriting this and the README; treat both as drafts)**
+- [x] A public page — `docs/index.html`, static, Pages from `/docs`.
+      **Rewritten 29 August; no longer a draft.**
+- [x] README rewritten 29 August; no longer a draft
+- [ ] **Repo actually pushed to a public GitHub remote.** `git remote -v` is
+      empty. 28 commits exist locally and none of them is visible to a judge.
+      This is a hard deliverable and it is the only one that is one command away.
+- [ ] **World v2** — realistic operating point, insolvent customers, mandate
+      cancellation, success decay. Spec in `04_BUILD_PLAN.md`. **In progress,
+      not a caveat.**
+- [ ] **The validation suite** — the simulator scored against published figures
+      it was never fitted to. This is what replaces a public benchmark, because
+      no public benchmark exists. `04_BUILD_PLAN.md`.
+- [ ] **Judge-facing docs**, plain English, engineering and business impact.
+      Written AFTER World v2 lands, so it is written once.
