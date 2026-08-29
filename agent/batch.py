@@ -56,7 +56,8 @@ def make_pop(n: int, k: int, pop_seed: int, spend: float = 1.05,
                        spend=spend, **kw)
 
 
-def at_risk_cycles(pop, seed: int, payday_err: int = 7) -> dict:
+def at_risk_cycles(pop, seed: int, payday_err: int = 7,
+                   p_missed_credit: float = 0.0) -> dict:
     """The world's revenue-at-risk set, without running a policy.
 
     Exposed HERE rather than imported from `agent.execution` by the caller,
@@ -68,7 +69,16 @@ def at_risk_cycles(pop, seed: int, payday_err: int = 7) -> dict:
 
     {(mandate_uid, cycle): due_day}. See `SimExecutor.at_risk_cycles`.
     """
-    return SimExecutor(pop, seed, payday_err).at_risk_cycles()
+    return SimExecutor(pop, seed, payday_err,
+                       p_missed_credit=p_missed_credit).at_risk_cycles()
+
+
+def unwinnable_cycles(pop, seed: int, payday_err: int = 7,
+                      p_missed_credit: float = 0.0) -> dict:
+    """The oracle's ceiling: cycles no schedule could collect. Routed through
+    the composition root for the same reason `at_risk_cycles` is."""
+    return SimExecutor(pop, seed, payday_err,
+                       p_missed_credit=p_missed_credit).unwinnable_cycles()
 
 
 def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
@@ -90,6 +100,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              per_customer_tech_rng: bool | None = None,
              declines: DeclineMix | None = None,
              decline_kw: dict | None = None,
+             p_missed_credit: float = 0.0,
              use_llm: bool = False,
              llm_max_calls: int | None = 150,
              executor=None) -> dict:
@@ -130,7 +141,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         executor = SimExecutor(pop, seed, payday_err, topup_p=topup_p,
                                nudge_p=nudge_p, outage=outage,
                                per_customer_tech_rng=per_customer_tech_rng,
-                               declines=declines)
+                               declines=declines,
+                               p_missed_credit=p_missed_credit)
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)

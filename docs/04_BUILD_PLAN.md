@@ -189,6 +189,54 @@ being an overlay that changes nothing and starts being load-bearing.
 
 Rates stay `[GUESS]` and stay swept, exactly as now.
 
+## W7. Transient failures — the highest-value world item. Added 30 August 2026.
+
+**One mechanism explains three of the four validation misses**, and it is the
+only outstanding item that moves more than one.
+
+Every failure in this world is "the money is not there and will not be until
+payday", plus, since W2, "the money never arrives". Real declines include a
+large third class: a temporary hold, a momentary shortfall, a balance topped up
+the same evening — **the money is back within a day or two.**
+`harness.P_TECH = 0.008` auto-represents and is not this.
+
+Add a swept transient-failure rate and three targets move together:
+
+* **V3 rises into 20–40%.** A fixed schedule retrying T+1…T+4 exists to catch
+  precisely this class. It is why the published band is 20–40% and not near
+  zero — and why ours currently measures 18.75%, very nearly nothing.
+* **V7 rises.** Recoveries land inside ten days because the money returned
+  inside ten days.
+* **V5 holds.** The agent already catches these; it simply waits longer than it
+  needs to.
+
+**Registered before building:** transients at a swept rate move V3 into 20–40%
+and V7 above 60%, without moving V5 out of 70–85%.
+
+⚠️ It will also *reduce* the agent's measured advantage, because a fixed
+schedule that catches transients is a better baseline than the one measured
+today. That is the correct direction and it should be reported as such.
+
+## W6. Due dates that cluster near paydays
+
+**Added 30 August 2026, after V7's miss was traced.** `w3.make_pop` draws
+`due_day` and `payday` independently, so the gap between a debit and the money
+that would cover it is uniform over the cycle — mean 14.7 days. **Only 35.8% of
+at-risk cycles have money inside ten days**, against a published ~90% of
+recoveries landing there. The agent already recovers 42.6% inside ten days,
+which is above the ceiling this world sets, so **V7 cannot be fixed by a better
+policy, and W2 will not touch it.**
+
+Real subscription billing is not uniform: people subscribe just after being
+paid, and merchants bill on the 1st. Draw `due_day` with mass concentrated a few
+days after `payday`, with the concentration swept rather than picked.
+
+⚠️ This one cuts both ways and that must be said when it lands. Clustering due
+dates near paydays makes the world easier — more debits succeed on the due date,
+so the at-risk set shrinks and **the agent has less left to win**. Expect the
+headline gap to fall. That is the correct direction: the current uniform offset
+is quietly inflating the problem the agent is solving.
+
 ---
 
 # THE VALIDATION SUITE — what replaces a public benchmark
@@ -210,7 +258,16 @@ way `05_TEST_DESIGN.md` already requires.
 | V8 | involuntary share of total subscription churn | 20–40% | not built |
 | V9 | mandate cancellation rate over the horizon | ~18% | 23.4% mandate death, indicative |
 
-**Scored 30 August 2026: 2 of 4 measurable targets hit, neither fitted.** The
+**Scored 30 August 2026: 2 of 4 measurable targets hit, neither fitted**, at
+`pop_spend=0.80` with no insolvency.
+
+⚠️ **W2 landed and the honest reading got harder.** Insolvency brings V5 into
+band at `p_missed_credit=0.08`, but V1 breaks there; a (0.70, 0.08) calibration
+satisfies V1 and V5 together and then **misses both targets it was not fitted
+to** — V3 falls to 18.75% and V7 to 32.86%. Two hits produced by turning two
+dials are a curve fit, not corroboration. **The 0.80 / 0.00 pair, where two
+unfitted targets hit, remains the stronger evidence and the reported
+calibration.** `NOTES.md`, 30 August, and W7 below. The
 fixed-schedule arm that made V3 measurable is `agent/policy/fixed_schedule.py`;
 `02_RESULTS.md` has the table and the caveats. **Both misses are W2** — recovery
 is too high and too slow because no customer in this world is ever unable to

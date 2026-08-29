@@ -1114,10 +1114,19 @@ fitted.** V1 is a property of the world; V3 is a property of a baseline policy
 running in it. They come from different parts of the model and agree with the
 outside record together.
 
-**The two misses are one missing mechanism.** Recovery is too high *and* too
-slow because in this world the money always arrives eventually — the oracle is
-100% at every calibration, so no customer is ever unable to pay. That is
-**W2** in `04_BUILD_PLAN.md`, now indicated by four separate measurements.
+**⚠️ CORRECTED 30 August 2026: the two misses are TWO mechanisms, not one.**
+The first version of this paragraph said both came from the absence of
+insolvency. That is right for V5 and wrong for V7, and it was asserted without
+being checked.
+
+* **V5 is insolvency.** The oracle is 100% at every calibration, so no customer
+  is ever unable to pay. **W2.**
+* **V7 is the due-date/payday offset.** `w3.make_pop` draws `due_day` and
+  `payday` independently, so the gap between them is uniform over the cycle:
+  mean **14.7 days**, and **only 35.8% of at-risk cycles have money inside ten
+  days**. The agent recovers **42.6%** of them inside ten days, so it is already
+  above the ceiling this world sets. No policy and no amount of insolvency can
+  move V7. **W6**, and nothing previously planned touched it.
 
 ### Mandate death is the mechanism, and it is the business argument
 

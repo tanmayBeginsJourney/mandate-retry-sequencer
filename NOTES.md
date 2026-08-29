@@ -4566,3 +4566,164 @@ harness, which emits no per-cycle record.
 - The fixed-schedule arm cannot present on the due date. A real card-dunning
   system can, and the published 20–40% band comes from systems that do — so
   V3's hit is against a baseline handicapped in a way the published one is not.
+
+---
+
+# 2026-08-30 (later still) — I said both validation misses were one mechanism. They are two.
+
+## The correction
+
+Yesterday's entry, the README and `02_RESULTS.md` all said V5 (recovery too
+high) and V7 (recoveries too slow) had a single cause: no simulated customer is
+ever unable to pay. **That is right for V5 and wrong for V7**, and I asserted it
+without checking, in a section about not doing that.
+
+Measured, n=100, pop 700, `pop_spend=0.80`:
+
+| | |
+|---|---|
+| gap from a mandate's due date to the customer's next payday | mean **14.7d**, median 15.0d |
+| share of at-risk cycles where money arrives **within 10 days** | **35.8%** |
+| days-to-recovery the agent actually achieved | median 12.0d, **42.6% inside 10 days** |
+
+**Only 35.8% of at-risk cycles have money inside ten days, and the agent
+recovers 42.6% of them inside ten days.** It is already beating the world's own
+ceiling. V7 cannot be fixed by a better policy and it will not be fixed by
+insolvency either.
+
+**The cause is that `make_pop` draws `due_day` and `payday` independently**, so
+the offset between them is uniform over the cycle and the expected wait is half
+a cycle. Real subscription billing is not uniform: people subscribe just after
+being paid, and merchants bill on the 1st. Due dates cluster near paydays.
+
+So:
+
+* **V5 is insolvency.** W2, as specced.
+* **V7 is the due-date/payday offset.** New item, **W6**, and nothing already
+  planned touches it.
+
+That is the third time in this project that two symptoms got attributed to one
+cause because the first explanation was sufficient for the first symptom.
+
+## PRE-REGISTERED, before W2 is built or run
+
+`p_missed_credit` — per customer per cycle, the probability the salary credit
+does not arrive. Swept over {0.00, 0.03, 0.08}, never picked. Inert at 0.00 by
+construction: the draw is guarded, so no existing number moves and T9 still
+holds.
+
+| id | prediction | band |
+|---|---|---|
+| **W2-1** | the oracle stops being 100% at `p=0.08` | 90–99.5% |
+| **W2-2** | V5, the agent's recovery rate at `pop_spend=0.80`, falls from 97.38% toward the published band | 78–93% at `p=0.08` |
+| **W2-3** | **V7 does NOT move materially** — its cause is the payday offset, not insolvency | early share stays within ±8 pts of 41.84% |
+| **W2-4** | the agent's lead over the fixed schedule *shrinks*, because uncollectable cycles are lost by both arms | gap narrows by 2–15 pts at `p=0.08` |
+| **W2-5** | first-presentation failure rate *rises*, because a missed credit empties the account on the due date too | 14–22% at `p=0.08`, from 13.68% |
+
+**W2-3 is the one worth watching.** It is the prediction that says the
+correction above is real. If the early share jumps into the published band when
+insolvency is added, then my diagnosis was wrong twice and the offset
+explanation goes in the bin.
+
+**How this could be biased toward the answer I want.** W2-2's band is wide
+enough (78–93%) that it can be satisfied without actually landing inside the
+published 70–85%, so it is a weak test of the thing I care about. Stating that
+now rather than after seeing the number: **landing in 78–85% is a hit for
+W2-2 and a hit for V5; landing in 85–93% is a hit for W2-2 and still a MISS for
+V5**, and I will report it as a miss if that is what happens.
+
+---
+
+# 2026-08-30 — W2 built, 5/5 predictions held, and the result says do NOT adopt it
+
+## W2 is in
+
+`p_missed_credit`: per customer, per cycle, the probability the salary credit
+does not arrive. Guarded, so **inert at 0.0** — parity is still bit-exact 24/24
+and no historical number moved. `SimExecutor.unwinnable_cycles()` gives the
+oracle's ceiling directly, policy-free, so "is anything actually uncollectable"
+is measured rather than inferred.
+
+*n=100, k=5, 8 held-out populations, 120d, `payday_err=7`, `pop_spend=0.80`.
+48 runs, ~139s.* `python agent/tests/test_insolvency_sweep.py`
+
+| `p_missed` | oracle | arm | cycle_rec | 1st-pres fail | recovery | ≤10d | survival |
+|---|---|---|---|---|---|---|---|
+| 0.00 | 100.00% | agent | 99.67% | 13.68% | 97.38% | 41.8% | 99.8% |
+| 0.00 | 100.00% | fixed | 76.64% | 13.68% | 27.85% | 100.0% | 76.6% |
+| 0.03 | 99.99% | agent | 98.78% | 15.12% | 94.20% | 42.6% | 97.7% |
+| 0.08 | **99.20%** | agent | 93.41% | 20.61% | **80.44%** | 39.6% | 89.9% |
+| 0.08 | 99.20% | fixed | 67.91% | 20.61% | 20.31% | 100.0% | 61.3% |
+
+**Pre-registration: 5/5.** Including **W2-3**, the one that mattered: the early
+share moved from 41.8% to 39.6%, well inside the ±8-point band. **Insolvency
+does not touch V7**, which is what the correction earlier today predicted. The
+payday-offset diagnosis survives its own test.
+
+## THEN I WENT LOOKING FOR A CALIBRATION THAT HITS BOTH V1 AND V5, AND FOUND ONE, AND IT IS A TRAP
+
+At `pop_spend=0.80` V5 only enters its band at `p=0.08`, but by then the
+first-presentation failure rate has climbed to 20.61% and **V1 has broken**.
+So I swept a 3×3 grid of (`pop_spend`, `p_missed_credit`) looking for a cell
+that satisfies both. There is one: **0.70 / 0.08 → V1 12.59% HIT, V5 77.08%
+HIT.**
+
+Then I checked the two targets that cell was *not* tuned against:
+
+| target | measured | published | | |
+|---|---|---|---|---|
+| V1 due-date failure | 12.59% | 8–15% | **HIT** | **fitted** |
+| V3 fixed-interval recovery | **18.75%** | 20–40% | **MISS** | not fitted |
+| V5 smart-retry recovery | 77.08% | 70–85% | **HIT** | **fitted** |
+| V7 recoveries inside 10 days | 32.86% | 85–95% | **MISS** | not fitted |
+
+**Both fitted targets hit. Both unfitted targets miss.** At the old calibration
+(0.80 / 0.00) V1 and V3 both hit and *neither was fitted*. Tuning two knobs to
+capture V5 destroyed the only independent corroboration the project had.
+
+**That is worth more than the calibration would have been.** Two hits obtained
+by turning two dials are not evidence of anything; they are a curve fit with
+four points. The 0.80/0.00 pair was evidence. **Do not adopt 0.70/0.08**, and
+do not report 3/4 by taking V1 from one calibration and V5 from another.
+
+## WHAT THE THREE MISSES SHARE — and it is one mechanism, again
+
+V3 too low, V5 too high before insolvency, V7 far too slow. One thing explains
+all three: **this world has no TRANSIENT failures.**
+
+Every failure here is "the money is not there and will not be there until
+payday", plus (since today) "the money never arrives at all". Real declines
+include a large third class — a temporary hold, a momentary shortfall, a
+balance that is topped up the same evening — where the money is there again
+within a day or two. `harness.P_TECH` is 0.008 and auto-represents, which is
+not this.
+
+Add transient failures and all three move the right way at once:
+
+* **V3 rises** — a fixed schedule retrying T+1…T+4 is *designed* to catch
+  exactly this class, which is why the published band is 20–40% rather than
+  near zero.
+* **V7 rises** — recoveries land inside ten days because the money came back
+  inside ten days.
+* **V5 stays put** — the agent already catches these; it just waits longer than
+  it needs to.
+
+It also explains why the published 20–40% figure exists at all. A fixed
+four-day schedule that only ever met payday-shaped failures would recover
+almost nothing, and ours very nearly does.
+
+**W7 in `04_BUILD_PLAN.md`.** It is now the highest-value remaining world item,
+ahead of W6, because it is the only one that moves three targets.
+
+## How this could be biased toward the answer I want
+
+- The transient story is a hypothesis that explains three misses tidily, which
+  is exactly when this project has historically been most wrong. It is written
+  down *before* being built so it can fail properly. **Registered: adding
+  transients at a swept rate moves V3 into 20–40% and V7 above 60%, without
+  moving V5 out of 70–85%.**
+- The 3×3 grid was searched *after* seeing that V5 missed. Any cell it found
+  was going to look good; that is why the unfitted targets were checked, and
+  it is the only reason the trap was visible.
+- `p_missed_credit` remains a pure `[GUESS]`. No source gives a rate for how
+  often an Indian salaried account receives no inflow in a month.

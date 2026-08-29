@@ -110,24 +110,46 @@ def hourly_spend_profile(cycle_days, decay=DEFAULT_DECAY):
     return w / w.sum()
 
 
-def balance_trace(c, rng, decay=None):
+def balance_trace(c, rng, decay=None, p_missed_credit=0.0):
     """True balance at every hour. Salary lands at hour 0 of payday.
 
     `decay` shifts the WORLD's spend curve away from what the beliefs assume.
     None means "unchanged", and every existing caller passes nothing, so this
     is inert by default -- gate T9 confirms it.
+
+    `p_missed_credit` is W2 (docs/04_BUILD_PLAN.md): the per-customer,
+    per-cycle probability that the salary credit does not arrive at all. It is
+    what makes a billing cycle genuinely UNCOLLECTABLE, and until it existed
+    every cycle in this world was winnable on some day -- the oracle scored
+    100% at every calibration tested, so the agent was solving a pure timing
+    problem and never a collectability one.
+
+    ⚠️ **INERT AT 0.0 AND THAT IS LOAD-BEARING.** The draw is guarded, so at
+    the default this function consumes nothing extra from `rng` and every
+    number measured before W2 is unchanged. Removing the guard would shift the
+    shared RNG stream and silently move every historical result; gate T9
+    catches that, and it should never have to.
     """
     days, cyc = c["days"], c["cycle_days"]
     T = days * HOURS
     bal = np.zeros(T)
     b = c["salary"] * rng.uniform(0.0, 0.06)
     prof = hourly_spend_profile(cyc, DEFAULT_DECAY if decay is None else decay)
+    # One draw per cycle, taken up front so the stream position does not depend
+    # on which days happen to be paydays.
+    missed = (rng.random(days // cyc + 2) < p_missed_credit
+              if p_missed_credit > 0 else None)
     for d in range(days):
         phase = (d - c["payday"]) % cyc
+        # Which cycle of THIS customer's salary calendar d falls in. Used only
+        # to index `missed`; >= 0 for every d at which a credit can land.
+        ci = max(0, (d - c["payday"]) // cyc)
+        skip = missed is not None and missed[ci]
         if c.get("irregular"):
             share = c["salary"] / len(c["credit_days"])
-            b += share * sum(1 for cd in c["credit_days"] if cd == d % cyc)
-        elif phase == 0:
+            if not skip:
+                b += share * sum(1 for cd in c["credit_days"] if cd == d % cyc)
+        elif phase == 0 and not skip:
             b += c["salary"]
         day_spend = c["salary"] * c["spend"] * prof[phase]
         for h in range(HOURS):

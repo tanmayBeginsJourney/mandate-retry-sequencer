@@ -285,7 +285,8 @@ class SimExecutor:
                  topup_mult: float = 1.15, spend_decay=None,
                  nudge_p: float = 0.0, outage: "OutageSchedule | None" = None,
                  per_customer_tech_rng: bool = False,
-                 declines: "DeclineMix | None" = None, n_banks: int = N_BANKS):
+                 declines: "DeclineMix | None" = None, n_banks: int = N_BANKS,
+                 p_missed_credit: float = 0.0):
         self.pop = pop
         self.days = pop[0]["days"]
         self.cyc = pop[0]["cycle_days"]
@@ -345,7 +346,8 @@ class SimExecutor:
 
         self.worlds: dict[int, CustomerWorld] = {}
         for ci, c in enumerate(pop):
-            bal = w3.balance_trace(c, rng, decay=spend_decay)
+            bal = w3.balance_trace(c, rng, decay=spend_decay,
+                                   p_missed_credit=p_missed_credit)
             est_sal = c["salary"] * rng.uniform(0.7, 1.3)
             est_pay = int((c["payday"] +
                            rng.integers(-payday_err, payday_err + 1)) % self.cyc)
@@ -436,6 +438,41 @@ class SimExecutor:
                 elif counts:
                     at_risk[(f"c{ci}m{mi}", cycle)] = day
         return at_risk
+
+    def unwinnable_cycles(self) -> dict[tuple[str, int], int]:
+        """Mandate-cycles NO schedule could have collected. The oracle's ceiling.
+
+        Returns `{(mandate_uid, cycle): due_day}` for cycles where the balance
+        never reaches the amount on ANY day of the cycle, so a clairvoyant
+        policy with the true future would still miss them.
+
+        WHY IT MATTERS. Before W2 this set was EMPTY at every calibration
+        tested: every cycle was winnable on some day, the oracle scored 100% by
+        construction, and the agent was solving a pure timing problem rather
+        than a collectability one. `06_MODEL_CARD.md` §3 item 11 flagged a
+        small oracle gap as suspicious for exactly this reason -- with nothing
+        uncollectable, closeness to the oracle measures how well the filter
+        matches the world, not how well it schedules.
+
+        DELIBERATELY OPTIMISTIC, in two ways, so it is a true upper bound:
+        it ignores drain from the customer's other mandates, and it ignores the
+        four-attempt cap. A cycle outside this set is *reachable*, not
+        necessarily collectable by any legal schedule.
+        """
+        out: dict[tuple[str, int], int] = {}
+        for ci, c in enumerate(self.pop):
+            w = self.worlds[ci]
+            for mi, m in enumerate(c["mandates"]):
+                n_due = max(0, (self.days - m["due_day"]) // self.cyc)
+                for cycle in range(n_due):
+                    day = m["due_day"] + cycle * self.cyc
+                    hi = min(day + self.cyc, self.days)
+                    reachable = any(
+                        w.bal[d * w3.HOURS + w3.DECISION_HOUR] >= m["amount"]
+                        for d in range(day, hi))
+                    if not reachable:
+                        out[(f"c{ci}m{mi}", cycle)] = day
+        return out
 
     # ---- what the loop is allowed to read: the NOISY estimates only.
     def estimates(self, customer_id: int) -> tuple[float, int]:

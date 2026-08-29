@@ -80,11 +80,19 @@ Two independent bands hit at the same calibration. The first is a property of
 the world; the second is a property of a baseline policy running inside it —
 different parts of the model, agreeing with the outside record together.
 
-**Both misses have the same cause**, and naming it is more useful than hiding
-it: in this world the money always arrives eventually. A clairvoyant scheduler
-collects 100% at every calibration tested, because no simulated customer is ever
-simply unable to pay. That makes recovery too high and too slow, and it is the
-next thing being built ([`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md), W2).
+**The two misses have two different causes**, and both are properties of the
+world rather than of the agent:
+
+- **Recovery is too high** because no simulated customer is ever simply unable
+  to pay — a clairvoyant scheduler collects 100% at every calibration tested.
+- **Recovery is too slow** because a mandate's due date and its customer's
+  payday are drawn independently, so the wait between them averages half a
+  cycle. Only **35.8%** of at-risk cycles have money inside ten days, and the
+  agent recovers **42.6%** of them inside ten days — it is already beating the
+  ceiling this world sets. Real billing dates cluster near paydays; these do not.
+
+Both are being fixed, separately
+([`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md), W2 and W6).
 
 **The headline is conditional on how hard the world is**, and that is swept
 rather than assumed. `pop_spend` sets how much of a salary a customer spends per
