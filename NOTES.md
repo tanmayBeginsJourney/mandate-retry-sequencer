@@ -3826,3 +3826,248 @@ proves the brief still matches the code rather than just reading well.
 Parity bit-exact. Stage 0 20/20. One-belief 11/11. Loop-order pass.
 `verify_brief` pass. Case loader self-test OK. **Eval replays offline at 6/8,
 $0.00.**
+
+
+---
+
+# 2026-08-29 (later) — the page, the README, and the Razorpay backend
+
+Three deliverables. Everything below is `agent/`, `docs/`, `scripts/` and a new
+`README.md`. `sim/` untouched; `--tier fast` green throughout (19 gates, 4 bad,
+all 4 known); parity bit-exact 24/24 after every change to `ports.py`.
+
+## Three things I was told, that turned out to be wrong when checked
+
+Recording these first because they are the useful part, and because two of them
+were things *I* was about to assert.
+
+**1. `agent/execution/executor.py` does not exist.** The `Executor` protocol
+lives in `agent/ports.py`. Minor, but it decided where `RazorpayExecutor` goes.
+
+**2. "Razorpay's downtime feed is system-wide."** FALSE, and I nearly built an
+argument on it. The Payment Downtime API's `instrument.vpa_handle` names
+individual handles — `oksbi`, `ybl` — and reports `ALL` only when the whole of
+UPI is down. **They already publish bank-scoped downtime, in the same handle
+vocabulary as `ports.BANK_HANDLES`.** Retracted in `01_FACTS.md`. What survives
+is narrower and is written out in `agent/execution/razorpay_downtime.py`:
+different traffic mix, a three-valued severity label rather than a rate, a PSP
+marked down only when every handle under it fails, and measured latency on our
+side against unstated latency on theirs. Complement, not replacement. The
+combined design is **not built and not measured** and is not claimed.
+
+**3. "Map real NPCI decline codes into our taxonomy."** Razorpay does not
+return NPCI codes. It returns its own normalised `error_reason` from a list of
+110, and their own material describes a mapping module that does the
+translation on their side. So the boundary is `razorpay_reason -> family`. Our
+taxonomy was keyed on the wrong vocabulary.
+
+## Two findings from their error list that outrank the deliverables
+
+Both `[VERIFIED]` from `payments_error_reasons.xlsx`, committed verbatim as
+`agent/execution/razorpay_reasons.txt` so the mapping is checkable.
+
+**`funds_blocked_by_mandate`** — money present, claimed by another mandate.
+Cross-merchant contention, in the production error vocabulary of the company
+judging this. Not FUNDS (balance is fine), not LIMIT (nothing breached). New
+family `LIEN`. Note the sharp bit: feeding it to `BeliefPD.observe(amount,
+False)` hard-zeroes every balance bin at or above the amount (`w3.py:432`), so
+treating it as a plain failure teaches the filter something **false** — it is
+positive evidence the customer HAD money.
+
+**`deemed_transaction` / `duplicate_rrn_found`** — we do not know *whether* it
+failed. Retrying risks a double debit, which error 19 already established is the
+worst thing this system can do. New family `INDETERMINATE`, and this is the
+cleanest argument in the repo for a diagnosis layer: `index_score` reads two
+probabilities and a discount, and no arrangement of those three numbers means
+"do not act, the question is unanswerable".
+
+**NEITHER IS SIMULATED AND NEITHER CARRIES A NUMBER.** `w3.py` is frozen and
+models neither state; no source gives a frequency for either. Putting a rate on
+a good story is how this project got errors 5, 7 and 8.
+
+## `AttemptOutcome` gained `pending` and `raw_code`
+
+Both optional, both defaulting to the old behaviour. `SimExecutor` sets neither,
+which `test_razorpay_mapping.py` R7 asserts rather than assumes (60 outcomes,
+0 pending, codes still in the frozen three-symbol vocabulary). **Parity re-run
+after the change: bit-exact 24/24 at pe1/pe7, fitted and unfitted.** So a
+modelling fix that UPI genuinely needs cost nothing gated.
+
+`success` stays False when `pending` is True, deliberately: a caller that has
+not been taught about `pending` keeps its old conservative reading, and no money
+is credited for an outcome nobody knows.
+
+## Four things the new gates caught in my own work, same afternoon
+
+The Razorpay gates found four defects in the code they were written for. Listing
+them because that is the point of writing the check in both directions.
+
+1. **Two published reasons unmapped** (`bank_not_available`,
+   `bank_not_enabled`). R1a caught it. Ordinary.
+2. **An invented code.** `deemed_transaction_unknown` was in my map and appears
+   **nowhere** in Razorpay's list — I typed it while writing the table and it
+   sat there cited as if it came from the document. **R1a could never have found
+   it**: it only checks that their list is covered, not that our table contains
+   nothing extra. R1b, the reverse direction, found it in one run. *A coverage
+   check and a provenance check are different checks, and only one of them was
+   there.* Rule 4's shape, in my own new code, on the same day I wrote the file
+   that quotes rule 4.
+3. **Their spreadsheet has a typo** — `psp_app_ not_available`, with a space.
+   Both spellings are mapped and the extra is declared in `KNOWN_EXTRA_KEYS`
+   with a written reason, the `known_failures.txt` pattern. Removable the moment
+   a live response settles it.
+4. **I put the mapping in the wrong package and gate I2 was right.**
+   `razorpay_codes.py` in `agent/execution/` failed I2 (a sibling import inside
+   the execution package). My first instinct was that I2's matcher is
+   over-broad, which it arguably is — but the decisive argument runs the other
+   way: **rule I1 forbids `agent/llm` from importing `agent.execution` at all**,
+   so a table the narrative layer may need could never have lived there. Moved
+   into `ports.py`, following the precedent that file already documents for
+   `BANK_HANDLES`. **No gate was changed.**
+
+⚠️ **OPEN, FOR TANMAY, NOT ACTED ON.** I2's matcher is `p.endswith(".py")` over
+every file under `agent/`, so it also forbids a module *inside*
+`agent/execution/` from importing a sibling. That is an accident of the matcher
+rather than a designed property — the rule's stated intent is "only
+`stage0.py` may HOLD an executor", and its named mutant (adding a SimExecutor
+import to `loop.py`) trips either way. Narrowing it to "nothing outside
+`agent/execution` may import `agent.execution`" would not weaken the mutant.
+**I did not change it.** Rule 1 says a test I believe is wrong goes in NOTES and
+gets asked about, and the workaround was free.
+
+## The one place the gate and the auditor do NOT measure the same thing
+
+`scripts/prove_stage0_refuses.py` was written to show the gate refusing a
+peak-hour debit against the real Razorpay client with no network. It does. But
+the first draft's step 3 printed "the two agree" beside `gate {peak: 2,
+pending: 1}` and `auditor {all zero}`, which is **not agreement** — I had
+written the caption before reading the output.
+
+They are different quantities. **The gate counts what it STOPPED. The auditor
+counts what ILLEGALLY HAPPENED.** Three refusals and zero violations is the
+correct pair.
+
+That matters beyond this script, because **`batch_report.py` prints both columns
+at 0 side by side under "agree? yes"** — and they agree at zero because nothing
+illegal happened, not because two implementations checked each other. The
+auditor only bites when the gate FAILS. The script now has a step 4 that moves
+money below the gate and shows the auditor catching it (`peak: 1`, from the log
+alone), which is the direction that actually demonstrates the two-implementation
+split. **The batch report's phrasing is worth revisiting for the same reason and
+I have not touched it.**
+
+## The outage panel measured something I did not expect
+
+Generating the page's outage scenario at severity 0.40, one run, four windows:
+
+| arm | fired | in a window | false alarms | recovery |
+|---|---|---|---|---|
+| detect only | 3 | 2 of 4 | 1 | 94.92% |
+| detect **and pause** | 2 | 1 of 4 | 1 | 94.33% |
+
+**Pausing suppresses the evidence detection needs.** `02_RESULTS.md` already
+ran the detection study with the response OFF and said why in a protocol note;
+this is that note's consequence, measured. Pausing cost 0.59 points here and
+lost a detection, consistent with the published −0.529 (SIG) at this severity.
+Both arms are on the page, side by side, and the page says pausing lost money.
+
+There is also **a genuine false alarm at day 67**, outside every injected
+window, 3 technical declines in 8 attempts, p=2.8e-05. Shown on the page and
+labelled as such. It does not contradict the published "0 of 48 runs" — that is
+measured at severity 0 — and the page keeps the two measurements separate
+rather than letting one unlucky run overwrite a 48-run result.
+
+## The page
+
+`docs/index.html` + `docs/data/scenarios.json`, static, no build step, on
+GitHub Pages from `/docs`. Every scenario is pre-computed by
+`scripts/build_page_data.py` against the frozen model; nothing is recomputed in
+JavaScript, because a JS re-implementation of `index_score` would be a second
+implementation of a gated thing with no parity test.
+
+`--check` regenerates and diffs against the committed JSON. It passes on a
+clean tree, so the page's data is reproducible rather than asserted.
+
+Two honesty decisions worth recording. The **hero customer is chosen** (`c45m3`,
+payday day 9, ₹550 due day 4, flat ₹215 between) because the month is legible;
+two customers where the agent does worse are named in `ALTERNATIVES` and the
+page says so. And **the payday slider spans ±1 to ±14 including where we lose** —
+at ±10 and ±14 the agent misses this customer's cycle entirely, 0 of 2, and the
+page says the portfolio still recovers 95.6% because one customer is not the
+result.
+
+## The clean-clone test
+
+`git write-tree` + `git archive` into a temp dir — the tracked tree, no `.env`,
+no `ml_artifacts/`. `python -m agent.batch_report --pops 4` there produced
+**94.36% / 57.70% / +36.66 pts (2 SE 2.47) / ₹5,994,430 in 47 seconds**, which
+is the documented number to the digit. `prove_stage0_refuses.py`,
+`test_razorpay_mapping.py` (44/44) and `build_page_data.py --check` also pass
+there. The README's runtime claim was "about ninety seconds" before this and is
+now fifty.
+
+## What is untested and stays untested
+
+No Razorpay key has been used and no request has ever been sent. Unverified:
+the request body for a recurring UPI charge, whether test mode returns populated
+`error_reason` values or one generic failure, whether the Downtime API is seeded
+in test mode, and whether the pre-debit notification API is required per debit.
+Every one is marked `# UNVERIFIED` at its line.
+
+`RazorpayExecutor.notify()` exists and **raises `NotImplementedError`**, because
+wiring it needs a change to `Stage0Gate.issue_notification` — and the headline
+claim of the whole file is that Stage 0 is unchanged when the backend changes.
+Adding a hook to the gate for one backend's benefit would make that claim false.
+It is the one remaining integration step and it belongs against a live key.
+
+
+## Later the same day — the cold read caught two things, and one was the segfault
+
+Ran a mechanical cold read over the docs before committing: every path a doc
+names must exist, every count a doc asserts must match the tree, no doc may
+reference a deleted module, `ports.py` must still import nothing, and every
+command the docs tell a reader to run must exit 0. Two failures.
+
+**1. I miscounted the gate scripts.** Wrote "thirteen" in three docs;
+`agent/tests/` holds twelve. Trivial, and exactly what the check is for.
+
+**2. `scripts/build_page_data.py --check` segfaulted. Exit 3221225477 =
+0xC0000005.** That is THE machine fault -- open item 0a, `06_MODEL_CARD.md`
+6a -- and I walked straight into it, having written an exemption for myself in
+the script's own docstring:
+
+> "A FRESH PROCESS PER RUN IS NOT USED HERE and that is a deliberate, bounded
+> exception. [...] Nothing here is a mean [...] The rule protects an average;
+> there is no average."
+
+Seven `run_once` calls in one process. **The reasoning was wrong because the
+rule has two halves and I only read one.** One half is about means -- a crashed
+run silently shrinks the sample. The other half is that *the process crashes*.
+An exemption argued from the first half says nothing about the second.
+
+Worse, it **ran clean four or five times** while I was building the page, which
+is the evidence an intermittent fault produces and which I took as
+confirmation. "It worked when I ran it" is not a counter-argument to a
+documented intermittent segfault; it is what one looks like.
+
+*Fix:* every arm now goes through `agent/tests/_parallel.py:run_jobs`, one
+fresh interpreter each. Output is byte-identical (44,131 bytes, same figures)
+and the script went from **~3 minutes to 14 seconds**, because eight arms now
+run in parallel instead of in sequence. The mandatory rule was also the fast
+one. The docstring now records the failed reasoning rather than deleting it,
+so the next person does not re-derive the exemption.
+
+**This is the shape of error 22 and error 10 both:** a component validated
+cheaply (a few runs, by hand, all fine) and then relied on, and a rule already
+written down in capitals that I argued my way around instead of following. It
+is not going in `03_ERRORS.md` as error 27 -- nothing shipped, nothing was
+measured wrong, and it was caught by a check written in the same session. But
+it is the third time this project has been bitten by treating "it worked when I
+ran it" as evidence.
+
+*Also fixed in the same pass:* `ports.py` referenced `agent/execution/declines.py`,
+which does not exist and never did -- `DeclineMix` landed in `sim_executor.py`
+under a different name. Pre-existing, unrelated to this work, found by the
+path-existence check. And `03_ERRORS.md` said "error 1, thirteen months later",
+an invented timespan, in an entry about not asserting things you have not
+checked.

@@ -1,0 +1,1720 @@
+{
+ "batch": {
+  "agent": 94.36,
+  "auditor_recount": 0,
+  "delta": 36.66,
+  "money_actions": 8954,
+  "payday_wait": 57.7,
+  "populations": 4,
+  "rupees": 5994430,
+  "stage0_refusals": 0,
+  "two_se": 2.47
+ },
+ "hero": {
+  "alternatives": [
+   {
+    "note": "payday day 17, debit due day 6 -- the agent misses too, twice",
+    "uid": "c34m1"
+   },
+   {
+    "note": "the agent burns one attempt on day 13 before landing on day 31",
+    "uid": "c51m1"
+   }
+  ],
+  "amount": 550.0,
+  "arms": {
+   "1": {
+    "attempts": [
+     {
+      "code": "OK",
+      "day": 12,
+      "success": true
+     }
+    ],
+    "cycle_rec": 95.85,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 18%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 27%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 34%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 29%. Best later day: 34%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 30%. Best later day: 34%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 11,
+      "internal": "Now is the best remaining day. Odds 31% against 34% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 11,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 12 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 12, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 12,
+      "internal": "\u20b9550 collected.",
+      "merchant": "\u20b9550 collected.",
+      "tone": "win"
+     }
+    ],
+    "payday_err": 1,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -99.81,
+      "p_later": 0.3276,
+      "p_now": 0.12,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -69.42,
+      "p_later": 0.3302,
+      "p_now": 0.1776,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -40.26,
+      "p_later": 0.3323,
+      "p_now": 0.2326,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -21.2,
+      "p_later": 0.3341,
+      "p_now": 0.2689,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -13.78,
+      "p_later": 0.3357,
+      "p_now": 0.2838,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -7.81,
+      "p_later": 0.3357,
+      "p_now": 0.2946,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": -3.19,
+      "p_later": 0.3357,
+      "p_now": 0.303,
+      "verdict": "wait"
+     },
+     {
+      "day": 11,
+      "index": 0.68,
+      "p_later": 0.3357,
+      "p_now": 0.3101,
+      "verdict": "ok"
+     }
+    ]
+   },
+   "10": {
+    "attempts": [
+     {
+      "code": "Z9",
+      "day": 22,
+      "success": false
+     },
+     {
+      "code": "Z9",
+      "day": 33,
+      "success": false
+     }
+    ],
+    "cycle_rec": 94.99,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 30%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 17%. Best later day: 30%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 30%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 34%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 29%. Best later day: 37%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 30%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 11,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 12,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 39%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 13,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 24%. Best later day: 39%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 14,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 22%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 15,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 21%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 16,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 24%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 17,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 18,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 31%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 19,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 34%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 20,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 37%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 21,
+      "internal": "Now is the best remaining day. Odds 45% against 31% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 21,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 22 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 22, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 22,
+      "internal": "Declined, Z9. Folded into the balance estimate.",
+      "merchant": "Attempt declined (Z9).",
+      "tone": "fail"
+     },
+     {
+      "day": 22,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 1%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 23,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 24,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 25,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 3%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 26,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 0%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 27,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 1%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 28,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 6%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 29,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 1%. Best later day: 5%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 32,
+      "internal": "Now is the best remaining day. Odds 5% against 0% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 32,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 33 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 33, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 33,
+      "internal": "Declined, Z9. Folded into the balance estimate.",
+      "merchant": "Attempt declined (Z9).",
+      "tone": "fail"
+     }
+    ],
+    "payday_err": 10,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -85.86,
+      "p_later": 0.2964,
+      "p_now": 0.1166,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -54.84,
+      "p_later": 0.2964,
+      "p_now": 0.173,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -25.09,
+      "p_later": 0.2964,
+      "p_now": 0.2271,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -12.16,
+      "p_later": 0.3097,
+      "p_now": 0.2628,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -20.84,
+      "p_later": 0.3427,
+      "p_now": 0.2774,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -27.42,
+      "p_later": 0.3673,
+      "p_now": 0.2881,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": -27.9,
+      "p_later": 0.3774,
+      "p_now": 0.2964,
+      "verdict": "wait"
+     },
+     {
+      "day": 11,
+      "index": -41.94,
+      "p_later": 0.3842,
+      "p_now": 0.2772,
+      "verdict": "wait"
+     },
+     {
+      "day": 12,
+      "index": -54.29,
+      "p_later": 0.3879,
+      "p_now": 0.2582,
+      "verdict": "wait"
+     },
+     {
+      "day": 13,
+      "index": -66.59,
+      "p_later": 0.3918,
+      "p_now": 0.2394,
+      "verdict": "wait"
+     },
+     {
+      "day": 14,
+      "index": -78.5,
+      "p_later": 0.3959,
+      "p_now": 0.2215,
+      "verdict": "wait"
+     },
+     {
+      "day": 15,
+      "index": -84.93,
+      "p_later": 0.3993,
+      "p_now": 0.2129,
+      "verdict": "wait"
+     },
+     {
+      "day": 16,
+      "index": -69.86,
+      "p_later": 0.4017,
+      "p_now": 0.2425,
+      "verdict": "wait"
+     },
+     {
+      "day": 17,
+      "index": -52.86,
+      "p_later": 0.4037,
+      "p_now": 0.2753,
+      "verdict": "wait"
+     },
+     {
+      "day": 18,
+      "index": -33.96,
+      "p_later": 0.4037,
+      "p_now": 0.3097,
+      "verdict": "wait"
+     },
+     {
+      "day": 19,
+      "index": -15.8,
+      "p_later": 0.4037,
+      "p_now": 0.3427,
+      "verdict": "wait"
+     },
+     {
+      "day": 20,
+      "index": -2.26,
+      "p_later": 0.4037,
+      "p_now": 0.3673,
+      "verdict": "wait"
+     },
+     {
+      "day": 21,
+      "index": 87.73,
+      "p_later": 0.3123,
+      "p_now": 0.4468,
+      "verdict": "ok"
+     },
+     {
+      "day": 22,
+      "index": -24.34,
+      "p_later": 0.0584,
+      "p_now": 0.0095,
+      "verdict": "wait"
+     },
+     {
+      "day": 23,
+      "index": -19.76,
+      "p_later": 0.0584,
+      "p_now": 0.0178,
+      "verdict": "wait"
+     },
+     {
+      "day": 24,
+      "index": -15.93,
+      "p_later": 0.0584,
+      "p_now": 0.0248,
+      "verdict": "wait"
+     },
+     {
+      "day": 25,
+      "index": -13.09,
+      "p_later": 0.0584,
+      "p_now": 0.0299,
+      "verdict": "wait"
+     },
+     {
+      "day": 26,
+      "index": -27.39,
+      "p_later": 0.0593,
+      "p_now": 0.0047,
+      "verdict": "wait"
+     },
+     {
+      "day": 27,
+      "index": -24.68,
+      "p_later": 0.0593,
+      "p_now": 0.0096,
+      "verdict": "wait"
+     },
+     {
+      "day": 28,
+      "index": -20.89,
+      "p_later": 0.0593,
+      "p_now": 0.0165,
+      "verdict": "wait"
+     },
+     {
+      "day": 29,
+      "index": -21.42,
+      "p_later": 0.0521,
+      "p_now": 0.0089,
+      "verdict": "wait"
+     },
+     {
+      "day": 32,
+      "index": 28.63,
+      "p_later": 0.0,
+      "p_now": 0.0521,
+      "verdict": "ok"
+     },
+     {
+      "day": 33,
+      "index": 0.0,
+      "p_later": 0.0,
+      "p_now": 0.0,
+      "verdict": "cycle_closed"
+     }
+    ]
+   },
+   "14": {
+    "attempts": [
+     {
+      "code": "Z9",
+      "day": 19,
+      "success": false
+     },
+     {
+      "code": "Z9",
+      "day": 33,
+      "success": false
+     }
+    ],
+    "cycle_rec": 93.08,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 30%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 17%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 36%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 37%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 25%. Best later day: 37%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 22%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 11,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 20%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 12,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 19%. Best later day: 38%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 13,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 39%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 14,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 39%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 15,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 30%. Best later day: 39%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 16,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 33%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 17,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 36%. Best later day: 40%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 18,
+      "internal": "Now is the best remaining day. Odds 44% against 30% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 18,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 19 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 19, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 19,
+      "internal": "Declined, Z9. Folded into the balance estimate.",
+      "merchant": "Attempt declined (Z9).",
+      "tone": "fail"
+     },
+     {
+      "day": 19,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 1%. Best later day: 7%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 20,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 1%. Best later day: 9%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 21,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 22,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 3%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 23,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 3%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 24,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 25,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 2%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 26,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 3%. Best later day: 11%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 32,
+      "internal": "Now is the best remaining day. Odds 8% against 0% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 32,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 33 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 33, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 33,
+      "internal": "Declined, Z9. Folded into the balance estimate.",
+      "merchant": "Attempt declined (Z9).",
+      "tone": "fail"
+     }
+    ],
+    "payday_err": 14,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -87.06,
+      "p_later": 0.2988,
+      "p_now": 0.1166,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -73.74,
+      "p_later": 0.3338,
+      "p_now": 0.173,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -56.93,
+      "p_later": 0.3594,
+      "p_now": 0.2271,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -42.5,
+      "p_later": 0.3696,
+      "p_now": 0.2628,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -52.68,
+      "p_later": 0.3748,
+      "p_now": 0.249,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -62.49,
+      "p_later": 0.3764,
+      "p_now": 0.2327,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": -72.57,
+      "p_later": 0.3776,
+      "p_now": 0.2155,
+      "verdict": "wait"
+     },
+     {
+      "day": 11,
+      "index": -83.19,
+      "p_later": 0.3806,
+      "p_now": 0.1989,
+      "verdict": "wait"
+     },
+     {
+      "day": 12,
+      "index": -88.31,
+      "p_later": 0.3839,
+      "p_now": 0.1926,
+      "verdict": "wait"
+     },
+     {
+      "day": 13,
+      "index": -71.56,
+      "p_later": 0.3874,
+      "p_now": 0.2263,
+      "verdict": "wait"
+     },
+     {
+      "day": 14,
+      "index": -53.72,
+      "p_later": 0.3912,
+      "p_now": 0.2622,
+      "verdict": "wait"
+     },
+     {
+      "day": 15,
+      "index": -35.23,
+      "p_later": 0.3944,
+      "p_now": 0.2988,
+      "verdict": "wait"
+     },
+     {
+      "day": 16,
+      "index": -17.17,
+      "p_later": 0.3967,
+      "p_now": 0.3338,
+      "verdict": "wait"
+     },
+     {
+      "day": 17,
+      "index": -4.16,
+      "p_later": 0.3988,
+      "p_now": 0.3594,
+      "verdict": "wait"
+     },
+     {
+      "day": 18,
+      "index": 91.11,
+      "p_later": 0.2971,
+      "p_now": 0.439,
+      "verdict": "ok"
+     },
+     {
+      "day": 19,
+      "index": -34.19,
+      "p_later": 0.075,
+      "p_now": 0.0068,
+      "verdict": "wait"
+     },
+     {
+      "day": 20,
+      "index": -39.34,
+      "p_later": 0.0926,
+      "p_now": 0.0136,
+      "verdict": "wait"
+     },
+     {
+      "day": 21,
+      "index": -45.18,
+      "p_later": 0.1115,
+      "p_now": 0.0204,
+      "verdict": "wait"
+     },
+     {
+      "day": 22,
+      "index": -42.61,
+      "p_later": 0.1115,
+      "p_now": 0.0251,
+      "verdict": "wait"
+     },
+     {
+      "day": 23,
+      "index": -42.39,
+      "p_later": 0.1115,
+      "p_now": 0.0255,
+      "verdict": "wait"
+     },
+     {
+      "day": 24,
+      "index": -43.2,
+      "p_later": 0.1115,
+      "p_now": 0.024,
+      "verdict": "wait"
+     },
+     {
+      "day": 25,
+      "index": -43.05,
+      "p_later": 0.1115,
+      "p_now": 0.0243,
+      "verdict": "wait"
+     },
+     {
+      "day": 26,
+      "index": -41.04,
+      "p_later": 0.1115,
+      "p_now": 0.0279,
+      "verdict": "wait"
+     },
+     {
+      "day": 32,
+      "index": 44.4,
+      "p_later": 0.0,
+      "p_now": 0.0807,
+      "verdict": "ok"
+     },
+     {
+      "day": 33,
+      "index": 0.0,
+      "p_later": 0.0,
+      "p_now": 0.0,
+      "verdict": "cycle_closed"
+     }
+    ]
+   },
+   "3": {
+    "attempts": [
+     {
+      "code": "OK",
+      "day": 12,
+      "success": true
+     }
+    ],
+    "cycle_rec": 95.98,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 17%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 29%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 30%. Best later day: 33%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 11,
+      "internal": "Now is the best remaining day. Odds 31% against 33% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 11,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 12 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 12, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 12,
+      "internal": "\u20b9550 collected.",
+      "merchant": "\u20b9550 collected.",
+      "tone": "win"
+     }
+    ],
+    "payday_err": 3,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -98.92,
+      "p_later": 0.3232,
+      "p_now": 0.1175,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -69.13,
+      "p_later": 0.3259,
+      "p_now": 0.1742,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -40.44,
+      "p_later": 0.3282,
+      "p_now": 0.2284,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -20.73,
+      "p_later": 0.3282,
+      "p_now": 0.2643,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -12.66,
+      "p_later": 0.3282,
+      "p_now": 0.279,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -6.77,
+      "p_later": 0.3282,
+      "p_now": 0.2897,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": -2.18,
+      "p_later": 0.3282,
+      "p_now": 0.298,
+      "verdict": "wait"
+     },
+     {
+      "day": 11,
+      "index": 1.71,
+      "p_later": 0.3282,
+      "p_now": 0.3051,
+      "verdict": "ok"
+     }
+    ]
+   },
+   "5": {
+    "attempts": [
+     {
+      "code": "OK",
+      "day": 11,
+      "success": true
+     }
+    ],
+    "cycle_rec": 95.65,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 17%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 29%. Best later day: 32%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Now is the best remaining day. Odds 30% against 32% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 10,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 11 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 11, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 11,
+      "internal": "\u20b9550 collected.",
+      "merchant": "\u20b9550 collected.",
+      "tone": "win"
+     }
+    ],
+    "payday_err": 5,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -98.7,
+      "p_later": 0.3218,
+      "p_now": 0.1166,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -67.67,
+      "p_later": 0.3218,
+      "p_now": 0.173,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -37.93,
+      "p_later": 0.3218,
+      "p_now": 0.2271,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -18.29,
+      "p_later": 0.3218,
+      "p_now": 0.2628,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -10.26,
+      "p_later": 0.3218,
+      "p_now": 0.2774,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -4.39,
+      "p_later": 0.3218,
+      "p_now": 0.2881,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": 0.21,
+      "p_later": 0.3218,
+      "p_now": 0.2964,
+      "verdict": "ok"
+     }
+    ]
+   },
+   "7": {
+    "attempts": [
+     {
+      "code": "OK",
+      "day": 11,
+      "success": true
+     }
+    ],
+    "cycle_rec": 95.32,
+    "narration": [
+     {
+      "day": 4,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 12%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 5,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 17%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 6,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 23%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 7,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 26%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 8,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 28%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 9,
+      "internal": "Skipping today. Odds of clearing \u20b9550 now: 29%. Best later day: 31%. Waiting is worth more.",
+      "merchant": "Holding this attempt. Our timing model scores a later day in this cycle higher.",
+      "tone": "wait"
+     },
+     {
+      "day": 10,
+      "internal": "Now is the best remaining day. Odds 30% against 32% later.",
+      "merchant": "Scheduling the attempt our timing model scores highest in the remaining window.",
+      "tone": "decide"
+     },
+     {
+      "day": 10,
+      "internal": "Pre-debit notice issued. NPCI requires 24 hours' lead, so the debit is set for day 11 at 08:00 \u2014 outside every peak window.",
+      "merchant": "Pre-debit notification sent. Debit scheduled for day 11, 08:00.",
+      "tone": "notify"
+     },
+     {
+      "day": 11,
+      "internal": "\u20b9550 collected.",
+      "merchant": "\u20b9550 collected.",
+      "tone": "win"
+     }
+    ],
+    "payday_err": 7,
+    "ticks": [
+     {
+      "day": 4,
+      "index": -94.94,
+      "p_later": 0.3144,
+      "p_now": 0.1166,
+      "verdict": "wait"
+     },
+     {
+      "day": 5,
+      "index": -63.91,
+      "p_later": 0.3144,
+      "p_now": 0.173,
+      "verdict": "wait"
+     },
+     {
+      "day": 6,
+      "index": -34.17,
+      "p_later": 0.3144,
+      "p_now": 0.2271,
+      "verdict": "wait"
+     },
+     {
+      "day": 7,
+      "index": -14.53,
+      "p_later": 0.3144,
+      "p_now": 0.2628,
+      "verdict": "wait"
+     },
+     {
+      "day": 8,
+      "index": -6.5,
+      "p_later": 0.3144,
+      "p_now": 0.2774,
+      "verdict": "wait"
+     },
+     {
+      "day": 9,
+      "index": -0.62,
+      "p_later": 0.3144,
+      "p_now": 0.2881,
+      "verdict": "wait"
+     },
+     {
+      "day": 10,
+      "index": 2.32,
+      "p_later": 0.3176,
+      "p_now": 0.2964,
+      "verdict": "ok"
+     }
+    ]
+   }
+  },
+  "balance": [
+   {
+    "bal": 215.25,
+    "day": 4
+   },
+   {
+    "bal": 215.18,
+    "day": 5
+   },
+   {
+    "bal": 215.13,
+    "day": 6
+   },
+   {
+    "bal": 215.09,
+    "day": 7
+   },
+   {
+    "bal": 215.07,
+    "day": 8
+   },
+   {
+    "bal": 10582.64,
+    "day": 9
+   },
+   {
+    "bal": 7339.14,
+    "day": 10
+   },
+   {
+    "bal": 5312.29,
+    "day": 11
+   },
+   {
+    "bal": 4051.65,
+    "day": 12
+   },
+   {
+    "bal": 3199.64,
+    "day": 13
+   },
+   {
+    "bal": 2625.48,
+    "day": 14
+   },
+   {
+    "bal": 2216.64,
+    "day": 15
+   },
+   {
+    "bal": 1935.11,
+    "day": 16
+   },
+   {
+    "bal": 1758.08,
+    "day": 17
+   },
+   {
+    "bal": 1660.44,
+    "day": 18
+   },
+   {
+    "bal": 1590.42,
+    "day": 19
+   },
+   {
+    "bal": 1547.08,
+    "day": 20
+   },
+   {
+    "bal": 1516.98,
+    "day": 21
+   },
+   {
+    "bal": 1496.15,
+    "day": 22
+   },
+   {
+    "bal": 1483.42,
+    "day": 23
+   },
+   {
+    "bal": 1475.19,
+    "day": 24
+   },
+   {
+    "bal": 1469.27,
+    "day": 25
+   },
+   {
+    "bal": 1465.79,
+    "day": 26
+   },
+   {
+    "bal": 1463.41,
+    "day": 27
+   },
+   {
+    "bal": 1461.86,
+    "day": 28
+   },
+   {
+    "bal": 1460.69,
+    "day": 29
+   },
+   {
+    "bal": 1460.01,
+    "day": 30
+   },
+   {
+    "bal": 1459.52,
+    "day": 31
+   },
+   {
+    "bal": 1459.2,
+    "day": 32
+   },
+   {
+    "bal": 1459.03,
+    "day": 33
+   }
+  ],
+  "cycle_end": 34,
+  "cycle_start": 4,
+  "due_day": 4,
+  "naive": [
+   {
+    "day": 4,
+    "success": false
+   },
+   {
+    "day": 5,
+    "success": false
+   },
+   {
+    "day": 6,
+    "success": false
+   },
+   {
+    "day": 7,
+    "success": false
+   }
+  ],
+  "payday": 9,
+  "salary": 11761,
+  "uid": "c45m3"
+ },
+ "meta": {
+  "bcfg": {
+   "prior_day0": 8.0,
+   "prior_floor": 0.25,
+   "prior_w": 12,
+   "spend_beta": 0.0,
+   "stride": 1
+  },
+  "days": 120,
+  "generated_by": "scripts/build_page_data.py",
+  "k": 5,
+  "n": 100,
+  "numpy": "2.4.2",
+  "policy": "solo_shared_pd",
+  "pop_seed": 700,
+  "python": "3.12.0",
+  "run_seed": 7
+ },
+ "outage": {
+  "ablation": [
+   {
+    "delta": -0.273,
+    "severity": 0.15,
+    "significant": false,
+    "two_se": 0.275
+   },
+   {
+    "delta": -0.529,
+    "severity": 0.4,
+    "significant": true,
+    "two_se": 0.296
+   },
+   {
+    "delta": 0.199,
+    "severity": 0.8,
+    "significant": false,
+    "two_se": 0.634
+   }
+  ],
+  "arms": {
+   "detect_and_pause": {
+    "cycle_rec": 94.33,
+    "entered": 2,
+    "entered_in_window": 1,
+    "false_alarms": 1,
+    "paused_dispatch": 5,
+    "transitions": [
+     {
+      "day": 67,
+      "edge": "NORMAL->OUTAGE",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 8,
+      "n_tech": 3,
+      "p_value": 2.782277689898592e-05,
+      "t": 1616
+     },
+     {
+      "day": 68,
+      "edge": "OUTAGE->NORMAL",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 5,
+      "n_tech": 2,
+      "p_value": 0.000629821308928,
+      "t": 1640
+     },
+     {
+      "day": 80,
+      "edge": "NORMAL->OUTAGE",
+      "hour": 13,
+      "in_window": true,
+      "n_attempts": 8,
+      "n_tech": 4,
+      "p_value": 2.7945303336288265e-07,
+      "t": 1933
+     },
+     {
+      "day": 82,
+      "edge": "OUTAGE->NORMAL",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 0,
+      "n_tech": 0,
+      "p_value": 1.0,
+      "t": 1976
+     }
+    ]
+   },
+   "detect_only": {
+    "cycle_rec": 94.92,
+    "entered": 3,
+    "entered_in_window": 2,
+    "false_alarms": 1,
+    "paused_dispatch": 0,
+    "transitions": [
+     {
+      "day": 67,
+      "edge": "NORMAL->OUTAGE",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 8,
+      "n_tech": 3,
+      "p_value": 2.782277689898592e-05,
+      "t": 1616
+     },
+     {
+      "day": 68,
+      "edge": "OUTAGE->NORMAL",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 7,
+      "n_tech": 2,
+      "p_value": 0.001308587336650457,
+      "t": 1640
+     },
+     {
+      "day": 80,
+      "edge": "NORMAL->OUTAGE",
+      "hour": 13,
+      "in_window": true,
+      "n_attempts": 8,
+      "n_tech": 4,
+      "p_value": 2.7945303336288265e-07,
+      "t": 1933
+     },
+     {
+      "day": 82,
+      "edge": "OUTAGE->NORMAL",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 2,
+      "n_tech": 0,
+      "p_value": 1.0,
+      "t": 1976
+     },
+     {
+      "day": 110,
+      "edge": "NORMAL->OUTAGE",
+      "hour": 13,
+      "in_window": true,
+      "n_attempts": 8,
+      "n_tech": 3,
+      "p_value": 2.782277689898592e-05,
+      "t": 2653
+     },
+     {
+      "day": 112,
+      "edge": "OUTAGE->NORMAL",
+      "hour": 8,
+      "in_window": false,
+      "n_attempts": 4,
+      "n_tech": 0,
+      "p_value": 1.0,
+      "t": 2696
+     }
+    ]
+   }
+  },
+  "published_false_alarm_runs": "0 of 48 at severity 0",
+  "published_tpr_at_n100": "1.00 at severity 0.40, response OFF",
+  "severity": 0.4,
+  "total_windows": 4,
+  "windows": [
+   {
+    "day": 20,
+    "end_t": 494,
+    "start_t": 488
+   },
+   {
+    "day": 50,
+    "end_t": 1214,
+    "start_t": 1208
+   },
+   {
+    "day": 80,
+    "end_t": 1934,
+    "start_t": 1928
+   },
+   {
+    "day": 110,
+    "end_t": 2654,
+    "start_t": 2648
+   }
+  ]
+ },
+ "pooling": {
+  "detection": [
+   {
+    "customers": 200,
+    "label": "every bank pooled",
+    "rate": 0.78
+   },
+   {
+    "customers": 30,
+    "label": "@okaxis -- best single bank",
+    "rate": 0.41
+   },
+   {
+    "customers": 25,
+    "label": "mean over the eight single banks",
+    "rate": 0.22
+   },
+   {
+    "customers": 19,
+    "label": "@upi -- worst single bank",
+    "rate": 0.09
+   }
+  ],
+  "min_attempts": 8,
+  "volume": [
+   {
+    "n": 25,
+    "pooled": 5.6,
+    "single": 0.09
+   },
+   {
+    "n": 50,
+    "pooled": 11.4,
+    "single": 0.19
+   },
+   {
+    "n": 100,
+    "pooled": 22.5,
+    "single": 0.38
+   },
+   {
+    "n": 200,
+    "pooled": 44.5,
+    "single": 0.74
+   }
+  ]
+ },
+ "sweep": [
+  {
+   "agent": 95.73,
+   "diff": -3.51,
+   "err": 1,
+   "payday_wait": 99.24,
+   "two_se": 0.36,
+   "verdict": "heuristic wins"
+  },
+  {
+   "agent": 95.82,
+   "diff": 1.17,
+   "err": 3,
+   "payday_wait": 94.65,
+   "two_se": 1.35,
+   "verdict": "tie"
+  },
+  {
+   "agent": 95.82,
+   "diff": 23.64,
+   "err": 5,
+   "payday_wait": 72.18,
+   "two_se": 2.61,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 95.57,
+   "diff": 36.43,
+   "err": 7,
+   "payday_wait": 59.14,
+   "two_se": 3.37,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 95.62,
+   "diff": 47.5,
+   "err": 10,
+   "payday_wait": 48.11,
+   "two_se": 3.17,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 93.16,
+   "diff": 53.15,
+   "err": 14,
+   "payday_wait": 40.01,
+   "two_se": 2.9,
+   "verdict": "agent wins"
+  }
+ ]
+}

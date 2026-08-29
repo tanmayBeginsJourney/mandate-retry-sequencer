@@ -91,6 +91,92 @@ Tags: `[VERIFIED]` primary source read directly · `[REPORTED]` secondary ·
   **This fact is true and the intervention it motivated does not work — see the
   retraction below.**
 
+## Razorpay's own API surface — added 29 August 2026
+
+Read directly from Razorpay's public documentation on 29 August 2026, while
+building `agent/execution/razorpay_executor.py`. **No API key has been used by
+this project and no request has ever been sent**, so everything here is
+documentation read, not behaviour observed. That distinction is the whole
+difference between `[VERIFIED]` and "it works".
+
+- `[VERIFIED]` **Razorpay's documented retry schedule for a failed subscription
+  charge is T, T+1, T+2, T+3, after which the subscription moves to `halted`.**
+  Source: their Payment Retries page, which gives the same schedule for cards
+  and for UPI. **This matters twice.** It independently corroborates the NPCI
+  attempt cap — 1 presentation plus 3 retries — which this file previously
+  carried only as `[REPORTED]` from practitioner accounts. And it means
+  `harness.baseline_doc`, the naive comparator this project has measured
+  against from the beginning, is a fair rendering of what the vendor actually
+  documents rather than a strawman we drew. **This is one of the very few
+  places where our comparator is validated against the vendor's own material.**
+  ⚠️ Their page makes **no mention** of NPCI attempt caps, pre-debit
+  notification, or peak-hour restrictions — only bank holidays for e-mandate.
+  So it corroborates the *number* and says nothing about the other four Stage 0
+  rules.
+
+- `[VERIFIED]` **Razorpay does not return NPCI decline codes.** The documented
+  payment surface carries `error_code` (`BAD_REQUEST_ERROR` / `GATEWAY_ERROR` /
+  `SERVER_ERROR`), `error_description`, `error_source`, `error_step`,
+  `error_reason`, and `acquirer_data` (which holds `rrn`). `error_reason` is
+  drawn from a published list, and Razorpay's own material describes an error
+  mapping module that translates NPCI codes into merchant-legible terms — so
+  the normalisation is deliberate on their side. **Consequence: our decline
+  taxonomy, which is keyed on NPCI codes, needs a `razorpay_reason -> family`
+  translation and not a code lookup.** Built as `REASON_FAMILY` in
+  `agent/ports.py`.
+
+- `[VERIFIED]` **The published list holds 114 rows, 110 distinct
+  `error_reason` values.** Downloaded as `payments_error_reasons.xlsx` from
+  razorpay.com and committed verbatim as
+  `agent/execution/razorpay_reasons.txt`. Their per-method pages
+  (`/docs/errors/payments/upi/`, `/docs/errors/payments/list/`) corroborate the
+  UPI subset. ⚠️ The spreadsheet contains a typo — `psp_app_ not_available`,
+  with a space — and we cannot tell which spelling the API emits without a key,
+  so both are mapped and the extra one is declared in
+  `ports.KNOWN_EXTRA_KEYS`.
+
+- `[VERIFIED]` **`funds_blocked_by_mandate` is a real Razorpay decline reason:**
+  the money is in the account and another mandate has already claimed it. This
+  is **cross-merchant contention appearing in the production error vocabulary
+  of the aggregator we are pitching to** — the closest thing this project has to
+  external evidence that the problem it was built for exists. A merchant who
+  sees only their own debits cannot distinguish it from an empty account.
+  ⚠️ `[GUESS]` — **how often it occurs.** Not modelled, not swept, no number
+  attached anywhere. `sim/w3.py` is frozen and models no such state.
+
+- `[VERIFIED]` **`deemed_transaction` and `duplicate_rrn_found` are real
+  Razorpay decline reasons** meaning the outcome is unknown rather than
+  failed — the response was lost and the customer may already have been
+  charged. Retrying risks a double debit, which error 19 in `03_ERRORS.md`
+  establishes is the worst outcome this system can produce. Motivated
+  `AttemptOutcome.pending` and the `INDETERMINATE` family.
+  ⚠️ `[GUESS]` — frequency. Not modelled, not swept.
+
+- `[VERIFIED]` **The Payment Downtime API exists, is scoped by instrument, and
+  is available with test keys.** `GET /v1/payments/downtimes` and
+  `GET /v1/payments/downtimes/:id`; webhooks `payment.downtime.started`,
+  `.updated`, `.resolved`. The downtime object carries `method`, `begin`,
+  `end`, `status`, `scheduled`, `severity` ∈ {`high`,`medium`,`low`}, and an
+  `instrument` object which for UPI holds `vpa_handle` (e.g. `oksbi`, or `ALL`
+  when the whole of UPI is affected), `psp`, and `flow`.
+  ⚠️ **THIS RETRACTS A CLAIM WE WERE ABOUT TO MAKE.** The outage argument was
+  drafted as "their feed is system-wide, ours is bank-shaped". **That is
+  false** — their feed is handle-scoped, using the same handle vocabulary as
+  `ports.BANK_HANDLES`. See the retraction below.
+
+- `[VERIFIED]` **A PSP is marked down only when *all* the handles associated
+  with it are down** — their words. A conservative trigger, appropriate for a
+  status page and wrong for an actuator.
+
+- `[REPORTED]` **In test mode, mandate registration and authentication are
+  mocked; token creation and charge requests can be simulated.** `success@razorpay`
+  and `failure@razorpay` are the test VPAs. Test and live keys are functionally
+  identical against separate data.
+  ⚠️ `[GUESS]` — **whether test mode returns populated `error_reason` values or
+  a single generic failure**, and **whether the Downtime API returns any data
+  in test mode.** Their docs invite you to try the endpoint with test keys and
+  do not say whether test data is seeded. Unresolvable without a key.
+
 ## Data governance
 
 - `[REPORTED]` India's DPDP Act 2023 requires data be used only for the purpose
@@ -126,6 +212,22 @@ Tags: `[VERIFIED]` primary source read directly · `[REPORTED]` secondary ·
 # RETRACTIONS — things this project believed and got wrong
 
 Read these. They are the most likely place for you to reintroduce an error.
+
+- `[RETRACTED]` **"Razorpay's downtime feed is system-wide, so a bank-shaped
+  incident is invisible to it."** Believed on 29 August 2026 and false. The
+  Payment Downtime API's `instrument.vpa_handle` names individual handles
+  (`oksbi`, `ybl`, …) and reports `ALL` only when the whole of UPI is affected.
+  Razorpay already publishes bank-scoped downtime. **The moat argument does not
+  get to be "they cannot see bank-level incidents."**
+  What survives, stated narrowly enough to be checked, is in
+  `agent/execution/razorpay_downtime.py`: their feed measures *their* traffic
+  mix (their `flow` field enumerates `collect`/`intent`/`in_app`, and nothing
+  says AutoPay mandate execution is what is measured); `severity` is a
+  three-valued label and not a rate a scheduler can act on; a PSP is only
+  marked down when every handle under it is down; and we have a measured
+  detection latency and false-alarm rate where theirs is unstated. **The correct
+  posture is complement, not replacement**, and the combined design — theirs as
+  a prior, ours as the likelihood — is **not built and not measured.**
 
 - `[RETRACTED]` **"41.7% → 76.3% of mandates collected."** Dead. Came from a
   simulation with no notification model, unrepresentable peak hours, three

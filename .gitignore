@@ -3,3 +3,4 @@ __pycache__/
 sim/ml_artifacts/
 agent/tests/_bench_cache.pkl
 .env
+scratch/

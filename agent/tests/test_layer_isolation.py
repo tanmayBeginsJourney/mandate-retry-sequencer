@@ -47,8 +47,16 @@ RULES = [
      "only agent/constraints/stage0.py may hold an executor",
      lambda p: p.endswith(".py"),
      ("agent.execution",),
+     # The exempt list is composition roots and the tests that must BUILD an
+     # executor to exercise the gate. `test_razorpay_mapping.py` joined it on
+     # 29 Aug 2026 for exactly the reason the other three are here: it
+     # constructs a RazorpayExecutor and a SimExecutor in order to prove Stage 0
+     # refuses before either is reached. Nothing in the PRODUCTION tree has ever
+     # been exempted and nothing should be -- if a module under agent/ that is
+     # not batch.py needs an executor, that is the rule working.
      ("constraints/stage0.py", "batch.py", "tests/test_parity_vs_harness.py",
-      "tests/test_stage0_enforces.py", "tests/test_action_ablation.py"),
+      "tests/test_stage0_enforces.py", "tests/test_action_ablation.py",
+      "tests/test_razorpay_mapping.py"),
      "add `from agent.execution.sim_executor import SimExecutor` to "
      "agent/loop.py so the loop can attempt a debit without the gate"),
 

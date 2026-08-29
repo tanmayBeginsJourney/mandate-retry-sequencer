@@ -1,22 +1,41 @@
 # 04 — BUILD PLAN
 
-Deadline **5 September 2026**. Day 1 was 27 August; **today is 28 August and
-the simulation is finished and frozen.** Seven working days remain.
+Deadline **5 September 2026**. Day 1 was 27 August; **today is 29 August.**
+The simulation is finished and frozen, and `agent/` is complete. Seven days
+remain and the remaining work is all presentation.
 
 **Rule: if a task does not move us toward a running agent with an audit trail
 and a measured batch result, it is out of scope.**
 
-## PROGRESS — updated 28 August 2026, end of day
+## PROGRESS — updated 29 August 2026, end of day
+
+**The plan below is running about five days ahead of itself.** Days 3-7 are
+done; what is left is the architecture doc and the pitch.
 
 | Day | Planned | State |
 |---|---|---|
 | 3 | `agent/` skeleton, wire in the frozen policy | **DONE.** Bit-exact with `harness.run` on 24/24 runs |
-| 4 | Stage 0 as enforced middleware | **DONE.** Refuses; independent auditor agrees at 0 |
+| 4 | Stage 0 as enforced middleware | **DONE.** Refuses; `prove_stage0_refuses.py` shows it refusing a REAL Razorpay debit with zero network |
 | 5 | Audit log queryable; stopping rules explicit | **DONE.** Append-only JSONL, 8 stop rules, `python -m agent.demo` |
-| 6 | LLM layer | **NOT STARTED.** See `07_AGENT_BRIEF.md` §8 for the open question |
-| 7 | The batch number | **PARTIAL.** Numbers measured and in `02_RESULTS.md`; top-up sweep still not redone on `w3` |
-| 8 | Architecture doc | not started |
-| 9 | Pitch video | not started |
+| 6 | LLM layer | **DONE.** `glm-5.3-flash` diagnosing, `glm-5.3` judging, $0.26 spent, caches committed so it replays offline for $0 |
+| 7 | The batch number | **DONE.** 94.36% vs `payday_wait` 57.70%, +36.66 pts, reproduced on a clean clone in 47s. Top-up sweep still not redone on `w3` (A1, still open) |
+| 8 | Architecture doc | **not started** — the last real deliverable |
+| 9 | Pitch video | **not started** |
+
+**Also done, and not in any plan:** a second executor backend against
+Razorpay's real API (`agent/execution/razorpay_executor.py`, gated offline,
+never called Razorpay), a static public page (`docs/index.html`), and a
+README. **Tanmay is rewriting the README and the page** — treat both as drafts
+and do not polish them.
+
+**What a fresh session should actually do next**, in order:
+
+1. **The architecture doc.** It is the only unstarted judged deliverable.
+2. **Adjudicate the 19 judge-vs-author disagreements** (open item 0b). That is
+   the only validation step the eval has.
+3. **Sweep `reasoning_effort`** (open item 0c). Every LLM score is at `low` and
+   10/21 may be a floor.
+4. Leave `sim/` alone.
 
 **Scope added and not in the original plan:** a context layer (rail-outage
 detection), built because the action space measured only +1.371 pts against a
@@ -24,7 +43,12 @@ policy already at 95.31% — the world is saturated at the scheduling task. The
 context layer's own recovery value is +0.256 pts at the most extreme severity
 swept; its defensible claim is a capability, not a number. `02_RESULTS.md`.
 
-## WHERE WE ACTUALLY ARE, 28 August
+## WHERE WE ACTUALLY WERE, 28 August — HISTORICAL, kept for the reasoning
+
+⚠️ **The day table below is the plan as it stood on 28 August and its dates
+have been overtaken.** Days 3-7 all landed on 28-29 August. Read it for why
+the ordering was chosen, not for what to do today — the current state is the
+PROGRESS block above.
 
 Days 1–2 were spent on the simulation, not the agent, and that was the right
 call — the model was carrying a dead constant, an unfitted belief and a
@@ -78,7 +102,7 @@ calibration gate pointed at the wrong object. It is now frozen at tag
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the errors** (there are **twenty-three**; see `03_ERRORS.md`). Lead
+- **Open with the errors** (there are **twenty-six**; see `03_ERRORS.md`). Lead
   with error 5, the broken oracle, then error 7, the ML result that reversed,
   then **error 11** — the mutation test that graded itself, found by an
   outside reader against a suite built specifically to prevent it. Error 11 is

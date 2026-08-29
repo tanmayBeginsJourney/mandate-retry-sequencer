@@ -1,24 +1,37 @@
 # 00 — HANDOFF
 
-## Where things stand, 29 August 2026
+## Where things stand, 29 August 2026 (updated end of day)
 
 Research and simulation: **done and FROZEN.** Stop doing it.
 Production code: **`agent/` is complete and every layer is measured.**
 Constraint layer, action space, context layer, detection benchmark, decline
 taxonomy and **the LLM layer** all exist, all run, and all have numbers.
+Added later on 29 August: a **second executor backend** against Razorpay's real
+API, a **public page**, and a **README**.
 Deadline: **5 September 2026 — 7 days from today.**
 
-**The two commands that matter:**
+**The commands that matter:**
 
 ```
-python -m agent.batch_report --llm         # THE DELIVERABLE. ~15 min.
+python -m agent.batch_report --pops 4      # THE DELIVERABLE. ~50s, no key.
+python -m agent.batch_report --llm         # the LLM overlay. ~15 min, needs a key.
 python agent/eval/run_eval.py --llm --judge --replay   # the eval, offline, $0
+python scripts/prove_stage0_refuses.py     # Stage 0 vs the REAL Razorpay client
+python agent/tests/test_razorpay_mapping.py            # the backend gates, 44/44
+python scripts/build_page_data.py --check  # the page's data is reproducible
 ```
 
-**The second needs nothing** — the model response caches are committed, so it
-replays offline with no key. **The first needs a Z.ai key in `.env` at the repo
-root** (`ZAI_API_KEY=...`, gitignored, read automatically) or its LLM arm
-silently becomes the deterministic arm. `07_AGENT_BRIEF.md` §0 has the table.
+**Only `--llm` needs a key.** Everything else in that list runs on a fresh
+clone with numpy alone: no network, no model download, no credentials. The
+eval's model responses are committed as caches, so `--replay` reproduces the
+whole thing offline for $0.00. `--llm` wants a Z.ai key in `.env` at the repo
+root (`ZAI_API_KEY=...`, gitignored, read automatically); without one its LLM
+arm silently becomes the deterministic arm, and the report says so.
+`07_AGENT_BRIEF.md` §0 has the full table.
+
+⚠️ **`prove_stage0_refuses.py` needs no RAZORPAY key either**, which is the
+point of it: Stage 0 adjudicates before the executor is reached, so the refusal
+can be shown against the real client with the network unplugged.
 
 > **THE BATCH NUMBER.** 100 customers x 5 mandates over 4 held-out populations,
 > 120 days, `payday_err=7`: **94.36% of billing cycles collected against
@@ -79,8 +92,9 @@ the merchant's eyeballs.
 ## THE MODEL IS FROZEN (tag `model-frozen`, 28 August 2026)
 
 No changes to `sim/w3.py`, `sim/harness.py` or the fitted constants before
-5 September without explicit approval. Next session is `agent/`, and its
-probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
+5 September without explicit approval. `agent/` is built and its probability
+engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. The next session's work is
+the architecture document and the pitch, not more code. See `CLAUDE.md`.
 
 ## Resolved 28 August 2026
 
@@ -129,6 +143,26 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
   Fixed in the component; the property had been living in the caller. Error 19.
 - **The detection benchmark's own gate found a defect in its own metric.**
   G-1b is kept RED; G-1c reads the verdict. Error 17.
+- **Can the agent run against a real payment API without changing anything
+  else?** Yes, and it is built. `agent/execution/razorpay_executor.py`
+  implements the same `ports.Executor` protocol; the switch is one argument in
+  `batch.py`. **Nothing in it has ever talked to Razorpay** — see
+  `06_MODEL_CARD.md` §6b-2 for the line between gated and untested.
+- **Does Razorpay return NPCI decline codes?** No. It returns its own
+  normalised `error_reason` from a published list of 110, and describes a
+  mapping module that does the translation on their side. Our taxonomy was
+  keyed on the wrong vocabulary; the map now lives in `ports.py`.
+- **Does Razorpay's documented retry schedule corroborate the NPCI attempt
+  cap?** Yes — T, T+1, T+2, T+3, then `halted`. `[VERIFIED]`. That is 1
+  presentation plus 3 retries, which this project had only as `[REPORTED]`
+  from practitioner accounts, and it means `baseline_doc` is a fair rendering
+  of what the vendor documents rather than a strawman.
+- **Is their Payment Downtime feed system-wide?** **No, and we said it was.**
+  It is scoped by `vpa_handle`, using the same handle vocabulary as ours.
+  Retracted in `01_FACTS.md`; error 26.
+- **`AttemptOutcome` gained `pending`.** Real UPI has a state where nobody
+  knows whether the debit landed. Optional, defaults to the old behaviour,
+  `SimExecutor` never sets it, **parity still bit-exact 24/24**.
 
 ## Open — genuinely unresolved
 
@@ -154,6 +188,26 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
    rate**. That is the design, not a workaround, but it means the batch's LLM
    arm is **95% deterministic** and must never be described as "the LLM's
    number".
+
+0e. **`batch_report.py` still prints `agree? yes` over two zeros.** The gate's
+   refusal count and the auditor's violation count are **not the same
+   quantity** — one is what was stopped, the other is what illegally happened —
+   and in a clean run they are both zero for unrelated reasons. That is
+   presented as a two-implementation cross-check and it is not one in that
+   regime. **Error 25.** The wording has NOT been changed, because the honest
+   fix is deciding what the panel should show when nothing illegal happened,
+   which is a judgement about the deliverable. `scripts/prove_stage0_refuses.py`
+   demonstrates the distinction and the auditor genuinely binding.
+0f. **Gate I2's matcher is broader than its stated intent.** It is
+   `p.endswith(".py")` over every file under `agent/`, so it also forbids a
+   module *inside* `agent/execution/` from importing a sibling. The rule's
+   stated intent is "only `stage0.py` may HOLD an executor" and its named
+   mutant trips either way. **Not changed** — rule 1 says a test I believe is
+   wrong goes in `NOTES.md` and gets asked about, and the workaround (putting
+   shared vocabulary in `ports.py`, which is where it belonged anyway) was
+   free. Tanmay's call.
+0g. **The Razorpay backend is untested against Razorpay.** No key, no request
+   ever sent. `06_MODEL_CARD.md` §6b-2 has the gated/untested split.
 
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and
    still the one fact that decides whether the sophisticated version is worth
@@ -214,11 +268,15 @@ probability engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. See `CLAUDE.md`.
 ## What "done" looks like on 5 September
 
 - [ ] Public repo, commits visible across the whole period
-- [ ] Agent runs end to end over a batch of synthetic merchants
-- [ ] One number: money recovered, with `payday_wait` printed beside it
-- [ ] Audit log: every money action, with reason, constraint check, outcome
-- [ ] Stopping rules explicit and demonstrable
-- [ ] One failure handled gracefully, on camera
+- [x] Agent runs end to end over a batch of synthetic merchants
+- [x] One number: money recovered, with `payday_wait` printed beside it
+      — **94.36% vs 57.70%, +36.66 pts, reproduced on a clean clone in 47s**
+- [x] Audit log: every money action, with reason, constraint check, outcome
+- [x] Stopping rules explicit and demonstrable
+- [x] One failure handled gracefully, on camera —
+      `scripts/prove_stage0_refuses.py` is the one to film
 - [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the errors (there are **twenty-three**)
-- [ ] `NOTES.md` full of real mess
+- [ ] 5-minute pitch video, opening with the errors (there are **twenty-six**)
+- [x] `NOTES.md` full of real mess
+- [x] A public page — `docs/index.html`, static, Pages from `/docs`
+      **(Tanmay is rewriting this and the README; treat both as drafts)**

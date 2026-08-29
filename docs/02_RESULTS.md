@@ -1209,3 +1209,74 @@ Verified wired rather than assumed: `banks=<all eight>` is **identical** to
 `banks=None`, and per-bank technical declines **sum exactly** to the pooled total
 (52 = 52).
 
+---
+
+# PAUSING SUPPRESSES THE EVIDENCE DETECTION NEEDS. Added 29 August 2026.
+
+**Not gate-protected, and it is ONE RUN.** Produced as a by-product of building
+the public page's outage panel. Reproduce with:
+
+```
+python scripts/build_page_data.py        # ~3 min; writes docs/data/scenarios.json
+```
+
+*n=100, k=5, population 700, 120d, `payday_err=7`, `FITTED_BELIEF`, four 6h
+outage windows on days 20/50/80/110 at hour 8, severity 0.40, `time_major=True`,
+monitor on. The only difference between the two rows is `pause_on_outage`.*
+
+| arm | detector fired | inside a window | outside one | recovery |
+|---|---|---|---|---|
+| detect only | 3 | **2 of 4** | 1 | **94.92%** |
+| detect **and pause** | 2 | **1 of 4** | 1 | **94.33%** |
+
+**Pausing cost 0.59 points here and lost a detection.** The mechanism is the
+one `docs/02_RESULTS.md` already relied on without measuring: the detection
+study above is run with the response **OFF**, deliberately, "so that pausing
+does not suppress the evidence that produces detection". This is that protocol
+note's consequence, observed. Pausing removes the attempts the binomial tail is
+computed over, so the detector starves itself.
+
+The recovery difference is consistent with the gated-adjacent ablation
+(**−0.529 pts, 2 SE 0.296, SIG** at this severity) but **is not a replication
+of it** — that figure is 8 populations paired; this is one run with no error
+bar. Quote the ablation, not this.
+
+**THERE IS ALSO A FALSE ALARM IN BOTH ARMS**, at day 67, outside every injected
+window: 3 technical declines in 8 attempts, exact binomial tail p = 2.8e-05.
+It is on the public page, labelled as a false alarm.
+
+⚠️ **This does NOT contradict "false alarms 0 of 48 runs".** That figure is
+measured at **severity 0**, with no outage present anywhere in the horizon.
+This is one run of a horizon that *does* contain outages. They are two
+different measurements and the page keeps them apart — letting one unlucky run
+overwrite a 48-run result would be the reverse of the usual error and just as
+wrong.
+
+## What the public page shows, and where its numbers come from
+
+`docs/index.html` is static and pre-computed; `scripts/build_page_data.py`
+writes `docs/data/scenarios.json` and `--check` regenerates and diffs it, so
+the page's data is reproducible rather than asserted. **Nothing is recomputed
+in JavaScript** — a JS re-implementation of `w3.index_score` would be a second
+implementation of a gated thing with no parity test, which is the mistake
+`agent/execution/sim_executor.py` needed a whole gate to avoid.
+
+Two classes of number appear on it and they are labelled differently:
+
+| on the page | where it comes from |
+|---|---|
+| one customer's month — the arrows, the waits, the index scores | **computed**, read out of a real `agent.batch.run_once` audit log at six values of `payday_err` |
+| every aggregate percentage | **transcribed** from this file, with "not gate-protected" printed beside it |
+
+**The hero customer is chosen and the page says so.** `c45m3` of population
+700 — payday day 9, ₹550 due day 4, a flat ₹215 in between — because the month
+is legible. Two customers in the same population where the agent does worse are
+named in `build_page_data.py:ALTERNATIVES`. At `payday_err` ±10 and ±14 the
+agent misses even this customer's cycle entirely, 0 of 2, and the page shows
+that rather than stopping the slider at ±7.
+
+⚠️ **One transcription trap, recorded because it nearly shipped.** The sweep
+table's difference column is transcribed from this file, **not** computed as
+`agent − payday_wait`. Subtracting the two rounded columns gives +47.51 at ±10
+days where this file says +47.50. A page that disagrees with its own source by
+a hundredth invites the reader to check nothing else.

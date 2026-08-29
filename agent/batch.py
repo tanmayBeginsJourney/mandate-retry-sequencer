@@ -75,7 +75,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              declines: DeclineMix | None = None,
              decline_kw: dict | None = None,
              use_llm: bool = False,
-             llm_max_calls: int | None = 150) -> dict:
+             llm_max_calls: int | None = 150,
+             executor=None) -> dict:
     """One agent run over one population.
 
     `mode="degenerate"` is retry-only with the deterministic diagnoser: the
@@ -100,10 +101,20 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     # that separation the gate would be comparing two things at once.
     if per_customer_tech_rng is None:
         per_customer_tech_rng = time_major
-    executor = SimExecutor(pop, seed, payday_err, topup_p=topup_p,
-                           nudge_p=nudge_p, outage=outage,
-                           per_customer_tech_rng=per_customer_tech_rng,
-                           declines=declines)
+    # THE BACKEND SWITCH. `executor=RazorpayExecutor(...)` and everything above
+    # and below this line is unchanged: the loop, the belief, Stage 0 and the
+    # audit trail never learn which world they are in, because gate I2 forbids
+    # any of them from importing `agent.execution` at all. This is the ONLY
+    # place in `agent/` where a second backend is even nameable.
+    #
+    # `scripts/prove_stage0_refuses.py` runs the constraint layer against the
+    # real Razorpay client with no key and no network, which is the check that
+    # this claim is structural rather than aspirational.
+    if executor is None:
+        executor = SimExecutor(pop, seed, payday_err, topup_p=topup_p,
+                               nudge_p=nudge_p, outage=outage,
+                               per_customer_tech_rng=per_customer_tech_rng,
+                               declines=declines)
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)

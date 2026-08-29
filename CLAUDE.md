@@ -3,17 +3,26 @@
 You are joining a project with a finished, frozen simulation behind it. **You
 do not have that context.** This file, plus `docs/`, is all of it.
 
-**If you are building the agent — which is all that remains — read
-`docs/07_AGENT_BRIEF.md` first, then `docs/06_MODEL_CARD.md`.** Between them
-they carry the interface, the evidence and the limits, and you do not need to
-read `sim/` to use it.
+**`sim/` is frozen and `agent/` is COMPLETE.** Every layer is built and
+measured: the constraint layer, the action space, the context layer, the LLM
+layer, the eval, the batch report, and a second executor backend against
+Razorpay's real API. **What actually remains is the architecture document and
+the pitch** — see `docs/04_BUILD_PLAN.md`, which names the next three things in
+order. Do not start rebuilding what is already there.
+
+**Read `docs/07_AGENT_BRIEF.md` first, then `docs/06_MODEL_CARD.md`.** Between
+them they carry the interface, the evidence and the limits, and you do not need
+to read `sim/` to use any of it.
 
 Then read `docs/00_HANDOFF.md`, `docs/01_FACTS.md`, `docs/02_RESULTS.md` and
 `docs/03_ERRORS.md`. That is not optional.
 
+⚠️ **`README.md` and `docs/index.html` are DRAFTS Tanmay is rewriting.** Do not
+polish either. If they disagree with `docs/`, `docs/` wins.
+
 The single most important thing about this project:
 
-> **It has found twenty-three significant errors in its own work. Every single one
+> **It has found twenty-six significant errors in its own work. Almost every one
 > made the project look BETTER than it was.** That is not coincidence. It is
 > what happens when the same party builds the measuring stick and the thing
 > being measured. You are now that party. Behave accordingly.
@@ -44,9 +53,9 @@ them, not because a better idea turned up. The simulation model is done.
 Everything from here is `agent/`. The probability engine is `w3.BeliefPD`
 configured with `w3.FITTED_BELIEF` — wire it in, do not rewrite it.
 
-What is still open and still allowed: `agent/`, `docs/`, `NOTES.md`, the pitch,
-and the architecture document. `sim/tests.py` may gain gates but no gate's
-threshold may move.
+What is still open and still allowed: `agent/`, `docs/`, `README.md`,
+`scripts/`, `NOTES.md`, the pitch, and the architecture document.
+`sim/tests.py` may gain gates but no gate's threshold may move.
 
 Why this rule exists: the model went through four significant corrections in a
 single day (a dead LTV multiplier, a placebo forecast defect, an unfitted
@@ -201,11 +210,13 @@ docs/
                        (start at 07_AGENT_BRIEF.md if you are building the agent)
   01_FACTS.md          every external fact, with source and confidence
   02_RESULTS.md        gated simulation results. See also 06_MODEL_CARD.md.
-  03_ERRORS.md         TWENTY-THREE errors, with mechanism + guard. Pitch material.
+  03_ERRORS.md         TWENTY-SIX errors, with mechanism + guard. Pitch material.
   04_BUILD_PLAN.md     what is left, dated
   05_TEST_DESIGN.md    test philosophy, written BEFORE the harness on purpose
   06_MODEL_CARD.md     WHAT SHIPS. Read this before touching sim/ or agent/.
   07_AGENT_BRIEF.md    START HERE if you are building the agent.
+  index.html           the public page. Static, GitHub Pages from /docs.
+  data/scenarios.json  every scenario the page shows, pre-computed.
 sim/
   w3.py                world + belief filters + FITTED_BELIEF. FROZEN.
   harness.py           policies, Stage 0 violation counters, run(). FROZEN.
@@ -227,17 +238,32 @@ sim/
   exp_main.py exp_pd.py calib2.py   older one-off experiment scripts
 legacy/                FROZEN. Known-defective. Do not build on.
 logs/                  raw output from prior runs
-scripts/               install-hooks.sh, pre-commit, pre-push, day-start.sh
-agent/                 THE PRODUCT. Built 28 Aug 2026; LLM layer still missing.
+README.md              the front door. Under 150 lines, on purpose.
+scripts/
+  install-hooks.sh pre-commit pre-push day-start.sh
+  build_page_data.py   pre-computes docs/data/scenarios.json for the page
+  prove_stage0_refuses.py   Stage 0 refusing a real Razorpay debit, no key
+agent/                 THE PRODUCT. Complete: every layer built and measured.
   demo.py              run it end to end: `python -m agent.demo`
-  ports.py             shared types. `Diagnosis` has NO time field, on purpose.
+  batch_report.py      THE TRACK DELIVERABLE. Not batch.py.
+  ports.py             shared vocabulary. Imports NOTHING from agent/.
+                       `Diagnosis` has NO time field, on purpose (ADR-005).
+                       Also holds the Razorpay reason -> family map: agent/llm
+                       may not import agent.execution, so it is the only
+                       lawful home. See error 24.
   loop.py batch.py     the recovery loop; batch.py is the composition root
+                       and the ONE place the executor backend is chosen
   policy/              ONE BeliefPD per CUSTOMER + the index. Wraps frozen sim/.
   constraints/         Stage 0 ENFORCED, plus an independent auditor
   context/             rail_monitor.py — cross-customer outage detection
-  execution/ audit/    the world; append-only JSONL audit trail
-  llm/                 redaction boundary + deterministic fallback. No model yet.
-  tests/               seven gates. _parallel.py is MANDATORY — see below.
+  execution/           sim_executor.py (the frozen world) and
+                       razorpay_executor.py + razorpay_downtime.py (the real
+                       API, UNTESTED pending credentials)
+  audit/               append-only JSONL, one row per event
+  llm/                 redaction boundary, governance, Z.ai transport,
+                       versioned prompts, ModelDiagnoser as an OVERLAY
+  eval/                40 + 7 + 3 golden cases, judge, committed caches
+  tests/               twelve gate scripts. _parallel.py is MANDATORY.
 ```
 
 ## Environment — read before running anything

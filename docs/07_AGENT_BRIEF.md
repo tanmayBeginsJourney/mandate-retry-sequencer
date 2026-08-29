@@ -1,8 +1,14 @@
 # 07 — AGENT BRIEF
 
-**START HERE.** You are building `agent/`. The simulation is finished and
-frozen; you do not need to understand it, only to call it. This page tells you
-what to build, what to call, and what not to touch.
+**START HERE.** The simulation is finished and frozen; you do not need to
+understand it, only to call it. This page tells you what `agent/` is, what to
+call, and what not to touch.
+
+⚠️ **`agent/` IS ALREADY BUILT — every layer, all measured.** This page reads
+as a build brief because that is what it was on 28 August, and the interface
+section (§3) is still exactly right. **Section 8 is the current state.** What
+remains is the architecture document and the pitch; `04_BUILD_PLAN.md` names
+the next three things in order.
 
 Deadline **5 September 2026**. Day-by-day plan: `04_BUILD_PLAN.md`.
 
@@ -132,7 +138,7 @@ Judged on, among other things — `[REPORTED]`, see `01_FACTS.md`:
 
 Applicants are explicitly asked to **explain what broke during development and
 how they recovered**. That is why `NOTES.md` and `03_ERRORS.md` exist and why
-they are judged deliverables, not housekeeping. `03_ERRORS.md` has **twenty-three**
+they are judged deliverables, not housekeeping. `03_ERRORS.md` has **twenty-six**
 entries with mechanisms and guards. **Open the pitch with them.** Errors 11-13
 were found by an outside reader checking `docs/` against `sim/` on 28 Aug --
 all three in the measuring apparatus, all three past a suite built to stop
@@ -159,9 +165,9 @@ Concretely:
 
 | Layer | Owns | Implementation |
 |---|---|---|
-| LLM | root-cause diagnosis, intervention choice (retry / nudge / partial / escalate / stop), human-readable justification per money action | you are building this |
+| LLM | root-cause diagnosis, intervention choice (retry / nudge / escalate / stop), human-readable justification per money action | **BUILT** — `agent/llm/`, `glm-5.3-flash` as an overlay over a deterministic rule engine. `WAIT` was cut and `PARTIAL` is a recommendation only; see §8. |
 | Policy | which mandate, which day | `w3.BeliefPD` + `w3.index_score` — **frozen, wire it in** |
-| Constraints | whether the chosen action is legal | Stage 0 — **see §4, this is the first real task** |
+| Constraints | whether the chosen action is legal | **BUILT** — `agent/constraints/`, enforced not counted. §4 explains why that was the first real task and what the simulation does differently. |
 
 Governance constraint, enforced in code: merchant-facing explanations must not
 disclose the customer's financial state. Say *"our model scores this window
@@ -459,32 +465,46 @@ That is how the last four defects were found.
 1. `06_MODEL_CARD.md` — what ships, what it is worth, what it was never tested
    on. Especially §3, before you quote any number to anyone.
 2. `CLAUDE.md` — the ten hard rules, the environment, the numbers rule.
-3. `03_ERRORS.md` — twenty-three errors with mechanisms. Pitch material.
+3. `03_ERRORS.md` — twenty-six errors with mechanisms. Pitch material.
 4. `01_FACTS.md` — every external fact with its source tag. **Nothing outside
    this file is established**, and the legality of the cross-merchant moat is
    still `[GUESS]`.
 
 ---
 
-## 8. THE AGENT EXISTS NOW. Added 28 August 2026.
+## 8. THE AGENT EXISTS NOW. Added 28 August, current at 29 August 2026.
 
-`agent/` is built through the constraint layer, the action space and the context
-layer. The LLM layer is **not** built. If you are the next session, this section
-plus `06_MODEL_CARD.md` §6 is your starting point, and `NOTES.md` from
-28 August has the full blow-by-blow.
+**`agent/` is complete.** Constraint layer, action space, context layer, LLM
+layer, eval, batch report — all built, all measured. Added later on 29 August:
+a **second executor backend** against Razorpay's real API, the public page,
+and the README. If you are the next session, this section plus
+`06_MODEL_CARD.md` §6 is your starting point, and `NOTES.md` from 28-29
+August has the full blow-by-blow.
+
+⚠️ **This heading used to say "the LLM layer is not built". It was stale for a
+day.** If anything below disagrees with the code, the code wins and the
+disagreement is a finding — `sim/verify_brief.py` checks the constants but
+cannot check prose.
 
 ### What is built
 
 ```
 agent/
-  ports.py            shared types. Imports no layer. `Diagnosis` has NO time field.
+  ports.py            shared vocabulary. Imports no layer. `Diagnosis` has NO
+                      time field. Also the decline taxonomy AND the Razorpay
+                      reason -> family map -- agent/llm may not import
+                      agent.execution, so ports.py is the only lawful home.
   state.py            per-mandate bookkeeping (the POLICY's view, not the gate's)
   loop.py             detect -> diagnose -> choose -> schedule -> enforce -> execute -> log
-  batch.py            composition root: the only place that builds an executor AND a gate
+  batch.py            composition root: the only place that builds an executor AND a gate,
+                      and the one place the BACKEND is chosen (`executor=`)
   policy/             belief_book.py (ONE BeliefPD per CUSTOMER), timing.py (the index)
   constraints/        rules.py + stage0.py (enforce), auditor.py (independent recount)
-  context/            rail_monitor.py - outage detection. NEW.
-  execution/          sim_executor.py - the world, incl. OutageSchedule
+  context/            rail_monitor.py - outage detection
+  execution/          sim_executor.py - the frozen world, incl. OutageSchedule
+                      razorpay_executor.py - the SAME port against the real API
+                      razorpay_downtime.py - their Payment Downtime feed
+                      razorpay_reasons.txt - their 110 reasons, verbatim
   audit/              log.py - append-only JSONL, one row per event
   llm/                caseview.py (redaction boundary), fallback.py (deterministic),
                       governance.py, client.py (Z.ai transport), prompts.py
@@ -492,7 +512,20 @@ agent/
   eval/               golden_cases.yaml (40 + 7 taxonomy + 3 injection),
                       cases.py, injection.py, run_eval.py, _cache/
   batch_report.py     THE TRACK DELIVERABLE. Not batch.py, the composition root.
-  tests/              _parallel.py + seven gates. See 06_MODEL_CARD.md §6b.
+  tests/              _parallel.py + twelve gate scripts. See 06_MODEL_CARD.md §6b.
+```
+
+**Outside `agent/`, added 29 August 2026:**
+
+```
+README.md                        the front door, under 150 lines
+docs/index.html                  the public page. Static, no build step.
+docs/data/scenarios.json         every scenario it shows, pre-computed
+scripts/build_page_data.py       regenerates that JSON. `--check` diffs it.
+scripts/prove_stage0_refuses.py  Stage 0 refusing a real Razorpay debit,
+                                 no API key, no network, then the auditor
+                                 catching a bypass. The best single artifact
+                                 in the repo for the compliance claim.
 ```
 
 ### The four things most likely to cost you the project, updated
@@ -580,7 +613,7 @@ that bound every LLM number: `06_MODEL_CARD.md` section 7.**
 `agent/eval/injection.py:diagnosis_has_temporal_field()` asserts it by
 inspecting the type, so an injected "retry at 11am" has nowhere to land. And the
 **judge must stay a different SKU from the diagnoser**: same-model-grading-itself
-is the same-party failure this project has now hit twenty-three times.
+is the same-party failure this project has now hit twenty-six times.
 
 **The deterministic fallback stays the default and produces the gated number.**
 The LLM is an overlay measured against it. A headline that needs an API key is

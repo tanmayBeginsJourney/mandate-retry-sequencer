@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debits that land — a recovery agent for UPI AutoPay</title>
+<meta name="description" content="Seven in ten Indian subscription debits fail because the account is empty at that exact moment. This is what waiting for payday looks like.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------------------------------------------------------------------------
+   ONE ACCENT, AND STATE IS CARRIED BY WEIGHT NOT HUE.
+   A failed attempt is a hollow hairline; a landed attempt is a solid accent
+   mark. That is deliberate: with two saturated colours fighting on one chart
+   the eye reads "colourful", and with one it reads "this one is different".
+   The only other saturated colour on the page is the negative-result red in
+   the outage panel, which is there because that number IS negative.
+--------------------------------------------------------------------------- */
+:root{
+  --bg:#fcfcfd; --panel:#ffffff; --ink:#101014; --ink-2:#3f3f48;
+  --muted:#71717a; --faint:#a1a1aa;
+  --line:#e6e6ea; --line-2:#f0f0f3;
+  --accent:#5b53d6; --accent-soft:#ecebfb; --accent-ink:#3f38ad;
+  --neg:#b4232b; --neg-soft:#fdeced;
+  --grid:#efeff2;
+  --radius:8px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0a0a0c; --panel:#111114; --ink:#f2f2f4; --ink-2:#c4c4cc;
+    --muted:#8b8b95; --faint:#5f5f6b;
+    --line:#232329; --line-2:#1a1a1f;
+    --accent:#8b84ee; --accent-soft:#1c1a3a; --accent-ink:#a9a3f5;
+    --neg:#f26b72; --neg-soft:#2c1618;
+    --grid:#1a1a1f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0a0a0c; --panel:#111114; --ink:#f2f2f4; --ink-2:#c4c4cc;
+  --muted:#8b8b95; --faint:#5f5f6b;
+  --line:#232329; --line-2:#1a1a1f;
+  --accent:#8b84ee; --accent-soft:#1c1a3a; --accent-ink:#a9a3f5;
+  --neg:#f26b72; --neg-soft:#2c1618;
+  --grid:#1a1a1f;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+  font-feature-settings:"cv05" 1,"cv08" 1,"tnum" 0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+@media(max-width:640px){.wrap{padding:0 16px}}
+
+/* ---- type scale */
+h1{font-size:30px;line-height:1.2;font-weight:600;letter-spacing:-.021em;margin:0}
+h1 .l1{display:block}   /* a hand-placed break, dropped below 700px */
+h2{font-size:19px;line-height:1.35;font-weight:600;letter-spacing:-.012em;margin:0 0 6px}
+h3{font-size:13px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+p{margin:0 0 12px;color:var(--ink-2);max-width:68ch}
+.lede{font-size:17px;line-height:1.55;color:var(--ink-2);max-width:64ch}
+.small{font-size:13px;line-height:1.5;color:var(--muted)}
+.tiny{font-size:12px;line-height:1.45;color:var(--faint)}
+.num{font-variant-numeric:tabular-nums}
+code,.mono{font-family:var(--mono);font-size:.88em}
+a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 30%,transparent)}
+a:hover{border-bottom-color:var(--accent)}
+
+/* The headline's hand-placed break is a desktop typesetting decision. On a
+   narrow screen it lands mid-thought, so it is dropped rather than honoured. */
+@media(max-width:700px){
+  h1{font-size:25px}
+  h1 .l1{display:inline}
+  .lede{font-size:15.5px}
+  header{padding:28px 0 24px;margin-bottom:26px}
+  .headline-stat{gap:18px 24px}
+  .stat .v{font-size:21px}
+}
+
+/* ---- header */
+header{border-bottom:1px solid var(--line);padding:44px 0 32px;margin-bottom:36px}
+.eyebrow{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.headline-stat{display:flex;flex-wrap:wrap;gap:28px;margin-top:26px;padding-top:22px;border-top:1px solid var(--line-2)}
+.stat .v{font-size:24px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;display:block;line-height:1.15}
+.stat .k{font-size:12px;color:var(--muted);display:block;margin-top:3px}
+.stat.dim .v{color:var(--muted);font-weight:500}
+
+/* ---- panels */
+section{margin-bottom:44px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px}
+.panel + .panel{margin-top:14px}
+
+/* ---- hero chart */
+.chart-shell{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;padding:16px 20px 0;flex-wrap:wrap}
+.chart-scroll{overflow-x:auto;padding:4px 8px 8px}
+svg.hero{display:block;width:100%;min-width:620px;height:auto}
+.axis-label{fill:var(--faint);font-size:10px;font-family:Inter,sans-serif}
+.row-label{fill:var(--muted);font-size:11px;font-weight:500;font-family:Inter,sans-serif}
+.row-note{fill:var(--faint);font-size:10px;font-family:Inter,sans-serif}
+
+/* ---- controls */
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+@media(max-width:820px){.controls{grid-template-columns:1fr}}
+.ctl{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.ctl h3{margin-bottom:4px}
+.ctl .why{font-size:12.5px;color:var(--muted);margin:0 0 12px;line-height:1.45}
+input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 4px}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.readout{font-size:13px;color:var(--ink-2);margin-top:8px;min-height:2.6em}
+.readout b{color:var(--ink);font-weight:600}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:2px}
+.seg button{flex:1;appearance:none;background:transparent;border:0;border-right:1px solid var(--line);
+  padding:8px 6px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent-ink);font-weight:500}
+
+/* ---- narration */
+.play{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-top:14px}
+@media(max-width:820px){.play{grid-template-columns:1fr}}
+.log{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:16px 18px;max-height:330px;overflow-y:auto}
+.ev{display:grid;grid-template-columns:52px 1fr;gap:12px;padding:8px 0;border-top:1px solid var(--line-2);font-size:13.5px;line-height:1.5}
+.ev:first-child{border-top:0}
+.ev .d{color:var(--faint);font-size:11.5px;font-variant-numeric:tabular-nums;padding-top:2px}
+.ev .t{color:var(--ink-2)}
+.ev.win .t{color:var(--ink);font-weight:500}
+.ev.win .d{color:var(--accent)}
+.ev.notify .t{color:var(--ink-2)}
+.ev .m{display:block;margin-top:3px;font-size:12px;color:var(--faint)}
+.ev .m::before{content:"merchant sees ";color:var(--faint);opacity:.75}
+
+/* ---- tables */
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:12px;padding:0 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 12px 8px 0;border-bottom:1px solid var(--line-2);color:var(--ink-2)}
+td.n,th.n{text-align:right;padding-right:0}
+tr.hl td{color:var(--ink);font-weight:500}
+td.neg{color:var(--neg)}
+.tablewrap{overflow-x:auto}
+
+/* ---- misc */
+.tag{display:inline-block;font-size:11px;font-weight:500;letter-spacing:.02em;
+  padding:2px 7px;border-radius:4px;background:var(--line-2);color:var(--muted);white-space:nowrap}
+.tag.warn{background:var(--neg-soft);color:var(--neg)}
+.note{border-left:2px solid var(--line);padding-left:14px;margin:16px 0}
+.note.warn{border-left-color:var(--neg)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+footer{border-top:1px solid var(--line);margin-top:56px;padding:26px 0 60px}
+.srcline{font-size:12px;color:var(--faint);margin-top:10px}
+.bars{margin-top:4px}
+.bar{display:grid;grid-template-columns:150px 1fr 46px;gap:10px;align-items:center;padding:5px 0;font-size:13px}
+.bar .lab{color:var(--ink-2);font-size:12.5px}
+.bar .track{height:7px;background:var(--line-2);border-radius:4px;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent);border-radius:4px}
+.bar.dim .fill{background:var(--faint)}
+.bar .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);font-size:12.5px}
+@media(max-width:520px){.bar{grid-template-columns:110px 1fr 42px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="eyebrow">UPI AutoPay · recovery agent · simulation</div>
+    <h1><span class="l1">Most subscription debits in India fail because</span> <span>nobody checked whether the money was there.</span></h1>
+    <p class="lede" style="margin-top:14px">
+      A mandate fires on its due date. The account is empty. It fires again the next
+      day, and the next. Payday arrives on the 9th and nobody is looking.
+      This agent maintains a probability distribution over both the balance and the
+      salary date, and schedules the debit for when the money is likely to have landed.
+    </p>
+    <div class="headline-stat">
+      <div class="stat"><span class="v" id="s-agent">94.36%</span><span class="k">billing cycles collected — this agent</span></div>
+      <div class="stat dim"><span class="v" id="s-rival">57.70%</span><span class="k"><code>payday_wait</code>, the five-line heuristic</span></div>
+      <div class="stat"><span class="v">₹59.9L</span><span class="k">recovered across the batch</span></div>
+      <div class="stat dim"><span class="v">0 / 0</span><span class="k">constraint refusals, gate and independent recount</span></div>
+    </div>
+    <p class="srcline">
+      4 held-out populations, 100 customers × 5 mandates, 120 days, payday known to ±7 days.
+      +36.66 pts, 2 SE 2.47. Simulated — no Razorpay transaction has ever been seen.
+      <span class="tag">not gate-protected</span>
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ==================== HERO ==================== -->
+<section>
+  <div class="chart-shell">
+    <div class="chart-head">
+      <div>
+        <h2>One customer, one month, one ₹550 subscription</h2>
+        <p class="small" style="margin:2px 0 0">
+          Salary lands on day <b id="h-payday">9</b>. The debit is due on day <b id="h-due">4</b>.
+          Between them the account holds <b>₹215</b>.
+        </p>
+      </div>
+      <div class="small num" style="text-align:right;white-space:nowrap">
+        <span class="mono" id="h-uid">c45m3</span><br>
+        <span class="tiny">population seed 700</span>
+      </div>
+    </div>
+    <div class="chart-scroll">
+      <svg class="hero" id="hero" viewBox="0 0 900 384" role="img"
+           aria-labelledby="hero-title hero-desc">
+        <title id="hero-title">Two timelines of the same month</title>
+        <desc id="hero-desc">The top row shows four retries fired into an empty
+          account before payday. The bottom row shows one attempt, placed after
+          the salary credit, which succeeds.</desc>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ==================== CONTROLS ==================== -->
+  <div class="controls">
+
+    <div class="ctl">
+      <h3>How well do we know payday</h3>
+      <p class="why">The one fact that decides whether this is worth building — and it has never been measured in India.</p>
+      <input type="range" id="c-err" min="0" max="5" step="1" value="3" aria-label="Payday estimate error in days">
+      <div class="ticks"><span>±1</span><span>±3</span><span>±5</span><span>±7</span><span>±10</span><span>±14</span></div>
+      <div class="readout" id="r-err"></div>
+    </div>
+
+    <div class="ctl">
+      <h3>Rail outage</h3>
+      <p class="why">UPI itself goes down. The agent sees a burst of technical declines it did not cause.</p>
+      <div class="seg" role="group" aria-label="Rail state">
+        <button id="o-off" aria-pressed="true">Rail healthy</button>
+        <button id="o-on" aria-pressed="false">Rail degraded</button>
+      </div>
+      <div class="readout" id="r-outage"></div>
+    </div>
+
+    <div class="ctl">
+      <h3>Merchants pooling data</h3>
+      <p class="why">One merchant sees one debit a month on an account. An aggregator sees five.</p>
+      <div class="seg" role="group" aria-label="Data scope">
+        <button id="p-one" aria-pressed="false">One merchant</button>
+        <button id="p-all" aria-pressed="true">Pooled</button>
+      </div>
+      <div class="readout" id="r-pool"></div>
+    </div>
+  </div>
+
+  <!-- ==================== NARRATION ==================== -->
+  <div class="play">
+    <div class="log" id="log" aria-live="polite" aria-label="The agent's decisions, day by day"></div>
+    <div class="panel">
+      <h3>What this row is</h3>
+      <p class="small" id="side-note"></p>
+      <p class="tiny" style="margin-top:14px">
+        Each line is read out of the run's audit log, not written for this page.
+        The grey line under a decision is what a <em>merchant</em> is allowed to be
+        told — the narrative layer is never handed a balance, and a rationale that
+        discloses one is replaced before it leaves the system.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THE CONDITIONAL ==================== -->
+<section>
+  <h2>Where this wins, and where it loses</h2>
+  <p>
+    The argument is not that the agent is better on average. It is that it does not
+    care how wrong the payday estimate is. The heuristic collapses from 99% to 48%
+    across the same range; the agent stays between 93% and 96%. Below about four
+    days of uncertainty, build the heuristic instead — at ±1 day it beats us by
+    3.5 points, and that row is on this page for the same reason it is in the repo.
+  </p>
+  <div class="panel">
+    <div class="tablewrap">
+      <table id="sweep-table">
+        <thead><tr>
+          <th>Payday known to</th>
+          <th class="n"><code>payday_wait</code></th>
+          <th class="n">this agent</th>
+          <th class="n">difference</th>
+          <th>verdict</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="srcline">
+      n=100, 8 held-out populations (700–707), 120 days, paired 2 SE.
+      Reproduce with <code>python sim/headline.py</code>.
+      <span class="tag">not gate-protected</span>
+    </p>
+  </div>
+</section>
+
+<!-- ==================== OUTAGE ==================== -->
+<section>
+  <h2>Noticing an outage is worth less than you would like</h2>
+  <p>
+    The agent detects a degraded rail from a burst of technical declines, using an
+    exact binomial tail rather than a normal approximation — at these volumes the
+    expected count is under one, and a z-score turns a single ordinary decline into
+    a one-in-a-thousand event. Detection works. <b>Acting on it does not.</b>
+  </p>
+  <div class="grid2">
+    <div class="panel">
+      <h3>What pausing on an outage is worth</h3>
+      <div class="tablewrap">
+        <table id="ablation-table">
+          <thead><tr><th>Severity</th><th class="n">vs not pausing</th><th class="n">2 SE</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="tiny" style="margin-top:12px">
+        Pausing costs a scheduling day whether or not anything is wrong. It is
+        significantly <em>negative</em> at moderate severity and only turns positive
+        at the most extreme setting swept — which is itself a guess, because no
+        source reports what fraction of AutoPay debits fail during a UPI incident.
+        <b>This is not shipped as an unconditional behaviour.</b>
+      </p>
+    </div>
+    <div class="panel">
+      <h3>And pausing hides the evidence it needs</h3>
+      <p class="small" id="outage-arms"></p>
+      <div class="tablewrap">
+        <table id="trans-table">
+          <thead><tr><th>Detector fired</th><th class="n">attempts</th><th class="n">technical</th><th class="n">p</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="tiny" style="margin-top:12px">
+        One run, four 6-hour windows at severity 0.40. The published false-alarm rate
+        is <b>0 of 48 runs</b> measured with no outage present; a firing outside a
+        window in a single run is not that measurement, and both are shown rather
+        than the kinder one.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== POOLING ==================== -->
+<section>
+  <h2>The thing a single merchant cannot do at all</h2>
+  <p>
+    Mandates are spread across 60 merchants. Pooling every merchant's outcomes for
+    the same customer gives a detector 22.5 attempts per 24-hour window to reason
+    about. One merchant gets 0.38, against a floor of 8 below which the statistic
+    cannot be evaluated. That is not a harder problem for the single merchant; it
+    is an unavailable one.
+  </p>
+  <div class="grid2">
+    <div class="panel">
+      <h3>Detecting a bank-shaped outage</h3>
+      <div class="bars" id="pool-bars"></div>
+      <p class="tiny" style="margin-top:12px">
+        n=200, severity 0.80, four windows, 8 populations. Pooling across banks is
+        what makes the aggregate detector work — and it is also what hides a
+        single-bank incident, because one bank in eight lifts the pooled rate by
+        about an eighth of its severity. Locally overwhelming, statistically
+        invisible.
+      </p>
+    </div>
+    <div class="panel">
+      <h3>Attempts available per 24-hour window</h3>
+      <div class="tablewrap">
+        <table id="vol-table">
+          <thead><tr><th>Customers</th><th class="n">pooled</th><th class="n">one merchant</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="tiny" style="margin-top:12px">
+        Whether a payment aggregator may lawfully use one merchant's outcomes to
+        schedule another's debit for the same customer is <b>unresolved</b>. It is
+        the legal basis for the central claim on this page and nobody has read the
+        relevant terms. Recorded as a guess in the repo, not as a footnote.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== THE VENDOR'S OWN VOCABULARY ==================== -->
+<section>
+  <h2>Two things we learned from Razorpay's own error list</h2>
+  <p>
+    We built a decline taxonomy from NPCI's published code list. Razorpay does not
+    return those codes — it normalises them into 110 reasons of its own. Mapping
+    one onto the other found two states our taxonomy had no name for, and both
+    change what the correct action is.
+  </p>
+  <div class="grid2">
+    <div class="panel">
+      <h3><code>funds_blocked_by_mandate</code></h3>
+      <p class="small" style="max-width:none">
+        The money is in the account and <b>another mandate has already claimed it</b>.
+        Not insufficient funds — the balance is adequate. Not a limit — nothing was
+        breached.
+      </p>
+      <p class="small" style="max-width:none;margin-bottom:0">
+        This is cross-merchant contention appearing in the production error
+        vocabulary of a payment aggregator. A merchant who can only see their own
+        debits cannot tell it apart from an empty account, and will retry into a
+        balance that was never theirs to take. It is also the one decline that
+        proves the customer <em>had</em> money at a known moment — the opposite of
+        what a plain failure teaches a balance filter.
+      </p>
+    </div>
+    <div class="panel">
+      <h3><code>deemed_transaction</code></h3>
+      <p class="small" style="max-width:none">
+        Every other decline says why the debit failed. This one refuses to say
+        <em>whether</em> it failed. The response was lost; the customer may already
+        have been charged.
+      </p>
+      <p class="small" style="max-width:none;margin-bottom:0">
+        Retrying here risks debiting someone twice, which is worse than never
+        collecting — it costs a refund, a complaint and probably the mandate. And
+        it is the cleanest argument on this page for a diagnosis layer: the timing
+        model reads two probabilities and a discount, and there is no arrangement
+        of those three numbers that means <b>“do not act, because the question
+        you are asking is unanswerable.”</b>
+      </p>
+    </div>
+  </div>
+  <p class="srcline">
+    Both families are wired into the vocabulary and routed by the diagnosis layer.
+    <b>Neither is simulated and neither carries a number</b> — the frozen world
+    models neither state, and no source gives a frequency for either, so putting a
+    rate on them would be inventing a constant to decorate a good story.
+    Source: <code>payments_error_reasons.xlsx</code>, 110 distinct reasons, from razorpay.com.
+    <span class="tag">verified, primary source</span>
+  </p>
+</section>
+
+<!-- ==================== HONESTY ==================== -->
+<section>
+  <h2>What this is not</h2>
+  <div class="panel">
+    <p class="small" style="max-width:none">
+      <b>No real data. Ever.</b> Every number here is simulation. No Razorpay
+      transaction, mandate or decline code has been observed. The world, the
+      policies and the tests were built by one party, which is the failure mode this
+      project has caught itself in twenty-six times and written up each time.
+    </p>
+    <p class="small" style="max-width:none">
+      <b>The customer above was chosen because the month is legible</b> — a flat
+      balance, a clean payday, one debit. Others in the same population go worse and
+      two of them are named in the repo. The aggregate table is the evidence; the
+      timeline is the explanation.
+    </p>
+    <p class="small" style="max-width:none">
+      <b>Two of the five compliance rules have no working test in the simulation.</b>
+      The attempt cap and the pending-notification rule are enforced by the agent and
+      tested there, but the simulation's own counters for them have never been shown
+      to fire. Peak-hour, notification-lead and re-presentation are genuinely tested.
+    </p>
+    <p class="small" style="max-width:none;margin-bottom:0">
+      <b>The batch runs with the decline taxonomy switched off</b> — no frozen
+      accounts, no revoked mandates, no limit hits. Switching them on costs between
+      0 and 13.5 points, and every rate in that sweep is a guess.
+    </p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p class="small" style="margin:0">
+      Built for Razorpay's AI Buildathon, Track 3.
+      <a href="../">Repository</a> ·
+      <a href="06_MODEL_CARD.md">Model card</a> ·
+      <a href="02_RESULTS.md">Results</a> ·
+      <a href="03_ERRORS.md">Twenty-six errors</a>
+    </p>
+    <p class="tiny" style="margin-top:8px">
+      Every scenario on this page is pre-computed by
+      <code>scripts/build_page_data.py</code> against the frozen model and read from
+      a committed JSON file. Nothing is recomputed in the browser.
+    </p>
+  </div>
+</footer>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------------------
+   The page LOOKS UP; it does not compute. Every number here was produced by
+   scripts/build_page_data.py against the frozen simulation and committed to
+   docs/data/scenarios.json. Re-implementing w3.index_score in JavaScript would
+   be a second implementation of a gated thing with no parity test.
+--------------------------------------------------------------------------- */
+const ERRS = [1, 3, 5, 7, 10, 14];
+const S = {err: 3, outage: false, pooled: true, day: null, timer: null};
+let D = null;
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 2) => n.toFixed(d);
+const rupees = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+/* ------------------------------------------------------------------ chart */
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+};
+
+const W = 900, PADL = 62, PADR = 20;
+/* Two rows. `y` is the top of the plotting box, `h` its height. The gutter
+   above each row carries that row's label; nothing is drawn into it. */
+const ROW = [{y: 58, h: 116}, {y: 232, h: 116}];
+const AXIS_Y = 372;
+
+function drawHero() {
+  const svg = $("hero");
+  while (svg.childNodes.length > 2) svg.removeChild(svg.lastChild);
+
+  const h = D.hero, bal = h.balance;
+  const d0 = h.cycle_start, d1 = h.cycle_end - 1;
+  const x = (d) => PADL + (d - d0) / (d1 - d0) * (W - PADL - PADR);
+  const maxBal = Math.max(...bal.map((b) => b.bal)) * 1.06;
+  const arm = h.arms[String(ERRS[S.err])];
+  const upTo = S.day == null ? d1 : S.day;
+  const balAt = (d) => (bal.find((z) => z.day === d) || {bal: 0}).bal;
+
+  /* the contiguous run of days on which the account cannot cover the debit.
+     Shading it is the whole hero: an attempt inside this band cannot succeed
+     no matter how many times it is repeated. */
+  const shortDays = bal.filter((b) => b.bal < h.amount).map((b) => b.day);
+
+  /* payday marker, once, above everything */
+  if (h.payday >= d0 && h.payday <= d1) {
+    svg.appendChild(el("text", {x: x(h.payday), y: 16, "text-anchor": "middle",
+      class: "row-note", fill: "var(--accent)"},
+      "salary lands — day " + h.payday));
+    svg.appendChild(el("path", {
+      d: `M${x(h.payday) - 4} 22L${x(h.payday) + 4} 22L${x(h.payday)} 29Z`,
+      fill: "var(--accent)"}));
+  }
+
+  ROW.forEach((row, ri) => {
+    const y = (v) => row.y + row.h - (v / maxBal) * row.h;
+    const floor = row.y + row.h;
+
+    /* --- the "cannot clear" band */
+    if (shortDays.length) {
+      const lo = Math.min(...shortDays), hi = Math.max(...shortDays);
+      svg.appendChild(el("rect", {x: x(lo) - 6, y: row.y,
+        width: (x(hi) - x(lo)) + 12, height: row.h,
+        fill: "var(--ink)", opacity: .05}));
+      if (ri === 0) {
+        svg.appendChild(el("text", {x: (x(lo) + x(hi)) / 2, y: row.y + 16,
+          "text-anchor": "middle", class: "row-note"},
+          "account below " + rupees(h.amount)));
+      }
+    }
+
+    /* --- axes */
+    svg.appendChild(el("line", {x1: PADL, x2: W - PADR, y1: floor, y2: floor,
+      stroke: "var(--line)", "stroke-width": 1}));
+    svg.appendChild(el("line", {x1: PADL, x2: W - PADR, y1: y(h.amount),
+      y2: y(h.amount), stroke: "var(--muted)", "stroke-width": 1,
+      "stroke-dasharray": "2 4", opacity: .55}));
+    svg.appendChild(el("text", {x: PADL - 9, y: y(h.amount) + 3.5,
+      "text-anchor": "end", class: "axis-label"}, rupees(h.amount) + " due"));
+    svg.appendChild(el("text", {x: PADL - 9, y: row.y + 9,
+      "text-anchor": "end", class: "axis-label"}, rupees(maxBal)));
+
+    /* --- the balance curve */
+    let path = "";
+    bal.forEach((b, i) => {
+      path += (i ? "L" : "M") + x(b.day).toFixed(1) + " " + y(b.bal).toFixed(1);
+    });
+    svg.appendChild(el("path", {
+      d: path + `L${x(d1).toFixed(1)} ${floor}L${x(d0).toFixed(1)} ${floor}Z`,
+      fill: "var(--accent)", opacity: .09}));
+    svg.appendChild(el("path", {d: path, fill: "none", stroke: "var(--accent)",
+      "stroke-width": 1.5, opacity: ri === 0 ? .5 : .9,
+      "stroke-linejoin": "round"}));
+
+    /* --- row label, in the gutter above the box */
+    svg.appendChild(el("text", {x: PADL, y: row.y - 24, class: "row-label"},
+      ri === 0 ? "A fixed retry schedule" : "This agent"));
+    svg.appendChild(el("text", {x: PADL, y: row.y - 10, class: "row-note"},
+      ri === 0
+        ? "charge on the due date, then retry the next three days"
+        : "wait for the balance to clear, notify, then debit once"));
+
+    /* --- attempts */
+    const items = ri === 0
+      ? h.naive.map((a) => ({day: a.day, ok: a.success}))
+      : arm.attempts.filter((a) => a.day <= upTo).map((a) => ({day: a.day, ok: a.success}));
+
+    items.forEach((a) => {
+      const px = x(a.day), py = y(balAt(a.day));
+      const top = row.y + 26;
+      svg.appendChild(el("line", {x1: px, x2: px, y1: top, y2: py - 8,
+        stroke: a.ok ? "var(--accent)" : "var(--muted)",
+        "stroke-width": a.ok ? 2.4 : 1.4, opacity: a.ok ? 1 : .8}));
+      svg.appendChild(el("path", {
+        d: `M${px - 4.5} ${py - 8.5}L${px + 4.5} ${py - 8.5}L${px} ${py - 0.5}Z`,
+        fill: a.ok ? "var(--accent)" : "none",
+        stroke: a.ok ? "var(--accent)" : "var(--muted)", "stroke-width": 1.3}));
+      if (a.ok) {
+        svg.appendChild(el("circle", {cx: px, cy: py, r: 3.4, fill: "var(--accent)"}));
+        svg.appendChild(el("text", {x: px + 9, y: py - 4, class: "row-note",
+          fill: "var(--accent)"}, "collected " + rupees(h.amount)));
+      }
+    });
+
+    /* --- one summary per row, never one label per arrow */
+    const nAtt = ri === 0 ? items.length : arm.attempts.length;
+    const landed = ri === 0
+      ? items.filter((a) => a.ok).length
+      : arm.attempts.filter((a) => a.success).length;
+    const summary = nAtt + " attempt" + (nAtt === 1 ? "" : "s")
+      + ", " + landed + " landed";
+    svg.appendChild(el("text", {x: W - PADR, y: row.y - 10,
+      "text-anchor": "end", class: "row-label",
+      fill: landed ? "var(--accent)" : "var(--muted)"}, summary));
+
+    if (ri === 0 && items.length) {
+      const mid = (x(items[0].day) + x(items[items.length - 1].day)) / 2;
+      svg.appendChild(el("text", {x: mid, y: floor + 15, "text-anchor": "middle",
+        class: "row-note"},
+        "every one into an account holding " + rupees(balAt(items[0].day))));
+    }
+  });
+
+  /* --- the waiting band, agent row only */
+  const first = arm.attempts.length ? arm.attempts[0].day : d1;
+  if (first > d0) {
+    const rightDay = Math.min(first, upTo);
+    if (rightDay > d0) {
+      svg.appendChild(el("rect", {x: x(d0), y: ROW[1].y,
+        width: x(rightDay) - x(d0), height: ROW[1].h,
+        fill: "var(--accent)", opacity: .06}));
+      svg.appendChild(el("text", {x: (x(d0) + x(rightDay)) / 2,
+        y: ROW[1].y + ROW[1].h - 10, "text-anchor": "middle",
+        class: "row-note", fill: "var(--accent)"},
+        "waiting — " + (rightDay - d0) + " days"));
+    }
+  }
+
+  /* --- shared day axis */
+  for (let d = d0; d <= d1; d++) {
+    if ((d - d0) % 5 !== 0 && d !== d1) continue;
+    svg.appendChild(el("text", {x: x(d), y: AXIS_Y, "text-anchor": "middle",
+      class: "axis-label"}, "day " + d));
+  }
+}
+
+/* -------------------------------------------------------------- narration */
+function drawLog() {
+  const box = $("log");
+  box.innerHTML = "";
+  const arm = D.hero.arms[String(ERRS[S.err])];
+  const upTo = S.day == null ? 1e9 : S.day;
+  const lines = arm.narration.filter((n) => n.day <= upTo);
+  if (!lines.length) {
+    box.innerHTML = '<p class="small" style="margin:0">Waiting for the first decision…</p>';
+    return;
+  }
+  lines.forEach((n) => {
+    const row = document.createElement("div");
+    row.className = "ev " + n.tone;
+    row.innerHTML = '<div class="d">day ' + n.day + '</div><div class="t">' +
+      esc(n.internal) + '<span class="m">' + esc(n.merchant) + '</span></div>';
+    box.appendChild(row);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]));
+
+/* ---------------------------------------------------------------- readouts */
+function drawReadouts() {
+  const e = ERRS[S.err];
+  const row = D.sweep.find((r) => r.err === e);
+  const arm = D.hero.arms[String(e)];
+  const landed = arm.attempts.filter((a) => a.success).length;
+
+  $("r-err").innerHTML = "Payday estimated to ±" + e + (e === 1 ? " day" : " days") +
+    ". Across the batch " +
+    "this agent collects <b>" + fmt(row.agent) + "%</b> against the heuristic's <b>" +
+    fmt(row.payday_wait) + "%</b>. " +
+    (row.verdict === "heuristic wins"
+      ? "<b>The heuristic wins here.</b>"
+      : row.verdict === "tie" ? "Statistically a tie."
+      : "");
+
+  $("side-note").textContent = landed
+    ? "At ±" + e + (e === 1 ? " day" : " days") + " the agent places " + arm.attempts.length +
+      " attempt" + (arm.attempts.length === 1 ? "" : "s") +
+      " in this cycle and collects. The waiting is the product: every skipped day " +
+      "is an attempt not spent against an empty account."
+    : "At ±" + e + (e === 1 ? " day" : " days") + " the agent misses this customer's cycle entirely — " +
+      arm.attempts.length + " attempts, none collected. The portfolio still " +
+      "recovers " + fmt(row.agent) + "%, because the filter learns payday from " +
+      "the customer's other four mandates. One customer is not the result.";
+
+  const arms = D.outage.arms;
+  if (S.outage) {
+    const p = arms.detect_and_pause, o = arms.detect_only;
+    $("r-outage").innerHTML = "The rail degrades in four 6-hour windows. The agent " +
+      "notices and pauses <b>" + p.paused_dispatch + "</b> dispatches — and " +
+      "recovers <b>" + fmt(p.cycle_rec) + "%</b> against <b>" + fmt(o.cycle_rec) +
+      "%</b> for noticing and carrying on. <b>Pausing lost money.</b>";
+  } else {
+    $("r-outage").innerHTML = "Rail healthy. The agent's detector is consulted every " +
+      "decision hour and stays quiet: the published false-alarm rate is " +
+      "<b>0 of 48</b> runs with no outage present.";
+  }
+
+  const det = D.pooling.detection;
+  $("r-pool").innerHTML = S.pooled
+    ? "Pooling every merchant's outcomes, a bank-shaped outage is caught in <b>" +
+      fmt(det[0].rate, 2) + "</b> of windows."
+    : "A single merchant sees <b>0.38</b> attempts per 24-hour window against a " +
+      "floor of <b>8</b>. It cannot evaluate the statistic at all — detection rate <b>" +
+      fmt(det[2].rate, 2) + "</b>.";
+}
+
+/* ------------------------------------------------------------------ tables */
+function drawTables() {
+  const tb = document.querySelector("#sweep-table tbody");
+  tb.innerHTML = "";
+  D.sweep.forEach((r) => {
+    /* `r.diff` is TRANSCRIBED from docs/02_RESULTS.md, not computed from the
+       two columns beside it. Subtracting the rounded columns gives +47.51 at
+       ±10 days where the source says +47.50, and a page that disagrees with
+       its own source by a hundredth invites the reader to check nothing. */
+    const diff = r.diff;
+    const tr = document.createElement("tr");
+    if (ERRS[S.err] === r.err) tr.className = "hl";
+    tr.innerHTML = "<td>±" + r.err + (r.err === 1 ? " day" : " days") + "</td>" +
+      '<td class="n">' + fmt(r.payday_wait) + "%</td>" +
+      '<td class="n">' + fmt(r.agent) + "%</td>" +
+      '<td class="n' + (diff < 0 ? " neg" : "") + '">' +
+      (diff > 0 ? "+" : "−") + fmt(Math.abs(diff)) + " pts</td>" +
+      "<td>" + (r.verdict === "heuristic wins"
+        ? '<span class="tag warn">heuristic wins</span>'
+        : r.verdict === "tie" ? '<span class="tag">tie</span>' : "") + "</td>";
+    tb.appendChild(tr);
+  });
+
+  const ab = document.querySelector("#ablation-table tbody");
+  ab.innerHTML = "";
+  D.outage.ablation.forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + fmt(r.severity, 2) + "</td>" +
+      '<td class="n' + (r.delta < 0 ? " neg" : "") + '">' +
+      (r.delta > 0 ? "+" : "−") + fmt(Math.abs(r.delta), 3) + " pts</td>" +
+      '<td class="n">' + fmt(r.two_se, 3) + "</td>" +
+      "<td>" + (r.significant
+        ? '<span class="tag warn">significant</span>'
+        : '<span class="tag">not significant</span>') + "</td>";
+    ab.appendChild(tr);
+  });
+
+  const arm = S.outage ? D.outage.arms.detect_and_pause : D.outage.arms.detect_only;
+  const o = D.outage.arms.detect_only, p = D.outage.arms.detect_and_pause;
+  $("outage-arms").innerHTML = "Detecting without acting caught <b>" +
+    o.entered_in_window + " of " + D.outage.total_windows + "</b> windows. " +
+    "Detecting <em>and pausing</em> caught <b>" + p.entered_in_window + "</b> — " +
+    "pausing removes the attempts the test is computed over, so the detector " +
+    "starves itself of its own evidence.";
+
+  const tt = document.querySelector("#trans-table tbody");
+  tt.innerHTML = "";
+  arm.transitions.filter((t) => t.edge.endsWith("->OUTAGE")).forEach((t) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>day " + t.day + ", " + String(t.hour).padStart(2, "0") + ":00</td>" +
+      '<td class="n">' + t.n_attempts + "</td>" +
+      '<td class="n">' + t.n_tech + "</td>" +
+      '<td class="n">' + t.p_value.toExponential(1) + "</td>" +
+      "<td>" + (t.in_window
+        ? '<span class="tag">real outage</span>'
+        : '<span class="tag warn">false alarm</span>') + "</td>";
+    tt.appendChild(tr);
+  });
+
+  const pb = $("pool-bars");
+  pb.innerHTML = "";
+  D.pooling.detection.forEach((r, i) => {
+    const on = S.pooled ? i === 0 : i === 2;
+    const div = document.createElement("div");
+    div.className = "bar" + (on ? "" : " dim");
+    div.innerHTML = '<div class="lab">' + esc(r.label) + "</div>" +
+      '<div class="track"><div class="fill" style="width:' + (r.rate * 100) +
+      '%;' + (on ? "" : "opacity:.45") + '"></div></div>' +
+      '<div class="val">' + fmt(r.rate, 2) + "</div>";
+    pb.appendChild(div);
+  });
+
+  const vt = document.querySelector("#vol-table tbody");
+  vt.innerHTML = "";
+  D.pooling.volume.forEach((r) => {
+    const tr = document.createElement("tr");
+    if (r.n === 100) tr.className = "hl";
+    tr.innerHTML = "<td>" + r.n + "</td>" +
+      '<td class="n">' + fmt(r.pooled, 1) + "</td>" +
+      '<td class="n">' + fmt(r.single, 2) + "</td>" +
+      "<td>" + (r.single < D.pooling.min_attempts
+        ? '<span class="tag warn">below the floor of 8</span>' : "") + "</td>";
+    vt.appendChild(tr);
+  });
+}
+
+/* -------------------------------------------------------------------- play */
+function play() {
+  clearInterval(S.timer);
+  const h = D.hero;
+  S.day = h.cycle_start - 1;
+  S.timer = setInterval(() => {
+    S.day++;
+    if (S.day > h.cycle_end - 1) {
+      clearInterval(S.timer);
+      S.day = null;
+      render();
+      return;
+    }
+    render();
+  }, 210);
+}
+
+function render() { drawHero(); drawLog(); drawReadouts(); drawTables(); }
+
+function press(onId, offId, on) {
+  $(onId).setAttribute("aria-pressed", String(on));
+  $(offId).setAttribute("aria-pressed", String(!on));
+}
+
+fetch("data/scenarios.json")
+  .then((r) => r.json())
+  .then((data) => {
+    D = data;
+    const h = D.hero;
+    $("h-payday").textContent = h.payday;
+    $("h-due").textContent = h.due_day;
+    $("h-uid").textContent = h.uid;
+    $("s-agent").textContent = fmt(D.batch.agent) + "%";
+    $("s-rival").textContent = fmt(D.batch.payday_wait) + "%";
+
+    $("c-err").addEventListener("input", (e) => {
+      S.err = +e.target.value; play();
+    });
+    $("o-on").addEventListener("click", () => {
+      S.outage = true; press("o-on", "o-off", true); render();
+    });
+    $("o-off").addEventListener("click", () => {
+      S.outage = false; press("o-on", "o-off", true);
+      press("o-off", "o-on", true); render();
+    });
+    $("p-all").addEventListener("click", () => {
+      S.pooled = true; press("p-all", "p-one", true); render();
+    });
+    $("p-one").addEventListener("click", () => {
+      S.pooled = false; press("p-one", "p-all", true); render();
+    });
+
+    render();
+    play();
+  })
+  .catch((err) => {
+    document.querySelector(".wrap").insertAdjacentHTML("afterbegin",
+      '<div class="panel"><p class="small" style="margin:0">Could not load ' +
+      '<code>data/scenarios.json</code>. Regenerate it with ' +
+      '<code>python scripts/build_page_data.py</code>.</p></div>');
+    console.error(err);
+  });
+</script>
+</body>
+</html>

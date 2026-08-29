@@ -396,11 +396,52 @@ over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
 | `test_decline_sweep.py` | **added 29 Aug 2026.** What a richer decline taxonomy costs the frozen policy, and whether a bank-shaped outage is invisible to a monitor that pools banks. 2/2 pre-registered. Every rate is `[GUESS]` and swept. |
 | `eval/run_eval.py` | **added 29 Aug 2026.** 40 registered cases + 7 taxonomy cases + 3 injection cases; deterministic arms always, `glm-5.3-flash` with a `glm-5.3` judge under `--llm --judge`. **Measured** - section 7 and `02_RESULTS.md`. |
 | `test_detection_benchmark.py` | **added 29 Aug 2026.** Excess loss against a clairvoyant detection oracle, decomposed into delay / missed / dropout / late resumption / false alarms. Three gates, four crippled oracles as **window transforms rather than code branches**, all four caught, none by every gate. **G-1b is deliberately RED** — it found a defect in its own hours-based loss and is kept visible rather than repaired. See `02_RESULTS.md`. |
+| `test_razorpay_mapping.py` | **added 29 Aug 2026.** Eight gates over the SECOND executor backend, all offline and keyless: Razorpay's 110 published `error_reason` values all map to a family (**and no mapped key was invented — that check found one, error 24**), the two dangerous families route the dangerous way, a transport failure returns `pending` rather than a fabricated decline, the idempotency key is deterministic per money action, Stage 0 refuses a peak-hour debit against the real client with **zero network calls**, `SimExecutor` still never sets `pending` (which is what keeps the parity gate honest), and the Payment Downtime feed parses. 44/44. Every gate names a mutant. |
 
 Run them from the repo root with the interpreter named in `CLAUDE.md`. None of
 them is part of `sim/gate.py`'s 25-gate suite, and none of their numbers is
 gate-protected in the `--tier full` sense. Quote them the way the numbers rule
 requires: name the script, say "not gate-protected".
+
+### 6b-2. THE SECOND EXECUTOR BACKEND. Added 29 August 2026.
+
+`agent/ports.py` declares one method — `attempt(ref, amount, t) -> AttemptOutcome`.
+`SimExecutor` implements it against the frozen simulation;
+`RazorpayExecutor` implements it against Razorpay's live API. **The loop, the
+belief, Stage 0, the auditor and the audit trail are unchanged either way**,
+because gate I2 already forbids every one of them from importing
+`agent.execution` at all. The switch is one argument in `agent/batch.py`:
+`run_once(..., executor=RazorpayExecutor(...))`.
+
+⚠️ **NOTHING IN IT HAS EVER TALKED TO RAZORPAY.** No API key has been used by
+this project and no request has ever been sent. The request shapes come from
+their public documentation, read 29 August 2026 and recorded in `01_FACTS.md`.
+Every unverified line is marked `# UNVERIFIED` at the line. **A doc-derived
+request body that has never received a 200 is a hypothesis**, and the gates
+below deliberately do not touch it.
+
+| what | state |
+|---|---|
+| the reason -> family map, 110 values | **gated offline**, `test_razorpay_mapping.py` R1-R3 |
+| a lost response becomes `pending`, never a decline | **gated**, R4 |
+| deterministic idempotency key per money action | **gated**, R5 |
+| Stage 0 refuses before the executor is reached, zero network | **gated**, R6, and demonstrated end to end by `scripts/prove_stage0_refuses.py` |
+| `SimExecutor` unaffected by the `AttemptOutcome` change | **gated**, R7, and parity is still **bit-exact 24/24** |
+| the Payment Downtime feed parses and normalises | **gated**, R8 |
+| whether Razorpay accepts our request body | **UNTESTED** |
+| whether test mode returns populated `error_reason` values | **UNTESTED** |
+| whether the Downtime feed is seeded in test mode | **UNTESTED** |
+| the pre-debit notification call | **DESIGNED, WIRED TO NOTHING.** `RazorpayExecutor.notify()` raises `NotImplementedError` on purpose — wiring it needs a change to `Stage0Gate`, and "Stage 0 is unchanged when the backend changes" is the claim the whole file rests on |
+
+**`AttemptOutcome` gained two optional fields** and both default to the old
+behaviour: `pending` (the rail did not tell us whether the debit happened) and
+`raw_code` (the vendor's own string, for the trail). Real UPI has a pending
+state and a `bool` cannot express it; rounding an unknown down to "failed" is
+the reading that licenses a retry, and a retry on an unknown is a double debit.
+`SimExecutor` sets neither, R7 asserts that rather than assuming it, and
+**`test_parity_vs_harness.py` was re-run after the change and is still
+bit-exact 24/24 at pe1/pe7, fitted and unfitted.** So a modelling fix the real
+rail genuinely needs cost nothing gated.
 
 ### 6c. `NOTIFICATION_CANCELLED` - do not remove it
 

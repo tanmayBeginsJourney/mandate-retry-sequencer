@@ -1,11 +1,13 @@
-# 03 — THE TWENTY-THREE ERRORS
+# 03 — THE TWENTY-SIX ERRORS
 
 **Errors 1-18 all made the project look BETTER than it was.** Errors 19-23,
 added 29 August 2026, break the streak: 19 and 23 were latent defects that had
 not yet flattered anything, and 20 was a decision taken for unrelated reasons
-that then moved a headline six points in the flattering direction. Read all of
-them before you optimise anything, because they are the shapes you will
-reintroduce.
+that then moved a headline six points in the flattering direction. **Errors
+24-26, added later the same day while building the Razorpay backend, resume
+it — all three made something look better than it was, and 25 flattered a
+COMPLIANCE claim.** Read all of them before you optimise anything, because
+they are the shapes you will reintroduce.
 
 They are also the strongest asset for the panel, who explicitly ask what broke
 and how you recovered.
@@ -646,12 +648,176 @@ rejected on time, both recorded.
 
 ---
 
-## The tally after twenty-three
+# Errors 24-26 — found 29 August 2026, building the Razorpay backend
+
+Three more. **24 and 26 made the project look better than it was; 25 made a
+COMPLIANCE claim look better than it was**, which is the most expensive of the
+three because that claim is on the front of the batch report.
+
+All three were found in a single afternoon of building an integration against a
+vendor's published documentation, and all three are the same underlying move:
+**asserting something about a thing we had not read.**
+
+---
+
+**24. A coverage check that could not see an invented entry.**
+
+`agent/ports.py:REASON_FAMILY` maps Razorpay's published `error_reason` values
+onto our decline families. Gate **R1a** in
+`agent/tests/test_razorpay_mapping.py` checks that every reason in Razorpay's
+published list has a family, against `agent/execution/razorpay_reasons.txt` —
+their list, committed verbatim.
+
+R1a passed. The map contained **`deemed_transaction_unknown`**, which appears
+**nowhere in Razorpay's list**. It was typed while writing the table and sat
+there, in a structure whose docstring cites a primary source, indistinguishable
+from the 110 entries that are real.
+
+*Mechanism:* R1a tests one direction of a two-directional relationship. "Every
+reason of theirs is covered by ours" and "every entry of ours came from theirs"
+are **different claims**, and only the first had a check. A gate named for a
+property — "the map is complete" — that tests completeness and not provenance.
+That is error 9's shape and error 13's shape: a gate named after a concept
+rather than after the object it is supposed to constrain.
+
+The rule this violates was already written down. Rule 4 says an untagged
+factual claim is a rumour and must not go in code comments. A fabricated
+identifier inside a table sourced to a document is a rumour that has been given
+a citation, which is worse than an untagged one — it *looks* checked.
+
+*Guard:* gate **R1b** computes `set(REASON_FAMILY) - set(published)` and fails
+on anything left over. It found the invented key on its first run. Legitimate
+extras — there is exactly one, and it exists because Razorpay's own spreadsheet
+contains the typo `psp_app_ not_available` with a space in it — must be
+declared in `ports.KNOWN_EXTRA_KEYS` **with a written reason**, and **R1b2**
+fails if a declared extra has no reason. That list is debt in the same sense as
+`sim/known_failures.txt`: adding a line to silence R1b is the same offence as
+loosening a threshold.
+
+> **New rule: a check that one set covers another is not a check that the two
+> sets are the same.** If a table claims a source, test both directions.
+
+---
+
+**25. "The gate and the auditor agree" is a tautology in the only regime anyone
+ever observes it.**
+
+This is the important one, because it is about a claim that is **on the front
+page of the deliverable** and in `00_HANDOFF.md`'s headline block.
+
+`python -m agent.batch_report` prints, per Stage 0 rule:
+
+```
+                   arm        rule  gate refused  auditor found  agree?
+  agent, deterministic        peak             0              0     yes
+                             TOTAL             0              0     yes   over 4511 executed money actions
+```
+
+and `02_RESULTS.md` presents it as the two-implementation cross-check:
+`auditor.py` may not import `rules.py` or `stage0.py`, gate I3 enforces that,
+so agreement is supposed to be evidence.
+
+**The two columns are not the same quantity.** `Stage0Gate.refusals` counts
+what the gate **stopped**. `auditor.replay` counts violations that **actually
+happened**, re-derived from the log. In a clean run both are zero — but they
+are zero for *unrelated reasons*: the gate refused nothing because nothing
+illegal was proposed, and the auditor found nothing because nothing illegal
+occurred. **Two numbers that are both zero because the world was quiet are not
+two implementations agreeing.**
+
+Found by accident. `scripts/prove_stage0_refuses.py` deliberately submits a
+peak-hour debit, so the gate refuses three times (`peak` at issue, `peak` and
+`pending` at dispatch) and the auditor still reports zero. The first draft of
+that script printed **"The two agree"** directly underneath `{peak: 2,
+pending: 1}` and `{all zero}` — a caption written before its own output was
+read. That is error 14's shape exactly: a confident sentence sitting under a
+number that contradicts it.
+
+*Mechanism:* a cross-check whose two sides are only comparable **when the
+enforcer has already failed**, presented in a display where the enforcer never
+fails. The auditor's power is real — it caught the `NOTIFICATION_CANCELLED`
+hole when the gate said 0 and it said 45/112/182, and it was right — but that
+power is only exercised in the failing regime, and nothing in the normal output
+says so. A reader is invited to read "0, 0, agree" as corroboration when it is
+a pair of unrelated zeros.
+
+*What is NOT wrong:* the architecture. The auditor genuinely shares no code
+with the enforcer, I3 genuinely enforces it, and
+`test_stage0_enforces.py` Half B genuinely injects illegal actions below the
+gate and catches all five. **The defect is in what the numbers are said to
+mean, not in what the code does.**
+
+*Guard:* `prove_stage0_refuses.py` now has a fourth step that moves money
+**below** the gate — writing exactly the rows the gate writes on success,
+touching no counter — and shows the auditor finding it from the log alone
+(`peak: 1`). The script states the distinction in its own output. `README.md`
+and this entry state it in prose.
+
+⚠️ **STILL OPEN, DELIBERATELY.** `agent/batch_report.py` still prints
+`agree? yes` over two zeros. Fixing the wording is a five-minute change and it
+has **not been made**, because the honest fix is not a rename — it is deciding
+what that panel should show when nothing illegal happened, and that is a
+judgement about the deliverable rather than a typo. Written down rather than
+quietly patched.
+
+> **New rule: before presenting two numbers as a cross-check, state the regime
+> in which they could differ, and check that the display is ever in it.**
+
+---
+
+**26. Asserted a competitor's product had a limitation, without reading their
+documentation.**
+
+The outage argument was drafted as: *their* downtime feed is system-wide, *our*
+detector is bank-shaped, 2026's incidents were bank-shaped while NPCI reported
+the system healthy, therefore we see what they cannot.
+
+**Razorpay's Payment Downtime API is not system-wide.** Its `instrument` object
+carries `vpa_handle` — `oksbi`, `ybl` — the **same handle vocabulary** as
+`ports.BANK_HANDLES`, and reports `ALL` only when the whole of UPI is affected.
+There are `payment.downtime.started` / `.updated` / `.resolved` webhooks, it is
+available with test keys, and they document it plainly. **They already publish
+bank-scoped downtime.** `[VERIFIED]`, `01_FACTS.md`.
+
+*Mechanism:* **error 1, in a new costume.** Error 1 was quoting the wrong
+payment rail's retry schedule by pattern-matching a familiar shape instead of
+reading the rail-specific document. This is the same move applied to a
+competitor's feature list: a plausible limitation, asserted because it made our
+moat argument work, about a product whose documentation is public and was not
+opened. The guard that came out of error 1 — "every constraint traces to a
+rail-specific source in `01_FACTS.md`" — covers *constraints* and never
+covered *competitive claims*, which had no tagging discipline at all.
+
+*What survives, and it is narrower:* their feed measures **their** traffic mix
+(their `flow` field enumerates `collect` / `intent` / `in_app`, and nothing in
+their documentation says AutoPay mandate execution is what is being measured,
+while 99.22% of our attempts land in one hour of the day); `severity` is a
+three-valued label and not a rate a scheduler can act on; **a PSP is marked
+down only when every handle under it is down**, which is their words and is a
+conservative trigger appropriate to a status page and wrong for an actuator;
+and we have a measured detection latency and a measured false-alarm rate where
+theirs is unstated. The posture is **complement, not replacement**, and the
+obvious combined design — their feed as a prior, ours as the likelihood — is
+**not built and not measured.**
+
+*Guard:* retracted in `01_FACTS.md` under RETRACTIONS. The four surviving
+differences are written into `agent/execution/razorpay_downtime.py`'s module
+docstring in the form that can be checked against their docs, and
+`agrees_with()` deliberately returns a **label and not a score**, because
+turning agreement between two imperfect detectors of two different populations
+into an accuracy would be inventing evidence.
+
+> **New rule: a claim about someone else's product is a factual claim and needs
+> a source tag like any other.** `01_FACTS.md` now carries them.
+
+---
+
+## The tally after twenty-six
 
 The seven guardrails that measured nothing are unchanged (`assert violations
 == 0`; peak hours unrepresentable; oracle approval ~100%; **M1**; **M4**; the
-loop-order mutant; **E-DET-2/3**). Errors 17-23 add four more shapes that are not
-vacuous gates:
+loop-order mutant; **E-DET-2/3**). Errors 17-26 add these shapes, none of which
+is a vacuous gate:
 
 | shape | instance |
 |---|---|
@@ -662,10 +828,25 @@ vacuous gates:
 | one quantity derived twice, in two places, disagreeing | **21** (judge count) |
 | a component validated cheaply and deployed exhaustively | **22** (119,667 calls) |
 | a checker written by the party that wrote the thing checked | **23** (governance) |
+| a set-coverage check standing in for a provenance check | **24** (invented code) |
+| a cross-check whose two sides can only differ in a regime the display never enters | **25** (gate vs auditor) |
+| a claim about someone else's product, asserted rather than read | **26** (downtime feed) |
 
-**The one encouraging line in this section:** error 22 was found by an
-independent checker running on a *different model family*, on its first outing,
-in the measuring apparatus — which is exactly where `CLAUDE.md` says self-audit
-is blindest. The two-implementation discipline has now caught something twice:
-once with `auditor.py` versus `Stage0Gate`, and once with GLM-5.3 versus our own
-regex list.
+**The two encouraging lines.** Error 23 was found by an independent checker
+running on a *different model family*, on its first outing, in the measuring
+apparatus — which is exactly where `CLAUDE.md` says self-audit is blindest.
+And errors 24 and 25 were both found by gates and scripts **written in the same
+session as the code they broke**, before anything was committed — 24 by a check
+deliberately pointed in the opposite direction to the obvious one, 25 by a demo
+built to make the enforcer fail on purpose.
+
+The two-implementation discipline has now caught something three times:
+`auditor.py` versus `Stage0Gate`, GLM-5.3 versus our own regex list, and R1b
+versus R1a.
+
+⚠️ **And the count is still the point.** Twenty-six errors, and **the ones
+found by an outsider or by a deliberately adversarial check are consistently
+the ones a careful self-audit missed.** Errors 11-13 came from an outside
+reader with `docs/` and half a day. Error 23 came from a different model.
+Errors 24 and 25 came from checks written to disagree with their own author.
+Nothing in this list was found by re-reading code and feeling confident.

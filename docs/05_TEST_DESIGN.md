@@ -300,11 +300,13 @@ written procedure in that file.
 
 ---
 
-## The agent's gates — added 28 August 2026
+## The agent's gates — added 28 August 2026, extended 29 August
 
-`agent/tests/` holds seven gates. They are **not** part of `sim/gate.py`'s
-25-gate suite and none of their numbers is gate-protected in the `--tier full`
-sense; quote them the way the numbers rule requires, by naming the script.
+`agent/tests/` holds **twelve gate scripts**. They are **not** part of
+`sim/gate.py`'s 25-gate suite and none of their numbers is gate-protected in
+the `--tier full` sense; quote them the way the numbers rule requires, by
+naming the script. The table of what each one proves is in
+`06_MODEL_CARD.md` §6b.
 
 They are held to this document's bar: **a gate earns its place only if you can
 name, in advance, a concrete broken implementation that would make it fail.**
@@ -324,3 +326,41 @@ of them, and which any new agent gate must satisfy:
 
 Two agent gates now carry explicit vacuity guards that report VACUOUS rather
 than HELD when the detector never fires.
+
+### A third rule, added 29 August 2026 after error 24
+
+`test_razorpay_mapping.py` checks that our map of Razorpay's 110 published
+`error_reason` values is complete. It passed while the map contained
+`deemed_transaction_unknown`, an identifier that appears **nowhere** in
+Razorpay's list and was typed while writing the table.
+
+The gate could not have found it. "Every reason of theirs is covered by ours"
+and "every entry of ours came from theirs" are different claims about the same
+two sets, and only the first had a check. Adding the second — one line,
+`set(ours) - set(theirs)` — found it on the first run.
+
+> **A check that one set covers another is not a check that the two sets are
+> the same. If a table cites a source, test both directions.**
+
+This is the same shape as errors 9 and 13 — a gate named for a property rather
+than for the object it constrains — arriving in a new place for the third time.
+Legitimate exceptions go in a declared list **with a written reason per entry**,
+the way `sim/known_failures.txt` works, and a further gate fails if a declared
+exception has no reason. There is exactly one today, and it exists because
+Razorpay's own spreadsheet contains a typo.
+
+### And a fourth, from error 25
+
+`prove_stage0_refuses.py` was written to show Stage 0 refusing an illegal debit.
+It does. Its first draft also printed **"The two agree"** under a gate count of
+`{peak: 2, pending: 1}` and an auditor count of `{all zero}` — a caption written
+before its own output was read, under two numbers that are **not the same
+quantity**.
+
+> **Before presenting two numbers as a cross-check, state the regime in which
+> they could differ, and check that the display is ever in it.**
+
+A cross-check that can only disagree when the enforcer fails proves nothing in a
+run where the enforcer works. The repair is not better wording: it is a test
+that **makes the enforcer fail** and shows the other side binding. That is now
+step 4 of the script.
