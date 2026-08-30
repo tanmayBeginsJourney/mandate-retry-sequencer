@@ -181,6 +181,21 @@ def main(argv=None) -> int:
     ap.add_argument("--replay", action="store_true",
                     help="cache only; never call the network")
     ap.add_argument("--budget", type=float, default=10.0)
+    # THE DIAGNOSER'S REASONING SETTING, and the reason it is a flag.
+    # Every LLM score in this repository was produced at `low` with a
+    # 2000-token cap, and `agent/llm/client.py` says in capitals that this is a
+    # DIFFERENT MODEL CONFIGURATION from the default -- "10/21 may be a floor".
+    # Thinking cannot be disabled on these SKUs; the API answers code 1210 and
+    # names the permitted values, which is why `medium` is not one of them.
+    #
+    # Changing it changes the CACHE KEY, so a sweep genuinely re-asks the model
+    # instead of silently replaying the `low` answers. That was not true until
+    # 30 August 2026 -- see ResponseCache.key and error 31.
+    ap.add_argument("--effort", default="low", choices=("low", "high", "max"),
+                    help="diagnoser reasoning_effort. Changes the cache key, "
+                         "so a new value costs money and a repeat is free.")
+    ap.add_argument("--max-tokens", type=int, default=2000,
+                    help="diagnoser completion cap. Also part of the cache key.")
     a = ap.parse_args(argv)
 
     cases = load_cases()
@@ -194,12 +209,21 @@ def main(argv=None) -> int:
           "and the baseline share one author.")
     print("=" * 108)
 
+    if a.llm and (a.effort != "low" or a.max_tokens != 2000):
+        print("")
+        print(f"  !! NON-DEFAULT DIAGNOSER CONFIGURATION: "
+              f"reasoning_effort={a.effort}, max_tokens={a.max_tokens}.")
+        print("     Every published LLM number in this repo is at low/2000.")
+        print("     These results are NOT comparable to them unless the")
+        print("     comparison is the point, and they get their own cache key.")
+
     budget = Budget(limit_usd=a.budget)
     arms = {"RuleBasedDiagnoser": RuleBasedDiagnoser()}
     model_diag = None
     if a.llm:
         client = ZaiClient(model=DIAGNOSER_MODEL, cache=_cache(DIAGNOSER_MODEL),
-                           budget=budget)
+                           budget=budget, reasoning_effort=a.effort,
+                           max_tokens=a.max_tokens)
         if a.replay:
             client.api_key = ""          # cache or fail. Never the network.
         model_diag = ModelDiagnoser(client=client)

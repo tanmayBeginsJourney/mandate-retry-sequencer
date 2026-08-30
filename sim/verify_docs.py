@@ -61,6 +61,7 @@ MARKERS = (
     "no longer true", "was false", "are now false", "is now false",
     "kept as the record", "kept struck through", "was wrong", "overclaim",
     "used to", "earlier revision", "previously", "until 30 aug",
+    "refuted", "does not survive", "claim under test",
     "until 30 august", "fixed 30 aug", "fixed 30 august", "✅",
     # rule 6 of CLAUDE.md quotes the retired numbers in order to ban them
     "is **dead**", "retired number", "never quote", "stale text",
@@ -201,6 +202,28 @@ RETRACTIONS = [
         retracted_on="2026-08-30",
     ),
     Retraction(
+        id="llm-score-is-a-floor",
+        pattern=r"10/21 may be a floor|may be a floor|scores? .{0,20}may be a floor",
+        why="SWEPT 30 Aug 2026. `low` is the BEST of the three permitted "
+            "settings on the ambiguous set: 10/21 low, 7/21 high, 9/21 max "
+            "(and max's row is the rule engine -- 32 of 50 calls hit the token "
+            "cap and fell back). 10/21 is not a floor. The sharper caveat that "
+            "replaced it: at `high` the model LOSES to the rule engine.",
+        retracted_on="2026-08-30",
+    ),
+    Retraction(
+        id="nothing-to-diagnose",
+        pattern=r"nothing (in the world )?to diagnose"
+                r"|because there is nothing to diagnose",
+        why="TESTED 30 Aug 2026 and refuted. With the decline taxonomy ON and "
+            "terminal codes everywhere, the LLM arm is 87.39% against the "
+            "deterministic 88.54% -- behind, not ahead. It is not a sufficient "
+            "explanation for the flat result. What IS true: the 150-call cap "
+            "leaves the arm 93.3% fallback, so the test cannot detect a small "
+            "effect either way.",
+        retracted_on="2026-08-30",
+    ),
+    Retraction(
         id="w7-moves-three-targets",
         pattern=r"mov(es|e) three validation targets"
                 r"|three validation targets at once",
@@ -271,6 +294,8 @@ def selftest() -> int:
         "readme-150-lines": "README.md the front door. Under 150 lines, on purpose.",
         "stale-error-count": "There are twenty-seven errors in this project.",
         "both-misses-one-cause": "Both misses share one cause, which is insolvency.",
+        "llm-score-is-a-floor": "Every score is at low and 10/21 may be a floor.",
+        "nothing-to-diagnose": "The LLM does not move the money because there is nothing to diagnose.",
         "w7-moves-three-targets": "W7 is the only item that moves three validation targets.",
     }
     print("SELFTEST -- every rule must fire on a sentence it is meant to catch")

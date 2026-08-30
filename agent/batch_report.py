@@ -82,11 +82,31 @@ def main(argv=None) -> int:
     ap.add_argument("--llm-max-calls", type=int, default=150,
                     help="hard cap on NETWORK calls per run. Cache hits are "
                          "free and do not count. See the note this prints.")
+    # W5 / queue item 7. The headline batch runs the decline taxonomy at ZERO,
+    # so every failure is insufficient funds and there is nothing to diagnose --
+    # which is the standing explanation for why the LLM arm does not move the
+    # money. This turns it on so that explanation can be TESTED instead of
+    # repeated. Rates are the mid combined cell from
+    # agent/tests/test_decline_sweep.py; every one is a [GUESS] and is swept
+    # there, never picked. It is OFF by default: turning it on changes the
+    # headline, and that is a decision about the deliverable, not a flag.
+    ap.add_argument("--declines", action="store_true",
+                    help="run with the richer decline taxonomy on. NOT the "
+                         "published configuration -- the headline is measured "
+                         "with every rate at zero.")
     a = ap.parse_args(argv)
     pops = POPS[:max(1, min(a.pops, len(POPS)))]
 
     base = dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
                 time_major=True)
+    if a.declines:
+        base["decline_kw"] = dict(p_account_shut=0.03, p_mandate_broken=0.02,
+                                  p_limit=0.05, p_ambiguous=0.15)
+        print("")
+        print("  !! DECLINE TAXONOMY ON. This is NOT the published headline")
+        print("     configuration, which runs every rate at zero. Rates are")
+        print("     the `mid` cell of the sweep in test_decline_sweep.py and")
+        print("     every one is a [GUESS].")
     arms = {"agent, deterministic": dict(base, mode="full")}
     if a.llm:
         arms["agent, LLM overlay"] = dict(base, mode="full", use_llm=True,
@@ -263,10 +283,22 @@ def main(argv=None) -> int:
     print("  * No real data. Every figure is simulation; no Razorpay")
     print("    transaction, mandate or decline code has ever been seen.")
     print("  * Conditional on payday_err=7. At +/-1 day payday_wait wins.")
-    print("  * The decline taxonomy is OFF here (every rate 0), so this is the")
-    print("    world without frozen accounts, broken mandates or limit hits.")
-    print("    With p_limit swept 0.00/0.05/0.15 the cost is")
-    print("    0.00 / -2.87 / -13.46 pts and every rate is a [GUESS].")
+    # THIS CAVEAT WAS PRINTED UNCONDITIONALLY AND `--declines` MADE IT FALSE.
+    # Found within minutes of adding the flag, 30 August 2026: a run WITH the
+    # taxonomy on still announced that the taxonomy was off. A hardcoded
+    # caveat is a claim, and a new flag can turn a claim into a lie.
+    if a.declines:
+        print("  * The decline taxonomy is ON here, which is NOT the published")
+        print("    configuration. Frozen accounts, broken mandates, limit hits")
+        print("    and ambiguous codes are all live at rates that are every one")
+        print("    a [GUESS], taken from the `mid` cell of the sweep in")
+        print("    agent/tests/test_decline_sweep.py. Do not compare this")
+        print("    number to the headline.")
+    else:
+        print("  * The decline taxonomy is OFF here (every rate 0), so this is the")
+        print("    world without frozen accounts, broken mandates or limit hits.")
+        print("    With p_limit swept 0.00/0.05/0.15 the cost is")
+        print("    0.00 / -2.87 / -13.46 pts and every rate is a [GUESS].")
     print("  * 8 populations, one run seed each. Not a large study.")
     return 0
 

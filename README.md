@@ -277,6 +277,15 @@ clean cases, which is what thirty lines of if-else are for. So it runs as an
 **overlay over the rule engine**, never a replacement: any failure falls back,
 and the row records which answered.
 
+**The top row survived a sweep of the model's reasoning setting and the middle
+row did not.** Every score above is at `reasoning_effort=low`; re-running at
+`high` and `max` gives **4/4 terminal at all three settings**, so the reason for
+having a model here does not depend on a configuration choice. The ambiguous
+row does: at `high` the model scores 7/21 and the rule engine wins. A one-case
+margin on twenty-one cases was never strong evidence, and the sweep is why that
+is stated rather than assumed —
+[`docs/02_RESULTS.md`](docs/02_RESULTS.md). It cost $0.17.
+
 The batch calls it under a hard cap on live network calls, with cached
 responses free. That is the intended shape — rules handle the routine, the
 model handles the novel — and it means the headline number does not depend on

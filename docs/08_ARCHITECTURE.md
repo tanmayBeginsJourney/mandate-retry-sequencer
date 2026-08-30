@@ -218,7 +218,7 @@ The model earns its place on **terminal decline codes**: a frozen account or a
 revoked mandate, where no retry can ever succeed and the index rule has no slot
 for the fact.
 
-**It does not move the batch money: 94.33% against the deterministic 94.36%.**
+**It does not move the batch money: 94.33% against the deterministic 94.36%** — and that survived the obvious explanation. Switching the richer decline taxonomy on, so terminal codes exist everywhere, leaves it at **87.39% against 88.54%**: still not ahead. What it does instead is stop twice as often and kill fewer mandates, trading collection for survival.
 And the loop asks for a diagnosis 119,667 times over a four-population batch,
 against a hard cap of 120 live calls per run, so **the batch's model arm is
 about 95% deterministic**. That is the design, not a workaround, and it is why

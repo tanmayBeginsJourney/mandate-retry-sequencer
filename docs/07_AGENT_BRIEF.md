@@ -605,6 +605,9 @@ that bound every LLM number: `06_MODEL_CARD.md` section 7.**
    these SKUs (the API answers code `1210`); at the default the diagnoser emitted
    1,596 completion tokens for an answer whose schema holds about eighty, and
    timed out. **Every score is for that setting and 10/21 may be a floor.**
+
+✅ **SWEPT 30 August 2026, and the caveat pointed the WRONG WAY.** `low` is the BEST of the three permitted settings on the ambiguous set: **10/21 at `low`, 7/21 at `high`, 9/21 at `max`** — and `max`'s row is the rule engine, because 32 of 50 calls hit the token cap and fell back. **10/21 is not a floor.** What IS invariant across all three settings is the terminal-code result, 4/4 against the rule engine's 0/4, which is the claim the LLM layer actually rests on. ⚠️ **And the marginal claim is not robust: at `high` the model LOSES to the rule engine on ambiguous cases, 7/21 against 9/21.** `02_RESULTS.md`, the reasoning_effort sweep.
+
    First thing to sweep.
 2. **The LLM cannot be called at every decision point.** The loop asks for a
    diagnosis once per live mandate per decision hour - **119,667 times** over a

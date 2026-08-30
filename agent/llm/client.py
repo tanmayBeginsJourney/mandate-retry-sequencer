@@ -206,9 +206,49 @@ class ResponseCache:
             with open(path, encoding="utf-8") as fh:
                 self.data = json.load(fh)
 
+    #: The settings the committed caches were recorded at. Entries written at
+    #: these values keep the THREE-FIELD key so the existing cache -- 385 + 80
+    #: paid responses -- stays valid and `--replay` keeps reproducing the
+    #: published numbers byte-identically. Anything else gets a longer key.
+    LEGACY_EFFORT, LEGACY_MAX_TOKENS = "low", 2000
+
     @staticmethod
-    def key(prompt_id: str, case_hash: str, model: str) -> str:
-        return f"{model}|{prompt_id}|{case_hash}"
+    def key(prompt_id: str, case_hash: str, model: str,
+            reasoning_effort: str = LEGACY_EFFORT,
+            max_tokens: int = LEGACY_MAX_TOKENS) -> str:
+        """THE KEY MUST NAME EVERY INPUT THAT CHANGES THE ANSWER.
+
+        ⚠️ IT DID NOT UNTIL 30 AUGUST 2026, AND THAT WAS A DEFECT WITH TWO
+        SEPARATE FAILURE MODES. `reasoning_effort` and `max_tokens` go into the
+        request body and change what the model returns -- this module's own
+        docstring says so in capitals, *"a reasoning model on its lowest
+        reasoning setting may well answer worse than the same model on high"*.
+        Neither was in the key.
+
+        So a sweep of `reasoning_effort`, which `docs/00_HANDOFF.md` calls the
+        first thing to measure, would have:
+
+          1. **hit the `low` cache and silently returned the `low` answers**,
+             reporting "effort makes no difference" -- a false negative
+             produced by the measuring apparatus, which is the shape of errors
+             11-13; or
+          2. **written `high` answers under the `low` key**, so committing the
+             cache would quietly change what `--replay` reproduces and break
+             the byte-identical-offline claim the whole eval rests on.
+
+        The first is worse, because it looks like a result.
+
+        Backward compatibility is deliberate, not accidental: at the recorded
+        settings the key is unchanged, so every existing entry still hits. A
+        different setting produces a different key and therefore a cache MISS,
+        which is exactly what it should do -- the same discipline `prompt_id`
+        already had.
+        """
+        base = f"{model}|{prompt_id}|{case_hash}"
+        if (reasoning_effort == ResponseCache.LEGACY_EFFORT
+                and max_tokens == ResponseCache.LEGACY_MAX_TOKENS):
+            return base
+        return f"{base}|{reasoning_effort}|{max_tokens}"
 
     def get(self, k: str):
         v = self.data.get(k)
@@ -271,7 +311,8 @@ class ZaiClient:
 
     def complete(self, *, system: str, user: str, prompt_id: str,
                  case_hash: str, schema: dict | None = None) -> LLMResult:
-        ck = ResponseCache.key(prompt_id, case_hash, self.model)
+        ck = ResponseCache.key(prompt_id, case_hash, self.model,
+                               self.reasoning_effort, self.max_tokens)
         if self.cache is not None:
             hit = self.cache.get(ck)
             if hit is not None:

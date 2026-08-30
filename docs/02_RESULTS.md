@@ -1157,8 +1157,16 @@ did not finish in thirty minutes.
 So every request sends `reasoning_effort="low"` with a 2,000-token cap.
 **"The LLM scored X" means "GLM-5.3-Flash at `reasoning_effort=low` scored X".**
 A reasoning model on its lowest setting may well answer worse than the same
-model on `high` or `max`. **That sweep has NOT been run and every score below
-may be a floor.** It is the first thing to measure next.
+model on `high` or `max`. ~~**That sweep has NOT been run and every score below
+may be a floor.**~~
+
+✅ **SWEPT 30 August 2026 — see "The reasoning_effort sweep" below. The caveat
+pointed the WRONG WAY: `low` is the best of the three settings on the ambiguous
+set, so 10/21 is not a floor.** But the sweep replaced it with a sharper
+caveat: at `high` the model **loses** to the rule engine on ambiguous cases,
+7/21 against 9/21, so the one-case margin the section below leads with is not
+robust to a configuration change. The terminal-code result, 4/4 against 0/4,
+**is** invariant across all three settings.
 
 ## The diagnosis eval
 
@@ -1637,10 +1645,124 @@ action ablation already said — the whole channel is mandate-death prevention,
 worth +1.371 pts — and the LLM does not add to it. Where it adds is terminal
 decline codes, and those are switched off in this batch.
 
+
+
+### W5 — the decline taxonomy on, and the LLM still does not move the money
+
+Added 30 August 2026. *n=100, k=5, 4 held-out populations, 120 days,
+`payday_err=7`, `pop_spend=1.05`, full mode, `llm_max_calls=150` per run.
+**Not gate-protected.** Reproduce with*
+`python -m agent.batch_report --pops 4 --declines --llm`. *Transcript:
+`logs/w5_declines_llm.txt`. Decline rates are the `mid` cell of
+`test_decline_sweep.py`; every one is a `[GUESS]`.*
+
+| arm | cycles collected | ₹ recovered | survival | 2 SE |
+|---|---|---|---|---|
+| `payday_wait` | 57.70% | — | 60.75% | |
+| agent, deterministic | **88.54%** | ₹5,604,560 | 94.80% | 1.52 |
+| agent, LLM overlay | **87.39%** | ₹5,547,590 | **95.05%** | 2.67 |
+
+*The same batch with the taxonomy OFF collects 94.36%. Turning it on costs
+5.82 points.*
+
+**The claim under test.** Four documents said the LLM arm does not move the
+batch money *because the taxonomy is off and there is nothing to diagnose*.
+**Tested, and refuted:** with terminal codes everywhere the LLM arm is
+**1.15 points behind**, not ahead. The 2 SE bands overlap, so the honest
+reading is "indistinguishable, point estimate slightly negative" — but the
+prediction was +0.3 or better and W5-2 broke.
+
+**What the arm did differently is more interesting than the score.**
+
+| | deterministic | LLM overlay |
+|---|---|---|
+| `COLLECTED` | 5769 | 5689 |
+| `MANDATE_DEAD` | 104 | **99** |
+| `AGENT_STOP` | 15 | **33** |
+| survival | 94.80% | **95.05%** |
+
+It stops **2.2× as often** and kills fewer mandates: it trades collection for
+mandate survival. The metric already prices mandate death — a dead mandate
+forfeits its remaining cycles — and the trade still scores as a loss. That is
+the model being more conservative than the scoring rule rewards, not a defect.
+
+#### ⚠️ THE TEST CANNOT DETECT A SMALL EFFECT
+
+**Fallback rate 93.3%.** Of 123,514 diagnoses requested, 115,217 were refused
+by the per-run cap of 150 live calls. Only **520 of 9,910 money attempts** were
+model-sourced. The LLM arm is about 95% the deterministic arm by construction,
+so this design cannot answer whether the model would move the money if it
+actually ran. Uncapped is roughly 120,000 live calls — about **$120** at the
+measured rate. That is arithmetic, not a caveat.
+
+**So the correct pair of statements is:** "there is nothing to diagnose" is
+refuted as a sufficient explanation, and "it would help if it could run" is
+untestable at this project's budget. Neither is the sentence that was in four
+documents.
+
+**How this could be biased.** One cell of a sweep reported as a result — the
+`mid` decline cell, not `low` or `high`, and a higher terminal rate would give
+the model more chances to be right. Four populations, one seed each, two
+overlapping error bars.
+
+
+## The reasoning_effort sweep — added 30 August 2026
+
+*40 registered cases + 7 taxonomy + 3 injection, `glm-5.3-flash` diagnosing,
+`glm-5.3` judging. **$0.172 spent over 180 live calls. Not gate-protected.**
+Reproduce with* `python agent/eval/run_eval.py --llm --judge --effort {low,high,max}`.
+*Transcripts: `logs/llm_effort_high.txt`, `logs/llm_effort_max.txt`.*
+
+| `reasoning_effort` | ambiguous /21 | clean /19 | terminal /4 | fell back | completion tokens (mean) | at the 2,000 cap | judge disagreements |
+|---|---|---|---|---|---|---|---|
+| **`low`** (published) | **10** | 13 | **4** | 0 | 114.2 | 0 | 19 |
+| **`high`** | **7** | 17 | **4** | 0 | 364.0 | 0 | 16 |
+| **`max`** | 9 | 19 | **4** | **32 / 50** | 1744.9 | **32** | 12 |
+| `RuleBasedDiagnoser` | 9 | 19 | 0 | — | — | — | — |
+
+### ⚠️ THE `max` ROW IS NOT A MEASUREMENT OF THE MODEL
+
+At `max`, **32 of 50 calls hit the 2,000-token cap and returned a payload the
+layer could not parse**, so they fell back to the rule engine and were scored as
+its answers. That arm reports **9/21 and 19/19** — *exactly* the
+`RuleBasedDiagnoser`'s scores. It did not beat anything; it became the
+baseline wearing the model's label, and its 19/19 is the best clean score in the
+table.
+
+**What stopped that being reported as a win is `ModelDiagnoser`'s `n_fallback`
+counter**, which prints `{"n_fallback": 32, "reasons": {"model returned a
+payload this layer could not read as a Diagnosis": 32}}` beside the score. A
+fallback that is instrumented is what makes the number legible. **`max` has not
+been fairly tested** — that needs a bigger cap and several times the spend —
+and nothing may claim it was.
+
+### What the sweep establishes
+
+1. **The claim the LLM layer rests on is invariant to the setting.** Terminal
+   decline codes score **4/4 at `low`, `high` and `max`** against the rule
+   engine's **0/4**.
+2. **The marginal claim is not robust, and it is the published one.** 10/21
+   against 9/21 is a one-case margin; at `high` the model *loses*, 7/21 against
+   9/21. The pre-registered check E-LLM-2 **broke at both new settings.**
+3. **More reasoning helps on easy cases and hurts on hard ones**: clean
+   13 → 17, ambiguous 10 → 7.
+4. **The judge agrees with the author more as effort rises** (19 → 16 → 12).
+   Either longer reasoning is more conventional, or **a judge that is itself a
+   reasoning model rewards reasoning it recognises** — a same-family effect the
+   eval's design exists to avoid. Unresolved.
+
+**Caveats.** One run per setting and these models are not deterministic, so a
+3-case difference on 21 is weak — enough to retire "10/21 is a floor", which is
+a claim about direction, and not enough to assert `low` is best.
+
+
 ## How all of this could be biased toward the answer we want
 
-* **`reasoning_effort=low`, unswept.** See the warning at the top. Every score
-  may be a floor.
+* ~~**`reasoning_effort=low`, unswept.**~~ **Swept 30 August 2026.** `low` is
+  the best of the three settings on the ambiguous set (10 / 7 / 9), so these
+  scores are not a floor. The sharper problem the sweep exposed: **the
+  ambiguous-set win is not robust** — at `high` the rule engine wins. The
+  terminal-code result is invariant.
 * **One draw per case.** `temperature=1.0`, responses cached, so every score is
   a single sample. **No score here has an error bar.**
 * **Same party** wrote the cases, the registered answers, the rubric and the

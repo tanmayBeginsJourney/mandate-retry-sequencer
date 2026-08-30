@@ -19,7 +19,7 @@ the README's Limitations section and nowhere else.
 | ~~**4**~~ | ~~**Put the validation suite on `docs/index.html`**~~ | ✅ **DONE 30 August 2026.** New section 07, *"Does this world behave like the real one?"*, with the four-row table, why two hits at one calibration are harder to arrange than one, the two misses and their two separate causes, and the fact that better-scoring calibrations were found twice and rejected both times. The old section 07 (limits) is now 08 and the nav carries a `Validation` link. Verified rendered: same figure width as the existing results section, no horizontal overflow, hit/miss tags resolve in both light and dark, no console errors. | **DONE** |
 | ~~**5**~~ | ~~**W9 — non-pooled default + consent-gating**~~ | ✅ **DONE 30 August 2026, 5/5 pre-registered.** `BeliefBook` takes `pooling` in `{all, none, consented}` plus a per-customer consent set; `"all"` is the default and parity is still bit-exact 24/24. **The cost of withholding pooling is now measured at two calibrations instead of argued:** 9.54 pts at `pop_spend=1.05`, **3.47 at 0.80**, and 4.79 / 1.48 at half consent. **The finding is that the moat is a curve in world hardness like the headline is, and every existing quotation of +9.53 was the hard-world figure missing its conditional** — now fixed in seven files. Also fixed: `run_once` stamped `policy="solo_shared_pd"` unconditionally, so a non-pooled run would have been mislabelled *in the audit trail*. | **DONE** |
 | ~~**6**~~ | ~~**Package the RUNTIME failure-recovery story**~~ | ✅ **DONE 30 August 2026.** The rubric's *"Failure Recovery: how the applicant identified system failures **at runtime** and engineered graceful fallbacks."* Nine rows — LLM→rule-engine fallback (94.8%), governance rejection, Stage 0 refusal, outage suppression, the `pending` outcome, idempotent retries, the refused-credential raise, crashed-worker detection, `LogFileNotEmpty` — now appear in **all three** places: `08_ARCHITECTURE.md`, a new README section *"When something breaks while it is running"* with the real `--mutants` output, and the public page's section 03. The framing that carries it is that **the fallback is the 95% path, not a cold branch**. | **DONE** |
-| **7** | **W5 — decline taxonomy ON by default** | Nearly free; `DeclineMix` exists and the headline batch runs it at zero. It is why the LLM does not move the money: with every failure being insufficient funds there is nothing to diagnose. **W7 raised its value** — the agent is measurably blind to a failure class it cannot name. | code exists, switched off |
+| ~~**7**~~ | ~~**W5 — decline taxonomy ON by default**~~ | ✅ **MEASURED 30 August 2026, and the reason for doing it was WRONG.** `--declines` on `batch_report`. With the taxonomy on and terminal codes everywhere, the LLM arm scores **87.39% against the deterministic 88.54%** — 1.15 points BEHIND, not ahead, though the 2 SE bands (1.52 / 2.67) overlap so it is indistinguishable from zero. **The standing explanation — "the LLM does not move the money because there is nothing to diagnose" — is refuted.** What the LLM arm does do is stop 2.2× as often and kill 5 fewer mandates, trading collection for survival. ⚠️ **And the test cannot detect a small effect:** the 150-call cap makes the LLM arm 93.3% fallback, so only 520 of 9,910 money attempts were model-sourced. An uncapped batch is ~120,000 live calls, about **$120**. **Adopting the taxonomy as the default is still a deliverable decision and has NOT been taken.** | **measured; not adopted** |
 | **8** | **The agent is blind to transient failures** | **Measured 30 August, not guessed.** It never presents on the due date, and `w3.BeliefPD.observe` takes no decline code, so a lien and an empty account give the identical posterior. It waits for payday on money already in the account — **15.1%** of transient-only cycles collected on the first legal day, **48.4%** over ten days. Fix is a design choice: let the belief condition on the decline family, or add a "re-present sooner" intervention. **Neither puts the LLM on the timing path.** | diagnosed, not built |
 | ~~**9**~~ | ~~**A doc gate**~~ | ✅ **DONE 30 August 2026, and it immediately found five more survivors.** `sim/verify_docs.py`: twelve retracted claims, each with the regex, the date, and what is true now. Two modes — **banned** in `README.md` and `docs/index.html` (a judge should not have to parse a correction), **marked** elsewhere (the record is kept on purpose). `NOTES.md` is never scanned. `--selftest` proves every rule fires on its own canary, 14/14, so the gate cannot go vacuous. Wired into `scripts/pre-commit`. | **DONE** |
 | 10 | **W6 — due dates that cluster near paydays** | **No longer "partly subsumed by W7" — W7 measured V7 and did not move it** (42.78% at best against 41.84%). W6 is one of V7's two remaining causes. | specced below |
@@ -27,7 +27,7 @@ the README's Limitations section and nowhere else.
 | 12 | **W8 — the two Razorpay decline states** | `funds_blocked_by_mandate` and `deemed_transaction` are routed by the diagnosis layer and modelled by nothing. Add to `DeclineMix` at swept rates. | not started |
 | 13 | **The agent forfeits the due date** | Actionable only from day T and needs 24h notice, so it can never present on T. **W7 priced this**: it is half of why transients are missed. | diagnosed, not built |
 | ~~14~~ | ~~**Anchor `DeclineMix`'s sweep against a published mix**~~ | ✅ **DONE 30 August 2026, and the answer is mostly no.** Three combined cells were added so the sweep produces a decline *shape* at all, and it is printed against Churnkey's card mix. **Insufficient funds straddles (41.4–69.6% vs 45–55%) — anchored. Technical sits entirely below (1.1–1.9% vs 10–15%) and that is EXPECTED**, because `01_FACTS.md` carries a UPI-specific claim of under 1% of failures and the two published sources contradict each other. **Hard flags sit entirely below (4.9–11.5% vs 25–33%) and remain genuinely invented** — either UPI has far fewer terminal declines, or those two rates are swept several times too low, and nothing here distinguishes them. `--shape-only` reruns just the 24 cells. | **DONE — 1 row anchored, 1 explained, 1 still a guess** |
-| 15 | Sweep `reasoning_effort` | Every LLM score is at `low`; 10/21 may be a floor. | not started |
+| ~~15~~ | ~~Sweep `reasoning_effort`~~ | ✅ **DONE 30 August 2026, $0.172, and the caveat pointed the WRONG WAY.** `low` is the best of the three permitted settings on the ambiguous set — **10/21 low, 7/21 high, 9/21 max** — so 10/21 is not a floor. **`max`'s row is the rule engine**: 32 of 50 calls hit the 2,000-token cap and fell back, and it reports the rule engine's exact scores. **The terminal-code result, 4/4 against 0/4, is invariant across all three settings** — the claim the LLM layer rests on does not depend on a configuration. ⚠️ **The marginal one does: at `high` the model LOSES on ambiguous cases, 7/21 against 9/21.** Also fixed **error 31**: the cache key omitted `reasoning_effort`, so this sweep would have silently replayed the `low` answers. | **DONE** |
 | 16 | Adjudicate the 19 judge-vs-author disagreements | The eval's only validation step. | not started |
 | 17 | **Error 27 in W2: `p_missed_credit` shifts the money path's RNG** | W7's equivalent was fixed to draw from its own generator; W2's was not, so each insolvency rate is a fresh draw of the world plus missed credits. W2's 5/5 were directional and stand. Repairing it **restates W2's published table** — a call about the deliverable, not a bug fix. | flagged, Tanmay's call |
 | 18 | Build V2, V4, V6, V8 | Four validation targets are still "not built", so the suite scores 4 of 9. | not started |
@@ -200,13 +200,27 @@ and makes `days_to_recovery` comparable to the published distribution.
 `agent/execution/sim_executor.py`) and the headline batch deliberately runs
 with every rate at zero. Frozen accounts, revoked mandates, limit hits.
 
-Consequence, and it is the reason to do it: **the diagnosis layer currently
+~~Consequence, and it is the reason to do it: **the diagnosis layer currently
 does not move the money** (94.33% against 94.36%) *because there is nothing in
 the world to diagnose*. Every failure is insufficient funds, and the frozen
 policy is exactly indifferent to decline reasons. Switch the taxonomy on and
 terminal codes exist — the case where the LLM already scores **4/4 against the
 rule engine's 0/4**, and where no retry can ever succeed. The LLM layer stops
-being an overlay that changes nothing and starts being load-bearing.
+being an overlay that changes nothing and starts being load-bearing.~~
+
+⚠️ **MEASURED 30 August 2026, AND THE PARAGRAPH ABOVE WAS WRONG.** The taxonomy
+was switched on. Terminal codes exist. **The LLM arm still does not move the
+money — 87.39% against the deterministic 88.54%, i.e. slightly behind**, with
+overlapping error bars. So "there is nothing to diagnose" was not a sufficient
+explanation, and the LLM layer did not become load-bearing.
+
+**Two things stop that being a clean verdict on the model.** It stops 2.2× as
+often and kills fewer mandates, trading collection for survival on a metric
+that scores the trade as a loss. And the 150-call cap leaves the arm **93.3%
+fallback**, so only 520 of 9,910 money attempts were model-sourced — a design
+that caps the model at 5% of decisions cannot measure whether it would move the
+money if it ran. Uncapped is ~120,000 calls, roughly **$120**. `NOTES.md`,
+30 August.
 
 Rates stay `[GUESS]` and stay swept, exactly as now.
 

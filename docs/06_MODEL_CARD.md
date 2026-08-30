@@ -620,6 +620,9 @@ sequential calls did not finish in thirty minutes. **"The LLM scored X" means
 "GLM-5.3-Flash at `reasoning_effort=low` scored X", and a higher setting may
 score better. 10/21 may be a floor.** This is the first thing to sweep.
 
+✅ **SWEPT 30 August 2026, and the caveat pointed the WRONG WAY.** `low` is the BEST of the three permitted settings on the ambiguous set: **10/21 at `low`, 7/21 at `high`, 9/21 at `max`** — and `max`'s row is the rule engine, because 32 of 50 calls hit the token cap and fell back. **10/21 is not a floor.** What IS invariant across all three settings is the terminal-code result, 4/4 against the rule engine's 0/4, which is the claim the LLM layer actually rests on. ⚠️ **And the marginal claim is not robust: at `high` the model LOSES to the rule engine on ambiguous cases, 7/21 against 9/21.** `02_RESULTS.md`, the reasoning_effort sweep.
+
+
 **2. One draw per case.** `temperature=1.0`, responses cached, so every score is
 a **single sample with no error bar.**
 

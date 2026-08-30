@@ -73,8 +73,13 @@ class ModelDiagnoser:
                 and self.client.cache is not None
                 and self.n_live >= self.max_live_calls):
             from agent.llm.client import ResponseCache
+            # Must use the SAME key the client will use, including the
+            # reasoning settings -- otherwise the cap check asks about a
+            # different cache entry than the one the call would hit.
             ck = ResponseCache.key(self.prompt_id, view.case_hash,
-                                   self.client.model)
+                                   self.client.model,
+                                   self.client.reasoning_effort,
+                                   self.client.max_tokens)
             if ck not in self.client.cache.data:
                 self.stats["n_capped"] += 1
                 return self._fell_back(

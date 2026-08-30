@@ -6286,3 +6286,400 @@ reporting its own findings* — the same defect fixed in `sim/verify_docs.py`
 hours earlier. Now ASCII, with a comment saying why. **Twice in one day is a
 pattern, not bad luck: anything in this repo that prints a finding must assume
 cp1252.**
+
+---
+
+# 2026-08-30 — PRE-REGISTRATION: the reasoning_effort sweep, and the cache-key defect that had to be fixed first
+
+Queue item 15. `docs/00_HANDOFF.md` calls this "the first thing to sweep":
+every LLM score in this repository was produced at `reasoning_effort=low` with
+a 2,000-token cap, and `agent/llm/client.py` says in capitals that this is a
+**different model configuration** from the default — *"10/21 may be a floor."*
+
+## ERROR 31, FOUND BEFORE SPENDING A RUPEE, AND IT WOULD HAVE MADE THE SWEEP MEANINGLESS
+
+The response cache was keyed on `(model, prompt_id, case_hash)`.
+**`reasoning_effort` and `max_tokens` were not in the key**, and both go into
+the request body and change what the model returns.
+
+So the sweep would have done one of two things:
+
+1. **Hit the `low` cache and returned the `low` answers**, at `high`, silently
+   — and reported "reasoning effort makes no difference". A false negative
+   manufactured by the measuring apparatus, which is the errors 11–13 shape and
+   the one this project keeps re-learning. **This is the worse failure, because
+   it looks like a result.**
+2. Or, on a cold cache, **written `high` answers under the `low` key**, so
+   committing the cache would quietly change what `--replay` reproduces and
+   break the byte-identical-offline claim the entire eval rests on.
+
+The same module's docstring boasts that `prompt_id` **is** part of the key so
+"a prompt edit misses the cache and shows as a diff". The identical argument
+applies to the reasoning settings and nobody made it.
+
+*Fixed:* the key now carries `reasoning_effort` and `max_tokens` — except at
+the exact values the committed caches were recorded at (`low`, 2000), which
+keep the three-field key so all 385 + 80 paid responses stay valid.
+**Verified: `--replay` still reproduces 10/21, 13/19, 4/4 and 19 judge
+disagreements, offline, at $0.00, 50/50 cached.** `ModelDiagnoser`'s live-call
+cap was building the key separately and is now aligned, or it would have asked
+about a different cache entry than the one the call would hit.
+
+## Pre-registered, before any paid call
+
+*40 registered cases + 7 taxonomy + 3 injection, `glm-5.3-flash` diagnosing,
+`glm-5.3` judging, `--effort high`. `low` baseline: **10/21 ambiguous, 13/19
+clean, 4/4 terminal**, 19 judge disagreements.*
+
+| id | prediction | falsifying band |
+|---|---|---|
+| **LLM-E-1** | the cache genuinely **misses** at `high` — this is the check that error 31's fix works | any cache hit on a diagnoser call, or a spend of $0.00 |
+| **LLM-E-2** | `high` **beats** `low` on the 21 ambiguous cases by **≥ 2** | fewer than 2 more correct |
+| **LLM-E-3** | completion tokens per call at least **double** the `low` run | under 2× |
+| **LLM-E-4** | some calls hit the 2,000-token cap and fall back | a fallback rate of **0–40%**; above 40% the setting is unusable rather than better |
+| **LLM-E-5** | the clean-case score does **not** improve materially | 11–17 of 19, i.e. within ±3 of the `low` run's 13 |
+
+## LLM-E-2 is registered against my own interest
+
+**The convenient result is "low was fine".** It means no rework, and every LLM
+number in `docs/` stands as published.
+
+**I am predicting the inconvenient one.** If `high` wins by 2 or more, then
+every LLM score in this repository was produced at a handicapped setting, the
+headline comparison (10/21 against the rule engine's 9/21 — a one-case margin)
+was measured on the model's weakest configuration, and the eval section needs
+restating. I will report that plainly if it happens rather than filing it as a
+curiosity.
+
+**And the reverse is a real result too.** If `high` does *not* help, then
+"10/21 may be a floor" — a caveat carried in four documents — is **retired**,
+and the LLM comparison becomes considerably more defensible than it is today.
+Either way this measurement pays for itself; that is why it was queued first.
+
+## How this could be biased
+
+- **`high` is slower and may time out**, and a timeout falls back to the rule
+  engine and is *scored as the rule engine's answer*. That would drag the
+  `high` arm toward the deterministic baseline and could disguise a real gain
+  as no gain. LLM-E-4 exists to make that visible instead of silent.
+- **One run per setting.** These models are not deterministic, so a 1–2 case
+  difference is inside the noise of a 21-case set. **A 2-case margin is the
+  minimum I am willing to call a result, and it is still weak evidence.**
+- **The judge grades the new answers and is itself a model.** Judge and
+  diagnoser stay different SKUs, but a judge that likes longer reasoning would
+  flatter `high` for a reason unrelated to correctness.
+
+---
+
+# 2026-08-30 — THE reasoning_effort SWEEP. "10/21 MAY BE A FLOOR" IS RETIRED, AND IT WAS BACKWARDS
+
+`python agent/eval/run_eval.py --llm --judge --effort {low,high,max}` —
+transcripts in `logs/llm_effort_high.txt` and `logs/llm_effort_max.txt`.
+**$0.083 + $0.089 = $0.172 spent, 180 live calls.** *Not gate-protected.*
+
+| `reasoning_effort` | ambiguous /21 | clean /19 | terminal /4 | fell back | completion tokens, mean | at the 2,000 cap | judge disagreements |
+|---|---|---|---|---|---|---|---|
+| **`low`** (published) | **10** | 13 | **4** | 0 | 114.2 | 0 | 19 |
+| **`high`** | **7** | 17 | **4** | 0 | 364.0 | 0 | 16 |
+| **`max`** | 9 | 19 | **4** | **32 / 50** | 1744.9 | **32** | 12 |
+| `RuleBasedDiagnoser` | 9 | 19 | 0 | — | — | — | — |
+
+## The caveat this was run to test is retired, and it pointed the wrong way
+
+Four documents carry *"every LLM score is at `low`; **10/21 may be a floor**"*.
+**It is not a floor. It is the best of the three settings on the ambiguous
+set**, and raising the reasoning effort made that score *worse*, not better.
+
+## THE `max` ROW IS NOT A MEASUREMENT OF THE MODEL, AND IT NEARLY LOOKED LIKE THE BEST ONE
+
+At `max`, **32 of 50 diagnoser calls hit the 2,000-token cap and returned a
+payload the layer could not parse**, so they fell back to the rule engine and
+were scored as the rule engine's answers.
+
+Look at what that arm reports: **9/21 ambiguous and 19/19 clean.** Those are
+**exactly** the `RuleBasedDiagnoser`'s scores. The `max` arm did not beat
+anything; it *became* the deterministic baseline, wearing the model's label,
+and its 19/19 clean is the best clean score in the table.
+
+**Someone reading only the score table would have reported `max` as the winner
+and would have been reporting thirty lines of if-else.** What stopped that is
+`ModelDiagnoser`'s `n_fallback` counter and its reason string — a counter this
+project built for a different purpose, printing
+`{"n_fallback": 32, "reasons": {"model returned a payload this layer could not
+read as a Diagnosis": 32}}` right next to the score. **The fallback being
+instrumented is what made the number legible.** That is the runtime-failure
+design paying for itself inside a measurement, and it is worth more than the
+sweep result.
+
+The mechanism is mundane: mean completion length runs 114 → 364 → 1745 tokens,
+and at `max` the cap truncates the JSON. `max` is not "the model at its best",
+it is "the model cut off mid-sentence". **A fair test of `max` needs a bigger
+cap and would cost several times more**; it has not been run, and nothing here
+may claim `max` was evaluated on its merits.
+
+## What the sweep actually establishes
+
+**1. The one claim the LLM layer rests on is INVARIANT to reasoning effort.**
+Terminal decline codes — a frozen account or a revoked mandate, where no retry
+can ever succeed and the index rule has no slot for the fact — score **4/4 at
+`low`, `high` and `max`**, against the rule engine's **0/4**. The argument for
+having a model here does not depend on a setting.
+
+**2. The marginal claim is NOT robust, and it is the one that was published.**
+The headline comparison was 10/21 against the rule engine's 9/21 — a
+**one-case margin** on a 21-case set. At `high` the model *loses*, 7/21 against
+9/21. So "the LLM beats the rule engine on ambiguous cases" is true at exactly
+one of the three settings tested, and E-LLM-2, a pre-registered check from
+29 August, **BROKE at both new settings**. That has to be said next to the
+10/21 wherever it appears.
+
+**3. More reasoning helps on easy cases and hurts on hard ones.** Clean goes
+13 → 17 as effort rises (`max`'s 19 is the fallback, not the model), while
+ambiguous goes 10 → 7. The ambiguous cases are the ones where two answers are
+defensible and the registered answer is one author's call; a model that reasons
+longer talks itself into `NUDGE` more often — visible in the `high` transcript,
+where `NUDGE` dominates the disagreement column.
+
+**4. The judge agrees with the author MORE as effort rises**: 19 → 16 → 12
+disagreements. Two readings, and this does not separate them — either longer
+reasoning produces more conventional answers, or **a judge that is itself a
+reasoning model rewards reasoning it recognises**. The second would be a
+same-family effect and the eval's whole design is built to avoid exactly that.
+Unresolved, and it is now a better question for the 19-disagreement
+adjudication than it was this morning.
+
+## Pre-registration: 2 held, 2 broke, 1 split
+
+| id | prediction | outcome |
+|---|---|---|
+| **LLM-E-1** | the cache genuinely misses at `high` | **HELD.** 180 live calls, $0.172, caches grew 385→485 and 80→160 exactly as expected |
+| **LLM-E-2** | `high` beats `low` on ambiguous by ≥2 | **BROKE**, and in the opposite direction: **3 worse** |
+| **LLM-E-3** | completion tokens at least double | **HELD.** 3.2× at `high`, 15.3× at `max` |
+| **LLM-E-4** | some calls hit the cap; fallback 0–40% | **SPLIT.** 0% at `high` — inside the band; **64% at `max`** — outside it, and the break is the finding |
+| **LLM-E-5** | clean score stays within ±3 of 13 | **BROKE.** 17 at `high`, +4 |
+
+**LLM-E-2 was the one registered against my own interest, and it broke in the
+direction that costs the most.** I predicted `high` would beat `low`, which
+would have meant the published numbers were understated. Instead `high` is
+worse on the ambiguous set *and* the rule engine beats it there — which is a
+harder result to write up than the one I predicted, because it undercuts the
+single number the LLM section leads with.
+
+**And the convenient half is real too**: "10/21 may be a floor" is retired, the
+terminal-code result is invariant across every setting, and that is the claim
+worth making.
+
+## Error 31, and why it had to be fixed before a rupee was spent
+
+The response cache was keyed on `(model, prompt_id, case_hash)`.
+**`reasoning_effort` and `max_tokens` were not in it**, and both go into the
+request body and change the answer.
+
+So this sweep would have either **hit the `low` cache and reported "effort makes
+no difference"** — a false negative manufactured by the measuring apparatus,
+which is the errors 11–13 shape and the worse of the two failures because it
+looks like a result — or **written `high` answers under the `low` key** and
+quietly broken the byte-identical `--replay` claim the eval rests on.
+
+The same module's docstring boasts that `prompt_id` **is** in the key so "a
+prompt edit misses the cache and shows as a diff". Nobody made the identical
+argument for the settings sitting three lines below it in the same request body.
+
+*Fixed*, and backward-compatibly: at `low`/2000 — the values the committed
+caches were recorded at — the key is unchanged, so all 385 + 80 paid responses
+still hit. Any other setting gets a longer key and therefore a miss.
+**Verified before spending: `--replay` still reproduces 10/21, 13/19, 4/4 and
+19 disagreements, offline, 50/50 cached, $0.00.** `ModelDiagnoser`'s live-call
+cap built the key separately and is now aligned — otherwise it would have asked
+about a different cache entry than the one the call would hit.
+
+## How this could be wrong
+
+- **One run per setting**, and these models are not deterministic. A 3-case
+  difference on 21 is weak. It is enough to retire "10/21 is a floor", which is
+  a claim about direction, and **not** enough to assert `low` is the best
+  setting — only that more effort did not help here.
+- **`max` was never fairly tested.** Its cap truncated 64% of calls. Its row is
+  in the table because leaving it out would hide the trap, not because it
+  measures anything about the model.
+- **The judge is a reasoning model grading reasoning models.** The disagreement
+  trend may be an artefact of that.
+- **The cases, the registered answers and the rubric share one author**, which
+  the 19 unadjudicated disagreements already say. A sweep does not fix that.
+
+---
+
+# 2026-08-30 — PRE-REGISTRATION: does the LLM move the money once there is something to diagnose?
+
+Queue item 7 / W5. The standing explanation for why the LLM arm does not move
+the batch — **94.33% against the deterministic 94.36%** — is that the headline
+batch runs the decline taxonomy at **zero**, so every failure is insufficient
+funds and there is nothing to diagnose. That explanation has been repeated in
+four documents and **never tested**.
+
+`--declines` turns it on. Rates are the `mid` combined cell from
+`test_decline_sweep.py` (`p_account_shut=0.03`, `p_mandate_broken=0.02`,
+`p_limit=0.05`, `p_ambiguous=0.15`); every one is a `[GUESS]` and is swept
+there, never picked. **It is OFF by default** — turning it on changes the
+headline, and that is a decision about the deliverable rather than a flag I get
+to flip.
+
+*Design: n=100, k=5, 4 held-out populations, 120 days, `payday_err=7`,
+`pop_spend=1.05`, full mode, `llm_max_calls=150` per run. Both arms on
+identical worlds and seeds, so the comparison is paired.*
+
+| id | prediction | falsifying band |
+|---|---|---|
+| **W5-1** | both arms collect **less** than they do with the taxonomy off | a fall of 2–14 pts from 94.36%. The sweep already prices `p_account_shut` alone at −2.81 pts at 0.03 |
+| **W5-2** | **the LLM arm beats the deterministic arm once terminal codes exist** | a gap of **+0.3 pts or more**. Below that, the standing explanation is wrong and the LLM does not move the money even when there IS something to diagnose |
+| **W5-3** | the gap comes from `STOP` on terminal codes, not from better timing | the LLM arm's `AGENT_STOP` count is at least 3× the deterministic arm's |
+| **W5-4** | the LLM arm's advantage is **small in absolute terms** — under 3 pts | 3+ pts would be a bigger effect than the eval's 4/4-vs-0/4 terminal result can explain on a population where terminal codes are a few percent of mandates |
+
+## W5-2 is the one that matters and it is registered against the project's story
+
+**The convenient result is that the LLM wins here.** It would retire a caveat
+carried in four documents, justify the LLM layer on the money rather than on a
+40-case eval, and make the "AI Judgment" argument concrete.
+
+**If W5-2 breaks — if the LLM still does not move the money with the taxonomy
+on — then the explanation this project has been giving for a year of documents
+is wrong**, and the honest statement becomes "the LLM does not move the batch
+money and we do not fully know why". I will write that if that is what happens.
+
+## How this could be biased toward the answer I want
+
+- **The rates are guesses**, and I picked the `mid` cell rather than sweeping
+  all three. A higher terminal rate mechanically gives the LLM more chances to
+  be right. `low` and `high` cells exist and this run does not use them, so
+  **this is one cell of a sweep reported as a result** — the weakest shape in
+  this repository, and it is stated up front rather than after.
+- **The LLM arm is ~95% deterministic** by design, under a 150-call cap per
+  run. Whatever gap appears is produced by at most 600 live decisions out of
+  ~120,000, which makes a large gap *less* plausible, not more.
+- **One run seed per population, four populations.**
+
+---
+
+# 2026-08-30 — W5 RAN. THE EXPLANATION THIS PROJECT HAS BEEN GIVING FOR THE LLM'S FLAT RESULT IS WRONG
+
+`python -m agent.batch_report --pops 4 --declines --llm` —
+`logs/w5_declines_llm.txt`. *n=100, k=5, 4 held-out populations, 120 days,
+`payday_err=7`, `pop_spend=1.05`, full mode, `llm_max_calls=150` per run.
+**Not gate-protected.** Decline rates are the `mid` cell of
+`test_decline_sweep.py`, every one a `[GUESS]`.*
+
+| arm | cycles collected | ₹ recovered | survival | 2 SE |
+|---|---|---|---|---|
+| `payday_wait` | 57.70% | — | 60.75% | |
+| agent, deterministic | **88.54%** | ₹5,604,560 | 94.80% | 1.52 |
+| agent, LLM overlay | **87.39%** | ₹5,547,590 | **95.05%** | 2.67 |
+
+*Headline batch, taxonomy OFF: 94.36%. Turning it on costs 5.82 points.*
+
+## The claim under test, and it does not survive
+
+Four documents say the LLM arm does not move the batch money — **94.33%
+against the deterministic 94.36%** — *because the taxonomy is off and there is
+nothing to diagnose*. That has been repeated and never tested.
+
+**Tested: with the taxonomy on and terminal codes everywhere, the LLM arm is
+87.39% against 88.54%. It is 1.15 points BEHIND, not ahead.**
+
+The difference is **not significant** — the two 2 SE bands are 1.52 and 2.67
+and they overlap comfortably — so the honest statement is *"statistically
+indistinguishable, with a slightly negative point estimate"*. But the
+prediction was **+0.3 or more** and the measured value is **−1.15**, so
+**W5-2 broke**, and it broke in the direction that costs the project its
+standing explanation.
+
+## What the arm actually did differently, which is more interesting than the score
+
+| | deterministic | LLM overlay |
+|---|---|---|
+| `COLLECTED` | 5769 | 5689 |
+| `CYCLE_CLOSED` (ran out of cycle) | 1010 | 1050 |
+| `MANDATE_DEAD` | 104 | **99** |
+| `AGENT_STOP` | 15 | **33** |
+| `ESCALATED` | 40 | 43 |
+| survival | 94.80% | **95.05%** |
+
+**The LLM stops more than twice as often and kills fewer mandates.** It is
+trading collection for mandate survival: 80 fewer cycles collected, 5 fewer
+mandates dead, survival up a quarter of a point. On a metric that is *cycles
+collected*, that trade scores as a loss — and the metric is deliberately built
+so a dead mandate forfeits its remaining cycles, so the trade is already priced
+and still comes out behind.
+
+That is a defensible product behaviour described by a number that says it
+lost. It is not a defect. It is the model being more conservative than the
+scoring rule rewards.
+
+## ⚠️ AND THE TEST CANNOT DETECT A SMALL EFFECT, WHICH LIMITS WHAT ANY OF THIS MEANS
+
+**The fallback rate is 93.3%.** Of 123,514 diagnoses requested, 115,217 were
+refused by the per-run cap of 150 live calls and 7 more were unparseable.
+Only **520 of 9,910 money attempts** were made on a model-sourced diagnosis.
+
+So the LLM arm is, by construction, about 95% the deterministic arm. **A design
+that caps the model at 5% of decisions cannot measure whether the model would
+move the money if it ran.** The right conclusion is:
+
+- the standing explanation — *"there is nothing to diagnose"* — is **refuted**
+  as a sufficient explanation, because there was plenty to diagnose and the
+  number did not move; and
+- the alternative — *"it would help if it could actually run"* — is
+  **untestable at this project's budget.** An uncapped batch is ~120,000 live
+  calls, which at the measured rate is roughly **$120**. Not a caveat, an
+  arithmetic fact.
+
+**Neither of those is the sentence currently in four documents**, and the
+sentence currently in four documents is the one that has to change.
+
+## Pre-registration: 1 held, 2 broke, 1 void
+
+| id | prediction | outcome |
+|---|---|---|
+| **W5-1** | both arms fall 2–14 pts with the taxonomy on | **HELD.** 94.36% → 88.54%, a fall of 5.82 |
+| **W5-2** | the LLM arm beats the deterministic arm by ≥ +0.3 | **BROKE.** −1.15, and not significant either way |
+| **W5-3** | the LLM's `AGENT_STOP` is ≥ 3× the deterministic arm's | **BROKE.** 33 against 15 — 2.2×. The direction is right and the size is not |
+| **W5-4** | any LLM advantage is under 3 pts | **VOID.** It predicted the size of an advantage that does not exist. Recording it as void rather than as a pass, because a prediction whose premise failed did not survive a test |
+
+## A defect I introduced and found within minutes
+
+`--declines` made the report print *"The decline taxonomy is OFF here (every
+rate 0)"* **on a run with the taxonomy on.** The caveat was hardcoded, and a
+new flag turned a true claim into a false one — in the "WHAT THIS NUMBER IS
+NOT" block, which exists precisely to stop a reader mis-reading the number.
+
+Fixed: the caveat is now conditional and the `--declines` branch says loudly
+that this is not the published configuration and must not be compared to the
+headline. **Generalising: a hardcoded caveat is a claim, and every new flag has
+to be checked against every claim already printed.** Nothing enforces that; it
+was caught by reading the output.
+
+## How this could be biased toward the answer I wanted
+
+- **One cell of a sweep, reported as a result.** I ran the `mid` decline cell
+  and not `low` or `high`. A higher terminal rate gives the model more chances
+  to be right, so the cell chosen bounds the result — and this is the weakest
+  shape in this repository, stated before the number rather than after.
+- **Four populations, one seed each**, and two overlapping error bars. Nothing
+  here separates −1.15 from zero.
+- **I wanted W5-2 to hold.** It would have justified the LLM layer on the money
+  rather than on a 40-case eval, and it would have retired a caveat rather than
+  replacing it with a worse one. It broke, and the write-up above is the one
+  the measurement supports rather than the one I set out to write.
+
+## Two rules added to the doc gate, in the same commit as the retractions
+
+`llm-score-is-a-floor` and `nothing-to-diagnose`. Both `why` fields state a
+**fact about the claim** and the measurement that settled it, rather than a
+state of the project — which is the lesson from withdrawing
+`pooling-already-consent-gated` a few hours after adding it.
+
+**And the gate immediately fired on my own write-up**, twice, in the very
+paragraphs that quote each claim in order to refute it. That is correct
+behaviour from an incomplete marker list, not a false positive to be silenced
+by narrowing the pattern. `refuted`, `does not survive` and `claim under test`
+are now markers, alongside `overclaim`, `is **dead**` and `never quote` — words
+this project actually uses when it withdraws something. Selftest 15/15.
