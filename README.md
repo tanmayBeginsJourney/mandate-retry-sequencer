@@ -284,6 +284,58 @@ The eval replays from committed caches in 0.5 seconds for $0.00, and the judge
 is a *different* model from the diagnoser; the harness refuses to run if the two
 SKU names match.
 
+## When something breaks while it is running
+
+Development-time mistakes are catalogued in
+[`docs/03_ERRORS.md`](docs/03_ERRORS.md) — there are thirty. This section is
+the other half: what the system does when something fails *while it is
+running*, in the shipping path.
+
+| What fails | What happens |
+|---|---|
+| The language model errors, times out, or returns unparseable output | Falls back to the deterministic rule engine and logs `LLM_FAILURE`. **This is the normal path, not a cold branch** — the batch takes it about 95% of the time by design, so it is exercised continuously rather than being a branch nobody has run. |
+| The model returns a legal-looking instruction containing a time | Rejected by the governance check — and there is no field on the diagnosis type in which a time could have been returned in the first place. |
+| An action would breach one of the five mandate rules | The constraint layer refuses it before the executor exists to it, and the refusal is a row in the audit trail. Refused actions generate **zero** network traffic. |
+| The payment rail is down across many customers at once | Detected from cross-customer outcomes, and the belief update is suppressed — a technical decline is a fact about the rail, not about one customer's balance. |
+| A debit's outcome is genuinely unknown — a timeout, a deemed transaction | Recorded as **pending**, never rounded down to "failed". Rounding an unknown to a failure is what licenses a retry, and a retry on an unknown is a double debit. |
+| An HTTP request is retried after a socket failure | The idempotency key is derived from the `action_id` the constraint layer already wrote to the audit trail, so the same logical debit produces the same key across a process restart. |
+| **The API key is wrong or expired** | Raises immediately, naming the status and the response. Until 30 August this returned a *customer decline* instead — see below. |
+| A worker process dies mid-measurement | The measurement fails loudly. A crashed run is a **failed** result, not a missing one. |
+| A second run appends to an existing audit log | Refused at open time. This once made a demo report constraint violations that had never happened. |
+
+**The seventh row is the most recent, and it was found by sending one real
+request.** The Razorpay client had never contacted Razorpay. Pointing it at the
+live API with no credentials — no account, no key, no money — returns a real
+authentication error, and the code turned that into "this customer's account is
+empty":
+
+```
+python agent/tests/test_razorpay_mapping.py --mutants
+
+R9  an authentication failure must not become a customer decline
+    mutant: `blind`, the pre-30-August behaviour -- hand every
+            response with a status to the payment parser
+  FAIL  R9a  a live 401 raises RazorpayError instead of returning an outcome
+             outcome=AttemptOutcome(code='U30', success=False, pending=False)
+  PASS  R9b  MUTANT: without the check it is a SILENT DECLINE
+             U30, success=False -- which w3.py:432 reads as `balance < amount`
+  PASS  R9c  a 400 that IS a payment decline stays a decline
+  PASS  R9d  a 200 captured payment is untouched
+```
+
+Because one belief is shared by every mandate belonging to a customer, a single
+misconfigured key would have corrupted all of them at once, burned all four
+legal attempts, killed the mandates, and printed a plausible recovery rate for
+a world in which nothing had been asked of anybody. It would not have crashed.
+
+```bash
+python scripts/razorpay_ladder.py
+```
+
+sends those requests and writes the transcript to `logs/razorpay_ladder.json`.
+It climbs as far as the credentials allow and prints the rungs it cannot reach
+rather than counting them as passes.
+
 ## Results
 
 Everything turns on how accurately payday can be estimated in advance.

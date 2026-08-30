@@ -582,20 +582,84 @@ footer{padding:56px 0 90px}
         <table>
           <thead><tr><th>Rule</th><th>What it requires</th><th>Tested in the simulation?</th></tr></thead>
           <tbody>
-            <tr><td>Attempt cap</td><td>At most 4 attempts per mandate per billing cycle</td><td><span class="tag warn">no working test</span></td></tr>
+            <tr><td>Attempt cap</td><td>At most 4 attempts per mandate per billing cycle</td><td><span class="tag good">tested</span></td></tr>
             <tr><td>Peak hours</td><td>No execution between 10:00–13:00 or 17:00–21:30</td><td><span class="tag good">tested</span></td></tr>
             <tr><td>Notice period</td><td>At least 24 hours between the pre-debit notice and the debit</td><td><span class="tag good">tested</span></td></tr>
-            <tr><td>One pending notice</td><td>Only one outstanding notification per mandate</td><td><span class="tag warn">no working test</span></td></tr>
+            <tr><td>One pending notice</td><td>Only one outstanding notification per mandate</td><td><span class="tag good">tested</span></td></tr>
             <tr><td>No re-presentation</td><td>An insufficient-funds decline may not be retried under the old notice</td><td><span class="tag good">tested</span></td></tr>
           </tbody>
         </table>
       </div>
-      <p class="tiny" style="margin-top:14px">All five are enforced by the agent and tested there.
-      Two of them have no working test in the underlying simulation: one test can never be
-      triggered, and another turned out to be grading itself. Both are listed as known failures
-      rather than quietly fixed. The rules themselves are second-hand summaries of NPCI's
-      requirements, not a regulation read end to end.</p>
+      <p class="tiny" style="margin-top:14px">All five are enforced by the agent and tested
+      there, and since 30 August 2026 all five also have a working test in the underlying
+      simulation. Two of them did not: the attempt-cap test could never be triggered, because at
+      a cap of four the deepest any cycle reached was four, and the pending-notice test turned
+      out to be grading itself — the deliberately broken version it was checked against wrote
+      the very counter it was scored on. Both were repaired by making the broken version create
+      illegal state and letting independent code notice, never by relaxing the check. The rules
+      themselves are second-hand summaries of NPCI's requirements, not a regulation read end to
+      end.</p>
     </div>
+
+    <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">What happens when something breaks while it is running</h3>
+    <p class="small" style="margin-top:10px;max-width:70ch">Every row below is in the shipping
+    path, not a plan. The first one is the interesting one: the fallback is not a rare branch
+    kept for emergencies, it is what happens on about 95% of decisions by design, so it is
+    exercised continuously rather than being code nobody has run.</p>
+    <div class="tablewrap" style="margin-top:14px">
+      <table>
+        <thead><tr><th>What fails</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>The language model errors, times out, or returns something unparseable</td>
+              <td>Falls back to a deterministic rule engine and records that it did. The headline
+                number therefore does not depend on an API key.</td></tr>
+          <tr><td>The model returns an instruction containing a time</td>
+              <td>Rejected — and the data type it returns has no field for a time in the first
+                place.</td></tr>
+          <tr><td>An action would breach one of the five mandate rules</td>
+              <td>Refused before the payment rail is reached, with the refusal written to the
+                audit log. A refused action generates no network traffic at all.</td></tr>
+          <tr><td>The payment rail is down across many customers at once</td>
+              <td>Detected from cross-customer outcomes, and the balance estimate is left alone.
+                A technical decline is a fact about the rail, not about one customer.</td></tr>
+          <tr><td>A debit's result is genuinely unknown — a timeout, a deemed transaction</td>
+              <td>Recorded as unknown, never as a failure. Rounding an unknown down to "failed"
+                is what licenses a retry, and a retry on an unknown is a double charge.</td></tr>
+          <tr><td>A request is retried after a network failure</td>
+              <td>The idempotency key comes from the action id already written to the audit log,
+                so the same logical debit produces the same key across a restart.</td></tr>
+          <tr><td>The API key is wrong or expired</td>
+              <td>Stops immediately and says so. Until 30 August this was recorded as a
+                <i>customer</i> decline — see below.</td></tr>
+          <tr><td>A worker process dies during a measurement</td>
+              <td>The measurement fails loudly. A crashed run is a failed result, not a missing
+                one.</td></tr>
+          <tr><td>A second run appends to an existing audit log</td>
+              <td>Refused when the log is opened. This once made a demo report constraint
+                violations that had never happened.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3>The seventh row was found by sending one real request</h3>
+      <p class="small" style="margin:8px 0 0">The Razorpay client in this repository had never
+      contacted Razorpay — every test of it ran against responses transcribed from the
+      documentation. Pointing it at the live API with no credentials at all, which needs no
+      account and moves no money, returns a real authentication error. The code turned that
+      error into <i>“this customer's account is empty”</i>: not a crash, not an alert, just a
+      decline recorded against the customer.</p>
+      <p class="small" style="margin:10px 0 0">Because one balance estimate is shared by all of a
+      customer's subscriptions, a single wrong key would have corrupted every one of them at
+      once, spent all four legal attempts, killed the mandates, and printed a plausible recovery
+      rate for a run in which nothing was ever asked of anybody. Eight offline tests were green
+      throughout, because not one of them had ever seen a response Razorpay wrote.</p>
+      <p class="tiny" style="margin:10px 0 0">Fixed, and the fix has a test that fails when the
+      fix is removed. The other two rungs of that ladder — authenticating for real, and charging
+      a test mandate — need an API key this project does not have, and they are reported as not
+      run rather than counted as passing.</p>
+    </div>
+
   </div>
 </section>
 

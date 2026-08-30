@@ -232,7 +232,11 @@ The original text, kept as the record:
 - **Can the agent run against a real payment API without changing anything
   else?** Yes, and it is built. `agent/execution/razorpay_executor.py`
   implements the same `ports.Executor` protocol; the switch is one argument in
-  `batch.py`. **Nothing in it has ever talked to Razorpay** — see
+  `batch.py`. ~~**Nothing in it has ever talked to Razorpay**~~ — **CORRECTED
+  30 August 2026: `scripts/razorpay_ladder.py` sent real requests and took a
+  live 401, which found errors 28 and 29. What is still true is narrower —
+  no request has ever been AUTHENTICATED, so Razorpay has never read one of
+  our request bodies.** See
   `06_MODEL_CARD.md` §6b-2 for the line between gated and untested.
 - **Does Razorpay return NPCI decline codes?** No. It returns its own
   normalised `error_reason` from a published list of 110, and describes a

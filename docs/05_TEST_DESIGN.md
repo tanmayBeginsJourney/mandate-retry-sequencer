@@ -250,18 +250,29 @@ Gates that only bind under contention (**M1, S2, T5, T7**) run at
 policies hit payday nearly every time, recovery is ~97%, and a constraint that
 is never reached cannot be tested. Everything else stays at the default.
 
-**This did not fix M1**, which is VACUOUS at both operating points: the deepest
-any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against
+~~**This did not fix M1**, which is VACUOUS at both operating points: the
+deepest any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against
 `NPCI_MAX = 4`, so the 5th attempt that trips the counter never occurs. The
 attempt-cap guarantee therefore has no working test behind it, and T7's cap
-clause reads the same counter, so both cap gates are exactly as strong as M1.
+clause reads the same counter, so both cap gates are exactly as strong as M1.~~
 
-**And T7's own mutant is weaker than this document's bar.** Declared 28 Aug
-2026. The bar at the top of this page is "a concrete broken *implementation*".
-T7's mutant (`tests.py:423-426`) is a **hand-edited dictionary** — a real
+✅ **RESOLVED 30 August 2026, and the diagnosis above is exactly what pointed at
+the fix.** The problem was never the operating point — it was that the mutant
+asked for an attempt the world could not reach. **M1 now runs its mutant at
+`cap_override=2`,** where a 3rd attempt is illegal and the mutant reaches it, so
+the counter binds and the gate trips. That proves the cap counter *works*,
+which is strictly more than it proved before and strictly less than the claim
+"the value 4 is the right cap" — `sim/verify_brief.py` asserts `NPCI_MAX`
+separately. **The attempt-cap guarantee now has a working test.**
+
+⚠️ **T7's own mutant is still weaker than this document's bar, and that has NOT
+changed.** Declared 28 Aug 2026. The bar at the top of this page is "a concrete
+broken *implementation*". T7's mutant is a **hand-edited dictionary** — a real
 result copied, then `cycle_rec` set to 1.5 and `vdetail["cap"]` set to 1. That
-tests the checker function, not the harness. Combined with M1, the attempt-cap
-counter has **no test that runs the simulator at all.**
+tests the checker function, not the harness. What *has* changed is that this no
+longer combines with M1 to leave the cap counter untested by any gate that runs
+the simulator: **M1 is now that gate.** T7 remains a weak test of a strong
+claim, on its own.
 
 ## ⚠️ M4 IS VACUOUS TOO, AND IT REPORTS PASS. Declared 28 August 2026.
 

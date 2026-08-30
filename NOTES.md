@@ -5660,3 +5660,96 @@ judge-facing artifact.
 That is the second consecutive session to find a stale claim on `index.html`
 that a grep would have caught. **The doc gate is queue item 9 and it keeps
 earning its position.**
+
+---
+
+# 2026-08-30 (end of session) — THE DOC GATE, AND THE FIVE SURVIVORS IT WAS BUILT FOR
+
+## The count that made the case
+
+This session found **five** live retracted claims by hand, in files a previous
+session had recorded as swept:
+
+| where | claimed | actually |
+|---|---|---|
+| `docs/index.html`, section 03 table | the attempt cap and the pending notice have **`no working test`**, as two orange tags in the five-rule table, plus a paragraph explaining why | all five have had a working test since 30 August. **This is the second time the public page has been caught telling judges about a weakness that no longer exists**, and the previous session's audit explicitly claimed to have fixed exactly this |
+| `docs/index.html`, limits | "The headline is conditional on **one parameter**" | two. `CLAUDE.md` has said two since 29 August, in a sentence that reads *"Both artifacts now say so"* — which was false for this file |
+| `docs/index.html`, scope | "none has been sent" | requests have been sent; the surviving claim is narrower |
+| `CLAUDE.md` + `07_AGENT_BRIEF.md` | README is "under 150 lines, on purpose" | it was 454 |
+| `docs/05_TEST_DESIGN.md` | "M1 ... is VACUOUS at both operating points"; "the attempt-cap counter has **no test that runs the simulator at all**" | M1 was repaired on 30 August. The M4 section of the same file **was** updated; the M1 section eight lines above it was not |
+
+The last row is the clearest statement of the mechanism. **Two paragraphs, one
+file, one screen apart, and only the one being edited got fixed.**
+
+## So: `sim/verify_docs.py`
+
+Twelve retracted claims, each carrying a regex, the date it was retracted, and
+a `why` that says what is true now — because a tripwire nobody can act on is
+just an obstacle.
+
+**Two modes, and the split is the design.**
+
+- **banned** in `README.md` and `docs/index.html`. No strike-throughs on the
+  judge-facing artifacts: a judge should not have to parse a correction to find
+  out what is true. A hit there means rewrite.
+- **marked** everywhere else. The phrase may appear if a retraction marker is
+  within eight lines. This project deliberately keeps the record of what it
+  used to believe; deleting a retracted sentence loses the error, leaving it
+  unmarked leaves a false statement in the repo, and marking it is the third
+  option the house style actually asks for.
+
+`NOTES.md` is never scanned. It is an append-only record of what was believed
+at the time and rule 8 forbids tidying it.
+
+**`--selftest` is the part that stops it going vacuous.** Every rule declares a
+canary — a sentence it must catch — and the selftest fails if any rule does not
+fire on its own canary, or has no canary at all. It also checks that the marker
+logic suppresses a struck-through hit **and** that it does not suppress an
+unmarked one, because a marker list broad enough to match everything is a gate
+that passes by construction. 14/14.
+
+**Demonstrated binding rather than asserted.** A canary line was appended to
+`README.md`, the gate exited 1 with `[BANNED]` and the rewrite instruction, the
+line was removed, and the gate exited 0. Wired into `scripts/pre-commit` as
+step 2 of three.
+
+## Two things I got wrong while building it, both caught by running it
+
+1. **The gate crashed on its own findings.** It printed the offending line, the
+   line contained `→`, and the Windows console codec is cp1252. A gate that
+   dies while reporting reports nothing. `sys.stdout.reconfigure(encoding=
+   "utf-8", errors="replace")`.
+2. **The first marker list was too narrow and produced three false positives** —
+   `CLAUDE.md`'s rule 6, which quotes the retired `41.7% → 76.3%` headline *in
+   order to ban it*; the agent brief's paragraph explaining the "bandit"
+   retraction; and the build plan's own record of the M1/M4B repair. All three
+   are correct prose. The fix was to widen the markers to the words this
+   project actually uses ("overclaim", "earlier revision", "is **dead**",
+   "never quote"), **not** to narrow the patterns — narrowing the patterns is
+   how a gate stops seeing the thing it was built for.
+
+   For one of them the honest fix was in the document instead: the build plan's
+   `**FIXED` sat on the line *after* the retracted phrase, so the marker never
+   joined up. That phrase is now struck through in place, which is what the
+   house style wanted anyway.
+
+## What this gate cannot do
+
+It cannot tell whether a sentence is true. It knows that twelve specific
+sentences were withdrawn and where they are still allowed to appear, and that
+is all. **A claim that has never been retracted is invisible to it** — so the
+whole class of "stale in the flattering direction", which the 30 August audit
+admitted it had never searched for, is still unprotected. That remains a job
+for an outside reader, and `CLAUDE.md` still says so.
+
+It is also a list that has to be fed. A retraction made without adding a rule
+here leaves no trace, and the only thing enforcing that is this paragraph.
+
+## Queue item 6 closed on the way past
+
+The runtime failure-recovery story now exists in three places instead of zero:
+`08_ARCHITECTURE.md`, a new README section with the real `--mutants` output
+showing the pre-fix behaviour, and section 03 of the public page. The framing
+that makes it land is that **the LLM→rule-engine fallback is the 95% path, not
+a cold branch kept for emergencies** — a fallback that runs continuously is
+evidence; a fallback nobody has exercised is a hope.

@@ -909,7 +909,9 @@ The two-implementation discipline has now caught something three times:
 `auditor.py` versus `Stage0Gate`, GLM-5.3 versus our own regex list, and R1b
 versus R1a.
 
-⚠️ **And the count is still the point.** Twenty-seven errors, and **the ones
+⚠️ **And the count is still the point.** *(SUPERSEDED — the count is now
+thirty; this paragraph is kept as the record of the tally at twenty-seven.)*
+Twenty-seven errors, and **the ones
 found by an outsider or by a deliberately adversarial check are consistently
 the ones a careful self-audit missed.** Errors 11-13 came from an outside
 reader with `docs/` and half a day. Error 23 came from a different model.

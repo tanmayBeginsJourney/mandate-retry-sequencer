@@ -304,7 +304,11 @@ sim/
   exp_main.py exp_pd.py calib2.py   older one-off experiment scripts
 legacy/                FROZEN. Known-defective. Do not build on.
 logs/                  raw output from prior runs
-README.md              the front door. Under 150 lines, on purpose.
+README.md              the front door. It SHOWS real command output rather
+                       than describing it, so it is long on purpose. (This
+                       line said "under 150 lines, on purpose" until 30 Aug
+                       2026, by which point the README was 454. A line count
+                       in a document is a staleness generator; it is gone.)
 scripts/
   install-hooks.sh pre-commit pre-push day-start.sh
   build_page_data.py   pre-computes docs/data/scenarios.json for the page

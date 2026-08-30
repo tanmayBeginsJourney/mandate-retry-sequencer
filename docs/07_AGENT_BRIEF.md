@@ -530,7 +530,7 @@ agent/
 **Outside `agent/`, added 29 August 2026:**
 
 ```
-README.md                        the front door, under 150 lines
+README.md                        the front door. Shows output, not prose
 docs/index.html                  the public page. Static, no build step.
 docs/data/scenarios.json         every scenario it shows, pre-computed
 scripts/build_page_data.py       regenerates that JSON. `--check` diffs it.
