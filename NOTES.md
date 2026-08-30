@@ -6703,3 +6703,112 @@ is a rule that is wrong between edits.**
 `no-request-ever-sent` still has the same shape and will expire the day rung 4
 of the Razorpay ladder runs. Left as-is deliberately: it is accurate today, and
 rewriting it speculatively is how a guard drifts away from the thing it guards.
+
+---
+
+# 2026-08-30 (later) — A DOCUMENTATION STYLE PASS, AND RUNG 4 AUTHENTICATES
+
+## The writing, and why it needed a pass
+
+Tanmay read the README and the public page and identified a consistent problem
+that is not technical: the prose reads as machine-generated. Compressed,
+self-conscious, and constantly signposting its own significance instead of
+stating a fact and stopping.
+
+The recurring constructions, all of which appeared repeatedly:
+
+- rhetorical inversion — *"The argument is not X. It is Y"*, *"is not just A,
+  it is B"*, *"Noticing is not the same as helping"*
+- meta-commentary about the document — *"That row stays on this page
+  because..."*, *"One month is an explanation, not evidence"*, *"Quote the
+  table, not this"*
+- development-log voice in a public artifact — *"Until 30 August this was
+  recorded as a customer decline"*, *"The seventh row was found by sending one
+  real request"*, *"This once made a demo report constraint violations that had
+  never happened"*
+- headings written for drama rather than description — *"What an aggregator can
+  see that one merchant cannot"*, *"Does this world behave like the real one?"*
+- emphasis applied to ordinary facts, to make them feel like findings
+
+`README.md` and `docs/index.html` are rewritten. Every quantitative result and
+its experimental conditions are preserved — checked mechanically: 52 figures
+from the old README all appear in the new one. What was removed is the layer of
+rhetoric, not information.
+
+**The specific rule now in force, and the reason it matters more than style:**
+*README.md and docs/index.html carry no development history.* A first-time
+reader is being told what the project is, not how it got there. The error
+catalogue, the retraction record and the blow-by-blow all still exist, in
+`NOTES.md` and `docs/`, where a reader has come to audit.
+
+Two concrete deletions Tanmay called out:
+
+- The five-mandate-rules table had a **"Tested in the simulation?"** column in
+  which every row said "tested", followed by a paragraph explaining which two
+  tests used to be broken and how they were repaired. A column that reassures
+  rather than informs is noise; the paragraph was a changelog. Both gone, and
+  the heading now says what the table is: *NPCI mandate rules enforced*.
+- The card headed *"The seventh row was found by sending one real request"* —
+  three paragraphs of narrative about a defect that is already fixed. Deleted.
+  The behaviour it described is one row of the error-handling table, stated as
+  behaviour.
+
+`CLAUDE.md` gains a **Documentation Writing Style** section: target voice,
+reader, sentence and heading rules, the antipattern lists, and BAD → GOOD pairs
+taken from this repository's own text rather than invented. It also records that
+**commits in this repository carry no `Co-Authored-By` trailer**, which
+overrides the tooling default.
+
+**A caveat about this entry.** It is written by the same author as the prose it
+is criticising, an hour later. That is the weakest form of review in this file
+and `CLAUDE.md` already says so. The finding came from an outside reader.
+
+## Rung 4 of the Razorpay ladder: authenticated
+
+Test-mode credentials were supplied in `.env`. The ladder now loads `.env`
+through the same `_load_dotenv` the LLM client uses, so there is one place that
+reads it and one precedence rule.
+
+```
+RUNG 4  authenticate for real, read-only
+    key mode: test  (prefix 'rzp_test_')
+      GET    https://api.razorpay.com/v1/payments?count=1
+      status 200   (622 ms)
+      keys   ['count', 'entity', 'items']
+    PASS -- the credential is accepted by the API
+```
+
+**What this establishes:** the credential is accepted, and the shipped
+`_UrllibTransport` handles a success path. The authentication half of the
+integration is real rather than doc-derived.
+
+**What it does not:** anything about the recurring-charge **body**. Rung 4 is a
+GET. `payments/create/recurring` charges a stored token, and a token exists only
+after a customer authorises an AutoPay mandate through checkout. Test mode mocks
+the bank's approval, not the registration flow, so obtaining a `token_id` is a
+checkout integration rather than another connectivity rung. **Rung 5 is
+reported NOT RUN and is not counted anywhere.**
+
+The script refuses to authenticate at all with a key that is not `rzp_test_`
+prefixed, and prints why. Every rung below it reads or writes merchant data, and
+a live key should not reach this code by accident.
+
+**A defect the run exposed immediately.** Rung 3 crashed. It calls
+`attempt()` on a replayed 401 and expected an `AttemptOutcome` — but error 28's
+fix makes `attempt()` **raise** on a request-level rejection, which is the
+correct behaviour and exactly what that rung exists to demonstrate. The script
+had not been updated alongside the fix, so the ladder had been broken since
+error 28 landed and nothing ran it in between. Rung 3 now catches the raise and
+records it as the expected result.
+
+## The doc gate rule expired again, as predicted twice
+
+`no-request-ever-sent` carried *"no request has been AUTHENTICATED"* in its
+`why`. Rung 4 authenticated, so that `why` is now wrong. This is the third rule
+whose `why` encoded a **state of the project** rather than a fact about the
+claim, and the second to expire within a day of being written.
+
+Rewritten to describe the shape of the surviving claim — Razorpay has never read
+a recurring-charge body — and to tell the next reader to check
+`logs/razorpay_ladder.json` for which rungs actually ran before writing anything
+down. **A `why` that points at evidence outlives a `why` that quotes a status.**

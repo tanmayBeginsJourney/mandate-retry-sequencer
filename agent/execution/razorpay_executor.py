@@ -31,17 +31,17 @@ WHAT IS TESTED AND WHAT IS NOT. Read this before believing anything below.
   * a transport failure never raises and never fabricates a decline
   * Stage 0 refuses a peak-hour action against this executor without calling it
 
-**Verified against the LIVE API, 30 August 2026** (`scripts/razorpay_ladder.py`,
-transcript in `logs/razorpay_ladder.json`, no key needed):
+**Verified against the LIVE API** (`scripts/razorpay_ladder.py`, transcript in
+`logs/razorpay_ladder.json`):
   * DNS, TLS 1.3, and the charge URL existing and answering
   * the shape of a real API-level error envelope -- `code` and `description`
-    alone, no `reason`, no `source`, no `step`, no `metadata`
-  * that this file used to turn that envelope into a customer decline. Error 28.
+    alone, no `reason`, no `source`, no `step`, no `metadata`. Error 28.
+  * authentication with a `rzp_test_` key: HTTP 200 on `GET /v1/payments`,
+    which exercises the transport's success path
 
-**NOT TESTED, PENDING CREDENTIALS.** Every line marked `# UNVERIFIED` below.
-No Razorpay key has been used by this project and **no request has ever been
-authenticated**, so Razorpay has never read one of our request bodies.
-Specifically unverified:
+**NOT TESTED.** Every line marked `# UNVERIFIED` below. Razorpay has never read
+one of our recurring-charge request bodies, because that endpoint charges a
+stored token and no authorised mandate exists. Specifically unverified:
   * the exact request body Razorpay wants for a recurring UPI charge
   * whether test mode returns populated `error_reason` values on
     `failure@razorpay`, or a single generic one

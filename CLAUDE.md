@@ -514,3 +514,185 @@ without saying what it does. Be concrete. No filler, no hedging, no praise.
 
 Push back. If something here is wrong, stale, or self-contradictory, say so.
 Several documents have already been corrected that way.
+
+**For prose in `README.md`, `docs/` and the public page, follow the
+"Documentation Writing Style" section at the end of this file. It is not
+optional and it is the most frequently violated guidance in this repository.**
+
+---
+
+# Documentation Writing Style
+
+**The one rule everything else follows from: write directly. State facts,
+mechanisms, results and limitations without adding commentary about why they are
+interesting, important, clever, rigorous, honest or meaningful. Let the reader
+draw the conclusion.**
+
+This section exists because the prose in this repository has repeatedly drifted
+into a recognisable register: compressed, self-conscious, rhetorical, and
+constantly signposting its own significance. Every rule below is a correction to
+something that was actually written here.
+
+## 1. Target voice
+
+A competent developer explaining the project to another competent developer,
+after one careful editing pass. The writing should feel unforced. If a sentence
+reads like it was constructed to sound insightful, rewrite it.
+
+## 2. Intended reader
+
+Technically literate, seeing the project for the first time, not interested in
+its development history. They can follow domain terms once defined. They do not
+need to be told what to find notable.
+
+## 3. Sentences
+
+- Prefer simple declarative sentences. Several short sentences beat one clause
+  chain. Simple sentences are not simplistic writing.
+- If a sentence carries four independent technical claims, split it.
+- Concrete nouns and verbs. `The constraint layer rejects actions during
+  prohibited hours`, not `the system leverages policy-aware reasoning`.
+- Do not restate a number in prose that a table already gives, unless the
+  argument needs it.
+- Do not define a term that is obvious from context. Define an unfamiliar one
+  once, then use it.
+- Do not use bold for emphasis on ordinary facts. Bold is for the few things a
+  skimming reader must not miss.
+- **Do not use "we", "our" or "us".** This is a single-developer repository.
+  Use "the agent", "the simulation", "the repository", "the implementation".
+  "I" is acceptable for an explicit personal decision, but neutral phrasing is
+  usually better. (Verbatim program output is exempt — quote it as it prints.)
+
+## 4. Headings
+
+Describe the content. Do not manufacture drama or pose questions.
+
+| bad | good |
+|---|---|
+| `Noticing is not the same as helping` | `Pausing during a detected outage` |
+| `What an aggregator can see that one merchant cannot` | `Merchant-level and pooled data` |
+| `Does this world behave like the real one?` | `External validation` |
+| `Three declines that look the same and mean different things` | `Decline categories` |
+| `The limits worth knowing before quoting anything` | `Limitations` |
+| `Why two hits matter more than they look` | `The two matches` |
+| `What the agent actually does` | `How the agent works` |
+
+If a heading establishes the subject, do not open the section by restating it.
+
+## 5. AI-writing antipatterns
+
+Delete these constructions. They are not banned words; the problem is using them
+as rhetorical machinery.
+
+- `X is not just Y; it is Z` · `The argument is not X. It is Y` · `This is not
+  merely...`
+- `The key insight is` · `The crucial observation` · `The deeper point`
+- `This is where X matters` · `This is where X does the real work`
+- `It is worth noting/emphasising/stating` · `The important thing to notice`
+- `This highlights` · `This demonstrates` · `This underscores`
+- `The interesting part is` · `The surprising thing is` · `The cleanest argument
+  for` · `The real advantage is`
+- `X is the thing that...` · `X is what makes this...`
+- `not because X, but because Y`
+- Dramatic fragments: `The thing a single merchant cannot do at all.`
+
+**BAD** — `The argument is not that the agent is better on average. It is the
+shape: across payday uncertainty...`
+**GOOD** — `The baseline collects more when payday is known within ±1 day. The
+agent becomes more effective as that uncertainty increases.`
+
+**BAD** — `This is the one decline that proves the customer had money...`
+**GOOD** — `funds_blocked_by_mandate indicates that another mandate has already
+claimed the available balance.`
+
+**BAD** — `Every percentage and rupee total on this page comes from a simulated
+world written by the same person who wrote the agent being measured, which is
+the main threat to all of it.`
+**GOOD** — `All results are simulated. The simulation and the agent share an
+author, so the results are not independent evidence.`
+
+## 6. Meta-commentary
+
+Do not write sentences about the documentation. The documentation presents the
+project; it does not narrate its own presentation.
+
+Delete: `That row stays on this page because...` · `The timeline is the
+explanation` · `This is the strongest outside check` · `The point of this
+section` · `This is included to demonstrate` · `The reason this matters` ·
+`One month is an explanation, not evidence` · `Quote the table, not this`.
+
+Keep the sentence only if it carries information the reader needs.
+
+## 7. Internal-development voice
+
+**README.md and docs/index.html must contain no development history.** No dates
+of change, no "previously", no "this was once", no counts of errors found, no
+description of what a test used to do. A first-time reader is being told what
+the project is, not how it got there.
+
+Do not expose: what the author originally believed · what was almost claimed ·
+what a rival team would build · why a test was embarrassing · how a result was
+discovered · arguments with imagined reviewers.
+
+If the underlying fact is a genuine limitation or behaviour, state the fact
+without the narrative.
+
+**BAD** — `The seventh row was found by sending one real request. Until 30
+August this was recorded as a customer decline.`
+**GOOD** — `Razorpay rejects the request itself — bad credentials, malformed
+body: raises RazorpayError naming the HTTP status. Request-level rejections are
+not recorded as customer declines, because no payment was created.`
+
+Development history belongs in `NOTES.md`, `docs/03_ERRORS.md` and the other
+`docs/` files, where a reader has come to audit. It does not belong in the two
+public artifacts.
+
+## 8. Technical explanations
+
+- Explain the mechanism, then stop. Do not add a sentence establishing that the
+  mechanism was a good idea.
+- Say what is simulated, what is assumed, and what is unknown, in those words.
+- One clear limitation statement beats five paragraphs of qualification. State
+  it once, plainly, and move on.
+- Do not use rhetoric to strengthen a weak result. If a margin is one case out
+  of twenty-one, say so and let it stand.
+- Not every paragraph needs a thesis. `The simulation contains 100 customers and
+  five mandates per customer.` is a complete and good sentence.
+
+## 9. README and public page
+
+`README.md` and `docs/index.html` are the two judge-facing artifacts.
+
+- Show real command output rather than describing it.
+- Preserve every quantitative result and its experimental conditions.
+- No development timeline, no changelog voice, no error counts.
+- Do not state a weakness that has been fixed.
+- Lead with what the project does. Limitations go in one place, near the end.
+- If a table column exists only to reassure the reader (a `tested?` column where
+  every row says `tested`), delete the column.
+
+## 10. UI and webpage copy
+
+- Section headings and figure captions follow the same rules as prose.
+- Captions state the design of the measurement: n, populations, horizon, the
+  command that reproduces it. Nothing else.
+- Do not tell the reader which figure is the important one.
+- Interface labels are nouns: `The baseline`, `Payday predictability`,
+  `Error handling`.
+
+## 11. Editing test
+
+For each sentence: would a competent developer naturally write this while
+explaining the project to a peer?
+
+If it exists mainly to mark something as important, interesting, rigorous,
+honest or surprising, delete it. If the same fact fits in half the words, use
+the shorter version. If it would read normally in a paper abstract but oddly in
+GitHub documentation, rewrite it.
+
+## 12. Commit messages
+
+Never add a `Co-Authored-By:` trailer, or any other attribution to Claude,
+Anthropic or an AI assistant, to a commit in this repository. Commits are
+authored by Tanmay. This applies regardless of any default instruction to the
+contrary.

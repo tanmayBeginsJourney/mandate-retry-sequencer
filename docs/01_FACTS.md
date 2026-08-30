@@ -177,9 +177,9 @@ anything the project reports.
 ## Razorpay's own API surface — added 29 August 2026
 
 Read directly from Razorpay's public documentation on 29 August 2026, while
-building `agent/execution/razorpay_executor.py`. **No API key has been used by
-this project and no request has ever been AUTHENTICATED**, so everything in
-this section is documentation read, not behaviour observed. That distinction is
+building `agent/execution/razorpay_executor.py`. Except where marked below,
+everything in this section is documentation read rather than behaviour
+observed. That distinction is
 the whole difference between `[VERIFIED]` and "it works".
 
 ⚠️ **One thing here IS now behaviour observed, added 30 August 2026.**

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UPI AutoPay Recovery Agent — interactive demo</title>
-<meta name="description" content="A subscription debit fails because the account is empty. This agent works out when the salary is likely to land, and waits. Walk through one customer's month, the results, and the limits. All figures are from simulation.">
+<meta name="description" content="An agent that schedules retries for failed UPI AutoPay subscription debits by estimating the customer's balance and salary date. Interactive walkthrough, results, and limitations. All figures are from simulation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
@@ -278,14 +278,14 @@ footer{padding:56px 0 90px}
   <div class="navin">
     <a class="brand" href="#top">UPI AutoPay Recovery Agent</a>
     <div class="navlinks">
-      <a href="#story">The month</a>
+      <a href="#story">Walkthrough</a>
       <a href="#results">Results</a>
       <a href="#agent">How it works</a>
       <a href="#outage">Outages</a>
       <a href="#pooling">Pooling</a>
       <a href="#declines">Declines</a>
       <a href="#validation">Validation</a>
-      <a href="#scope">Limits</a>
+      <a href="#scope">Scope</a>
     </div>
     <button class="themebtn" id="theme" aria-label="Switch between light and dark">◐</button>
   </div>
@@ -294,12 +294,12 @@ footer{padding:56px 0 90px}
 <header id="top">
   <div class="wrap">
     <span class="chip"><span class="dot" aria-hidden="true"></span>Every figure on this page is from simulation</span>
-    <h1 style="margin-top:22px">The debit fails.<br>The salary arrives five days later.</h1>
+    <h1 style="margin-top:22px">Retry scheduling for<br>UPI AutoPay subscriptions</h1>
     <p class="lede" style="margin-top:22px">
       Indian subscription payments are collected by a standing mandate on UPI. When the
-      account is empty on the due date, the payment is declined and the usual answer is
-      to try again tomorrow, and the day after. This agent estimates when the money is
-      likely to arrive, and waits for it.
+      account is short on the due date the debit is declined, and the usual response is
+      to retry on the following days. This agent estimates when the salary arrives and
+      schedules the attempt for a day the balance is likely to cover it.
     </p>
 
     <div class="hero-stats">
@@ -326,9 +326,9 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">01</div>
       <div>
-        <h2>One customer, one month, one ₹550 subscription</h2>
-        <p>Customer <code id="uid">c45m3</code>, drawn from a simulated population of 100.
-        Below is a real month from a real run of the agent, read out of its audit log.</p>
+        <h2>One customer's billing cycle</h2>
+        <p>Customer <code id="uid">c45m3</code>, from a simulated population of 100. The
+        month below is read out of the audit log of an agent run.</p>
       </div>
     </div>
 
@@ -337,7 +337,7 @@ footer{padding:56px 0 90px}
       <li><span class="w">Day 4</span><span>The account holds <b>₹215</b>.</span></li>
       <li><span class="w">Day 9</span><span>The salary lands. The account jumps to <b>₹10,583</b>.</span></li>
       <li><span class="w">The baseline</span><span>Charges on the due date, then retries on the next three days. All four attempts hit the same empty account.</span></li>
-      <li><span class="w">The agent</span><span>Skips the due date, waits for the balance to clear, sends the required notice, and debits once.</span></li>
+      <li><span class="w">The agent</span><span>Skips the due date, waits for the balance to rise, sends the required notice, and debits once.</span></li>
     </ul>
 
     <div class="figure">
@@ -399,27 +399,26 @@ footer{padding:56px 0 90px}
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>Why the agent waits</h3>
-        <p class="small" style="margin-bottom:0">Each day it compares two numbers: the chance the
-        debit clears today, and the best chance available on any remaining day of the cycle. On
-        day 4 those are <b>12%</b> and <b>31%</b>, so it holds the attempt. It only has four
-        attempts for the whole cycle, and spending one into an empty account buys nothing.</p>
+        <h3>The waiting decision</h3>
+        <p class="small" style="margin-bottom:0">Each day the agent compares two numbers: the
+        chance the debit clears today, and the best chance available on any remaining day of the
+        cycle. On day 4 those are <b>12%</b> and <b>31%</b>, so it holds the attempt. Only four
+        attempts are available for the whole cycle, so an attempt against an empty account is
+        wasted.</p>
       </div>
       <div class="card">
-        <h3>Where this customer goes wrong</h3>
-        <p class="small" style="margin-bottom:0">Push the payday uncertainty to ±10 or ±14 days and
-        the agent misses this customer's cycle entirely — it waits past the money and its two
-        attempts both decline. Two other customers in the same population where it does worse are
-        named in <code>scripts/build_page_data.py</code>. One month is an explanation, not
-        evidence; the results below are the evidence.</p>
+        <h3>Where the agent fails on this customer</h3>
+        <p class="small" style="margin-bottom:0">At ±10 or ±14 days of payday uncertainty the
+        agent misses this customer's cycle: it waits past the salary credit and both remaining
+        attempts decline. Two other customers in the same population where it performs worse are
+        named in <code>scripts/build_page_data.py</code>.</p>
       </div>
     </div>
 
     <p class="tiny" style="margin-top:20px">
-      This customer was picked because the month is easy to read: a flat balance, one salary
-      credit, one debit. Every arrow, wait and decision above was produced by a real agent run at
-      six different levels of payday uncertainty and stored in
-      <code>docs/data/scenarios.json</code>. Nothing is recalculated in the browser.
+      This customer has a flat balance, one salary credit and one debit. The arrows and
+      decisions come from agent runs at six levels of payday uncertainty, stored in
+      <code>docs/data/scenarios.json</code>.
     </p>
   </div>
 </section>
@@ -432,11 +431,11 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">02</div>
       <div>
-        <h2>What it collects, and when the simple version is better</h2>
-        <p>The whole result turns on one thing: how accurately the customer's payday can be
-        guessed in advance. When the guess is good, waiting for the guessed date is hard to
-        beat. When it is not, the agent's estimate of payday — which it learns from the
-        customer's own failed and successful debits — holds up and the guess does not.</p>
+        <h2>Results</h2>
+        <p>Results depend on how accurately the customer's payday can be estimated in
+        advance. When the estimate is accurate, waiting for the estimated date is hard to
+        beat. As the estimate degrades the agent holds up better, because it recovers the
+        payday from the customer's own attempt outcomes.</p>
       </div>
     </div>
 
@@ -463,8 +462,8 @@ footer{padding:56px 0 90px}
       <div class="figure-head">
         <div>
           <h3>Collection rate against payday uncertainty</h3>
-          <p class="tiny" style="margin:0">Move the slider in section 01 and the highlighted point
-          moves with it. Below about four days of uncertainty, the baseline is the better tool.</p>
+          <p class="tiny" style="margin:0">The slider in section 01 moves the highlighted point.
+          Below about four days of uncertainty the baseline collects more.</p>
         </div>
       </div>
       <div class="figure-body">
@@ -498,18 +497,17 @@ footer{padding:56px 0 90px}
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>What the baseline is</h3>
-        <p class="small" style="margin-bottom:0">Estimate the customer's payday, wait until that
-        date, then attempt once a day. It is a few lines of code. At ±1 day of error it collects
-        <b>99.24%</b> and beats the agent by 3.5 points. That row stays on this page because it
-        is the honest comparison, and because it says where this project is not worth building.</p>
+        <h3>The baseline</h3>
+        <p class="small" style="margin-bottom:0"><code>payday_wait</code> estimates the
+        customer's payday, waits until that date, then attempts once a day. At ±1 day of error
+        it collects <b>99.24%</b>, 3.5 points above the agent.</p>
       </div>
       <div class="card">
-        <h3>How well payday can really be guessed</h3>
-        <p class="small" style="margin-bottom:0">Nobody knows. No measurement of payday
-        predictability in India was found while building this, which is why it is a slider rather
-        than a constant. The design response was to make the agent learn payday from observed
-        outcomes and report how sure it is, instead of assuming a value.</p>
+        <h3>Payday predictability</h3>
+        <p class="small" style="margin-bottom:0">Unknown. No measurement of payday
+        predictability in India was found, so it appears here as a slider rather than a fixed
+        value. The agent learns payday from observed outcomes and reports its own
+        uncertainty.</p>
       </div>
     </div>
   </div>
@@ -523,11 +521,11 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">03</div>
       <div>
-        <h2>What the agent actually does</h2>
-        <p>Once a day, for every live mandate. A failed debit is treated as information: a
-        declined ₹550 charge says the balance was under ₹550 at that moment, and a successful one
-        says it was at least ₹550. Those two facts are enough to build up a picture of both the
-        balance and the salary date.</p>
+        <h2>How the agent works</h2>
+        <p>Once a day, for every live mandate. A declined ₹550 charge means the balance was
+        below ₹550 at that moment; a successful one means it was at least ₹550. Accumulated
+        over attempts, these bounds give an estimate of both the balance and the salary
+        date.</p>
       </div>
     </div>
 
@@ -548,7 +546,7 @@ footer{padding:56px 0 90px}
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>The seven steps</h3>
+        <h3>The daily loop</h3>
         <ol class="small" style="padding-left:20px;margin:10px 0 0;line-height:1.7">
           <li><b>Track the belief.</b> One probability distribution per customer, covering the
             balance and which day of the cycle the salary lands. All of a customer's
@@ -563,49 +561,41 @@ footer{padding:56px 0 90px}
         </ol>
       </div>
       <div class="card">
-        <h3>Two boundaries, enforced in code</h3>
-        <p class="small"><b>A language model never picks the debit time.</b> It explains why a
-        payment failed and chooses between interventions. The data type it returns has no field
-        for a time, and an automated check on the import graph stops that layer from reaching the
-        timing code, the balance estimate or the payment rail at all.</p>
+        <h3>Enforced boundaries</h3>
+        <p class="small"><b>The language model cannot pick the debit time.</b> It explains
+        why a payment failed and chooses between interventions. The data type it returns has no
+        field for a time, and an import-graph check prevents that layer from importing the
+        timing code, the balance estimate or the executor.</p>
         <p class="small" style="margin-bottom:0"><b>The constraint layer refuses; a separate
         auditor recounts.</b> One component blocks illegal actions. A second rebuilds what was
-        legal from the audit log alone, using code that is forbidden from importing the first.
-        Both counts are printed side by side — over 8,954 money actions in the headline batch,
-        both are zero.</p>
+        legal from the audit log, using code that cannot import the first. Both counts are
+        printed side by side. Over 8,954 money actions in the headline batch, both are
+        zero.</p>
       </div>
     </div>
 
     <div class="card" style="margin-top:16px">
-      <h3>The five mandate rules</h3>
+      <h3>NPCI mandate rules enforced</h3>
       <div class="tablewrap" style="margin-top:10px">
         <table>
-          <thead><tr><th>Rule</th><th>What it requires</th><th>Tested in the simulation?</th></tr></thead>
+          <thead><tr><th>Rule</th><th>What it requires</th></tr></thead>
           <tbody>
-            <tr><td>Attempt cap</td><td>At most 4 attempts per mandate per billing cycle</td><td><span class="tag good">tested</span></td></tr>
-            <tr><td>Peak hours</td><td>No execution between 10:00–13:00 or 17:00–21:30</td><td><span class="tag good">tested</span></td></tr>
-            <tr><td>Notice period</td><td>At least 24 hours between the pre-debit notice and the debit</td><td><span class="tag good">tested</span></td></tr>
-            <tr><td>One pending notice</td><td>Only one outstanding notification per mandate</td><td><span class="tag good">tested</span></td></tr>
-            <tr><td>No re-presentation</td><td>An insufficient-funds decline may not be retried under the old notice</td><td><span class="tag good">tested</span></td></tr>
+            <tr><td>Attempt cap</td><td>At most 4 attempts per mandate per billing cycle</td></tr>
+            <tr><td>Peak hours</td><td>No execution between 10:00–13:00 or 17:00–21:30</td></tr>
+            <tr><td>Notice period</td><td>At least 24 hours between the pre-debit notice and the debit</td></tr>
+            <tr><td>One pending notice</td><td>Only one outstanding notification per mandate</td></tr>
+            <tr><td>No re-presentation</td><td>An insufficient-funds decline may not be retried under the old notice</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="tiny" style="margin-top:14px">All five are enforced by the agent and tested
-      there, and since 30 August 2026 all five also have a working test in the underlying
-      simulation. Two of them did not: the attempt-cap test could never be triggered, because at
-      a cap of four the deepest any cycle reached was four, and the pending-notice test turned
-      out to be grading itself — the deliberately broken version it was checked against wrote
-      the very counter it was scored on. Both were repaired by making the broken version create
-      illegal state and letting independent code notice, never by relaxing the check. The rules
-      themselves are second-hand summaries of NPCI's requirements, not a regulation read end to
-      end.</p>
+      <p class="tiny" style="margin-top:14px">Each rule is enforced by the agent and covered by
+      a test in both the agent and the simulation. The rules are second-hand summaries of NPCI's
+      requirements rather than a regulation read end to end.</p>
     </div>
 
-    <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">What happens when something breaks while it is running</h3>
-    <p class="small" style="margin-top:10px;max-width:70ch">Every row below is in the shipping
-    path, not a plan. The first one is the interesting one: the fallback is not a rare branch
-    kept for emergencies, it is what happens on about 95% of decisions by design, so it is
-    exercised continuously rather than being code nobody has run.</p>
+    <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">Error handling</h3>
+    <p class="small" style="margin-top:10px;max-width:70ch">The rule-engine fallback is the
+    normal path: the batch takes it on about 95% of decisions by design.</p>
     <div class="tablewrap" style="margin-top:14px">
       <table>
         <thead><tr><th>What fails</th><th>What happens</th></tr></thead>
@@ -628,37 +618,19 @@ footer{padding:56px 0 90px}
           <tr><td>A request is retried after a network failure</td>
               <td>The idempotency key comes from the action id already written to the audit log,
                 so the same logical debit produces the same key across a restart.</td></tr>
-          <tr><td>The API key is wrong or expired</td>
-              <td>Stops immediately and says so. Until 30 August this was recorded as a
-                <i>customer</i> decline — see below.</td></tr>
+          <tr><td>Razorpay rejects the request itself — bad credentials, malformed body</td>
+              <td>Raises, naming the HTTP status and the response. A request-level rejection is
+                not recorded as a customer decline, because no payment was created.</td></tr>
           <tr><td>A worker process dies during a measurement</td>
               <td>The measurement fails loudly. A crashed run is a failed result, not a missing
                 one.</td></tr>
           <tr><td>A second run appends to an existing audit log</td>
-              <td>Refused when the log is opened. This once made a demo report constraint
-                violations that had never happened.</td></tr>
+              <td>Refused when the log is opened, so one log always describes exactly one
+                run.</td></tr>
         </tbody>
       </table>
     </div>
 
-    <div class="card" style="margin-top:22px">
-      <h3>The seventh row was found by sending one real request</h3>
-      <p class="small" style="margin:8px 0 0">The Razorpay client in this repository had never
-      contacted Razorpay — every test of it ran against responses transcribed from the
-      documentation. Pointing it at the live API with no credentials at all, which needs no
-      account and moves no money, returns a real authentication error. The code turned that
-      error into <i>“this customer's account is empty”</i>: not a crash, not an alert, just a
-      decline recorded against the customer.</p>
-      <p class="small" style="margin:10px 0 0">Because one balance estimate is shared by all of a
-      customer's subscriptions, a single wrong key would have corrupted every one of them at
-      once, spent all four legal attempts, killed the mandates, and printed a plausible recovery
-      rate for a run in which nothing was ever asked of anybody. Eight offline tests were green
-      throughout, because not one of them had ever seen a response Razorpay wrote.</p>
-      <p class="tiny" style="margin:10px 0 0">Fixed, and the fix has a test that fails when the
-      fix is removed. The other two rungs of that ladder — authenticating for real, and charging
-      a test mandate — need an API key this project does not have, and they are reported as not
-      run rather than counted as passing.</p>
-    </div>
 
   </div>
 </section>
@@ -671,20 +643,20 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">04</div>
       <div>
-        <h2>When the payment rail itself is broken</h2>
-        <p>An empty account and a broken payment network produce the same thing: a failed debit.
-        The agent's balance estimate cannot tell them apart, so a rail outage teaches it something
-        false about every customer it touches. Watching the failure rate across all customers at
-        once is how it notices.</p>
+        <h2>Outage detection</h2>
+        <p>An empty account and a degraded payment network both produce a failed debit, and the
+        balance estimate cannot distinguish them. During a rail outage every affected customer's
+        estimate is updated with a decline that says nothing about their balance. The agent
+        detects this by tracking the failure rate across all customers at once.</p>
       </div>
     </div>
 
     <div class="figure">
       <div class="figure-head">
         <div>
-          <h3>Three real moments from one 120-day run</h3>
-          <p class="tiny" style="margin:0">Each is an actual decision hour, with the attempts the
-          agent saw in the previous 24 hours.</p>
+          <h3>Three decision hours from one 120-day run</h3>
+          <p class="tiny" style="margin:0">Each shows the attempts the agent saw in the previous
+          24 hours.</p>
         </div>
         <div class="seg" role="group" aria-label="Which moment to show">
           <button id="o-quiet" aria-pressed="false">Rail healthy</button>
@@ -710,41 +682,41 @@ footer{padding:56px 0 90px}
       </div>
 
       <div class="figure-foot">
-        <p class="tiny" style="margin:0">Four six-hour outages were injected on days 20, 50, 80 and
-        110, each knocking out about 40% of attempts. That 40% is a guess — no source reports what
-        fraction of AutoPay debits fail during a UPI incident — so it is swept across three values
-        and never picked. In a separate study with no outage present anywhere, the detector raised
-        a false alarm in <b>0 of 48 runs</b>; the day-67 alarm above comes from a single run of a
-        horizon that does contain outages, and the two are different measurements.</p>
+        <p class="tiny" style="margin:0">Four six-hour outages were injected on days 20, 50,
+        80 and 110, each removing about 40% of attempts. No source reports what fraction of
+        AutoPay debits fail during a UPI incident, so that severity is swept across three values
+        rather than chosen. In a separate study containing no outages, the detector raised a
+        false alarm in <b>0 of 48 runs</b>. The day-67 alarm above comes from a single run of a
+        horizon that does contain outages; the two are different measurements.</p>
       </div>
     </div>
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>Noticing is not the same as helping</h3>
-        <p class="small">The obvious response to a detected outage is to stop sending debits into
-        it. Measured across 8 populations, that response <b>loses money</b> at moderate outage
-        severity: it costs a scheduling day whether or not anything is actually wrong, and most of
-        the day's attempts have already gone out by the time the evidence accumulates.</p>
+        <h3>Pausing during a detected outage</h3>
+        <p class="small">Pausing dispatch during a detected outage <b>reduces collection</b> at
+        moderate severity, measured across 8 populations. It costs a scheduling day whether or
+        not the rail is actually degraded, and most of the day's attempts have already been sent
+        by the time enough evidence accumulates.</p>
         <div class="tablewrap" style="margin-top:14px">
           <table id="ablation-table">
             <thead><tr><th>Outage severity</th><th class="n">Pausing is worth</th><th class="n">2 SE</th><th></th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
-        <p class="tiny" style="margin-top:12px">Pausing therefore does not ship as default
-        behaviour. What does ship is detection plus a change to how declines are folded into the
-        balance estimate, worth +0.256 points at the most extreme severity swept.</p>
+        <p class="tiny" style="margin-top:12px">Pausing is off by default. The shipped
+        behaviour is detection plus a change to how declines are folded into the balance
+        estimate, worth +0.256 points at the highest severity swept.</p>
       </div>
       <div class="card">
-        <h3>And pausing hides the evidence</h3>
-        <p class="small">A paused attempt produces no result, and results are exactly what the
-        detector counts. In the single run shown above, pausing removed enough attempts that the
-        agent caught one outage window instead of two.</p>
+        <h3>Effect of pausing on detection</h3>
+        <p class="small">A paused attempt produces no result, and the detector counts results.
+        In the run shown above, pausing removed enough attempts that the agent detected one
+        outage window instead of two.</p>
         <div class="bars" id="pause-bars" style="margin-top:16px"></div>
-        <p class="tiny" style="margin-top:16px">One run, no error bars. The recovery difference
-        here is consistent with the 8-population measurement on the left, but does not replicate
-        it. Quote the table, not this.</p>
+        <p class="tiny" style="margin-top:16px">One run, no error bars. The recovery
+        difference is consistent with the 8-population measurement on the left but does not
+        replicate it.</p>
       </div>
     </div>
   </div>
@@ -758,20 +730,19 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">05</div>
       <div>
-        <h2>What an aggregator can see that one merchant cannot</h2>
-        <p>A single merchant charges a customer once a month, so it sees one data point per
-        customer per month. A payment aggregator carrying that customer's other subscriptions sees
-        five. Both learning payday and spotting an outage are volume problems, and volume is the
-        one thing a single merchant cannot buy.</p>
+        <h2>Merchant-level and pooled data</h2>
+        <p>A single merchant charges a customer once a month and so observes one attempt per
+        customer per month. An aggregator carrying that customer's other subscriptions observes
+        five. Estimating payday and detecting an outage both depend on attempt volume.</p>
       </div>
     </div>
 
     <div class="figure">
       <div class="figure-head">
         <div>
-          <h3>Attempts available to reason about, per 24-hour window</h3>
+          <h3>Attempts per 24-hour window</h3>
           <p class="tiny" style="margin:0">The mandates in this population are spread over 60
-          merchants. Below 8 attempts, the outage test cannot be evaluated at all.</p>
+          merchants. The outage test requires at least 8 attempts in the window.</p>
         </div>
         <div class="seg" role="group" aria-label="Data scope">
           <button id="p-one" aria-pressed="false">One merchant</button>
@@ -781,31 +752,28 @@ footer{padding:56px 0 90px}
       <div class="figure-foot" style="border-top:0">
         <div class="bars" id="vol-bars"></div>
         <p class="tiny" style="margin:14px 0 0">The vertical mark on each bar is the
-        eight-attempt floor. Below it the agent refuses to evaluate the outage test at all,
-        rather than reading a result off two or three attempts.</p>
+        eight-attempt floor. Below it the agent does not evaluate the outage test.</p>
         <div class="rv" id="p-read" style="margin-top:16px"></div>
       </div>
     </div>
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>The same effect on collection</h3>
-        <p class="small">Letting one customer's subscriptions share a single estimate — rather
-        than each merchant learning that customer separately — is worth <b>+9.53 percentage
-        points</b> (±1.81) in the hard world, and <b>+3.47</b> at the gentler calibration whose
-        failure rate matches the published record. Like the headline, it is a curve in how hard
-        the world is rather than a single number.</p>
-        <p class="small" style="margin-bottom:0">Because the legal position on sharing one
-        customer's outcomes across merchants is unsettled, pooling is a <b>per-customer
-        permission</b> rather than an assumption, and the cost of withholding it is measured:
-        pooling only for customers who agreed costs 4.79 points at half consent in the hard
-        world, and 1.48 at the gentler one.</p>
+        <h3>Effect on collection rate</h3>
+        <p class="small">Sharing one estimate across a customer's subscriptions, instead of each
+        merchant estimating that customer separately, is worth <b>+9.53 percentage points</b>
+        (±1.81) at <code>pop_spend=1.05</code> and <b>+3.47</b> at 0.80, the calibration whose
+        failure rate matches the published band. The value varies with world hardness.</p>
+        <p class="small" style="margin-bottom:0">The legal position on sharing one customer's
+        outcomes across merchants is unsettled, so pooling is a <b>per-customer permission</b>.
+        Pooling only for consenting customers costs 4.79 points at half consent at
+        <code>pop_spend=1.05</code>, and 1.48 at 0.80.</p>
       </div>
       <div class="card">
-        <h3>Pooling is also the blind spot</h3>
-        <p class="small">Customers are spread across eight banks. When one bank has an incident, it
-        lifts the pooled failure rate by roughly an eighth of its severity, which is not enough for
-        the test to fire — overwhelming locally, invisible in aggregate.</p>
+        <h3>Bank-level outages</h3>
+        <p class="small">Customers are spread across eight banks. An incident at one bank lifts
+        the pooled failure rate by roughly an eighth of its severity, which is below the
+        detection threshold. Pooling hides outages confined to a single bank.</p>
         <div class="bars" id="bank-bars" style="margin-top:14px"></div>
         <p class="tiny" style="margin-top:14px">200 customers, four windows, 8 populations. Share
         of outage windows detected.</p>
@@ -813,12 +781,12 @@ footer{padding:56px 0 90px}
     </div>
 
     <div class="card" style="margin-top:16px;border-color:var(--warn);background:var(--warn-soft)">
-      <h3 style="color:var(--warn-ink)">This rests on an unresolved legal question</h3>
-      <p class="small" style="margin-bottom:0;color:var(--ink-2)">Whether a payment aggregator may
-      lawfully use one merchant's transaction outcomes to schedule another merchant's debit for
-      the same customer has not been established. Razorpay's merchant terms, their privacy policy
-      and the relevant RBI directions have not been read. It is recorded in the repository as an
-      open question, not a footnote, because it underpins the strongest claim here.</p>
+      <h3 style="color:var(--warn-ink)">Legal status</h3>
+      <p class="small" style="margin-bottom:0;color:var(--ink-2)">Whether a payment aggregator
+      may lawfully use one merchant's transaction outcomes to schedule another merchant's debit
+      for the same customer has not been established. Razorpay's merchant terms, their privacy
+      policy and the relevant RBI directions have not been read. The repository records this as
+      an open question.</p>
     </div>
   </div>
 </section>
@@ -831,11 +799,10 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">06</div>
       <div>
-        <h2>Three declines that look the same and mean different things</h2>
-        <p>Razorpay publishes the list of reasons it returns on a failed payment — 110 of them,
-        normalised from the underlying network's codes. Reading that list against this project's
-        own decline categories turned up two states it had no name for, and both change what the
-        right next action is.</p>
+        <h2>Decline categories</h2>
+        <p>Razorpay publishes the reasons it returns on a failed payment: 110 of them,
+        normalised from the underlying network's codes. Mapping them onto this project's decline
+        categories surfaced two states that change the correct next action.</p>
       </div>
     </div>
 
@@ -843,7 +810,7 @@ footer{padding:56px 0 90px}
       <div class="figure-head">
         <div>
           <h3>Pick a decline</h3>
-          <p class="tiny" style="margin:0">What the agent can and cannot work out from each.</p>
+          <p class="tiny" style="margin:0">What each decline tells the agent.</p>
         </div>
         <div class="seg" role="group" aria-label="Decline reason">
           <button id="d-z9" aria-pressed="true">Insufficient funds</button>
@@ -855,9 +822,8 @@ footer{padding:56px 0 90px}
       <div class="figure-foot">
         <p class="tiny" style="margin:0">Source: Razorpay's published
         <code>payments_error_reasons</code> list, 110 distinct reasons, committed verbatim to the
-        repository. <b>The second and third are not simulated and carry no frequency</b> — the
-        simulated world models neither state, and no source gives a rate for either, so putting a
-        number on them would be inventing one.</p>
+        repository. The second and third states are not simulated and carry no frequency. No
+        source gives a rate for either.</p>
       </div>
     </div>
   </div>
@@ -874,23 +840,21 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">07</div>
       <div>
-        <h2>Does this world behave like the real one?</h2>
-        <p>A simulated result cannot be checked by a reader. What can be checked is whether
-        the world producing it reproduces figures published by other people — figures this
-        project did not fit to. There is no public benchmark for payment retry scheduling:
-        no shared dataset, no held-out set, no leaderboard. What exists is aggregate
-        statistics published by companies that sell recovery software. They are second-hand
-        and they aggregate customer bases that are not comparable. They are still the only
-        outside check available, and the world was scored against four of them.</p>
+        <h2>External validation</h2>
+        <p>There is no public benchmark for payment retry scheduling: no shared dataset, no
+        held-out set, no leaderboard. The available comparisons are aggregate statistics
+        published by companies selling recovery software. They are second-hand and they
+        aggregate customer bases that are not comparable. The simulation is scored against
+        four of them below.</p>
       </div>
     </div>
 
     <div class="figure">
       <div class="figure-head">
         <div>
-          <h3>Four published figures, scored not fitted</h3>
-          <p class="tiny" style="margin:0">The world is calibrated against a single anchor.
-          None of the four below was used to set a parameter.</p>
+          <h3>Four published figures</h3>
+          <p class="tiny" style="margin:0">The simulation is calibrated against a single
+          anchor. None of the four below was used to set a parameter.</p>
         </div>
       </div>
       <div class="figure-foot">
@@ -942,43 +906,38 @@ footer{padding:56px 0 90px}
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
-        <h3>Why two hits matter more than they look</h3>
-        <p class="tiny" style="margin:8px 0 0">They are properties of different parts of the
-        model. The first is a property of the simulated world — how often an account is short
-        on the due date. The second is a property of a baseline policy running inside that
-        world — what Razorpay's own documented schedule of T, T+1, T+2, T+3 recovers. Two
-        different pieces agreeing with the outside record at the same setting is harder to
-        arrange by accident than one.</p>
+        <h3>The two matches</h3>
+        <p class="tiny" style="margin:8px 0 0">The two come from different parts of the model.
+        The first measures the simulated world: how often an account is short on the due date.
+        The second measures a baseline policy running inside it: what Razorpay's documented
+        T, T+1, T+2, T+3 schedule recovers. Both fall inside their published bands at the same
+        calibration.</p>
       </div>
       <div class="card">
-        <h3>The two misses have two different causes</h3>
+        <h3>The two mismatches</h3>
         <p class="tiny" style="margin:8px 0 0">Recovery is too high because no simulated
-        customer is ever simply unable to pay — a clairvoyant scheduler collects 100% here.
+        customer is permanently unable to pay: a clairvoyant scheduler collects 100% here.
         Recovery is too slow because a mandate's due date and its customer's payday are drawn
-        independently, so the wait between them averages half a cycle. Both are properties of
-        the world, not of the agent. They were once written down as sharing one cause; that
-        was checked and corrected.</p>
+        independently, so the gap between them averages half a cycle. Both are properties of
+        the simulated world rather than of the agent, and they have separate causes.</p>
       </div>
     </div>
 
     <div class="card" style="margin-top:22px">
-      <h3>Calibrations that score better were found twice, and rejected both times</h3>
+      <h3>Alternative calibrations</h3>
       <p class="tiny" style="margin:8px 0 0">Adding customers who cannot pay brings the third
-      row inside its band. So does adding temporary holds on the account. Each was swept, and
-      each one <b>broke the first row</b> — the target that currently hits — while doing it.
-      A grid search found a cell satisfying two targets at once; at that cell, both targets it
-      had <i>not</i> been tuned against missed. Two hits obtained by turning two dials are a
-      curve fit with four points, so no recalibration was taken and the reported setting is
-      unchanged. Across fourteen alternative worlds swept so far, none scores better than the
-      one above.</p>
+      row inside its band, and so does adding temporary account holds. Both were swept, and
+      both moved the first row outside its band. A grid search found a cell satisfying two
+      targets at once; at that cell the two targets it had not been tuned against both moved
+      outside their bands. Fourteen alternative calibrations have been swept and none scores
+      better against the four figures than the one reported here.</p>
     </div>
 
     <p class="tiny" style="margin-top:22px">
-      What this cannot establish: the published figures are vendor marketing material, none is
-      ground truth, and a world can reproduce an aggregate statistic while being wrong about
-      the mechanism underneath it. Four numbers is a small suite, and five more targets are
-      specified but not yet built. This is the strongest outside check the project has, and it
-      is not a benchmark.
+      Limits of this comparison: the published figures are vendor material rather than ground
+      truth, and a simulation can reproduce an aggregate statistic while modelling the
+      underlying mechanism incorrectly. Four figures is a small set; five further targets are
+      specified but not yet implemented.
     </p>
   </div>
 </section>
@@ -988,10 +947,11 @@ footer{padding:56px 0 90px}
     <div class="shead">
       <div class="n">08</div>
       <div>
-        <h2>What is simulated, and what is known</h2>
+        <h2>Scope</h2>
         <p>No Razorpay transaction, mandate or decline code has been observed by this project.
-        Every percentage and rupee total on this page comes from a simulated world written by the
-        same person who wrote the agent being measured, which is the main threat to all of it.</p>
+        All percentages and rupee totals here come from simulation. The simulation and the agent
+        share an author, so the results are not independent evidence and should not be read as
+        production estimates.</p>
       </div>
     </div>
 
@@ -1024,35 +984,37 @@ footer{padding:56px 0 90px}
           <li>How accurately payday can be predicted in India</li>
           <li>Whether cross-merchant pooling is legally permitted</li>
           <li>What fraction of debits fail during a UPI incident</li>
-          <li>Whether Razorpay's API accepts the request bodies written here. Requests have now been
-            sent, but they are rejected at authentication before the body is read</li>
+          <li>Whether Razorpay's API accepts the recurring-charge request body written here.
+            The client authenticates against the test API and reads successfully; charging
+            requires an authorised mandate, which this project does not have</li>
         </ul>
       </div>
     </div>
 
-    <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">The limits worth knowing before quoting anything</h3>
+    <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">Limitations</h3>
     <ul class="limits" style="margin-top:14px">
-      <li><b>The headline is conditional on two parameters, not one.</b> At ±1 day of payday error
-        the simple baseline wins by 3.5 points; the +36.66 point figure is measured at ±7 days.
-        It also depends on how hard the world is: the uplift runs +3.51 to +36.43 across the
-        plausible range of spending pressure, and is +6.29 at the setting where this world's
-        due-date failure rate matches the published record.</li>
-      <li><b>The headline batch runs with the richer decline taxonomy switched off.</b> No frozen
-        accounts, revoked mandates or limit hits. Switching it on costs between 0 and 13.5 points,
-        and every rate in that sweep is a guess.</li>
-      <li><b>The largest single sensitivity is a guessed constant.</b> How often a debit is refused
-        by a transaction or mandate limit is published nowhere; sweeping it over 0.00 / 0.05 / 0.15
-        costs 0.00 / −2.87 / −13.46 points. The curve is steeply non-linear, so the middle of the
-        range is not the middle of the damage.</li>
-      <li><b>The timing score contains a hand-chosen discount.</b> Sweeping it across a plausible
-        range moves the headline over roughly 7 points.</li>
-      <li><b>Four of the simulation's twenty-five checks are red on a clean checkout</b>, on purpose,
-        each with a written reason rather than a loosened threshold. Two are calibration gates that
-        no parameter can fix; two are controls kept visibly failing so a rewrite stays auditable.</li>
-      <li><b>Simulation results are not production estimates.</b> The published industry benchmark
-        for retry optimisation is a 6–8% uplift. A simulated +36.66 points is a statement about
-        this world.</li>
-      <li><b>The study is small.</b> 100 customers, 8 populations, one run seed each.</li>
+      <li><b>The headline depends on two parameters.</b> At ±1 day of payday error the
+        baseline collects 3.5 points more; the +36.66 point figure is measured at ±7 days. It
+        also depends on spending pressure: the difference runs +3.51 to +36.43 across the
+        plausible range, and is +6.29 at the setting where this world's due-date failure rate
+        matches the published band.</li>
+      <li><b>The headline batch runs with the richer decline taxonomy switched off</b>, so it
+        contains no frozen accounts, revoked mandates or limit hits. Switching it on costs
+        between 0 and 13.5 points. Every rate in that sweep is unsourced.</li>
+      <li><b>The largest single sensitivity is an unsourced rate.</b> How often a debit is
+        refused by a transaction or mandate limit is not published anywhere. Sweeping it over
+        0.00 / 0.05 / 0.15 costs 0.00 / −2.87 / −13.46 points. The curve is non-linear, so the
+        midpoint of the range is not the midpoint of the cost.</li>
+      <li><b>The timing score contains a hand-chosen discount factor.</b> Sweeping it across
+        a plausible range moves the headline by roughly 7 points.</li>
+      <li><b>Four of the simulation's twenty-five checks fail on a clean checkout.</b> Each
+        has a written reason recorded rather than a loosened threshold. Two are calibration
+        gates that no parameter fixes; two are controls left failing so that a rewrite of the
+        surrounding tests remains auditable.</li>
+      <li><b>Simulation results are not production estimates.</b> The published industry
+        benchmark for retry optimisation is a 6–8% uplift. The +36.66 point figure describes
+        this simulated world at <code>pop_spend=1.05</code>.</li>
+      <li><b>The study is small:</b> 100 customers, 8 populations, one run seed each.</li>
     </ul>
   </div>
 </section>
@@ -1070,9 +1032,7 @@ footer{padding:56px 0 90px}
     </div>
     <p class="tiny" style="margin-top:22px">
       Every scenario on this page is pre-computed by <code>scripts/build_page_data.py</code>
-      against the frozen model and read from a committed JSON file. Nothing is recomputed in
-      JavaScript, because a second implementation of the scoring rule would be a second thing to
-      keep correct.
+      and read from a committed JSON file. The scoring rule is not reimplemented in JavaScript.
     </p>
   </div>
 </footer>
@@ -1646,31 +1606,29 @@ function drawPooling() {
    ========================================================================= */
 const DECLINES = {
   z9: {
-    what: "The account did not hold enough money. This is nearly every real failure, and the " +
-      "only one the simulated world models.",
-    learn: "<b>A measurement.</b> The balance was below ₹550 at that moment. That narrows " +
-      "the agent's estimate of both the balance and the salary date, and it schedules the next " +
-      "attempt for the day with the best remaining chance.",
+    what: "The account did not hold enough money. This accounts for nearly every real " +
+      "failure, and it is the only decline the simulated world models.",
+    learn: "The balance was below ₹550 at that moment. That bound narrows the estimate of " +
+      "both the balance and the salary date, and the next attempt is scheduled for the day " +
+      "with the highest remaining chance of clearing.",
     tag: "<span class=\"tag good\">simulated and measured</span>"
   },
   blk: {
-    what: "The money is in the account, and another mandate has already claimed it. Not an empty " +
-      "account: the balance is adequate. Not a limit: nothing was breached.",
-    learn: "<b>The opposite of an empty account.</b> It is the one decline that proves the " +
-      "customer <em>had</em> money at a known moment, so treating it as evidence of an empty " +
-      "account would push the estimate the wrong way. Retrying into it is also the wrong action, " +
-      "because the balance was never available. A merchant who can only see its own debits " +
-      "cannot tell this apart from an empty account at all.",
+    what: "The balance is adequate, but another mandate has already claimed it. The account " +
+      "is not empty and no limit was breached.",
+    learn: "The customer had money at a known moment, so recording this as evidence of an " +
+      "empty account moves the estimate in the wrong direction. Retrying is also wrong, since " +
+      "the balance was never available to this mandate. A merchant seeing only its own debits " +
+      "cannot distinguish this from an empty account.",
     tag: "<span class=\"tag warn\">not simulated · no frequency known</span>"
   },
   deem: {
     what: "The response was lost. Whether the debit went through is unknown, and the customer " +
       "may already have been charged.",
-    learn: "<b>Nothing about the balance.</b> Retrying risks charging someone twice, which " +
-      "is worse than not collecting: it costs a refund, a complaint and probably the mandate. " +
-      "A pure timing score cannot express this — it only compares the chance of success now " +
-      "against later, and no pair of those numbers means <em>do not act, because the question is " +
-      "unanswerable</em>. This is why the agent has a diagnosis step at all.",
+    learn: "No information about the balance. Retrying risks charging the customer twice. A " +
+      "timing score compares the chance of success now against later, and no pair of those " +
+      "numbers encodes <em>do not act, because the outcome is unknown</em>. Cases like this " +
+      "are handled by the diagnosis step.",
     tag: "<span class=\"tag warn\">not simulated · no frequency known</span>"
   }
 };
@@ -1680,7 +1638,7 @@ function drawDeclines() {
   $("decl-body").innerHTML =
     "<div><div class=\"rk\">What happened</div><div class=\"rv\">" + d.what +
       "<span class=\"said\">" + d.tag + "</span></div></div>" +
-    "<div><div class=\"rk\">What the agent takes from it</div><div class=\"rv\">" + d.learn +
+    "<div><div class=\"rk\">What it tells the agent</div><div class=\"rv\">" + d.learn +
       "</div></div>";
 }
 

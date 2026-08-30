@@ -47,7 +47,14 @@ if PKG not in sys.path:
 from agent.execution.razorpay_executor import (API_BASE, MandateBinding,
                                                RazorpayExecutor,
                                                _UrllibTransport)
+from agent.llm.client import _load_dotenv
 from agent.ports import MandateRef
+
+# Credentials live in `.env` at the repo root, which is gitignored. Reuse the
+# loader the LLM client already uses so there is one place that reads it and one
+# rule about precedence: an environment variable set by the caller always wins.
+# NOTHING IN THIS SCRIPT EVER PRINTS A KEY.
+_load_dotenv()
 
 HOST = "api.razorpay.com"
 CHARGE_URL = f"{API_BASE}/payments/create/recurring"
@@ -179,49 +186,129 @@ def rung3(captured: list[dict]) -> dict:
         out = ex._outcome_from_payment(payload, t=0)
 
         # (b) the whole money path, exactly as agent/loop.py calls it, with the
-        #     captured response replayed. Proves what a live 401 would do to a
-        #     real mandate rather than what the parser does to a dict.
+        #     captured response replayed.
+        #
+        #     `attempt` RAISES on a request-level rejection, and that is the
+        #     expected result here: a refused credential is a configuration
+        #     fault, not a decline, so it must not come back as an
+        #     AttemptOutcome the belief filter would learn from. The raise is
+        #     recorded as the outcome of this rung.
         ex2 = _executor(_ReplayTransport(status, payload))
-        end = ex2.attempt(MandateRef(0, 0, 0), 499.0, 0, action_id="probe")
+        raised = None
+        end = None
+        try:
+            end = ex2.attempt(MandateRef(0, 0, 0), 499.0, 0, action_id="probe")
+        except Exception as e:                      # noqa: BLE001
+            raised = type(e).__name__
 
         case = {
             "label": cap["label"],
             "http_status": status,
             "parser": {"code": out.code, "success": out.success,
                        "pending": out.pending, "raw_code": out.raw_code},
-            "attempt": {"code": end.code, "success": end.success,
-                        "pending": end.pending, "raw_code": end.raw_code},
+            "attempt": ({"raised": raised} if raised else
+                        {"code": end.code, "success": end.success,
+                         "pending": end.pending, "raw_code": end.raw_code}),
         }
         rec["cases"].append(case)
         print(f"    {cap['label']}  (HTTP {status})")
         print(f"      _outcome_from_payment -> code={out.code!r} "
               f"success={out.success} pending={out.pending} "
               f"raw_code={out.raw_code!r}")
-        print(f"      attempt()             -> code={end.code!r} "
-              f"success={end.success} pending={end.pending} "
-              f"raw_code={end.raw_code!r}")
+        if raised:
+            print(f"      attempt()             -> raised {raised} "
+                  f"(expected: a refused request is not a decline)")
+        else:
+            print(f"      attempt()             -> code={end.code!r} "
+                  f"success={end.success} pending={end.pending} "
+                  f"raw_code={end.raw_code!r}")
     return rec
 
 
-def rung45() -> dict:
-    print("\nRUNG 4  authenticate for real and take a 200")
-    print("RUNG 5  charge success@razorpay / failure@razorpay")
-    kid = os.environ.get("RAZORPAY_KEY_ID", "")
-    sec = os.environ.get("RAZORPAY_KEY_SECRET", "")
+def _creds():
+    return (os.environ.get("RAZORPAY_KEY_ID", ""),
+            os.environ.get("RAZORPAY_KEY_SECRET", ""))
+
+
+def rung4() -> dict:
+    """Authenticate for real against a READ-ONLY endpoint.
+
+    `GET /v1/payments?count=1` lists payments. It creates nothing, charges
+    nothing and is safe to run against any account. A 200 here proves the
+    credential is accepted and the transport handles a success path, which the
+    unauthenticated rungs cannot show.
+    """
+    print("\nRUNG 4  authenticate for real, read-only")
+    kid, sec = _creds()
     if not kid or not sec:
-        print("    SKIPPED -- no credentials on this machine.")
-        print("    Needs: RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (a rzp_test_ pair),")
-        print("           and for rung 5 an AUTHORISED test mandate, i.e. a real")
-        print("           customer_id and token_id from a completed AutoPay")
-        print("           registration. Test-mode registration is mocked, so this")
-        print("           is obtainable without a bank, but not without an account.")
-        print("    NOT counted as a pass. Nothing in docs/ may claim these rungs.")
-        return {"rung": "4-5", "state": "SKIPPED", "reason": "no credentials"}
-    print("    Credentials present, but rungs 4-5 are NOT run automatically:")
-    print("    they create entities on a real Razorpay account. Run them")
-    print("    deliberately, with the account owner's knowledge.")
-    return {"rung": "4-5", "state": "NOT RUN", "reason": "credentials present, "
-            "creation of remote entities requires explicit intent"}
+        print("    SKIPPED -- no RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET.")
+        print("    Put them in .env at the repo root. NOT counted as a pass.")
+        return {"rung": 4, "state": "SKIPPED", "reason": "no credentials"}
+
+    mode = "test" if kid.startswith("rzp_test_") else "LIVE"
+    print(f"    key mode: {mode}  (prefix {kid[:9]!r})")
+    if mode != "test":
+        print("    REFUSED. This key is not a rzp_test_ key. This script will")
+        print("    not authenticate with a live key: every rung below creates")
+        print("    or reads real merchant data. Use a test-mode key.")
+        return {"rung": 4, "state": "REFUSED", "reason": "not a test-mode key"}
+
+    t = _UrllibTransport(kid, sec, timeout=20.0)
+    url = f"{API_BASE}/payments?count=1"
+    started = time.time()
+    try:
+        status, payload = t.get(url)
+        err = None
+    except Exception as e:                      # noqa: BLE001
+        status, payload, err = None, {}, repr(e)
+    ms = int((time.time() - started) * 1000)
+    print(f"      GET    {url}")
+    print(f"      status {status}   ({ms} ms)")
+    if err:
+        print(f"      transport error: {err}")
+    shape = (sorted(payload.keys()) if isinstance(payload, dict) else type(payload).__name__)
+    print(f"      keys   {shape}")
+    if isinstance(payload, dict) and "count" in payload:
+        print(f"      count  {payload.get('count')}")
+    ok = status == 200
+    print(f"    {'PASS' if ok else 'FAIL'} -- the credential is "
+          f"{'accepted' if ok else 'NOT accepted'} by the API")
+    # Keep the SHAPE, never the contents: a payment list is merchant data.
+    return {"rung": 4, "state": "PASS" if ok else "FAIL", "http_status": status,
+            "response_keys": shape if isinstance(shape, list) else None,
+            "elapsed_ms": ms, "transport_error": err}
+
+
+def rung5() -> dict:
+    """Charge a mandate against success@razorpay / failure@razorpay.
+
+    NOT RUN, and the reason is a missing PREREQUISITE rather than a missing
+    key. `payments/create/recurring` charges a stored token, and a token only
+    exists after an AutoPay mandate has been authorised through the checkout
+    flow by a customer. Test mode mocks the bank's approval, not the flow: it
+    still needs a customer, an order with `method=upi` and
+    `token.max_amount`, and a completed authorisation that returns a
+    `token_id`.
+
+    That is a registration integration, not a connectivity rung, and running it
+    would create customers, orders and tokens on the account. It is reported as
+    NOT RUN rather than counted, and `MandateBinding` is the place the
+    `customer_id`/`token_id` pair is supplied once it exists.
+    """
+    print("\nRUNG 5  charge success@razorpay / failure@razorpay")
+    kid, _ = _creds()
+    if not kid:
+        print("    SKIPPED -- no credentials.")
+        return {"rung": 5, "state": "SKIPPED", "reason": "no credentials"}
+    print("    NOT RUN. Needs an AUTHORISED mandate, not just a key: a token_id")
+    print("    from a completed UPI AutoPay registration. Test mode mocks the")
+    print("    bank approval, not the registration flow, so this needs a")
+    print("    customer, an order with method=upi and token.max_amount, and a")
+    print("    checkout authorisation. That is a registration integration and")
+    print("    it creates entities on the account.")
+    print("    NOT counted as a pass. Nothing in docs/ may claim this rung.")
+    return {"rung": 5, "state": "NOT RUN",
+            "reason": "no authorised mandate: token_id required"}
 
 
 def main() -> int:
@@ -246,7 +333,8 @@ def main() -> int:
     r2 = rung2()
     results["rungs"] += [r1, r2]
     results["rungs"].append(rung3([r1, r2]))
-    results["rungs"].append(rung45())
+    results["rungs"].append(rung4())
+    results["rungs"].append(rung5())
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

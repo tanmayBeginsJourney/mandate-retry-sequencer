@@ -123,9 +123,13 @@ RETRACTIONS = [
         pattern=r"no request has ever been sent|never sent a byte"
                 r"|nothing in it has ever talked to razorpay"
                 r"|have never been sent",
-        why="scripts/razorpay_ladder.py sent real requests on 30 Aug 2026 and "
-            "took a live 401. What is still true is narrower: no request has "
-            "been AUTHENTICATED, so Razorpay has never read one of our bodies.",
+        why="scripts/razorpay_ladder.py talks to the live API. The client "
+            "also AUTHENTICATES: rung 4 takes an HTTP 200 on GET /v1/payments "
+            "with a rzp_test_ key. What remains true is narrower and is the "
+            "only form allowed -- Razorpay has never read a recurring-charge "
+            "BODY, because that endpoint charges a stored token and no "
+            "authorised mandate exists. Check logs/razorpay_ladder.json for "
+            "which rungs actually ran before writing any of this down.",
         retracted_on="2026-08-30",
     ),
     Retraction(

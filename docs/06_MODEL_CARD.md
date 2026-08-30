@@ -464,11 +464,19 @@ that need no account:
 | 1 | an unauthenticated POST to the real charge URL returns a real status and a real error envelope | **RUN**, HTTP 401 |
 | 2 | the same POST with a well-formed but fake `rzp_test_` key | **RUN**, HTTP 401, identical envelope |
 | 3 | the shipped parser and the shipped `attempt()` on those real envelopes | **RUN** — and it **failed**, see error 28 |
-| 4 | authenticate successfully and take a 200 | **NOT RUN** — needs a `rzp_test_` key |
-| 5 | charge `success@razorpay` / `failure@razorpay` | **NOT RUN** — needs a key and an authorised test mandate |
+| 4 | authenticate successfully and take a 200 | **RUN**, HTTP 200 on `GET /v1/payments?count=1` with a `rzp_test_` key |
+| 5 | charge `success@razorpay` / `failure@razorpay` | **NOT RUN** — needs an authorised mandate, i.e. a `token_id` from a completed AutoPay registration |
 
-`logs/razorpay_ladder.json` is the transcript. **Rungs 4 and 5 are not counted
-as passes anywhere and nothing in `docs/` may claim them.**
+`logs/razorpay_ladder.json` is the transcript. **Rung 5 is not counted as a
+pass anywhere and nothing in `docs/` may claim it.**
+
+⚠️ **What rung 4 does and does not establish.** It proves the credential is
+accepted and that the shipped transport handles a success path — the
+authentication half of the integration is real. It says nothing about the
+recurring-charge **body**, because that endpoint charges a stored token and no
+authorised mandate exists. `test mode` mocks the bank's approval, not the
+registration flow, so obtaining a `token_id` is a checkout integration rather
+than another connectivity rung.
 
 **What rungs 1-3 do NOT establish.** They are rejected at the authentication
 layer, so **Razorpay never read the request body.** The request shapes still
@@ -492,8 +500,8 @@ gates could not.
 | Stage 0 hands the executor the `action_id` it audited | **gated**, R10. Error 29 |
 | every named mutant trips its own gate | **gated**, `--mutants`, 3/3. Error 30 |
 | DNS, TLS and transport against the live API | **RUN**, `scripts/razorpay_ladder.py` rungs 0-2 |
-| whether Razorpay accepts our request body | **UNTESTED** — rungs 1-2 are rejected before the body is read |
-| whether an authenticated request succeeds at all | **UNTESTED** — rung 4, needs a key |
+| whether Razorpay accepts our recurring-charge body | **UNTESTED** — rungs 1-2 are rejected before the body is read, and rung 4 is a GET |
+| whether an authenticated request succeeds at all | **RUN**, rung 4: HTTP 200 with a `rzp_test_` key |
 | whether test mode returns populated `error_reason` values | **UNTESTED** |
 | whether the Downtime feed is seeded in test mode | **UNTESTED** |
 | the pre-debit notification call | **DESIGNED, WIRED TO NOTHING.** `RazorpayExecutor.notify()` raises `NotImplementedError` on purpose — wiring it needs a change to `Stage0Gate`, and "Stage 0 is unchanged when the backend changes" is the claim the whole file rests on |

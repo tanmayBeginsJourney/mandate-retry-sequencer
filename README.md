@@ -1,120 +1,119 @@
 # UPI AutoPay Recovery Agent
 
-**An agent that decides *when* to retry a failed subscription debit, by tracking
-a probability distribution over the customer's bank balance and over the day
-their salary arrives.**
+An agent that schedules retries for failed subscription debits on UPI AutoPay.
+It maintains a probability distribution over the customer's bank balance and
+over the day their salary arrives, and attempts the debit when the balance is
+likely to cover it.
 
-Indian subscription payments run on UPI AutoPay: a mandate authorises a merchant
-to debit a customer once per billing cycle, and when the account is short at
-that exact moment the debit is declined. The standard answer is a fixed retry
-schedule — Razorpay documents charge on day T, then retry on T+1, T+2 and T+3,
-then halt — which spends every permitted attempt inside a four-day window that
-is often still before the customer is paid. Worse, it spends them: an attempt
-is capped at four per cycle, and a mandate that *fails* all four dies,
-forfeiting every billing cycle it had left.
+## The problem
 
-This project treats each decline as a measurement. A failed ₹550 debit says the
-balance was under ₹550 at that moment; a successful one says it was at least
-₹550. Those observations update a belief about the balance and about which day
-of the cycle the salary lands, and the agent schedules the next attempt for the
-day with the best remaining chance of clearing. Every proposed money action
-passes a constraint layer that enforces NPCI's mandate rules before execution,
-and every decision — including the decision to wait — is appended to an audit
-log.
+Indian subscription payments run on UPI AutoPay. A mandate authorises a merchant
+to debit a customer once per billing cycle. If the account is short at the
+moment of the charge, the debit is declined.
 
-| | agent | fixed schedule | |
+NPCI permits four attempts per mandate per cycle: one presentation and three
+retries. Razorpay's documented schedule uses them on day T, T+1, T+2 and T+3,
+then halts. That spends every attempt inside four days of the due date, which is
+often before the customer is paid. A mandate that fails all four attempts dies
+and forfeits its remaining billing cycles.
+
+## Approach
+
+Each decline is treated as a measurement. A failed ₹550 debit means the balance
+was below ₹550 at that moment; a successful one means it was at least ₹550.
+
+The agent maintains a distribution over the customer's balance and payday.
+Each attempt outcome updates it. Once a day the timing policy compares the
+probability of clearing today against the best probability available on any
+remaining day of the cycle, and either attempts or waits. Proposed actions pass
+through a constraint layer that enforces NPCI's mandate rules before execution.
+Every decision is appended to an audit log, including the decision to wait.
+
+## Results
+
+| | agent | fixed schedule | source |
 |---|---|---|---|
-| Billing cycles collected | **94.36%** | — | `agent.batch_report` |
-| Recovered across the batch | **₹5,994,430** | — | `agent.batch_report` |
-| Of the debits that would fail on their due date, share recovered | **90.55%** | 16.35% | `test_recovery_rates` |
-| Mandates still alive after 120 days | **97.2%** | 32.1% | `test_recovery_rates` |
+| Billing cycles collected | 94.36% | — | `agent.batch_report` |
+| Recovered across the batch | ₹5,994,430 | — | `agent.batch_report` |
+| Of debits that would fail on their due date, share recovered | 90.55% | 16.35% | `test_recovery_rates` |
+| Mandates alive after 120 days | 97.2% | 32.1% | `test_recovery_rates` |
 
-*Two experiments, named so they are not mistaken for one. The first two rows are
-100 customers × 5 mandates over **4** held-out populations; the last two are the
-same design over **8**. Both at 120 days, payday known to ±7 days, and both at
-the repository's default calibration `pop_spend=1.05` — which is a hard world,
-and the next section is about what happens at a realistic one. The simple
-payday-timing baseline `payday_wait` collects 57.70% of cycles, +36.66 points
-behind the agent (2 SE 2.47).*
+The first two rows are 100 customers × 5 mandates over 4 held-out populations.
+The last two use the same design over 8 populations. Both run 120 days with
+payday known to ±7 days, at `pop_spend=1.05`. The `payday_wait` baseline
+collects 57.70% of cycles, 36.66 points below the agent (2 SE 2.47).
 
-> **Every result here comes from a simulation.** No Razorpay transaction,
-> mandate or decline code has been observed by this project. How far the
-> simulation can be trusted is measured below rather than asserted.
+The fixed schedule's survival rate is low because it uses all four attempts
+within four days of the due date and reaches the NPCI cap while the account is
+still empty. The cycle-collection metric prices mandate death directly: a dead
+mandate forfeits its remaining cycles, so no lifetime-value constant is needed.
 
-**Interactive demo.** [`docs/index.html`](docs/index.html) walks through one
-customer's month, the timing decision day by day, a rail outage, and the cases
-where the simple baseline wins. Static page, no build step:
-`python -m http.server --directory docs`.
+All results are simulated. No Razorpay transaction, mandate or decline code has
+been observed by this project.
 
----
+[`docs/index.html`](docs/index.html) is an interactive walkthrough of one
+customer's month, a rail outage, and the cases where the baseline wins. Static
+page, no build step: `python -m http.server --directory docs`.
 
-## Does the simulation resemble reality?
+## External validation
 
-There is **no public benchmark** for payment retry scheduling — no shared
-dataset, no held-out set, no leaderboard. What exists is a set of aggregate
-statistics published by companies that sell recovery software. They are
-second-hand, they aggregate non-comparable customer bases, and one states in its
-own methodology note that its figures are ranges rather than laws.
+No public benchmark exists for payment retry scheduling — no shared dataset,
+held-out set or leaderboard. The available comparisons are aggregate statistics
+published by companies selling recovery software. They are second-hand, they
+aggregate customer bases that are not comparable, and one states in its
+methodology note that its figures are ranges rather than laws.
 
-They are still useful for one reason: **this project did not fit to them.** The
-world is calibrated against a single anchor. Everything below is scored, not
-tuned.
+The simulation is calibrated against a single anchor. The four figures below
+were not used in calibration.
 
 | | measured | published | |
 |---|---|---|---|
-| Share of debits failing on their due date | **13.68%** | 8–15% | **hit** |
-| Recovery under a fixed-interval retry schedule | **27.85%** | 20–40% | **hit** |
-| Recovery under smart retry timing | 97.38% | 70–85% | miss — too high |
-| Share of recoveries landing inside 10 days | 41.84% | 85–95% | miss — too slow |
+| Share of debits failing on their due date | 13.68% | 8–15% | hit |
+| Recovery under a fixed-interval retry schedule | 27.85% | 20–40% | hit |
+| Recovery under smart retry timing | 97.38% | 70–85% | miss, too high |
+| Share of recoveries landing inside 10 days | 41.84% | 85–95% | miss, too slow |
 
-*8 held-out populations at `pop_spend=0.80` — a gentler world than the default,
-chosen because it is the one whose failure rate matches the published record.
-The same script prints the `1.05` rows quoted at the top. Reproduce with
-`python agent/tests/test_recovery_rates.py`. Sources in
-[`docs/01_FACTS.md`](docs/01_FACTS.md).*
+8 held-out populations at `pop_spend=0.80`, the calibration whose failure rate
+falls inside the published band. Reproduce with
+`python agent/tests/test_recovery_rates.py`. Sources are listed in
+[`docs/01_FACTS.md`](docs/01_FACTS.md).
 
-Two independent bands hit at the same calibration. The first is a property of
-the world; the second is a property of a baseline policy running inside it —
-different parts of the model, agreeing with the outside record together.
+The two hits come from different parts of the model: the first is a property of
+the simulated world, the second of a baseline policy running inside it.
 
-**The two misses have two different causes**, and both are properties of the
-world rather than of the agent:
+The two misses have separate causes, both in the world model rather than the
+agent:
 
-- **Recovery is too high** because no simulated customer is ever simply unable
-  to pay — a clairvoyant scheduler collects 100% at every calibration tested.
-  Adding customers who genuinely cannot pay brings it into the published band.
-- **Recovery is too slow** because a mandate's due date and its customer's
-  payday are drawn independently, so the wait between them averages half a
-  cycle. Only **35.8%** of at-risk cycles have money inside ten days, and the
-  agent recovers **42.6%** of them inside ten days — it is already beating the
-  ceiling this world sets. Real billing dates cluster near paydays; these do not.
+- Recovery is too high because no simulated customer is permanently unable to
+  pay. A clairvoyant scheduler collects 100% at every calibration tested.
+  Adding customers who cannot pay brings recovery into the published band.
+- Recovery is too slow because a mandate's due date and its customer's payday
+  are drawn independently, so the gap between them averages half a cycle. Only
+  35.8% of at-risk cycles have money available inside ten days, and the agent
+  recovers 42.6% of them in that window. Real billing dates cluster near
+  paydays; these do not.
 
-Both are being worked on
-([`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md)), and the work has already
-falsified one theory: temporary holds on the account were predicted to fix the
-second miss and, measured across 14 alternative worlds, **moved it by under one
-point.** The same sweep found that every alternative world scores worse against
-the published record than the one reported above.
+Temporary account holds were expected to account for the second miss. Swept
+across 14 alternative worlds, they moved it by under one point. No alternative
+world in that sweep scores better against the published figures than the
+calibration above.
 
-**The headline is conditional on how hard the world is**, and that is swept
-rather than assumed. `pop_spend` sets how much of a salary a customer spends per
-cycle:
+### Sensitivity to world hardness
+
+`pop_spend` sets how much of a salary a customer spends per cycle.
 
 | `pop_spend` | baseline per-attempt approval | agent − baseline |
 |---|---|---|
 | 0.60 | 93.2% | +3.51 ±0.88 |
-| **0.80** | **84.6%** | **+6.29 ±1.42** |
+| 0.80 | 84.6% | +6.29 ±1.42 |
 | 0.90 | 66.2% | +14.73 ±1.83 |
 | 1.05 | 39.7% | +36.43 ±3.37 |
 
-*Due-date failure is measured at the two calibrations the recovery study covers:
-**13.68%** at 0.80 and **68.71%** at 1.05.*
+Due-date failure is 13.68% at `pop_spend=0.80` and 68.71% at 1.05.
 
-At 0.80 — the setting that matches the published failure rate — the agent is
-worth **+6.29 points**, which sits inside the 6–8% uplift published as the
-industry benchmark for retry optimisation. Nothing was tuned to land there. The
-larger numbers come from a harsher world, and quoting them without this table
-would be quoting the top of a range. Reproduce with
+At 0.80, where the failure rate matches the published band, the agent is worth
+6.29 points. The published industry benchmark for retry optimisation is a 6–8%
+uplift. No parameter was fitted against either figure. Reproduce with
 `python scripts/spend_sweep.py`.
 
 ## Quickstart
@@ -124,11 +123,10 @@ pip install numpy==2.4.2
 python -m agent.batch_report --pops 4
 ```
 
-**~50 seconds. No API key, no network, no model download.**
+Roughly 50 seconds. No API key, no network, no model download.
 
-It runs the agent over four populations of 100 customers, prints the headline
-with the baseline beside it, and then prints the things that are easy to claim
-and hard to show. Every stopping rule that fired, grouped:
+The run covers four populations of 100 customers and prints the headline beside
+the baseline, then the supporting detail. Stopping rules that fired:
 
 ```
 STOPPING RULES THAT FIRED, grouped by rule
@@ -140,9 +138,8 @@ STOPPING RULES THAT FIRED, grouped by rule
      MANDATE_DEAD             3
 ```
 
-Every constraint refusal, counted twice — once by the gate that refuses, and
-once by an auditor that rebuilds legality from the log alone and is forbidden
-from importing the gate:
+Constraint refusals, counted twice — once by the gate that refuses, and once by
+an auditor that rebuilds legality from the log and cannot import the gate:
 
 ```
                    arm        rule  gate refused  auditor found  agree?
@@ -154,8 +151,8 @@ from importing the gate:
                              TOTAL             0              0     yes   over 8954 executed money actions
 ```
 
-And the full chain behind one recovered payment, which is what querying the
-audit trail by `action_id` returns:
+Querying the audit trail by `action_id` returns the full chain behind one
+payment:
 
 ```
   action_id b9798daaff4e2c93   mandate c11m1
@@ -175,58 +172,53 @@ audit trail by `action_id` returns:
      OK  success=True  recovered Rs 630.00
 ```
 
-The trail for that run is 29,671 events in
-`agent/runs/batch_report_chain.jsonl`, one row per event, append-only.
+That run writes 29,671 events to `agent/runs/batch_report_chain.jsonl`, one row
+per event, append-only.
 
-Two more, both offline:
+Two further offline commands:
 
 ```bash
 python scripts/prove_stage0_refuses.py
 ```
 
-The constraint layer refusing an illegal debit against the *real* Razorpay
-client, with the network transport rigged to raise if it is ever reached — then
-an action injected below the gate, caught by the auditor from the log alone.
+Runs the constraint layer against the Razorpay client with a transport that
+raises if it is ever called, showing that an illegal action is refused before
+any request is made. It then injects an action below the gate, which the auditor
+detects from the log.
 
 ```bash
 python agent/eval/run_eval.py --llm --judge --replay
 ```
 
-The diagnosis eval replayed from committed response caches. 0.5s, $0.00.
+Replays the diagnosis eval from committed response caches. 0.5s, $0.00.
 
-> **If `import numpy` fails, the interpreter is wrong rather than the dependency
-> list.** On Windows with msys2 on `PATH`, `python` can resolve to a build with
-> neither numpy nor pip. `sim/gate.py` and the git hooks probe for an
-> interpreter that can import numpy instead of trusting the name.
+If `import numpy` fails, check the interpreter rather than the dependency list.
+On Windows with msys2 on `PATH`, `python` can resolve to a build with neither
+numpy nor pip. `sim/gate.py` and the git hooks probe for an interpreter that can
+import numpy instead of trusting the name.
 
 ## How it works
 
-Once a day, for every live mandate:
+Once a day, for each live mandate:
 
-1. **Track the belief.** One probability distribution per *customer*, covering
-   the balance and which day of the 30-day cycle the salary lands. All of a
-   customer's mandates share it, so an outcome on one subscription informs the
-   timing of the others. That sharing is worth **+9.53 points in the hard
-   world and +3.47 at the calibration matching the published failure
-   rate**, and it is the argument for running this at an aggregator rather
-   than a merchant. Like the headline, it is a curve rather than a number.
-2. **Score today against later.** The belief gives the probability a debit
-   clears today, and the best probability available on any remaining day of the
-   cycle. A negative index score means waiting is worth more, which it is on
-   most days.
-3. **Diagnose the failure.** A language model names a root cause and picks an
-   intervention — retry, nudge, escalate or stop — falling back to a
-   deterministic rule engine on any failure.
-4. **Check the action is legal.** Five NPCI rules: at most four attempts per
-   mandate per cycle, no execution during peak hours, at least 24 hours between
-   the pre-debit notification and the debit, one pending notification per
-   mandate, and no re-presentation of an insufficient-funds decline under the
-   old notification.
+1. **Update the belief.** One distribution per customer covering the balance and
+   which day of the 30-day cycle the salary lands. All of a customer's mandates
+   share it, so an outcome on one subscription informs the timing of the others.
+2. **Score today against later.** The belief gives the probability that a debit
+   clears today and the best probability on any remaining day of the cycle. A
+   negative index score means waiting has higher expected value.
+3. **Diagnose the failure.** A language model assigns a root cause and selects an
+   intervention: retry, nudge, escalate or stop. It falls back to a deterministic
+   rule engine on any failure.
+4. **Check the action against the mandate rules.** At most four attempts per
+   mandate per cycle; no execution during peak hours; at least 24 hours between
+   the pre-debit notification and the debit; one pending notification per
+   mandate; no re-presentation of an insufficient-funds decline under the old
+   notification.
 5. **Execute or refuse.** Refused actions never reach an executor. The executor
-   is an interface with two implementations: the simulation, and Razorpay's
-   live API.
-6. **Fold the outcome back in**, success or decline.
-7. **Log everything**, including the days it decided to do nothing.
+   is an interface with two implementations: the simulation and Razorpay's API.
+6. **Record the outcome** in the belief, success or decline.
+7. **Log the decision**, including days when nothing was attempted.
 
 ```mermaid
 flowchart LR
@@ -242,252 +234,187 @@ flowchart LR
   A -.-> R["independent recount<br/><i>shares no code with the enforcer</i>"]
 ```
 
-Two boundaries are enforced in code, and each has a test behind it.
+Sharing one belief across a customer's mandates is worth 9.53 points at
+`pop_spend=1.05` and 3.47 points at 0.80. Like the headline, it varies with
+world hardness. This is the case for running the system at an aggregator rather
+than at a single merchant.
 
-**The language model never chooses when to debit.** It diagnoses why a payment
-failed and picks among interventions. The type it returns has no field in which
-a time could be expressed, and an import-graph test stops that layer from
-reaching the belief, the timing code, the constraint layer or the world.
+Two boundaries are enforced in code, each with a test:
 
-**The constraint layer refuses; a separate auditor recounts.** They measure
-different things — the gate counts what it stopped, the auditor counts what
-illegally happened. `scripts/prove_stage0_refuses.py` shows the difference by
-moving money below the gate and watching the auditor catch it.
+**The language model cannot choose when to debit.** It diagnoses why a payment
+failed and selects among interventions. `Diagnosis` has no temporal field, so a
+time cannot be expressed in its return type, and an import-graph test prevents
+that layer from importing the belief, the timing code, the constraint layer or
+the executor.
 
-### Where the language model is, and where it is not
+**The constraint layer refuses; a separate auditor recounts.** The gate counts
+actions it stopped; the auditor counts illegal actions that occurred. The two
+components share no code. `scripts/prove_stage0_refuses.py` moves money below
+the gate and shows the auditor detecting it.
 
-The split is deliberate: **the model decides *what* to do and explains why, the
-belief filter decides *when*, and the constraint layer decides *whether it is
-allowed*.** A model that could pick debit times would be a model that can
-schedule money movement, so `Diagnosis` carries no temporal field and a test
-inspects the type to keep it that way.
+### Language model role
 
-Where it earns its place is measured rather than assumed:
+The model decides what to do and explains why. The belief filter decides when.
+The constraint layer decides whether the action is permitted.
 
 | | rule engine | `glm-5.3-flash` |
 |---|---|---|
-| terminal decline codes — no retry can ever succeed | **0/4** | **4/4** |
-| ambiguous cases | 9/21 | **10/21** |
-| unambiguous cases | **19/19** | 13/19 |
+| terminal decline codes, where no retry can succeed | 0/4 | 4/4 |
+| ambiguous cases | 9/21 | 10/21 |
+| unambiguous cases | 19/19 | 13/19 |
 
-It wins exactly where a scoring function has nothing to say — a frozen account
-or a revoked mandate, where the right action is *stop*, and where "probability
-now versus probability later" cannot express the situation. It loses on the
-clean cases, which is what thirty lines of if-else are for. So it runs as an
-**overlay over the rule engine**, never a replacement: any failure falls back,
-and the row records which answered.
+The model performs best on terminal decline codes — a frozen account or a
+revoked mandate — where the correct action is to stop and the timing score has
+no way to represent the situation. It performs worse than the rule engine on
+unambiguous cases. It therefore runs as an overlay: any failure falls back to
+the rule engine, and each audit row records which component answered.
 
-**The top row survived a sweep of the model's reasoning setting and the middle
-row did not.** Every score above is at `reasoning_effort=low`; re-running at
-`high` and `max` gives **4/4 terminal at all three settings**, so the reason for
-having a model here does not depend on a configuration choice. The ambiguous
-row does: at `high` the model scores 7/21 and the rule engine wins. A one-case
-margin on twenty-one cases was never strong evidence, and the sweep is why that
-is stated rather than assumed —
-[`docs/02_RESULTS.md`](docs/02_RESULTS.md). It cost $0.17.
+These scores are at `reasoning_effort=low`. At `high` and `max` the terminal
+result stays at 4/4. The ambiguous result does not: at `high` the model scores
+7/21 and the rule engine wins. A one-case margin on 21 cases is weak evidence.
+Full sweep in [`docs/02_RESULTS.md`](docs/02_RESULTS.md).
 
-The batch calls it under a hard cap on live network calls, with cached
-responses free. That is the intended shape — rules handle the routine, the
-model handles the novel — and it means the headline number does not depend on
-an API key. A judge (or anyone) can reproduce every figure here offline.
+The batch caps live network calls per run and serves cached responses free, so
+the headline does not depend on an API key. The eval replays from committed
+caches in 0.5 seconds for $0.00. The judge is a different model from the
+diagnoser, and the harness refuses to run if the two SKU names match.
 
-The eval replays from committed caches in 0.5 seconds for $0.00, and the judge
-is a *different* model from the diagnoser; the harness refuses to run if the two
-SKU names match.
+## Error handling
 
-## When something breaks while it is running
-
-Development-time mistakes are catalogued in
-[`docs/03_ERRORS.md`](docs/03_ERRORS.md) — there are thirty. This section is
-the other half: what the system does when something fails *while it is
-running*, in the shipping path.
-
-| What fails | What happens |
+| Condition | Behaviour |
 |---|---|
-| The language model errors, times out, or returns unparseable output | Falls back to the deterministic rule engine and logs `LLM_FAILURE`. **This is the normal path, not a cold branch** — the batch takes it about 95% of the time by design, so it is exercised continuously rather than being a branch nobody has run. |
-| The model returns a legal-looking instruction containing a time | Rejected by the governance check — and there is no field on the diagnosis type in which a time could have been returned in the first place. |
-| An action would breach one of the five mandate rules | The constraint layer refuses it before the executor exists to it, and the refusal is a row in the audit trail. Refused actions generate **zero** network traffic. |
-| The payment rail is down across many customers at once | Detected from cross-customer outcomes, and the belief update is suppressed — a technical decline is a fact about the rail, not about one customer's balance. |
-| A debit's outcome is genuinely unknown — a timeout, a deemed transaction | Recorded as **pending**, never rounded down to "failed". Rounding an unknown to a failure is what licenses a retry, and a retry on an unknown is a double debit. |
-| An HTTP request is retried after a socket failure | The idempotency key is derived from the `action_id` the constraint layer already wrote to the audit trail, so the same logical debit produces the same key across a process restart. |
-| **The API key is wrong or expired** | Raises immediately, naming the status and the response. Until 30 August this returned a *customer decline* instead — see below. |
-| A worker process dies mid-measurement | The measurement fails loudly. A crashed run is a **failed** result, not a missing one. |
-| A second run appends to an existing audit log | Refused at open time. This once made a demo report constraint violations that had never happened. |
+| The language model errors, times out, or returns unparseable output | Falls back to the deterministic rule engine and logs `LLM_FAILURE`. The batch takes this path about 95% of the time by design. |
+| The model returns an instruction containing a time | Rejected by the governance check. `Diagnosis` has no field in which a time could be returned. |
+| An action would breach a mandate rule | Refused before the executor is called, and the refusal is written to the audit trail. Refused actions generate no network traffic. |
+| The payment rail is degraded across many customers | Detected from cross-customer outcomes; the belief update is suppressed, since a technical decline is a property of the rail rather than of one customer's balance. |
+| A debit's outcome is unknown — a timeout or a deemed transaction | Recorded as `pending`, not as a failure. Treating an unknown as a failure would permit a retry, and a retry on an unknown outcome risks a double debit. |
+| An HTTP request is retried after a socket failure | The idempotency key is derived from the `action_id` already written to the audit trail, so the same logical debit produces the same key across a process restart. |
+| Razorpay rejects the request itself — bad credentials, malformed body | Raises `RazorpayError` naming the HTTP status and response. Request-level rejections are not recorded as customer declines, since no payment was created. |
+| A worker process dies during a measurement | The measurement raises. A crashed run is a failed result, not a missing one. |
+| A second run appends to an existing audit log | Refused when the log is opened. |
 
-**The seventh row is the most recent, and it was found by sending one real
-request.** The Razorpay client had never contacted Razorpay. Pointing it at the
-live API with no credentials — no account, no key, no money — returns a real
-authentication error, and the code turned that into "this customer's account is
-empty":
+## Timing sensitivity
 
-```
-python agent/tests/test_razorpay_mapping.py --mutants
-
-R9  an authentication failure must not become a customer decline
-    mutant: `blind`, the pre-30-August behaviour -- hand every
-            response with a status to the payment parser
-  FAIL  R9a  a live 401 raises RazorpayError instead of returning an outcome
-             outcome=AttemptOutcome(code='U30', success=False, pending=False)
-  PASS  R9b  MUTANT: without the check it is a SILENT DECLINE
-             U30, success=False -- which w3.py:432 reads as `balance < amount`
-  PASS  R9c  a 400 that IS a payment decline stays a decline
-  PASS  R9d  a 200 captured payment is untouched
-```
-
-Because one belief is shared by every mandate belonging to a customer, a single
-misconfigured key would have corrupted all of them at once, burned all four
-legal attempts, killed the mandates, and printed a plausible recovery rate for
-a world in which nothing had been asked of anybody. It would not have crashed.
-
-```bash
-python scripts/razorpay_ladder.py
-```
-
-sends those requests and writes the transcript to `logs/razorpay_ladder.json`.
-It climbs as far as the credentials allow and prints the rungs it cannot reach
-rather than counting them as passes.
-
-## Results
-
-Everything turns on how accurately payday can be estimated in advance.
-`payday_wait` — the baseline throughout — estimates the payday, waits for it,
-then attempts once a day. A few lines of code, and a strong comparator when the
-estimate is good.
+Results depend on how accurately payday can be estimated in advance.
+`payday_wait`, the baseline throughout, estimates the payday, waits for it, and
+then attempts once a day.
 
 *n=100, 8 held-out populations (seeds 700–707), 120 days, paired 2 SE.
 Reproduce with `python sim/headline.py`.*
 
 | Payday known to | `payday_wait` | This agent | Difference |
 |---|---|---|---|
-| ±1 day | **99.24%** | 95.73% | −3.51 ±0.36 — baseline wins |
-| ±3 days | 94.65% | **95.82%** | +1.17 ±1.35 — not significant |
-| ±5 days | 72.18% | **95.82%** | +23.64 ±2.61 |
-| ±7 days | 59.14% | **95.57%** | +36.43 ±3.37 |
-| ±10 days | 48.11% | **95.62%** | +47.50 ±3.17 |
-| ±14 days | 40.01% | **93.16%** | +53.15 ±2.90 |
+| ±1 day | 99.24% | 95.73% | −3.51 ±0.36 |
+| ±3 days | 94.65% | 95.82% | +1.17 ±1.35, not significant |
+| ±5 days | 72.18% | 95.82% | +23.64 ±2.61 |
+| ±7 days | 59.14% | 95.57% | +36.43 ±3.37 |
+| ±10 days | 48.11% | 95.62% | +47.50 ±3.17 |
+| ±14 days | 40.01% | 93.16% | +53.15 ±2.90 |
 
-The crossover sits between ±3 and ±5 days. Below it the baseline is the better
-tool. Above it the baseline degrades sharply while the learned policy holds
-between 93% and 96%, because it recovers the payday from observed outcomes
-rather than trusting the estimate it was handed. **How accurately payday can
-actually be estimated in India is not known** — no measurement of it was found,
-which is why the agent learns it online and reports its own uncertainty.
+The baseline is better when payday is known within about three days. Beyond
+that it degrades sharply while the agent holds between 93% and 96%, because the
+agent recovers the payday from observed outcomes instead of relying on the
+estimate it was given.
 
-**Why the fixed schedule does so badly is worth stating plainly.** It spends all
-four attempts within four days of the due date, hits the NPCI cap while the
-account is still empty, and the mandate dies — forfeiting every remaining
-billing cycle. Survival falls to 32.1%, against the agent's 97.2%. Dunning
-harder costs the customer, and the metric prices that directly: a dead mandate
-forfeits its remaining cycles, so no assumed lifetime value is needed.
+How accurately payday can be estimated in India is unknown; no measurement of it
+was found. The agent therefore learns it online and reports its own uncertainty.
 
-Two further measured results:
+Two further results:
 
-- **The agent's own action space is worth +1.371 points** at 120 days, entirely
-  by holding back a final attempt to prevent mandate death. It is +0.563 at 60
-  days and +1.790 at 180, so it is a curve over the horizon, not a constant.
-- **Outage detection is a capability, not a recovery number.** Pooling every
-  merchant's outcomes, the agent detects a degraded UPI rail with a false-alarm
-  rate of 0 of 48 runs and a true-positive rate of 1.00 at n≥100. A single
-  merchant sees 0.38 attempts per 24-hour window against a floor of 8 and cannot
-  evaluate the statistic at all. Acting on it is a different question: pausing
-  dispatch measured **−0.529 points**, so it does not ship as a default.
+- The agent's action space is worth 1.371 points at 120 days, almost entirely by
+  holding back a final attempt to avoid mandate death. It is 0.563 points at 60
+  days and 1.790 at 180, so the value grows with the horizon.
+- Outage detection works, but acting on it does not help. Pooling outcomes
+  across merchants, the agent detects a degraded UPI rail with 0 false alarms in
+  48 runs and a true-positive rate of 1.00 at n≥100. A single merchant sees 0.38
+  attempts per 24-hour window against a floor of 8 and cannot evaluate the
+  statistic. Pausing dispatch during a detected outage measured −0.529 points,
+  so it is off by default.
 
-Full experimental design and bias analysis:
+Experimental design and bias analysis for all of the above:
 [`docs/02_RESULTS.md`](docs/02_RESULTS.md).
 
-## Two decline states from Razorpay's error list
+## Decline states without a timing interpretation
 
-Razorpay does not return NPCI's decline codes — it normalises them into 110
-error reasons of its own. Mapping one onto the other surfaced two states this
-project's taxonomy had no name for, and both change the correct action.
+Razorpay does not return NPCI decline codes. It normalises them into 110 error
+reasons of its own, and mapping between the two surfaces two states that change
+the correct action.
 
-**`funds_blocked_by_mandate`** — the money is there, and another mandate has
-already claimed it. Retrying is wrong, and a merchant seeing only its own debits
-cannot tell it apart from an empty account.
+**`funds_blocked_by_mandate`** — the balance is present but another mandate has
+claimed it. Retrying is wrong. A merchant seeing only its own debits cannot
+distinguish this from an empty account.
 
 **`deemed_transaction`** — the response was lost, so whether the debit went
 through is unknown and the customer may already have been charged. Retrying
-risks a double debit. No timing score can express this: there is no combination
-of "probability now" and "probability later" that means *do not act, because the
-question is unanswerable*.
+risks a double debit.
 
-Both are routed by the diagnosis layer, and both are cases where the timing
-model is structurally silent — which is the clearest statement of what the
-diagnosis layer is *for*. Neither is simulated yet; adding them to the world's
-decline mix, at swept rates like every other decline family, is queued as W8.
-Details:
-[`docs/03_ERRORS.md`](docs/03_ERRORS.md).
+Neither state can be expressed as a timing decision: no combination of
+"probability now" and "probability later" encodes *do not act, because the
+question is unanswerable*. Both are routed by the diagnosis layer. Neither is
+simulated yet; adding them to the world's decline mix at swept rates is queued
+as W8 in [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md).
 
 ## What is simulated
 
 **Simulated.** Customer balances, salary dates and spending; debit outcomes;
-outage scenarios; the merchant population; and every percentage and rupee total
-in this repository.
+outage scenarios; the merchant population; every percentage and rupee total in
+this repository.
 
 **From published sources.** NPCI's five mandate execution rules and decline code
 list; Razorpay's error reasons, documented retry schedule, Payment Downtime API
 shape and payment error surface. Every external claim carries a source tag in
-[`docs/01_FACTS.md`](docs/01_FACTS.md); anything not in that file is not
-established.
+[`docs/01_FACTS.md`](docs/01_FACTS.md).
 
-**Not known.** Real AutoPay decline frequencies. How accurately payday can be
+**Unknown.** Real AutoPay decline frequencies. How accurately payday can be
 predicted in India. Whether an aggregator may lawfully use one merchant's
-outcomes to schedule another's debit for the same customer. Whether Razorpay's
-API accepts the request bodies in `agent/execution/razorpay_executor.py`: they
-are derived from documentation, and the requests that have been sent were
-rejected at authentication before the body was read.
+outcomes to schedule another's debit for the same customer. Whether Razorpay
+accepts the recurring-charge request body in
+`agent/execution/razorpay_executor.py`: the client authenticates against the
+test API and reads successfully, but charging requires an authorised mandate,
+and the body has never been submitted with one.
 
 ## Limitations
 
-These are the things this project cannot resolve from where it stands. Items
-that *are* fixable live in [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) as
-work, not here as excuses.
-
-- **No real transaction data, and none obtainable.** There is no public dataset
-  for payment retry scheduling — no shared task, no held-out set. The only
-  formal artifacts in the field are patents, which publish methods and no data.
-  Every number here is simulation, validated against published aggregates
-  rather than against ground truth.
-- **Decline frequencies are unpublished.** NPCI names the codes and does not
-  rank them; no source gives AutoPay-specific rates. Every rate in this
-  repository is therefore **swept and never picked**, and reported as a curve.
-  The largest single sensitivity is one of these: sweeping the limit-decline
-  rate over 0.00 / 0.05 / 0.15 costs 0.00 / −2.87 / −13.46 points.
-- **The legal status of cross-merchant pooling is unresolved in Indian law.**
-  No statute or RBI circular found addresses it directly. The nearest instrument
-  is the DPDP Act 2023, whose purpose-limitation and consent provisions were
-  operationalised by the DPDP Rules notified on 14 November 2025 — which points
-  at consent-gating as the design the law would require rather than at a
-  prohibition. **So the system treats pooling as a per-customer permission
-  and the cost of withholding it is measured, not argued:** running fully
-  non-pooled costs **9.54 points** in the hard world and **3.47** at the
-  calibration matching the published failure rate, and pooling only for
-  customers who consented costs **4.79** and **1.48** at half consent.
-  Reproduce with `python agent/tests/test_pooling_consent.py`. See
-  [`docs/01_FACTS.md`](docs/01_FACTS.md).
-- **Two calibration gates fail on monotonicity, and no parameter can fix
-  them.** The belief filter models no balance floor at zero and approximates
-  the world's hourly spend jitter with a fixed 3-tap kernel. Both are
-  structural. Calibration error is already well inside its bound (ECE 0.026);
-  it is the *ordering* of the reliability curve that breaks.
-- **Sample size is compute-bound, not design-bound.** n=100 × 5 mandates × 8
-  populations, one run seed each. Larger runs are a question of machine time.
+- **No real transaction data.** There is no public dataset for payment retry
+  scheduling. Every number here comes from simulation, validated against
+  published aggregates rather than ground truth.
+- **Decline frequencies are unpublished.** NPCI names the codes without ranking
+  them, and no source gives AutoPay-specific rates. Every rate in this
+  repository is swept rather than chosen, and reported as a curve. The largest
+  single sensitivity: sweeping the limit-decline rate over 0.00 / 0.05 / 0.15
+  costs 0.00 / −2.87 / −13.46 points.
+- **The legal status of cross-merchant pooling is unresolved in Indian law.** No
+  statute or RBI circular addresses it directly. The nearest instrument is the
+  DPDP Act 2023, whose purpose-limitation and consent provisions were
+  operationalised by the DPDP Rules notified on 14 November 2025, which points
+  at consent-gating rather than prohibition. Pooling is therefore a per-customer
+  permission, and the cost of withholding it is measured: running fully
+  non-pooled costs 9.54 points at `pop_spend=1.05` and 3.47 at 0.80; pooling
+  only for consenting customers costs 4.79 and 1.48 at half consent. Reproduce
+  with `python agent/tests/test_pooling_consent.py`.
+- **Two calibration gates fail on monotonicity.** The belief filter models no
+  balance floor at zero and approximates hourly spend jitter with a fixed 3-tap
+  kernel. Both are structural and no parameter fixes either. Calibration error
+  is inside its bound (ECE 0.026); the ordering of the reliability curve is
+  what fails.
+- **Sample size is bounded by compute.** n=100 × 5 mandates × 8 populations, one
+  run seed each.
 
 ## Repository map
 
-| Path | What is there |
+| Path | Contents |
 |---|---|
-| [`docs/08_ARCHITECTURE.md`](docs/08_ARCHITECTURE.md) | **The architecture document.** One page: the layers, the seams, the decision rule, and what the number is conditional on |
-| [`docs/06_MODEL_CARD.md`](docs/06_MODEL_CARD.md) | What ships, what it is worth, and eleven things it was never tested on. Read before quoting a number. |
-| [`docs/02_RESULTS.md`](docs/02_RESULTS.md) | Every result, with its experimental design and bias analysis |
-| [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) | What is being built next, and the validation suite |
-| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Thirty-two errors found in this project's own work, with the mechanism and the guard added for each |
-| [`docs/01_FACTS.md`](docs/01_FACTS.md) | Every external fact, with a source and a confidence tag |
-| [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | The interface between the agent and the simulation |
-| [`NOTES.md`](NOTES.md) | The decision log, append-only and unedited |
+| [`docs/08_ARCHITECTURE.md`](docs/08_ARCHITECTURE.md) | Architecture document: layers, interfaces, the decision rule, and what the headline is conditional on |
+| [`docs/06_MODEL_CARD.md`](docs/06_MODEL_CARD.md) | What ships, what it is worth, and what it has not been tested on |
+| [`docs/02_RESULTS.md`](docs/02_RESULTS.md) | Every result with its experimental design and bias analysis |
+| [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) | Planned work and the validation suite |
+| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Defects found during development, each with its mechanism and the regression test added for it |
+| [`docs/01_FACTS.md`](docs/01_FACTS.md) | External facts with source and confidence tags |
+| [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | Interface between the agent and the simulation |
+| [`NOTES.md`](NOTES.md) | Append-only decision log |
 | `agent/` | Policy, constraints, context, execution, LLM layer, audit trail, eval |
 | `sim/` | The simulated world, the belief filters and the 25-gate suite |
-| `scripts/` | Page data, the constraint-layer demonstration, the Razorpay ladder, the calibration sweep, git hooks |
+| `scripts/` | Page data, constraint-layer demonstration, Razorpay connectivity ladder, calibration sweep, git hooks |
 
 ## Running the tests
 
@@ -499,19 +426,19 @@ python sim/gate.py --tier fast
 python sim/gate.py --tier full
 ```
 
-The fast tier (~35s idle) checks the code still behaves the same way; the full
-tier (~100s idle) adds the statistical gates. Both roughly double if the machine
-is busy — the suite saturates eight worker processes.
+The fast tier (~35s idle) checks that behaviour has not changed. The full tier
+(~100s idle) adds the statistical gates. Both roughly double on a busy machine;
+the suite saturates eight worker processes.
 
-The agent's own gates run individually:
+Individual agent gates:
 
 ```bash
-python agent/tests/test_stage0_enforces.py      # the constraint layer, 20/20
-python agent/tests/test_parity_vs_harness.py    # agent == simulation, bit-exact
-python agent/tests/test_recovery_metric.py      # the recovery metric, 5 mutants
+python agent/tests/test_stage0_enforces.py      # constraint layer, 20 checks
+python agent/tests/test_parity_vs_harness.py    # agent matches simulation bit-exactly
+python agent/tests/test_recovery_metric.py      # recovery metric, 5 mutants
 ```
 
-Install the git hooks once per clone with `scripts/install-hooks.sh`; `git
+Install the git hooks once per clone with `scripts/install-hooks.sh`. `git
 commit` then runs the fast tier and `git push` runs the full tier.
 
 ---
