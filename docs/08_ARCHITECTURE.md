@@ -126,10 +126,27 @@ any other layer knowing.
 **1. One belief per customer, shared by all `k` mandates.** This is the claim
 the project is built on: a failed debit for merchant A is evidence about the
 same customer's ability to pay merchant B. Build one filter per *mandate* and
-you have a system that works and is **9.53 points worse** — and nothing tells
-you, because both configurations run clean. `agent/policy/belief_book.py`
-enforces the sharing and `agent/tests/test_one_belief.py` asserts it.
-*(Gate S2a, `--tier full`: +9.53 pts ±1.81.)*
+you have a system that works and is **9.5 points worse** in the hard world —
+and nothing tells you, because both configurations run clean.
+`agent/policy/belief_book.py` enforces the sharing and
+`agent/tests/test_one_belief.py` asserts it.
+
+**It is a curve, not a number, and it is reported as one.** Pooling is worth
+**+9.54 points at `pop_spend=1.05` and +3.47 at `pop_spend=0.80`**, the same
+two calibrations the headline is reported over.
+
+**And it is a per-customer permission, not an assumption.** Sharing one
+customer's outcomes across merchants is the part of this design with a live
+legal question attached — mandates are structurally per-merchant, and India's
+DPDP Rules 2025 operationalise consent and purpose limitation. A system that
+can only run pooled cannot answer that question. This one takes `pooling` in
+`{all, none, consented}`, and the cost of withholding is measured rather than
+argued: **4.79 points at half consent in the hard world, 1.48 at the gentler
+one.**
+
+*(Gate S2a, `--tier full`: +9.53 pts ±1.81, on the unfitted filter. The
+two-calibration figures: `python agent/tests/test_pooling_consent.py`,
+not gate-protected.)*
 
 **2. Stage 0 enforces; a separate component recounts.** The gate refuses
 illegal actions. `auditor.py` then rebuilds legality **from the audit log

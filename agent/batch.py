@@ -109,6 +109,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              decline_kw: dict | None = None,
              p_missed_credit: float = 0.0,
              p_transient: float = 0.0, transient_h: int = 24,
+             pooling: str = "all", consent_frac: float | None = None,
              use_llm: bool = False,
              llm_max_calls: int | None = 150,
              executor=None) -> dict:
@@ -197,7 +198,24 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         # arm it is supposed to be the control for.
         diagnoser = RetryOnlyDiagnoser()
 
-    book = BeliefBook(pop[0]["cycle_days"], pop[0]["days"], pop_spend, bcfg)
+    # W9. `pooling="all"` is the default and is what every published number
+    # was measured on. "none" is the non-pooled configuration -- one belief per
+    # MANDATE, which is `solo_pop_pd` in harness terms. "consented" shares only
+    # for customers who permitted it.
+    #
+    # `consent_frac` draws the consenting set from its OWN generator, seeded off
+    # the run seed. It must never touch the money path's rng: an enrichment
+    # parameter that shifts the money stream turns a controlled comparison into
+    # two different worlds, which is error 27 and it has been made twice.
+    consent = None
+    if pooling == "consented":
+        if consent_frac is None:
+            raise ValueError("pooling='consented' needs consent_frac")
+        crng = np.random.default_rng(0xC0FFEE ^ (seed * 2654435761 % 2**32))
+        consent = {ci for ci in range(len(pop))
+                   if crng.random() < consent_frac}
+    book = BeliefBook(pop[0]["cycle_days"], pop[0]["days"], pop_spend, bcfg,
+                      pooling=pooling, consent=consent)
     # The monitor's base rate is the harness's P_TECH, not a number of ours.
     #
     # `monitor_kind="oracle"` swaps in the CLAIRVOYANT monitor, which is handed
@@ -224,7 +242,16 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         raise ValueError(f"unknown monitor_kind {monitor_kind!r}")
 
     prov = dict(
-        run_id=run_id, mode=mode, policy="solo_shared_pd",
+        run_id=run_id, mode=mode,
+        # The provenance must name the policy actually run. Before W9
+        # this was hardcoded to "solo_shared_pd", which would have
+        # labelled every non-pooled run as the pooled one -- in the
+        # audit trail, which is the artifact meant to settle exactly
+        # that kind of question.
+        policy={"all": "solo_shared_pd", "none": "solo_pop_pd"}.get(
+            pooling, f"solo_consented_pd({consent_frac})"),
+        pooling=pooling, consent_frac=consent_frac,
+        n_consented=(len(consent) if consent is not None else None),
         diagnoser=type(diagnoser).__name__,
         prompt_id=getattr(diagnoser, "prompt_id", ""),
         seed=seed, payday_err=payday_err, pop_spend=pop_spend,

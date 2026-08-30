@@ -246,6 +246,102 @@ S2a" directly beside "the policy is `solo_shared_pd` with `w3.FITTED_BELIEF`",
 which reads as though the gate covers what ships. It does not. See error 13:
 only 2 of 25 gates run the fitted configuration at all.
 
+
+### W9 — pooling measured in the AGENT, at TWO calibrations, and consent-gated
+
+Added 30 August 2026. *n=100, k=5, 8 held-out populations (700–707), 120 days,
+`payday_err=7`, `w3.FITTED_BELIEF`, degenerate mode. 112 agent runs + 16
+baseline runs, one process each. **Not gate-protected.** Reproduce with*
+`python agent/tests/test_pooling_consent.py`. *Transcript:
+`logs/w9_pooling_consent.txt`.*
+
+`BeliefBook` now takes `pooling` in `{"all", "none", "consented"}` plus a
+per-customer consent set. `"all"` is the default and parity with
+`harness.run("solo_shared_pd", ...)` is still **bit-exact 24/24**, so nothing
+above this section moved.
+
+| arm | `pop_spend=1.05` | vs pooled | `pop_spend=0.80` | vs pooled |
+|---|---|---|---|---|
+| pooled (`all`) | **95.56%** ±1.02 | — | **99.67%** ±0.22 | — |
+| consent 75% | 93.40% ±1.20 | −2.16 ±0.83 | 98.99% ±0.25 | −0.68 ±0.18 |
+| consent 50% | 90.77% ±0.98 | **−4.79** ±0.59 | 98.19% ±0.30 | **−1.48** ±0.20 |
+| consent 25% | 89.24% ±0.99 | −6.32 ±1.06 | 97.43% ±0.46 | −2.24 ±0.38 |
+| not pooled (`none`) | 86.02% ±1.51 | **−9.54** ±1.43 | 96.20% ±0.48 | **−3.47** ±0.41 |
+| `payday_wait` | 60.42% | | 93.40% | |
+
+**Pre-registered 5/5** (`NOTES.md`, 30 August 2026, before the run), including
+**W9-4, which was registered against the convenient answer**: it predicted
+consent-gating would *not* be free, and it is not.
+
+#### ⚠️ THE MOAT IS A CURVE IN WORLD HARDNESS, LIKE THE HEADLINE
+
+**Pooling is worth 9.54 points at `pop_spend=1.05` and 3.47 points at
+`pop_spend=0.80`** — a factor of 2.7, across exactly the same range of world
+hardness the headline is already reported over.
+
+Every existing quotation of the pooling number in this repository — **+9.53**,
+gate S2a — is the **hard-world** figure. It is correct at the calibration it
+was measured at and it is now independently reproduced. What was missing is the
+conditional. This project already learned this about the headline on 29 August:
+quoting +36.66 without saying it is +6.29 at the calibration matching the
+published failure rate is quoting the top of a range. **The pooling claim had
+the same shape and nobody had noticed**, because S2a runs at one operating
+point and nothing measured a second until now.
+
+So: quote **+9.53 (S2a, gated, unfitted)** or **+9.54 (agent, ungated,
+fitted)** for the hard world, and say **+3.47 at `pop_spend=0.80`** beside it.
+
+#### Independent corroboration, and why it is weaker than it looks
+
+| measurement | filter | implementation | result |
+|---|---|---|---|
+| gate S2a | unfitted | harness | +9.53 (±1.81) |
+| `fair_audit.py` | fitted | harness | +9.61 (±1.67) |
+| W9 | fitted | **agent** | +9.54 (±1.43) |
+
+Three figures within 0.08 points. That is the closest agreement anything in
+this project has produced, and it should be discounted rather than celebrated:
+all three call the same `w3.BeliefPD` over the same `w3.make_pop` worlds at the
+same seeds, and the agent's degenerate mode is bit-exact against `harness.run`
+by construction. What *is* independent is the wiring — the harness collapses
+`k` references inside `run()`, the agent does it with a key function in
+`BeliefBook` — and a defect in either would have shown as a disagreement.
+
+#### Consent at 100% and 0% are bit-identical to the two endpoints
+
+8/8 and 8/8 populations, exact equality, not "within noise". That is a
+construction check rather than a finding: two routes to one state that
+disagreed would be a defect. It comes out exact because `consent_frac` draws
+from its **own** generator, seeded off the run seed and never touching the
+money path — error 27's rule, which this project has now broken twice
+elsewhere.
+
+#### A reversal at small n, checked rather than explained away
+
+The first smoke test at n=20, k=3, 60 days reported non-pooled **beating**
+pooled by 4.92 points, which contradicts S2a. Rule 3 says treat that as a
+defect until proven otherwise. Running the frozen harness on the identical
+population and seed reproduced **both agent arms bit-exactly** —
+`solo_shared_pd` 88.5246 and `solo_pop_pd` 93.4426 — so the reversal is a
+property of that configuration and not of the agent's wiring. **At some small
+configurations this project's central claim inverts**, which was not previously
+known and is recorded here rather than in a footnote.
+
+#### What it does not settle
+
+It does not make cross-merchant pooling lawful. `01_FACTS.md` still marks that
+`[GUESS]`, and the DPDP Rules 2025 reading is `[REPORTED]` from a secondary
+source because the primary MeitY text returned HTTP 403. What changed is that
+the question now carries a **price at two calibrations** instead of an
+argument, and the system can ship either way.
+
+**How this could be biased.** Degenerate mode isolates the belief architecture
+and is also the flattering choice for the pooling gap, because the action space
+is switched off and cannot compensate for a weaker belief; a full-mode run
+might show less. W9-3's monotonicity band was never tested in the direction
+that would fail it. Eight populations, one seed each.
+
+
 **Do not quote +21.68 / +23.99 / +23.62 / +24.04 as
 evidence that the benefit is information.** A control that matches update count
 without supplying wrong information — label-shuffled observations at the matched

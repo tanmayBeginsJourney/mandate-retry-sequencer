@@ -5753,3 +5753,261 @@ showing the pre-fix behaviour, and section 03 of the public page. The framing
 that makes it land is that **the LLM→rule-engine fallback is the 95% path, not
 a cold branch kept for emergencies** — a fallback that runs continuously is
 evidence; a fallback nobody has exercised is a hope.
+
+---
+
+# 2026-08-30 — PRE-REGISTRATION: W9, consent-gated pooling, written before the sweep
+
+Queue item 5. `BeliefBook` now takes `pooling` in `{"all", "none",
+"consented"}` and a per-customer `consent` set. **`"all"` is the default and
+parity with `harness.run("solo_shared_pd", ...)` is still bit-exact 24/24**, so
+nothing published moves.
+
+**What this is for.** Cross-merchant pooling is the moat AND the part of the
+design with a live legal question attached — `01_FACTS.md`, still `[GUESS]`.
+A system that can only run pooled cannot answer that question. One that treats
+pooling as a per-customer permission can ship either way and **price the
+difference**, which turns a hole in the argument into a number.
+
+**The design decision that could bias this measurement, stated first.**
+`consent_frac` draws the consenting set from its **own** generator, seeded off
+the run seed and never touching the money path's `rng`. That is error 27's
+rule, which this project has now broken twice (W2 and W7's first cut). If it
+drew from the shared stream, every consent rate would be a different world plus
+consent, and the whole sweep would be uninterpretable. Registering it here so
+that if the numbers look odd, the first thing to check is written down in
+advance.
+
+*Design: n=100, k=5, 8 held-out populations (700–707), 120 days,
+`payday_err=7`, `pop_spend=1.05`, `w3.FITTED_BELIEF`, degenerate mode so this
+measures the belief architecture and not the action space. One process per run.*
+
+| id | prediction | falsifying band |
+|---|---|---|
+| **W9-1** | `pooling="none"` collects **fewer** cycles than `pooling="all"` | a gap of **4–14 points**. Gate S2a reads +9.53 (±1.81) unfitted and the refit reads +9.61 (±1.67); anything outside 4–14 means the agent's pooling is not doing what the harness's does |
+| **W9-2** | **`consent_frac=1.0` is bit-identical to `pooling="all"`, and `consent_frac=0.0` is bit-identical to `pooling="none"`** | any difference at all. Two routes to one state that disagree is a defect, not a finding |
+| **W9-3** | the loss grows **monotonically** as consent falls, across {1.00, 0.75, 0.50, 0.25, 0.00} | any decrease larger than one 2 SE band between adjacent cells |
+| **W9-4** | **consent-gating is NOT free.** At 50% consent the loss is real, not a rounding error | **3–7 points**. If it comes in under 1 point I will report that pooling barely matters in the agent, which contradicts the moat claim this project is built on |
+| **W9-5** | the non-pooled agent still beats `payday_wait` by a wide margin | **> 20 points**. Below that, most of the agent's lead is the aggregator position rather than the belief filter, and the architecture story is much weaker than advertised |
+
+## W9-4 is the one registered against my own interest
+
+The convenient result is "consent-gating costs almost nothing" — it would let
+the project ship the legally safe configuration and keep the headline. **I am
+predicting it costs 3–7 points at half consent, and if it does, that is a real
+commercial cost that has to be reported next to the recommendation.** The
+inconvenient direction here is the *cheap* one, which is unusual and is why it
+is worth writing down: a near-zero cost would be pleasant and would also mean
+the moat — +9.53 points, the central claim, the reason this belongs at an
+aggregator — is not reproducible in the agent.
+
+**So W9-1 and W9-4 pull against each other on purpose.** If the gap is small,
+the moat claim weakens. If it is large, consent-gating is expensive. There is
+no result here that is good for everything, which is what makes it worth
+measuring rather than assuming.
+
+## How this could still be biased toward the answer I want
+
+- **Degenerate mode is the right choice for isolating the belief architecture
+  and it is also the flattering one for W9-1**, because the action space can
+  only add noise to the comparison. A full-mode run might show a smaller
+  pooling effect if the action space partially compensates for a weaker
+  belief. Not measured here, and it should be.
+- **`pop_spend=1.05` is the hard world.** The spend sweep shows every effect in
+  this project is larger there. A pooling gap measured at 1.05 will overstate
+  what it is worth at 0.80, where the world matches the published failure rate.
+  I will run 0.80 as well and report both rather than picking.
+- **8 populations, one seed each**, which is the same small study everything
+  else here rests on.
+
+---
+
+# 2026-08-30 — W9 RAN. 5/5 PRE-REGISTERED, AND THE MOAT IS A CURVE, NOT A NUMBER
+
+`python agent/tests/test_pooling_consent.py` — transcript in
+`logs/w9_pooling_consent.txt`. *n=100, k=5, 8 held-out populations (700–707),
+120 days, `payday_err=7`, `w3.FITTED_BELIEF`, degenerate mode. 112 agent runs +
+16 baseline runs, one process each. **Not gate-protected.***
+
+## The result
+
+**`pop_spend = 1.05`** — the repository default, the hard world.
+
+| arm | cycle_rec | 2 SE | vs pooled | 2 SE | survival |
+|---|---|---|---|---|---|
+| pooled (`all`) | **95.56%** | 1.02 | — | | 97.2% |
+| not pooled (`none`) | 86.02% | 1.51 | **−9.54** | 1.43 | 84.7% |
+| consent 100% | 95.56% | 1.02 | +0.00 | 0.00 | 97.2% |
+| consent 75% | 93.40% | 1.20 | −2.16 | 0.83 | 94.4% |
+| consent 50% | 90.77% | 0.98 | −4.79 | 0.59 | 91.2% |
+| consent 25% | 89.24% | 0.99 | −6.32 | 1.06 | 89.0% |
+| consent 0% | 86.02% | 1.51 | −9.54 | 1.43 | 84.7% |
+| `payday_wait` | 60.42% | | | | |
+
+**`pop_spend = 0.80`** — the calibration whose due-date failure rate matches
+the published record.
+
+| arm | cycle_rec | 2 SE | vs pooled | 2 SE | survival |
+|---|---|---|---|---|---|
+| pooled (`all`) | **99.67%** | 0.22 | — | | 99.8% |
+| not pooled (`none`) | 96.20% | 0.48 | **−3.47** | 0.41 | 95.6% |
+| consent 50% | 98.19% | 0.30 | −1.48 | 0.20 | 98.0% |
+| consent 0% | 96.20% | 0.48 | −3.47 | 0.41 | 95.6% |
+| `payday_wait` | 93.40% | | | | |
+
+**Pre-registration: 5/5.**
+
+| id | predicted | measured | |
+|---|---|---|---|
+| W9-1 | not pooling costs 4–14 pts at 1.05 | **+9.54** | HELD |
+| W9-2 | consent 100% ≡ pooled, consent 0% ≡ not pooled, exactly | **8/8 and 8/8 bit-identical** | HELD |
+| W9-3 | the loss grows monotonically as consent falls | largest adjacent rise −1.53, inside a 0.98 2 SE | HELD |
+| W9-4 | consent-gating is NOT free: 3–7 pts at 50% consent | **+4.79** | HELD |
+| W9-5 | the non-pooled agent still beats `payday_wait` by >20 pts | **+25.59** | HELD |
+
+## The finding that matters, and it is not one of the five
+
+**The moat is a curve in world hardness, exactly like the headline is.** It is
+**9.54 points** in the hard world and **3.47 points** at the calibration where
+this world's failure rate matches the published record — a factor of 2.7.
+
+Every place this project quotes the pooling number quotes **+9.53** (gate S2a),
+and that is the *hard-world* figure. The project already learned this lesson
+once, on 29 August, about the headline: quoting +36.66 without saying it is
++6.29 at the realistic calibration is quoting the top of a range. **The pooling
+claim has had the same shape all along and nobody had noticed**, because S2a
+runs at one operating point and nothing else measured it at a second.
+
+That is not a retraction of +9.53 — it is correct at the calibration it is
+measured at, and it is now independently reproduced. It is a missing
+conditional, and it is now stated wherever the number appears.
+
+## Independent corroboration, in a different implementation
+
+Gate S2a measures pooling in the **harness** at **+9.53 (±1.81)**, on the
+*unfitted* filter. The belief refit reads **+9.61 (±1.67)**. This measures it in
+the **agent**, on the *fitted* filter, through a different object graph, a
+different loop and a different metric path: **+9.54 (±1.43)**.
+
+Three measurements of the same quantity across two implementations landing
+within 0.08 points is the strongest agreement anything in this project has
+produced. It is worth being suspicious of rather than pleased about, so:
+they are **not independent in the way that matters** — both call the same
+`w3.BeliefPD`, both run the same `w3.make_pop` worlds at the same seeds, and
+the agent's degenerate mode is bit-exact against `harness.run` by construction
+(parity, 24/24). What is genuinely independent is the *wiring*: the harness
+collapses `k` references onto one object inside `run()`, and the agent does it
+in `BeliefBook` with a key function. A defect in either wiring would show as a
+disagreement, and there is none.
+
+## A surprise that turned out not to be a defect, checked rather than assumed
+
+The first smoke test — n=20, k=3, 60 days — reported **non-pooled BEATING
+pooled by 4.92 points.** That contradicts S2a, and rule 3 says a large
+unexpected result is a defect until proven otherwise.
+
+It is not a defect. Running `harness.run("solo_shared_pd")` and
+`harness.run("solo_pop_pd")` on the identical population and seed reproduced
+**both agent arms bit-exactly**:
+
+```
+agent pooled      88.5246   harness solo_shared_pd  88.5246   match=True
+agent non-pooled  93.4426   harness solo_pop_pd     93.4426   match=True
+```
+
+So the agent's non-pooled arm **is** `solo_pop_pd`, and the frozen harness
+says the same reversal at that configuration. The reversal is a property of
+n=20/k=3/60d, not of this code. Recorded because "I checked the surprise and it
+was the world, not the wiring" is only worth anything if the check is written
+down — and because at some small configuration this project's central claim
+inverts, which nobody knew.
+
+## What was built
+
+`BeliefBook` takes `pooling` in `{"all", "none", "consented"}` and a
+per-customer `consent` set. `"all"` is the default; **parity with
+`harness.run("solo_shared_pd", ...)` is still bit-exact 24/24**, so no
+published number moved.
+
+- The mandate key is threaded through `loop.py`. `uncertainty()` and
+  `belief_for()` are now fetched **per mandate** inside the decision loop
+  rather than once per customer. In pooled mode every iteration returns the
+  same object and the same numbers — `posterior_summary` and `expected` are
+  pure reads — so pooled behaviour is unchanged. In non-pooled mode, fetching
+  once would have used mandate 1's posterior for all `k`, **which is the exact
+  defect `harness.py:554-560` already had once** (the placebo policies scoring
+  mandates 2..k off mandate 1's belief).
+- `advance_day` still takes a customer and advances every belief that customer
+  owns exactly once, so a non-pooled run cannot age its beliefs `k` times.
+- `PoolingError` rather than a guess: a non-pooled book asked for "customer 0's
+  belief" with no mandate **raises**. Returning an arbitrary one of the `k`
+  would be silently wrong, which is the failure this class exists to prevent.
+- **The provenance was lying and now is not.** `run_once` stamped
+  `policy="solo_shared_pd"` unconditionally, so every non-pooled run would have
+  been labelled as the pooled one **in the audit trail** — the artifact whose
+  whole job is to settle that kind of question. It now names the policy
+  actually run, plus `pooling`, `consent_frac` and `n_consented`.
+- Seven new checks in `test_one_belief.py`, 18/18: that `none` really builds
+  `k` objects, that an observation moves **only** its own mandate's belief,
+  that the book refuses to guess, that one `advance_day` ages each belief once,
+  and that consent at 100%/0% reaches the pooled/non-pooled states.
+- `consent_frac` draws from its **own** generator, seeded off the run seed. That
+  is error 27's rule, and it is why W9-2 comes out bit-identical rather than
+  merely close.
+
+## How this could be biased toward the answer I wanted
+
+- **Degenerate mode is the right isolation and the flattering choice for
+  W9-1.** The action space is off, so it cannot compensate for a weaker belief.
+  A full-mode run might show a smaller pooling effect. Not measured, and it
+  should be.
+- **W9-4 was registered against the convenient answer and held**, which is the
+  one result here I would have preferred to break. Consent-gating costs 4.79
+  points at half consent in the hard world. It costs **1.48** at the realistic
+  one, which is the number a product decision should actually use, and it is
+  the smaller and less impressive of the two.
+- **W9-3's band is weak.** "Monotone within one 2 SE" tolerates a small
+  non-monotonicity, and the measured worst case (−1.53 against a 0.98 band) is
+  a *decrease*, i.e. the right direction, so the band was never tested in the
+  direction that would have failed it.
+- **8 populations, one seed each**, and both calibrations share the same eight.
+
+## What this does NOT settle
+
+**It does not make cross-merchant pooling legal.** `01_FACTS.md` still marks
+that `[GUESS]`, and the DPDP Rules 2025 reading is `[REPORTED]` from a
+secondary source because the primary MeitY text returned HTTP 403 and was never
+read. What changed is that the question now has a **price** attached at two
+calibrations instead of an argument, and the system can ship either way.
+
+## The doc gate's own rule went stale within hours, and the protocol worked
+
+`pooling-already-consent-gated` was added this morning to ban the sentence
+*"the project also reports the non-pooled configuration and treats pooling as
+consent-gated"*, because on 30 August that was a judge-facing claim about work
+that did not exist.
+
+**W9 made it true.** The non-pooled configuration is measured at two
+calibrations and pooling is a per-customer permission. A rule banning an
+accurate sentence is worse than no rule, because the only way past it is to
+write something less true.
+
+So the rule is **withdrawn**, and `sim/verify_docs.py` carries the withdrawal
+as a comment block — the rule text, its old `why`, and why it stopped applying
+— rather than a deletion. Its canary went with it; the selftest is 13/13.
+
+**This is the direction a retraction list has to be able to move in.** A list
+that can only grow eventually forbids the truth. The module's own docstring
+says *"Do NOT silence a hit by deleting the rule. If the rule is genuinely
+wrong, say so in NOTES.md and change it there, in the same commit."* That is
+this paragraph, and this is that commit.
+
+**One thing I got mildly wrong and am recording rather than smoothing over.**
+The rule was written this morning with `why="W9 is UNBUILT"` — a `why` that
+encodes a *state of the project* rather than a *fact about the claim*. Those
+expire. A better `why` would have been "this describes a capability; check it
+exists before allowing the sentence". Two of the remaining eleven rules have
+the same shape (`no-request-ever-sent`, `stale-error-count`) and will expire
+the same way when the next rung of the ladder runs or the next error is found.
+That is not a defect in them so much as a property of the design, and the
+answer is the protocol above rather than cleverer rules.

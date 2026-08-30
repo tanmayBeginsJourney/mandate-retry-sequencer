@@ -1,0 +1,60 @@
+112 runs: 2 calibrations x 8 populations x 7 arms, n=100 k=5 120d payday_err=+/-7, degenerate mode, FITTED_BELIEF
+Degenerate mode on purpose: this measures the BELIEF architecture,
+not the action space. See the pre-registration's bias note.
+
+================================================================================================
+pop_spend = 1.05
+================================================================================================
+                   arm   cycle_rec     2 SE   vs pooled     2 SE   survival
+          pooled (all)      95.56%    1.02          --               97.2%
+     not pooled (none)      86.02%    1.51      -9.54     1.43      84.7%
+          consent 100%      95.56%    1.02      +0.00     0.00      97.2%
+           consent 75%      93.40%    1.20      -2.16     0.83      94.4%
+           consent 50%      90.77%    0.98      -4.79     0.59      91.2%
+           consent 25%      89.24%    0.99      -6.32     1.06      89.0%
+            consent 0%      86.02%    1.51      -9.54     1.43      84.7%
+   payday_wait (rival)      60.42%
+
+================================================================================================
+pop_spend = 0.8
+================================================================================================
+                   arm   cycle_rec     2 SE   vs pooled     2 SE   survival
+          pooled (all)      99.67%    0.22          --               99.8%
+     not pooled (none)      96.20%    0.48      -3.47     0.41      95.6%
+          consent 100%      99.67%    0.22      +0.00     0.00      99.8%
+           consent 75%      98.99%    0.25      -0.68     0.18      99.0%
+           consent 50%      98.19%    0.30      -1.48     0.20      98.0%
+           consent 25%      97.43%    0.46      -2.24     0.38      97.0%
+            consent 0%      96.20%    0.48      -3.47     0.41      95.6%
+   payday_wait (rival)      93.40%
+
+PRE-REGISTERED (NOTES.md, 30 Aug 2026, before this ran)
+================================================================================================
+  HELD   W9-1  not pooling costs 4-14 pts at pop_spend=1.05
+           measured +9.54 pts
+  HELD   W9-2  consent 100% == pooled, and consent 0% == not pooled, exactly
+           measured 8/8 and 8/8 identical
+  HELD   W9-3  the loss grows monotonically as consent falls
+           measured largest rise between adjacent cells -1.53 pts, 2 SE 0.98
+  HELD   W9-4  consent-gating is NOT free: 3-7 pts at 50% consent
+           measured +4.79 pts
+  HELD   W9-5  the non-pooled agent still beats payday_wait by > 20 pts
+           measured +25.59 pts
+
+  Pre-registration record: 5/5
+
+HOW THIS COULD BE WRONG
+================================================================================================
+  * Degenerate mode isolates the belief architecture and is also the
+    flattering choice for W9-1: the action space cannot compensate
+    for a weaker belief here because it is switched off.
+  * pop_spend=1.05 is the hard world and every effect in this
+    project is larger there. Both calibrations are printed above so
+    the smaller number is not hidden.
+  * 8 populations, one seed each. Not a large study.
+  * The consenting set is drawn from its OWN generator, seeded off
+    the run seed and never touching the money path -- error 27's
+    rule. If it shared the stream, each consent rate would be a
+    different world PLUS consent.
+
+

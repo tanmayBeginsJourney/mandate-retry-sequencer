@@ -163,15 +163,25 @@ RETRACTIONS = [
             "document is a staleness generator and should not be reintroduced.",
         retracted_on="2026-08-30",
     ),
-    Retraction(
-        id="pooling-already-consent-gated",
-        pattern=r"(also reports|reports) the non-pooled configuration"
-                r"|treats pooling as consent-gated",
-        why="W9 is UNBUILT. The project does not report the non-pooled "
-            "configuration and does not consent-gate pooling. solo_pop_pd "
-            "exists as an arm; that is all.",
-        retracted_on="2026-08-30",
-    ),
+    # ---- WITHDRAWN 30 August 2026, later the same day, and this comment is
+    # the record rather than a deletion.
+    #
+    #   id="pooling-already-consent-gated"
+    #   pattern=r"(also reports|reports) the non-pooled configuration"
+    #           r"|treats pooling as consent-gated"
+    #   why="W9 is UNBUILT. The project does not report the non-pooled
+    #        configuration and does not consent-gate pooling."
+    #
+    # THE CLAIM BECAME TRUE. W9 shipped: `BeliefBook` takes
+    # `pooling={"all","none","consented"}`, the non-pooled configuration is
+    # measured at two calibrations (`agent/tests/test_pooling_consent.py`), and
+    # both are reported. A rule that bans an accurate sentence is worse than no
+    # rule, because the only way past it is to write something less true.
+    #
+    # This is the one direction this file has to be able to move in. A
+    # retraction list that can only grow eventually forbids the truth. The
+    # protocol in this module's docstring was followed: the reasoning is in
+    # NOTES.md, 30 August 2026, in the same commit that removed the rule.
     Retraction(
         id="stale-error-count",
         pattern=r"twenty-six errors|twenty-seven errors|26 errors|27 errors"
@@ -259,7 +269,6 @@ def selftest() -> int:
         "six-red-gates": "Six gates are red on a clean checkout.",
         "retired-headline": "Collection went from 41.7% to 76.3% in the study.",
         "readme-150-lines": "README.md the front door. Under 150 lines, on purpose.",
-        "pooling-already-consent-gated": "The project also reports the non-pooled configuration.",
         "stale-error-count": "There are twenty-seven errors in this project.",
         "both-misses-one-cause": "Both misses share one cause, which is insolvency.",
         "w7-moves-three-targets": "W7 is the only item that moves three validation targets.",

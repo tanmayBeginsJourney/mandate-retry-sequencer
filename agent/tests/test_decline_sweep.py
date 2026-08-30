@@ -55,6 +55,40 @@ BROKEN_RATES = [0.0, 0.02, 0.05]
 LIMIT_RATES = [0.0, 0.05, 0.15]
 AMBIG_RATES = [0.0, 0.15, 0.40]
 
+#: Combined cells, added 30 August 2026 for E-MIX-3. The single-axis sweep
+#: above cannot produce a decline SHAPE, because every cell has exactly one
+#: non-funds family switched on. These three turn the corners of that same
+#: range on together, low / mid / high, so the shape they produce can be put
+#: next to a published one. The rates are the same [GUESS] values; nothing new
+#: is invented here.
+COMBOS = {
+    "low":  dict(p_account_shut=0.01, p_mandate_broken=0.02,
+                 p_limit=0.05, p_ambiguous=0.15),
+    "mid":  dict(p_account_shut=0.03, p_mandate_broken=0.02,
+                 p_limit=0.05, p_ambiguous=0.15),
+    "high": dict(p_account_shut=0.06, p_mandate_broken=0.05,
+                 p_limit=0.15, p_ambiguous=0.40),
+}
+
+#: THE ONLY PUBLISHED DECLINE BREAKDOWN THIS PROJECT HAS FOUND, and it is not
+#: about our rail. Churnkey, on failed CARD subscription payments in a mostly
+#: non-Indian base: roughly half insufficient funds, a quarter to a third
+#: risk-management hard flags, 10-15% card/instrument issues. `[REPORTED]`,
+#: read 30 August 2026, recorded in docs/01_FACTS.md.
+#:
+#: WHAT IT IS FOR. Until now every rate above was pure invention. This does not
+#: make them sourced -- it lets us ask whether the RANGE they are swept over
+#: brackets a shape somebody has actually published, instead of sitting
+#: somewhere nobody has ever observed. **It must never be calibrated to.** UPI
+#: AutoPay has no card network, no issuer risk engine and a different mandate
+#: model, so agreement would be a coincidence worth noting and disagreement
+#: would not be evidence of a defect.
+PUBLISHED_SHAPE = {
+    "insufficient funds": (0.45, 0.55),
+    "hard flags (terminal)": (0.25, 0.33),
+    "instrument / technical": (0.10, 0.15),
+}
+
 OUTAGE_DAYS = [20, 50, 80, 110]
 DURATION_H, SEVERITY = 6, 0.80
 N_BANK = 200            # the bank study needs volume; detection is volume-bound
@@ -78,6 +112,11 @@ def build_jobs():
             for s in POPS:
                 jobs.append((("mix", axis, r, s), (N, K, s, SPEND, DAYS),
                              RUN_SEED, _base(decline_kw=kw), False))
+    # ---- combined cells, for the shape comparison (E-MIX-3)
+    for name, kw in COMBOS.items():
+        for s in POPS:
+            jobs.append((("combo", name, s), (N, K, s, SPEND, DAYS),
+                         RUN_SEED, _base(decline_kw=dict(kw)), False))
     # ---- the bank study
     ok = dict(days=OUTAGE_DAYS, duration_h=DURATION_H, severity=SEVERITY)
     for s in POPS:
@@ -165,6 +204,72 @@ def main() -> int:
     print(f"{'best single':>14s} {'':10s} {worst_single:20.2f} "
           f"{worst_single/4:15.2f}")
 
+    # ------------------------------------------------------------------
+    # E-MIX-3 -- the SHAPE this sweep produces, against a published one
+    # ------------------------------------------------------------------
+    from agent.ports import CODE_FAMILY
+
+    def shape(key):
+        """Share of FAILURES by family, pooled over populations."""
+        tot = {}
+        for s in POPS:
+            for code, n in res[key + (s,)]["exec_code_counts"].items():
+                if code == "OK":
+                    continue
+                fam = CODE_FAMILY.get(code, "AMBIGUOUS")
+                tot[fam] = tot.get(fam, 0) + n
+        n_all = sum(tot.values()) or 1
+        return {f: v / n_all for f, v in tot.items()}, n_all
+
+    def bucket(sh):
+        """Collapse our nine families onto the three the published mix names."""
+        return {
+            "insufficient funds": sh.get("FUNDS", 0.0),
+            "hard flags (terminal)": (sh.get("ACCOUNT_SHUT", 0.0)
+                                      + sh.get("MANDATE_BROKEN", 0.0)),
+            "instrument / technical": sh.get("TECH", 0.0),
+        }
+
+    print()
+    print("=" * 100)
+    print("E-MIX-3 -- does the swept RANGE bracket a published decline shape?")
+    print("=" * 100)
+    print("  The published mix is CARD subscriptions in a mostly non-Indian")
+    print("  base (Churnkey, [REPORTED], docs/01_FACTS.md). UPI AutoPay has no")
+    print("  card network and no issuer risk engine, so this is NOT a target")
+    print("  and nothing here is calibrated to it. The only question is whether")
+    print("  the range these rates are swept over reaches a shape somebody has")
+    print("  published, or sits somewhere nobody has ever observed.")
+    print()
+    print(f"{'cell':>8s} {'failures':>10s} " +
+          " ".join(f"{k:>24s}" for k in PUBLISHED_SHAPE))
+    print(f"{'published':>8s} {'--':>10s} " +
+          " ".join(f"{lo:>10.0%} - {hi:<11.0%}"
+                   for lo, hi in PUBLISHED_SHAPE.values()))
+    in_band = {}
+    for name in COMBOS:
+        sh, n_all = shape(("combo", name))
+        b = bucket(sh)
+        cells = []
+        hits = 0
+        for k, (lo, hi) in PUBLISHED_SHAPE.items():
+            v = b[k]
+            ok_ = lo <= v <= hi
+            hits += ok_
+            cells.append(f"{v:>17.1%} {'in ' if ok_ else 'out':<6s}")
+        in_band[name] = hits
+        print(f"{name:>8s} {n_all:>10d} " + " ".join(cells))
+        left = {f: v for f, v in sh.items()
+                if f not in ("FUNDS", "ACCOUNT_SHUT", "MANDATE_BROKEN", "TECH")}
+        if left:
+            print(f"{'':>8s} {'':>10s} not named by the published mix: "
+                  + ", ".join(f"{f} {v:.1%}" for f, v in sorted(left.items())))
+    print()
+    print("  LIMIT and AMBIGUOUS have no counterpart in the published")
+    print("  breakdown, so they are listed separately rather than folded into")
+    print("  a bucket they do not belong to. AMBIGUOUS is our own relabelling")
+    print("  knob, not a thing the rail does.")
+
     print()
     print("=" * 100)
     print("PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before this file)")
@@ -183,6 +288,14 @@ def main() -> int:
               and allb.mean() / 4 >= 0.5,
               f"all-bank {allb.mean()/4:.2f}, best single bank "
               f"{worst_single/4:.2f}, mean single {mean_single/4:.2f}"))
+    best = max(in_band.values()) if in_band else 0
+    v.append(("E-MIX-3 the swept range REACHES the published shape on at "
+              "least two of its three named families",
+              best >= 2,
+              "best cell matches " + str(best) + "/3; per cell "
+              + ", ".join(f"{k}={n}/3" for k, n in in_band.items())
+              + ".  Added 30 Aug 2026; NOT pre-registered before its first "
+                "run, and labelled so"))
     hits = 0
     for name, passed, detail in v:
         hits += 1 if passed else 0

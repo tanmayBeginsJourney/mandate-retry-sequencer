@@ -321,7 +321,8 @@ the docs — it needs a key to observe.
     Act require personal data be processed for specified, legitimate purposes.
 
   **What this means for the project, and it is not "give up".** The pooled
-  configuration is worth **+9.53 points** and it is the single largest component
+  configuration is worth **+9.53 points in the hard world and +3.47 at
+  `pop_spend=0.80`** (W9, `02_RESULTS.md`) and it is the single largest component
   of the result. The response is to stop treating pooling as the default and
   start treating it as **consent-gated**, with the non-pooled configuration
   measured and reported beside it. `solo_pop_pd` — one belief per mandate rather

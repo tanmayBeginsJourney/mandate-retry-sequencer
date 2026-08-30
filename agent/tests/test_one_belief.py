@@ -96,6 +96,59 @@ def main() -> int:
     book.advance_day(0, 1)
     ok("normal advance still works", True)
 
+    # ---- W9: pooling is a setting, and withholding it must actually withhold
+    # These checks exist because "pooling=none" that quietly still pooled would
+    # report the consent-gated configuration as costing nothing, which is the
+    # convenient answer and would be a lie the rest of the suite cannot see.
+    from agent.policy.belief_book import PoolingError
+
+    nb = BeliefBook(30, 120, 1.05, w3.FITTED_BELIEF, pooling="none")
+    nb.add_customer(0, 20000.0, 5, n_mandates=3,
+                    mandate_uids=["c0m0", "c0m1", "c0m2"])
+    ok("W9: pooling='none' builds one belief PER MANDATE",
+       nb.n_objects_for(0) == 3, f"{nb.n_objects_for(0)} objects")
+
+    b_a = nb.belief_for(0, "c0m0")
+    before_b = nb.belief_for(0, "c0m1").expected()
+    nb.record_outcome(0, 400.0, False, "c0m0")
+    ok("W9: an observation moves ONLY its own mandate's belief",
+       b_a.expected() != before_b
+       and nb.belief_for(0, "c0m1").expected() == before_b,
+       "this is exactly the information the non-pooled config gives up")
+
+    try:
+        nb.belief_for(0)
+        ok("W9: a non-pooled book refuses to guess which belief", False,
+           "it returned one instead of raising")
+    except PoolingError:
+        ok("W9: a non-pooled book refuses to guess which belief", True)
+
+    # advance_day is still called ONCE per customer and must age each of the
+    # k beliefs exactly once. Ageing them k times is the silent destruction
+    # the double-advance guard exists for.
+    nb.advance_day(0, 0)
+    ok("W9: one advance_day ages every belief the customer owns, once",
+       all(nb._last_day[k] == 0 for k in nb._owned[0]))
+
+    # Consent at 100% must BE pooling, and at 0% must BE not-pooling. Two
+    # routes to one state that disagree is a defect, not a finding.
+    cb_all = BeliefBook(30, 120, 1.05, w3.FITTED_BELIEF, pooling="consented",
+                        consent={0})
+    cb_all.add_customer(0, 20000.0, 5, n_mandates=3,
+                        mandate_uids=["c0m0", "c0m1", "c0m2"])
+    cb_none = BeliefBook(30, 120, 1.05, w3.FITTED_BELIEF, pooling="consented",
+                         consent=set())
+    cb_none.add_customer(0, 20000.0, 5, n_mandates=3,
+                         mandate_uids=["c0m0", "c0m1", "c0m2"])
+    ok("W9: a consenting customer pools", cb_all.n_objects_for(0) == 1)
+    ok("W9: a non-consenting customer does not", cb_none.n_objects_for(0) == 3)
+
+    try:
+        BeliefBook(30, 120, 1.05, w3.FITTED_BELIEF, pooling="sometimes")
+        ok("W9: an unknown pooling mode raises", False, "it did not raise")
+    except ValueError:
+        ok("W9: an unknown pooling mode raises", True)
+
     # est_spend must come from the constant, not be hardcoded to its fitted 0.0
     b2 = BeliefBook(30, 120, 1.05, dict(w3.FITTED_BELIEF, spend_beta=0.5))
     b2.add_customer(0, 20000.0, 5, n_mandates=5)

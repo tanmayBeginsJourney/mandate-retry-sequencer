@@ -176,7 +176,7 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
 
         # S1's calibration input, computed BEFORE the update, exactly as
         # harness.py:279-280 does it.
-        p_pred = (ctx.book.belief_for(rt.ci).p_success(m.amount)
+        p_pred = (ctx.book.belief_for(rt.ci, m.ref.uid).p_success(m.amount)
                   if ctx.collect_calib else None)
 
         decision = ctx.gate.submit(a)
@@ -256,7 +256,10 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                          detail="technical decline is not evidence about this "
                                 "customer's balance")
         else:
-            ctx.book.record_outcome(rt.ci, m.amount, outcome.success)
+            # The mandate uid is ignored when this customer pools, and is
+            # what keeps the evidence inside one merchant when it does not.
+            ctx.book.record_outcome(rt.ci, m.amount, outcome.success,
+                                    m.ref.uid)
 
         # A technical decline may auto-represent under the SAME notification.
         # A Z9 may not. (docs/01_FACTS.md)
@@ -310,10 +313,16 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                          rail_p=v.p_value)
             return
 
-    unc = ctx.book.uncertainty(rt.ci)        # NO balance. See belief_book.
-    belief = ctx.book.belief_for(rt.ci)
-
+    # Fetched per MANDATE rather than once per customer. When this customer
+    # pools, every iteration returns the same object and the same numbers,
+    # so pooled behaviour is unchanged -- `posterior_summary` and
+    # `expected` are pure reads (w3.py:550-563). When it does not pool,
+    # each mandate has its own belief and fetching once would have used
+    # mandate 1's posterior for all k. That is the defect this shape
+    # prevents, and it is the same one harness.py:554-560 already had once.
     for m in live:
+        unc = ctx.book.uncertainty(rt.ci, m.ref.uid)   # NO balance.
+        belief = ctx.book.belief_for(rt.ci, m.ref.uid)
         peer = any(d >= day - PEER_WINDOW_DAYS and uid != m.ref.uid
                    for d, uid in rt.recent_success)
         view = build_case_view(
@@ -433,7 +442,9 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
     runtimes = []
     for ci, c in enumerate(pop):
         est_sal, est_pay = estimates(ci)
-        book.add_customer(ci, est_sal, est_pay, len(c["mandates"]))
+        book.add_customer(ci, est_sal, est_pay, len(c["mandates"]),
+                          mandate_uids=[MandateRef(ci, mi, m["merchant"]).uid
+                                        for mi, m in enumerate(c["mandates"])])
         runtimes.append(CustomerRuntime(
             ci=ci, c=c, bank=(banks or {}).get(ci, ""),
             mands=[MandateState(ref=MandateRef(ci, mi, m["merchant"]),

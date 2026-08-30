@@ -123,6 +123,14 @@ the probability.**
 
 **+9.53 pts (±1.81), gated as S2a.** This is the defensible number.
 
+⚠️ **AND IT IS THE HARD-WORLD FIGURE. Added 30 August 2026 (W9).** Measured
+in the agent at two calibrations, pooling is worth **+9.54 pts (±1.43) at
+`pop_spend=1.05` and +3.47 (±0.41) at `pop_spend=0.80`** — a factor of 2.7
+across the same range the headline is already reported over. Every existing
+quotation of +9.53 in this repository is the hard-world number and was
+missing that conditional. Quote both. `02_RESULTS.md`, W9;
+`python agent/tests/test_pooling_consent.py`, not gate-protected.
+
 ⚠️ **S2a is measured on the UNFITTED filter** (`sim/tests.py:583-585` passes
 no `bcfg`). The gate-protected moat number is therefore not the shipping
 configuration's; the shipping figure is the ungated +9.61 below. Both agree, so

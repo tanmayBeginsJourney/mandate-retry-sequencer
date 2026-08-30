@@ -206,8 +206,10 @@ Once a day, for every live mandate:
 1. **Track the belief.** One probability distribution per *customer*, covering
    the balance and which day of the 30-day cycle the salary lands. All of a
    customer's mandates share it, so an outcome on one subscription informs the
-   timing of the others. That sharing is worth **+9.53 points** and is the
-   argument for running this at an aggregator rather than a merchant.
+   timing of the others. That sharing is worth **+9.53 points in the hard
+   world and +3.47 at the calibration matching the published failure
+   rate**, and it is the argument for running this at an aggregator rather
+   than a merchant. Like the headline, it is a curve rather than a number.
 2. **Score today against later.** The belief gives the probability a debit
    clears today, and the best probability available on any remaining day of the
    cycle. A negative index score means waiting is worth more, which it is on
@@ -447,10 +449,12 @@ work, not here as excuses.
   is the DPDP Act 2023, whose purpose-limitation and consent provisions were
   operationalised by the DPDP Rules notified on 14 November 2025 — which points
   at consent-gating as the design the law would require rather than at a
-  prohibition. Pooling is worth **+9.53 points** and is the single largest
-  component of the result, so the non-pooled arm (`solo_pop_pd`) exists and
-  measuring it as the shipping default is the next item in
-  [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md). See
+  prohibition. **So the system treats pooling as a per-customer permission
+  and the cost of withholding it is measured, not argued:** running fully
+  non-pooled costs **9.54 points** in the hard world and **3.47** at the
+  calibration matching the published failure rate, and pooling only for
+  customers who consented costs **4.79** and **1.48** at half consent.
+  Reproduce with `python agent/tests/test_pooling_consent.py`. See
   [`docs/01_FACTS.md`](docs/01_FACTS.md).
 - **Two calibration gates fail on monotonicity, and no parameter can fix
   them.** The belief filter models no balance floor at zero and approximates
