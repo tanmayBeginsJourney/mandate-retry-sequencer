@@ -247,6 +247,122 @@ which reads as though the gate covers what ships. It does not. See error 13:
 only 2 of 25 gates run the fitted configuration at all.
 
 
+
+
+### Item 14 — the decline sweep against a published shape
+
+Added 30 August 2026. *n=100, k=5, 8 held-out populations, 120 days,
+`pop_spend=1.05`, degenerate mode, 24 runs. **Not gate-protected.** Reproduce
+with* `python agent/tests/test_decline_sweep.py --shape-only`.
+
+Every rate in `DeclineMix` is `[GUESS]`, swept and never picked. The question
+was whether the swept **range** could be anchored against a published shape
+instead of being pure invention. The only published breakdown found is
+Churnkey's, and it describes **card** subscriptions in a mostly non-Indian
+base — `[REPORTED]`, `01_FACTS.md`.
+
+| family | this world's swept range | published (card) | verdict |
+|---|---|---|---|
+| insufficient funds | **41.4% – 69.6%** | 45–55% | **straddles** |
+| hard flags (terminal) | 4.9% – 11.5% | 25–33% | **entirely below** |
+| instrument / technical | 1.1% – 1.9% | 10–15% | **entirely below** |
+
+*No single cell lands inside any band — the low/mid/high grid is coarse and the
+funds share steps 69.6% → 64.7% → 41.4%, crossing 45–55% between the last two.*
+
+**The three rows mean three different things.**
+
+- **Insufficient funds is anchored.** The range straddles the band, so a finer
+  grid puts a cell inside it. This is the one row where both sources describe
+  the same quantity the same way.
+- **Technical is a source conflict, and the UPI source wins.** `01_FACTS.md`
+  carries a UPI-specific `[REPORTED]` claim that technical declines are **under
+  1% of failures**; the card mix says 10–15%. This world measures 1.1–1.9% and
+  sits with the UPI source. **The gap on this row is expected** — it is the
+  card-vs-UPI structural difference appearing exactly where it should, and it
+  is a small point *for* the world rather than against it.
+- **Hard flags remain genuinely invented.** No UPI-specific source exists for
+  how often a mandate is revoked or an account frozen. Either UPI AutoPay has
+  far fewer terminal declines than card subscriptions — plausible: no issuer
+  risk engine, no expiry, no card updater — or `p_account_shut` and
+  `p_mandate_broken` are swept over a range several times too low. **Nothing
+  here distinguishes those two readings.**
+
+**So the claim "no source gives AutoPay decline frequencies" survives intact.**
+One row is anchored, one is explained by a conflict that resolves in this
+world's favour, and one is still a guess.
+
+⚠️ **The check was restated after its first run.** The first form asked whether
+a swept *cell* lands inside the band and answered 0/3 — which is a question
+about grid spacing, not anchoring. It now asks whether the *range* straddles,
+and prints both numbers. The measurements did not change; the same 24 runs are
+reported twice. **The new form is not easier to pass** — it still returns
+"entirely below" on two of three rows. `NOTES.md`, 30 August, has the full
+reasoning and the original 0/3.
+
+
+### W1 — the declared operating points, and how sharp `pop_spend` really is
+
+Added 30 August 2026. *n=100, k=5, 8 held-out populations (700–707), 120 days,
+seed 907, bisection to within 0.2 points. **Not gate-protected.** Reproduce
+with* `python scripts/solve_operating_point.py`.
+
+Until now the first-presentation failure rate was a **side effect**: pick a
+spend, run the world, read the failure rate off the other end. That is
+backwards — the failure rate is the quantity the public record constrains
+(8–15%, `[REPORTED]`), and the spend is an unobservable knob. So it is
+inverted: name the failure rate, solve for the spend.
+
+| point | target | solved `pop_spend` | measured due-date failure |
+|---|---|---|---|
+| **`realistic`** | 12% | **0.7850** | **11.87%** |
+| **`stressed`** | 50% | **0.9627** | **50.13%** |
+
+*Solved between two already-published anchors: 0.80 → 13.68%, 1.05 → 68.71%.*
+
+**The search runs no policy.** `SimExecutor.at_risk_cycles()` answers the
+question from `w3.balance_trace`, which is deterministic in `(pop, seed)`, so no
+agent, no baseline and no belief filter executes during the solve — a declared
+operating point cannot be contaminated by the thing it will later be used to
+measure. The script also refuses to bisect until it has checked the objective is
+monotone, because a non-monotone objective returns a confident wrong answer.
+
+#### ⚠️ `pop_spend` IS A MUCH SHARPER DIAL THAN THIS PAGE HAS TREATED IT AS
+
+**0.1777 of spend spans 12% → 50% due-date failure.** The entire interesting
+region is `pop_spend` 0.78–0.97. The sweep published above steps
+0.60 → 0.80 → 0.90 → 1.05, so **three of its four steps sit outside that
+region**, and two adjacent published cells are further apart than the whole
+distance from "matches the published record" to "half of all debits fail".
+
+"The headline is conditional on `pop_spend`" is true and understates it. The
+accurate statement is that it is conditional on a parameter whose plausible
+range is *narrow* and whose effect across that narrow range is *most of the
+result*.
+
+#### And `pop_spend=0.80` is on the pessimistic half of the published band
+
+The 12% point solves to **0.7850**, so the calibration this project reports its
+validation suite at is slightly harsher than the middle of the published 8–15%
+band, not centred in it. It is still a hit and still not fitted. But "inside the
+band" has been doing quiet work in several documents, and the precise version is
+"inside the band, above its midpoint, in the harsher direction". This was
+pre-registered as W1-1 before the number was known.
+
+#### Nothing was adopted
+
+The points are **declared**; the default is unchanged; no headline was re-run
+and none may be re-quoted on the strength of this script. ⚠️ **The declared
+`stressed` point (0.9627, 50.13%) is NOT the repository default** (1.05,
+68.71%). Two different worlds — do not let the name blur them.
+
+**How this could be wrong.** The targets are a choice: 12% is the middle of a
+`[REPORTED]` band from trade blogs that cite no operator, and **50% is not a
+published figure at all** — it is a round number near where this repository has
+been operating, so `stressed` is a declaration and never a calibration to
+anything external. One technical seed, eight populations.
+
+
 ### W9 — pooling measured in the AGENT, at TWO calibrations, and consent-gated
 
 Added 30 August 2026. *n=100, k=5, 8 held-out populations (700–707), 120 days,

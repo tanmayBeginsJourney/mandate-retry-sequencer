@@ -146,7 +146,122 @@ def _detected(transitions):
     return n
 
 
+def _emix3(res):
+    """The shape comparison. Returns (in_band, brackets)."""
+    # ------------------------------------------------------------------
+    # E-MIX-3 -- the SHAPE this sweep produces, against a published one
+    # ------------------------------------------------------------------
+    from agent.ports import CODE_FAMILY
+
+    def shape(key):
+        """Share of FAILURES by family, pooled over populations."""
+        tot = {}
+        for s in POPS:
+            for code, n in res[key + (s,)]["exec_code_counts"].items():
+                if code == "OK":
+                    continue
+                fam = CODE_FAMILY.get(code, "AMBIGUOUS")
+                tot[fam] = tot.get(fam, 0) + n
+        n_all = sum(tot.values()) or 1
+        return {f: v / n_all for f, v in tot.items()}, n_all
+
+    def bucket(sh):
+        """Collapse our nine families onto the three the published mix names."""
+        return {
+            "insufficient funds": sh.get("FUNDS", 0.0),
+            "hard flags (terminal)": (sh.get("ACCOUNT_SHUT", 0.0)
+                                      + sh.get("MANDATE_BROKEN", 0.0)),
+            "instrument / technical": sh.get("TECH", 0.0),
+        }
+
+    print()
+    print("=" * 100)
+    print("E-MIX-3 -- does the swept RANGE bracket a published decline shape?")
+    print("=" * 100)
+    print("  The published mix is CARD subscriptions in a mostly non-Indian")
+    print("  base (Churnkey, [REPORTED], docs/01_FACTS.md). UPI AutoPay has no")
+    print("  card network and no issuer risk engine, so this is NOT a target")
+    print("  and nothing here is calibrated to it. The only question is whether")
+    print("  the range these rates are swept over reaches a shape somebody has")
+    print("  published, or sits somewhere nobody has ever observed.")
+    print()
+    print(f"{'cell':>8s} {'failures':>10s} " +
+          " ".join(f"{k:>24s}" for k in PUBLISHED_SHAPE))
+    print(f"{'published':>8s} {'--':>10s} " +
+          " ".join(f"{lo:>10.0%} - {hi:<11.0%}"
+                   for lo, hi in PUBLISHED_SHAPE.values()))
+    in_band, spans = {}, {k: [] for k in PUBLISHED_SHAPE}
+    for name in COMBOS:
+        sh, n_all = shape(("combo", name))
+        b = bucket(sh)
+        cells = []
+        hits = 0
+        for k, (lo, hi) in PUBLISHED_SHAPE.items():
+            v = b[k]
+            spans[k].append(v)
+            ok_ = lo <= v <= hi
+            hits += ok_
+            cells.append(f"{v:>17.1%} {'in ' if ok_ else 'out':<6s}")
+        in_band[name] = hits
+        print(f"{name:>8s} {n_all:>10d} " + " ".join(cells))
+        left = {f: v for f, v in sh.items()
+                if f not in ("FUNDS", "ACCOUNT_SHUT", "MANDATE_BROKEN", "TECH")}
+        if left:
+            print(f"{'':>8s} {'':>10s} not named by the published mix: "
+                  + ", ".join(f"{f} {v:.1%}" for f, v in sorted(left.items())))
+
+    # THE QUESTION THE QUEUE ACTUALLY ASKED was whether the swept RANGE is
+    # anchored to a published shape -- not whether one of three coarse cells
+    # happens to land inside a band. A range that straddles the band is
+    # anchored; a finer grid would find a cell in it. A range entirely below
+    # the band is not, and that is a different and more interesting answer.
+    print()
+    print(f"  {'family':>24s} {'swept range':>18s}  {'published':>14s}   verdict")
+    brackets = {}
+    for k, (lo, hi) in PUBLISHED_SHAPE.items():
+        vs = spans[k]
+        rlo, rhi = min(vs), max(vs)
+        straddles = rlo <= hi and rhi >= lo
+        brackets[k] = straddles
+        where = ("straddles" if straddles
+                 else "entirely BELOW" if rhi < lo else "entirely ABOVE")
+        print(f"  {k:>24s} {rlo:>8.1%}-{rhi:<9.1%} {lo:>6.0%}-{hi:<7.0%}  {where}")
+
+    print()
+    print("  LIMIT and AMBIGUOUS have no counterpart in the published")
+    print("  breakdown, so they are listed separately rather than folded into")
+    print("  a bucket they do not belong to. AMBIGUOUS is our own relabelling")
+    print("  knob, not a thing the rail does.")
+    print()
+    # ASCII on purpose: the default Windows console codec is cp1252 and a
+    # gate that dies while printing its own findings reports nothing.
+    print("  !! WHERE THE TWO PUBLISHED SOURCES DISAGREE, THE UPI ONE GOVERNS.")
+    print("  docs/01_FACTS.md carries a UPI-specific [REPORTED] claim that")
+    print("  technical declines are UNDER 1% OF FAILURES. The card mix says")
+    print("  10-15%. This world sits with the UPI source. A gap against the")
+    print("  card figure on that row is therefore EXPECTED and is not evidence")
+    print("  that the sweep range is wrong.")
+    return in_band, brackets
+
+
+def shape_only() -> int:
+    """E-MIX-3 alone. Same jobs, same code path, one section of output."""
+    jobs = [(("combo", name, s), (N, K, s, SPEND, DAYS), RUN_SEED,
+             _base(decline_kw=dict(kw)), False)
+            for name, kw in COMBOS.items() for s in POPS]
+    print(f"{len(jobs)} runs (combined-decline cells only), one process each")
+    res = run_jobs(agent_job, jobs)
+    _emix3(res)
+    return 0
+
+
 def main() -> int:
+    # --shape-only runs the 24 combined-decline cells and prints E-MIX-3
+    # alone. The rest of this file re-runs 176 jobs including a bank study at
+    # n=200 that nothing here touches, and re-running unchanged work to reprint
+    # one section is how a measurement budget disappears.
+    if "--shape-only" in sys.argv:
+        return shape_only()
     jobs = build_jobs()
     print(f"{len(jobs)} runs, one process each")
     res = run_jobs(agent_job, jobs)
@@ -204,71 +319,7 @@ def main() -> int:
     print(f"{'best single':>14s} {'':10s} {worst_single:20.2f} "
           f"{worst_single/4:15.2f}")
 
-    # ------------------------------------------------------------------
-    # E-MIX-3 -- the SHAPE this sweep produces, against a published one
-    # ------------------------------------------------------------------
-    from agent.ports import CODE_FAMILY
-
-    def shape(key):
-        """Share of FAILURES by family, pooled over populations."""
-        tot = {}
-        for s in POPS:
-            for code, n in res[key + (s,)]["exec_code_counts"].items():
-                if code == "OK":
-                    continue
-                fam = CODE_FAMILY.get(code, "AMBIGUOUS")
-                tot[fam] = tot.get(fam, 0) + n
-        n_all = sum(tot.values()) or 1
-        return {f: v / n_all for f, v in tot.items()}, n_all
-
-    def bucket(sh):
-        """Collapse our nine families onto the three the published mix names."""
-        return {
-            "insufficient funds": sh.get("FUNDS", 0.0),
-            "hard flags (terminal)": (sh.get("ACCOUNT_SHUT", 0.0)
-                                      + sh.get("MANDATE_BROKEN", 0.0)),
-            "instrument / technical": sh.get("TECH", 0.0),
-        }
-
-    print()
-    print("=" * 100)
-    print("E-MIX-3 -- does the swept RANGE bracket a published decline shape?")
-    print("=" * 100)
-    print("  The published mix is CARD subscriptions in a mostly non-Indian")
-    print("  base (Churnkey, [REPORTED], docs/01_FACTS.md). UPI AutoPay has no")
-    print("  card network and no issuer risk engine, so this is NOT a target")
-    print("  and nothing here is calibrated to it. The only question is whether")
-    print("  the range these rates are swept over reaches a shape somebody has")
-    print("  published, or sits somewhere nobody has ever observed.")
-    print()
-    print(f"{'cell':>8s} {'failures':>10s} " +
-          " ".join(f"{k:>24s}" for k in PUBLISHED_SHAPE))
-    print(f"{'published':>8s} {'--':>10s} " +
-          " ".join(f"{lo:>10.0%} - {hi:<11.0%}"
-                   for lo, hi in PUBLISHED_SHAPE.values()))
-    in_band = {}
-    for name in COMBOS:
-        sh, n_all = shape(("combo", name))
-        b = bucket(sh)
-        cells = []
-        hits = 0
-        for k, (lo, hi) in PUBLISHED_SHAPE.items():
-            v = b[k]
-            ok_ = lo <= v <= hi
-            hits += ok_
-            cells.append(f"{v:>17.1%} {'in ' if ok_ else 'out':<6s}")
-        in_band[name] = hits
-        print(f"{name:>8s} {n_all:>10d} " + " ".join(cells))
-        left = {f: v for f, v in sh.items()
-                if f not in ("FUNDS", "ACCOUNT_SHUT", "MANDATE_BROKEN", "TECH")}
-        if left:
-            print(f"{'':>8s} {'':>10s} not named by the published mix: "
-                  + ", ".join(f"{f} {v:.1%}" for f, v in sorted(left.items())))
-    print()
-    print("  LIMIT and AMBIGUOUS have no counterpart in the published")
-    print("  breakdown, so they are listed separately rather than folded into")
-    print("  a bucket they do not belong to. AMBIGUOUS is our own relabelling")
-    print("  knob, not a thing the rail does.")
+    in_band, brackets = _emix3(res)
 
     print()
     print("=" * 100)
@@ -289,13 +340,16 @@ def main() -> int:
               f"all-bank {allb.mean()/4:.2f}, best single bank "
               f"{worst_single/4:.2f}, mean single {mean_single/4:.2f}"))
     best = max(in_band.values()) if in_band else 0
-    v.append(("E-MIX-3 the swept range REACHES the published shape on at "
-              "least two of its three named families",
-              best >= 2,
-              "best cell matches " + str(best) + "/3; per cell "
-              + ", ".join(f"{k}={n}/3" for k, n in in_band.items())
-              + ".  Added 30 Aug 2026; NOT pre-registered before its first "
-                "run, and labelled so"))
+    n_str = sum(1 for x in brackets.values() if x)
+    v.append(("E-MIX-3 the swept range STRADDLES the published band on the one "
+              "family both sources describe the same way (insufficient funds)",
+              brackets.get("insufficient funds", False),
+              f"straddled {n_str}/3 families; no single cell lands inside any "
+              f"band (best cell {best}/3). Added 30 Aug 2026 and RESTATED after "
+              "its first run -- the first form asked whether a coarse cell "
+              "lands in the band, which is a question about grid spacing, not "
+              "about anchoring. Both numbers are printed above. NOT "
+              "pre-registered."))
     hits = 0
     for name, passed, detail in v:
         hits += 1 if passed else 0

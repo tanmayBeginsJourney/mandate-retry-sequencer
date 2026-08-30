@@ -1,0 +1,23 @@
+==============================================================================
+W1 -- SOLVING FOR A DECLARED OPERATING POINT
+==============================================================================
+  n=100 k=5 120d, 8 held-out populations, seed 907.
+  The first-presentation failure rate is a property of the WORLD.
+  No policy is run here, so the declared point cannot be
+  contaminated by the thing it will be used to measure.
+
+  Anchors already published in docs/02_RESULTS.md:
+    pop_spend=0.80  ->   13.68% first-presentation failure
+    pop_spend=1.05  ->   68.71% first-presentation failure
+
+   realistic  target 12.0%  ->  pop_spend = 0.7850   measured 11.87%   (11 evaluations)
+    stressed  target 50.0%  ->  pop_spend = 0.9627   measured 50.13%   (11 evaluations)
+
+  written to logs\w1_operating_points.json
+
+  WHAT THIS DOES NOT DO. It declares the points; it does not adopt
+  one. Adopting `realistic` as the default re-runs every headline,
+  and 04_BUILD_PLAN.md W1 keeps `stressed` precisely so the existing
+  numbers stay comparable. The spend sweep in 02_RESULTS.md already
+  shows the shape, so nothing is waiting to surprise anyone.
+==============================================================================

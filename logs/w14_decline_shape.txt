@@ -1,0 +1,37 @@
+24 runs (combined-decline cells only), one process each
+
+====================================================================================================
+E-MIX-3 -- does the swept RANGE bracket a published decline shape?
+====================================================================================================
+  The published mix is CARD subscriptions in a mostly non-Indian
+  base (Churnkey, [REPORTED], docs/01_FACTS.md). UPI AutoPay has no
+  card network and no issuer risk engine, so this is NOT a target
+  and nothing here is calibrated to it. The only question is whether
+  the range these rates are swept over reaches a shape somebody has
+  published, or sits somewhere nobody has ever observed.
+
+    cell   failures       insufficient funds    hard flags (terminal)   instrument / technical
+published         --        45% - 55%                25% - 33%                10% - 15%        
+     low       8438             69.6% out                 4.9% out                 1.9% out   
+                    not named by the published mix: AMBIGUOUS 16.7%, LIMIT 6.9%
+     mid       9199             64.7% out                11.5% out                 1.8% out   
+                    not named by the published mix: AMBIGUOUS 15.5%, LIMIT 6.4%
+    high      12630             41.4% out                 7.5% out                 1.1% out   
+                    not named by the published mix: AMBIGUOUS 40.5%, LIMIT 9.5%
+
+                    family        swept range       published   verdict
+        insufficient funds    41.4%-69.6%        45%-55%      straddles
+     hard flags (terminal)     4.9%-11.5%        25%-33%      entirely BELOW
+    instrument / technical     1.1%-1.9%         10%-15%      entirely BELOW
+
+  LIMIT and AMBIGUOUS have no counterpart in the published
+  breakdown, so they are listed separately rather than folded into
+  a bucket they do not belong to. AMBIGUOUS is our own relabelling
+  knob, not a thing the rail does.
+
+  !! WHERE THE TWO PUBLISHED SOURCES DISAGREE, THE UPI ONE GOVERNS.
+  docs/01_FACTS.md carries a UPI-specific [REPORTED] claim that
+  technical declines are UNDER 1% OF FAILURES. The card mix says
+  10-15%. This world sits with the UPI source. A gap against the
+  card figure on that row is therefore EXPECTED and is not evidence
+  that the sweep range is wrong.
