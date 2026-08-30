@@ -310,16 +310,29 @@ A failed attempt may prompt the customer to top up. Old harness, k=7:
 | 0.25 | 54.5% | 79.7% | +25.2 |
 | 0.50 | 62.4% | 80.9% | +18.5 |
 
-Roughly half the apparent gain is "customers never top up." `w3` supports
-`topup_p`; this sweep has **not** been redone there. Do it before the pitch.
+Roughly half the apparent gain is "customers never top up" — **on the OLD
+harness.** ✅ **Redone on `w3`, 29 August 2026, and the worry does not carry
+over**: the unconditional `topup_p` sweep on the shipping configuration is worth
+**+0.02 pts (2 SE 0.59)**, against **+11.4 pts** for `payday_wait`. The
+mechanism is live; the shipping policy has nothing left to recover at 95.3%.
+Table in the action-space section below.
 
 ## Test suite status
 
-**25 gates. Six are red: S1 FAIL, S1_PD FAIL, S2b FAIL, S2_LEGACY FAIL,
-M4B FAIL, M1 VACUOUS.** Enforced by `sim/gate.py`; reasons in
-`sim/known_failures.txt`. **M4B was added 28 Aug 2026 and is the important
-one: it says gate M4's mutant increments the counter M4 grades it on, so the
-pending-notification constraint has no working test.** See error 11.
+**Updated 30 August 2026. 25 gates. Four are red: S1 FAIL, S1_PD FAIL,
+S2b FAIL, S2_LEGACY FAIL. Zero vacuous.** Enforced by `sim/gate.py`; reasons in
+`sim/known_failures.txt`.
+
+Two of the four are **calibration** gates that no parameter can fix, and two are
+**controls kept visibly failing** so a rewrite stays auditable. None is debt.
+
+✅ **M1 and M4B were red and are now green (30 August).** M4B was the important
+one — it found that gate M4's mutant incremented the very counter M4 graded it
+on, so the pending-notification constraint had been passing by construction:
+1066 counted, 1066 self-written, 0 independent. Both mutants were repaired so
+they create illegal state and let independent code notice. **All five Stage 0
+rules now have a working test.** See error 11, and error 27 for the same shape
+recurring in W7.
 
 **Runtime: ~100s for the full suite, ~34s for the fast tier, ON AN IDLE
 MACHINE** (was ~27 minutes). Re-measured 29 Aug 2026 three times back to back:
@@ -1173,13 +1186,142 @@ Registered in `NOTES.md` before the code ran; scored 2/4.
   50–70%, where the published figure is ~90%.
 
 **Recovery is too high (90–97% against a published 70–85%) and too slow (37%
-inside 10 days against ~90%), and both have one cause: in this world the money
-always arrives eventually.** The oracle is 100% at every calibration, so every
-at-risk cycle is winnable given enough patience. Real recovery is capped
-because some customers never pay, and fast because most real failures are
-transient. This world has neither property yet — which is what **W2** and
-**W4** in `04_BUILD_PLAN.md` add, and this is the measurement that turns them
-from plausible into evidenced.
+inside 10 days against ~90%).** The oracle is 100% at every calibration, so
+every at-risk cycle is winnable given enough patience.
+
+⚠️ **"Both have one cause" was written here and it is wrong.** They have two,
+and both were tested. **W2** (insolvency) brings recovery into band and does
+not touch the early share — 5/5 pre-registered. **W7** (transient failures) was
+predicted to fix the early share and **did not move it**: 41.84% → 42.78% at
+best across 14 worlds. The early share has its own two causes, the
+due-date/payday offset (W6) and the agent's blindness to transients, and both
+are open. See the W7 section below. This is the third time in this project that
+two symptoms were attributed to one cause because the first explanation covered
+the first symptom.
+
+## W7 — transient failures. 6/8 pre-registered, and the two breaks carry it
+
+**Added 30 August 2026.** `python agent/tests/test_transient_sweep.py`.
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`pop_spend=0.80`, `w3.FITTED_BELIEF`. 224 runs, one process each. **Not
+gate-protected** — the script is named so it can be re-run.* Raw table:
+`logs/w7_transient_sweep.json`.
+
+A transient failure is a **temporary hold**: the whole available balance is
+unreachable for `transient_h` hours and afterwards is exactly what it would
+have been. A lien, a momentary shortfall, a balance topped up the same evening.
+The decline code stays `Z9`, because a hold *is* insufficient funds as far as
+the bank's response is concerned.
+
+| `p_transient` | hold | V1 due-date fail | V3 fixed schedule | V5 agent | V7 ≤10d |
+|---|---|---|---|---|---|
+| 0.00 | — | **13.68% HIT** | **27.85% HIT** | 97.38% | 41.84% |
+| 0.05 | 24h | 17.50% | 40.64% | 96.56% | 42.78% |
+| 0.10 | 24h | 21.38% | 48.69% | 96.14% | 41.96% |
+| 0.20 | 24h | 29.25% | 58.67% | 94.25% | 39.27% |
+| 0.20 | 48h | 42.88% | 57.68% | 87.25% | 34.26% |
+
+*2 SE on V3 runs ±1.92 to ±2.58; on V1, ±0.72 to ±1.57. Published bands: V1
+8–15%, V3 20–40%, V5 70–85%, V7 85–95%. The 48h rows at 0.05/0.10 and the whole
+`p_missed_credit=0.08` panel are in the script's output.*
+
+**The oracle stays at 100% collectable at every cell** — a hold blocks money,
+it does not destroy it, which is the check that the mechanism built is the one
+specified.
+
+### Transients are not free, and that was predicted before the run
+
+V3 rises hard — 27.85% → 40.64% at the lowest rate swept. But **V1 rises with
+it**, and V1 was the one target this world hit without being fitted to it. In
+the lowest cell where V3 reaches its band, V1 is already **17.50%**, outside
+the published 8–15%. That was registered in advance as W7-7, deliberately
+against our own interest, and it held.
+
+**Across all 14 worlds swept, none hits more than 2 of 4 targets, and the best
+is still `p_transient=0.00`.** So the reported calibration survived a search
+that was set up to unseat it.
+
+### The grid is too coarse at the bottom, and refining it would be curve-fitting
+
+V3 crosses the entire 20–40% band between `p_transient=0.00` and `0.05`. A rate
+near 0.02 would land it, and interpolation puts V1 at roughly 15% there — so a
+refined grid would probably hit V1 and V3 together. **V5 (96–97%) and V7
+(42–43%) are flat in `p_transient`**, so that cell would be 2/4 with both
+unfitted targets missing: the (0.70, 0.08) trap in new clothes. The grid was
+not refined.
+
+**The inversion is the result worth keeping:** if the published 20–40%
+fixed-schedule band describes reality, this world says the transient rate is
+**under 5% of account-days.** That is the first quantitative statement this
+project has been able to make about the world *from* a published figure rather
+than about itself. It is an inference from a curve and it is adopted nowhere.
+
+### V7 did not move, and why is a finding about the agent
+
+Registered: V7 rises above 60%. Measured: **42.78% at best.** The reasoning
+behind the prediction — recoveries land inside ten days because the money came
+back inside ten days — is true of the fixed schedule, which is 100% early at
+every cell, and false of the agent, which is the arm V7 is defined on.
+
+At `p_transient=0.10`, 24h, one population, recoveries reconstructed from the
+audit log's OUTCOME rows:
+
+| cycles at risk because… | recovered | early (≤10d) | median |
+|---|---|---|---|
+| …they were at risk anyway | 181/201 | 36.5% | 13.0d |
+| **…ONLY because of a hold** | 126/127 | **51.6%** | **10.0d** |
+
+**Only 15.1% of transient-only cycles are collected on the first legal day**,
+when the money is already back; **48.4% take more than ten days.** The wait
+tracks the distance to the next payday — median 3.0d when payday is 0–4 days
+out, 16.5d when it is 20–24 days out.
+
+**The agent waits for payday on money that is sitting in the account.** Two
+structural causes:
+
+- **it never presents on the due date** (24h notice, actionable only from day
+  T), so a 24h hold has released before it ever knocks — it never observes the
+  transient at all;
+- **it could not tell if it did.** `w3.BeliefPD.observe(amount, success)` takes
+  no decline code — `[VERIFIED]` in `01_FACTS.md`, and until now that was a
+  note about an interface rather than a measured cost. A lien and an empty
+  account produce the identical posterior update.
+
+This is the strongest argument yet for turning the decline taxonomy on (W5) and
+for the diagnosis layer being load-bearing. **It is not an argument for putting
+the LLM on the timing path** — ADR-005 stands, and the two candidate fixes
+(letting the belief condition on the decline family, or adding a "re-present
+sooner" intervention) both leave timing in the policy.
+
+### A defect in the measurement, found and fixed mid-run
+
+The first implementation drew the holds from the money path's generator, so
+turning transients on **re-drew every customer's entire balance trace** — the
+sweep was comparing the mechanism plus a different world. `sim_executor.py`
+states the rule against exactly this, twice, for the decline taxonomy and the
+nudge.
+
+Holds now come from a per-customer generator seeded the way `harness.py:158`
+seeds `donor_bal`, and `p_transient > 0` without one **raises** rather than
+falling back. It changed a verdict: V3 at (0.05, 24h) moved 39.06% → **40.64%**,
+flipping W7-1 from HELD to BROKE. `NOTES.md`, 30 August.
+
+### How this could be biased toward the answer we want
+
+- **The mechanism was chosen after seeing which targets missed**, so moving them
+  in the registered direction is close to guaranteed. That is why W7-7 exists:
+  the test with content is whether it works without collateral damage, and it
+  does not.
+- **A full-balance block is the strongest form of the mechanism**, so every
+  effect above is an upper bound on what a hold at that rate can do.
+- **The V7 diagnostic is one run and one population**, n=127 transient-only
+  cycles, buckets of 15–30, no confidence interval. A mechanism demonstration,
+  not an estimate.
+- **The at-risk denominator grows at every non-zero rate**, so V3 and V5 are
+  ratios over a larger set than the `p_transient=0.00` row. Comparable in
+  direction, not point to point.
+- **`p_transient` is a pure `[GUESS]`** with no source and no long-standing
+  default to appeal to. It was invented for this test.
 
 ## What flatters these numbers
 

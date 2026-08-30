@@ -74,7 +74,7 @@ interesting to a judge?"** — not "does this fit before Friday."
 
 The single most important thing about this project:
 
-> **It has found twenty-six significant errors in its own work. Almost every one
+> **It has found twenty-seven significant errors in its own work. Almost every one
 > made the project look BETTER than it was.** That is not coincidence. It is
 > what happens when the same party builds the measuring stick and the thing
 > being measured. You are now that party. Behave accordingly.
@@ -251,7 +251,7 @@ interventions, and writes a human-readable justification for every money action.
 
 ### Division of labour — this is the pitch line, keep it true
 - **The LLM decides *what* to do and explains *why*.**
-- **The bandit policy decides *when*.**
+- **The belief filter and its index rule decide *when*.**
 - **The constraint layer decides *whether it is allowed*.**
 
 An LLM must never be on the path that decides whether to debit a specific
@@ -273,7 +273,7 @@ docs/
                        (start at 07_AGENT_BRIEF.md if you are building the agent)
   01_FACTS.md          every external fact, with source and confidence
   02_RESULTS.md        gated simulation results. See also 06_MODEL_CARD.md.
-  03_ERRORS.md         TWENTY-SIX errors, with mechanism + guard. Pitch material.
+  03_ERRORS.md         TWENTY-SEVEN errors, with mechanism + guard. Pitch material.
   04_BUILD_PLAN.md     what is left, dated
   05_TEST_DESIGN.md    test philosophy, written BEFORE the harness on purpose
   06_MODEL_CARD.md     WHAT SHIPS. Read this before touching sim/ or agent/.
@@ -456,22 +456,25 @@ Bayes-versus-ML comparison. Requiring the label is stricter in the way that
 matters — a reader can tell which is which — and the alternative was a rule
 everyone quietly broke.)*
 
-**Six gates are red on a clean checkout** (25 gates: 5 FAIL, 1 VACUOUS, 19
-pass). Full reasons in `sim/known_failures.txt`; the short version:
+**Four gates are red on a clean checkout** (25 gates: 4 FAIL, **0 VACUOUS**,
+21 pass) — updated 30 August 2026, when M1 and M4B were repaired. Full reasons
+in `sim/known_failures.txt`; the short version, with the two repaired rows kept
+struck through as the record:
 
 | Gate | State | What it means |
 |---|---|---|
 | **S1** calibration, point-estimate filter | FAIL | ECE 0.091, inside the 0.10 bound, but the reliability curve is **not monotone**. Note S1 runs `portfolio`, which carries `w3.Belief` — **not the filter that ships**. |
 | **S1_PD** calibration, shipping filter | FAIL | Same threshold, on `w3.BeliefPD` under `FITTED_BELIEF`. ECE 0.026, also not monotone. Added 28 Aug because S1 had never measured the product. |
-| **M1** attempt-cap mutant | VACUOUS | The mutant cannot trip the cap counter at either operating point, so the NPCI attempt-cap claim has **no working test behind it**. |
-| **M4B** mutants must not grade themselves | FAIL | **Added 28 Aug. `mutate="pending"` increments `V.pending` itself (`harness.py:610-612`), so gate M4 passes by construction — 1066 counted, 1066 self-written, 0 independent. The pending-notification constraint has no working test either.** `mutate="represent"` does the same but M5 still binds. |
+| ~~**M1**~~ attempt-cap mutant | ✅ **GREEN** | Was VACUOUS. Now runs its mutant at `cap_override=2` so the counter binds. The attempt-cap claim has a working test and **is safe to claim.** |
+| ~~**M4B**~~ mutants must not grade themselves | ✅ **GREEN** | Was FAIL: `mutate="pending"` incremented `V.pending` itself, so gate M4 passed by construction — 1066 counted, 1066 self-written, 0 independent. Both mutants now create illegal state instead. **It went green because the mutants were repaired, not because the detector was narrowed.** |
 | **S2b** placebo neutrality | FAIL | −14.09 pts. A finding about the control's design, not a code defect: the placebo injects *wrong* observations, not neutral extra ones. Left visible on purpose. |
 | **S2_LEGACY** point-estimate pooling | FAIL | Retired architecture, kept failing on purpose so the S2 rewrite is auditable rather than looking like test-loosening. |
 
-⚠️ **Two of the five Stage 0 rules have no working test: the attempt cap (M1)
+⚠️ ~~**Two of the five Stage 0 rules have no working test: the attempt cap (M1)
 and the pending notification (M4/M4B). Keep BOTH out of the pitch and the
-architecture doc.** Peak-hour, notification-lead and Z9 re-presentation are
-genuinely tested and are safe to claim.
+architecture doc.**~~ **RETRACTED — all five rules are now tested and all five
+are safe to claim.** Kept struck through so it is recognisable as withdrawn
+rather than missing when it turns up in an older session's notes.
 
 ✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
 

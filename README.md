@@ -82,14 +82,19 @@ world rather than of the agent:
 
 - **Recovery is too high** because no simulated customer is ever simply unable
   to pay — a clairvoyant scheduler collects 100% at every calibration tested.
+  Adding customers who genuinely cannot pay brings it into the published band.
 - **Recovery is too slow** because a mandate's due date and its customer's
   payday are drawn independently, so the wait between them averages half a
   cycle. Only **35.8%** of at-risk cycles have money inside ten days, and the
   agent recovers **42.6%** of them inside ten days — it is already beating the
   ceiling this world sets. Real billing dates cluster near paydays; these do not.
 
-Both are being fixed, separately
-([`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md), W2 and W6).
+Both are being worked on
+([`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md)), and the work has already
+falsified one theory: temporary holds on the account were predicted to fix the
+second miss and, measured across 14 alternative worlds, **moved it by under one
+point.** The same sweep found that every alternative world scores worse against
+the published record than the one reported above.
 
 **The headline is conditional on how hard the world is**, and that is swept
 rather than assumed. `pop_spend` sets how much of a salary a customer spends per
@@ -385,10 +390,15 @@ work, not here as excuses.
   The largest single sensitivity is one of these: sweeping the limit-decline
   rate over 0.00 / 0.05 / 0.15 costs 0.00 / −2.87 / −13.46 points.
 - **The legal status of cross-merchant pooling is unresolved in Indian law.**
-  No statute or RBI circular addresses it directly, and the surrounding
-  framework points both ways. It is worth **+9.53 points**, so the project also
-  reports the non-pooled configuration and treats pooling as consent-gated
-  rather than assumed. See [`docs/01_FACTS.md`](docs/01_FACTS.md).
+  No statute or RBI circular found addresses it directly. The nearest instrument
+  is the DPDP Act 2023, whose purpose-limitation and consent provisions were
+  operationalised by the DPDP Rules notified on 14 November 2025 — which points
+  at consent-gating as the design the law would require rather than at a
+  prohibition. Pooling is worth **+9.53 points** and is the single largest
+  component of the result, so the non-pooled arm (`solo_pop_pd`) exists and
+  measuring it as the shipping default is the next item in
+  [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md). See
+  [`docs/01_FACTS.md`](docs/01_FACTS.md).
 - **Two calibration gates fail on monotonicity, and no parameter can fix
   them.** The belief filter models no balance floor at zero and approximates
   the world's hourly spend jitter with a fixed 3-tap kernel. Both are
@@ -404,7 +414,7 @@ work, not here as excuses.
 | [`docs/06_MODEL_CARD.md`](docs/06_MODEL_CARD.md) | What ships, what it is worth, and eleven things it was never tested on. Read before quoting a number. |
 | [`docs/02_RESULTS.md`](docs/02_RESULTS.md) | Every result, with its experimental design and bias analysis |
 | [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) | What is being built next, and the validation suite |
-| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Twenty-six errors found in this project's own work, with the mechanism and the guard added for each |
+| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Twenty-seven errors found in this project's own work, with the mechanism and the guard added for each |
 | [`docs/01_FACTS.md`](docs/01_FACTS.md) | Every external fact, with a source and a confidence tag |
 | [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | The interface between the agent and the simulation |
 | [`NOTES.md`](NOTES.md) | The decision log, append-only and unedited |

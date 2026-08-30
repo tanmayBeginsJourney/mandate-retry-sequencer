@@ -169,7 +169,7 @@ The list below named six modelling choices pinned to convenient values. Status:
 
 | ID | parameter | status |
 |---|---|---|
-| A1 | top-up probability | **still pinned at 0** except one `topup_p=0.25` row. The old-harness sweep suggesting ~half the gain was "customers never top up" has NOT been redone on `w3`. |
+| A1 | top-up probability | **still pinned at 0** except one `topup_p=0.25` row. ✅ **Redone on `w3` 29 Aug 2026:** the unconditional sweep on the shipping configuration is worth **+0.02 pts (2 SE 0.59)**, against **+11.4 pts** for `payday_wait`. The old-harness worry — that ~half the gain was "customers never top up" — does not carry over. |
 | A2 | payday estimate error | **DONE** — swept ±1 to ±14, `sim/headline.py`. The crossover against `payday_wait` is between ±3 and ±5 days. |
 | A3 | `p_later` discount | **DONE** — swept 0.80–1.00. Not a no-op: it changes the index's sign. Broad plateau, argmax moves between population sets. Reported as a range, 78.7%–83.1%, never as a point. |
 | A4 | LTV multiplier | **DONE, and removed.** Swept over {0,1,6,20}: a **no-op for every policy**, because `value` is strictly positive so it cannot flip the index's sign, and non-budgeted policies commit every positive-score mandate regardless of rank. It was live and inert. |

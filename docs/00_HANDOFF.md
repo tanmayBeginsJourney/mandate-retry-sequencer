@@ -44,6 +44,12 @@ credentials, no model download. Only `--llm` needs a key.
 > fitted. Smart-retry recovery 97.38% (published 70–85%, MISS) and recoveries
 > inside 10 days 41.84% (published 85–95%, MISS).
 >
+> **W7 SEARCHED 14 ALTERNATIVE WORLDS AND NONE BEAT IT.** Transient failures
+> were swept on 30 August. They move V3 hard, and they break V1 doing it. **No
+> world in the grid hits more than 2 of 4 targets and the best is still the one
+> above** — so this calibration has now survived a search designed to unseat
+> it, rather than being the first thing tried.
+>
 > **THE MECHANISM THAT SELLS IT.** The fixed schedule spends all four attempts
 > within four days of the due date, hits the NPCI cap while the account is
 > empty, and the mandate dies. **Survival 32.1% against the agent's 97.2%.**
@@ -55,7 +61,13 @@ credentials, no model download. Only `--llm` needs a key.
    brings V5 into band at `p_missed_credit=0.08`, but V1 breaks there. A
    (0.70, 0.08) calibration satisfies both and then **misses both targets it
    was not fitted to.** Two hits from turning two dials are a curve fit.
-   `pop_spend=0.80, p_missed_credit=0.00` remains the reported calibration.
+   `pop_spend=0.80, p_missed_credit=0.00, p_transient=0.00` remains the
+   reported calibration.
+   ⚠️ **W7 offers the same trap in a third dial.** V3 crosses its whole
+   published band between `p_transient` 0.00 and 0.05, so a finer grid would
+   probably find a cell hitting V1 and V3 together — while V5 and V7 stay flat
+   and outside their bands. **Do not refine that grid.** The measured curve is
+   in `02_RESULTS.md` and it already says what a refined one would show.
 2. **ONE BELIEF PER CUSTOMER, shared by all k mandates.** Build it per-mandate
    and you have silently built `solo_pop_pd`, which is 9.53 points worse, and
    nothing will tell you. `agent/policy/belief_book.py` enforces it.
@@ -70,6 +82,20 @@ credentials, no model download. Only `--llm` needs a key.
 - **W0 landed**: the recovery-rate metric, which is the first quantity this
   project has ever produced that is comparable to a published figure.
 - **W2 landed**: insolvent customers, 5/5 pre-registered.
+- **W7 landed**: transient holds, **6/8 pre-registered, and the two breaks are
+  the point.** V3 rises hard but breaks V1 doing it, so no recalibration was
+  taken. **V7 did not move** (41.84% → 42.78% at best), which retires the claim
+  that W7 would fix it and opens a new queue item: the agent is structurally
+  blind to transient failures. It never presents on the due date, and
+  `w3.BeliefPD.observe` takes no decline code, so it waits for payday on money
+  already in the account — **15.1%** of transient-only cycles collected on the
+  first legal day, **48.4%** taking over ten days.
+- **A defect in W7's own measurement was found and fixed mid-run.** Holds were
+  drawn from the money path's RNG, so turning them on re-drew the whole world.
+  Fixing it moved V3 by 1.58 pts and **flipped a pre-registered prediction from
+  HELD to BROKE**. The same flaw is present in W2's `p_missed_credit` and is
+  flagged in the queue rather than silently repaired — fixing it would restate
+  W2's published table.
 - **M1 and M4B were FIXED.** Both Stage 0 rules that had no working test in
   `sim/` now have one. The suite went 6 red → 4 red, 1 vacuous → 0. **Do not
   reintroduce the old caveat that "two of the five constraint rules are
@@ -77,10 +103,11 @@ credentials, no model download. Only `--llm` needs a key.
 - **The pooling moat has a specific legal problem**, not a vague one.
   `01_FACTS.md` has the analysis and W9 has the response: measure the
   non-pooled configuration and make pooling consent-gated.
-- **Two claims were corrected after being asserted without checking**: that
-  both validation misses shared one cause (they are two), and that the
-  documented retry schedule's compliance gap was unfixable (it is queued as
-  item 8). Both are in `NOTES.md`.
+- **Three claims were corrected after being asserted without checking**: that
+  both validation misses shared one cause (they are two), that the documented
+  retry schedule's compliance gap was unfixable (it is queued), and that W7
+  would move three validation targets at once (**it moves one, breaks a second,
+  and diagnoses a third**). All three are in `NOTES.md`.
 
 ### Where things live
 
@@ -118,8 +145,13 @@ credentials, no model download. Only `--llm` needs a key.
 
 > **An LLM must never be on the path that decides whether to debit a specific
 > customer at a specific moment.** The LLM decides *what* to do and explains
-> *why*; the bandit policy decides *when*; the constraint layer decides
-> *whether it is allowed*.
+> *why*; the belief filter and its index rule decide *when*; the constraint
+> layer decides *whether it is allowed*.
+
+*(Earlier revisions said "the bandit policy". `w3.index_score` is a one-step
+lookahead in the style of a Whittle index — no exploration/exploitation trade,
+no learned index, no indexability proof — so "bandit" overclaimed and was
+corrected on 30 August 2026.)*
 
 It is enforced by construction, not by review: `ports.Diagnosis` has **no
 temporal field**, so the narrative layer's only output type physically cannot
@@ -129,12 +161,25 @@ asserts that by inspecting the type, and fails the day someone adds one.
 because a justification that recommends an hour is an LLM on the timing path via
 the merchant's eyeballs.
 
-## THE MODEL IS FROZEN (tag `model-frozen`, 28 August 2026)
+## ~~THE MODEL IS FROZEN~~ — THE FREEZE WAS LIFTED ON 30 AUGUST 2026
 
-No changes to `sim/w3.py`, `sim/harness.py` or the fitted constants before
-5 September without explicit approval. `agent/` is built and its probability
-engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. The next session's work is
-the architecture document and the pitch, not more code. See `CLAUDE.md`.
+⚠️ **This section contradicted the top of this same file for a day, which is
+exactly the failure a cold-start document must not have.** The freeze is
+**lifted**. `sim/` is open, and the world model has been the main line of work
+since 30 August — W0, W2 and W7 all changed `sim/w3.py` after this paragraph
+was written.
+
+Tag `model-frozen` still marks the 28 August state and is still the reference
+point for "what the reported numbers were measured on". The discipline the
+freeze encoded survives it: **re-run before you re-quote**, one change at a
+time, and a guarded default so existing numbers do not move.
+
+The original text, kept as the record:
+
+> No changes to `sim/w3.py`, `sim/harness.py` or the fitted constants before
+> 5 September without explicit approval. `agent/` is built and its probability
+> engine is `w3.BeliefPD` under `w3.FITTED_BELIEF`. The next session's work is
+> the architecture document and the pitch, not more code. See `CLAUDE.md`.
 
 ## Resolved 28 August 2026
 
@@ -258,8 +303,9 @@ the architecture document and the pitch, not more code. See `CLAUDE.md`.
    Resolution unchanged: make the agent learn payday online and expose its own
    uncertainty, so the posterior width is a product feature rather than an
    assumption. Do not chase the number externally.
-2. **Six gates are red on a clean checkout: S1, S1_PD, M1, M4B, S2b,
-   S2_LEGACY** (25 gates: 5 FAIL, 1 VACUOUS, 19 pass).
+2. ~~**Six gates are red on a clean checkout**~~ **Four are: S1, S1_PD, S2b,
+   S2_LEGACY** (25 gates: 4 FAIL, **0 VACUOUS**, 21 pass). M1 and M4B were
+   repaired on 30 August; the original text is kept below as the record.
    **M4B is new, 28 Aug, and is the one to read first:** gate M4's mutant
    increments `V.pending` itself, so the pending-notification constraint has
    no working test -- 1066 counted, 1066 self-written, 0 independent. With M1
@@ -305,12 +351,14 @@ the architecture document and the pitch, not more code. See `CLAUDE.md`.
 ## The three-way split — keep this true in the code
 
 - **LLM** decides *what* to do and explains *why*
-- **Bandit policy** decides *when*
+- **Belief filter + index rule** decides *when* (not a "bandit" — see ADR-005
+  above)
 - **Constraint layer** decides *whether it is allowed*
 
 ## What "done" looks like on 5 September
 
-- [ ] Public repo, commits visible across the whole period
+- [ ] Public repo, commits visible across the whole period — **push after
+      every session; local has run ahead of the remote before**
 - [x] Agent runs end to end over a batch of synthetic merchants
 - [x] One number: money recovered, with `payday_wait` printed beside it
       — **94.36% vs 57.70%, +36.66 pts, reproduced on a clean clone in 47s**
@@ -319,19 +367,24 @@ the architecture document and the pitch, not more code. See `CLAUDE.md`.
 - [x] One failure handled gracefully, on camera —
       `scripts/prove_stage0_refuses.py` is the one to film
 - [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the errors (there are **twenty-six**)
+- [ ] 5-minute pitch video, opening with the errors (there are **twenty-seven**)
 - [x] `NOTES.md` full of real mess
 - [x] A public page — `docs/index.html`, static, Pages from `/docs`.
       **Rewritten 29 August; no longer a draft.**
 - [x] README rewritten 29 August; no longer a draft
-- [ ] **Repo actually pushed to a public GitHub remote.** `git remote -v` is
-      empty. 28 commits exist locally and none of them is visible to a judge.
-      This is a hard deliverable and it is the only one that is one command away.
+- [x] **Repo pushed to a public GitHub remote.** `origin` is
+      `github.com/tanmayBeginsJourney/mandate-retry-sequencer`.
+      ⚠️ **Local is AHEAD of `origin/main`** — check `git status` before
+      assuming a judge can see the latest work. A commit that exists only
+      locally is not a deliverable.
 - [ ] **World v2** — realistic operating point, insolvent customers, mandate
       cancellation, success decay. Spec in `04_BUILD_PLAN.md`. **In progress,
-      not a caveat.**
-- [ ] **The validation suite** — the simulator scored against published figures
-      it was never fitted to. This is what replaces a public benchmark, because
-      no public benchmark exists. `04_BUILD_PLAN.md`.
+      not a caveat.** W0, W2 and W7 have landed; W1, W3, W4, W6, W8 have not.
+- [x] **The validation suite** — the simulator scored against published figures
+      it was never fitted to, in place of a public benchmark, because none
+      exists. **2 of 4 measurable targets hit, neither fitted**, and the
+      calibration has since survived W2's and W7's attempts to unseat it:
+      across every alternative world swept, none scores better.
+      `04_BUILD_PLAN.md`. V2, V4, V6, V8 are still unbuilt.
 - [ ] **Judge-facing docs**, plain English, engineering and business impact.
       Written AFTER World v2 lands, so it is written once.

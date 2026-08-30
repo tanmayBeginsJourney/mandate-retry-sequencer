@@ -139,7 +139,7 @@ Judged on, among other things — `[REPORTED]`, see `01_FACTS.md`:
 
 Applicants are explicitly asked to **explain what broke during development and
 how they recovered**. That is why `NOTES.md` and `03_ERRORS.md` exist and why
-they are judged deliverables, not housekeeping. `03_ERRORS.md` has **twenty-six**
+they are judged deliverables, not housekeeping. `03_ERRORS.md` has **twenty-seven**
 entries with mechanisms and guards. **Open the pitch with them.** Errors 11-13
 were found by an outside reader checking `docs/` against `sim/` on 28 Aug --
 all three in the measuring apparatus, all three past a suite built to stop
@@ -150,7 +150,17 @@ exactly that. That is the strongest Failure-Recovery material in the repo.
 ## 2. The three-way split — this is the pitch line, keep it true in the code
 
 - **The LLM decides *what* to do and explains *why*.**
-- **The bandit policy decides *when*.**
+- **The belief filter and its index rule decide *when*.**
+
+**A note on the word, added 30 August 2026.** Earlier revisions of this line
+said "the bandit policy decides *when*". `w3.index_score` is
+`amount * (p_now - discount * p_later)` — a one-step lookahead comparing acting
+now against the best remaining day, in the *style* of a Whittle index. There is
+no exploration/exploitation trade, no learned index and no indexability proof,
+so **"bandit" was an overclaim** and a technical reader would have caught it.
+The mechanism is a Bayesian filter plus a greedy index rule, which is what the
+README has always said.
+
 - **The constraint layer decides *whether it is allowed*.**
 
 An LLM must **never** be on the path that decides whether to debit a specific
@@ -417,13 +427,12 @@ behind it, so you can still prove the enforcement works rather than asserting
 it. An enforcement layer with no independent check is exactly the vacuous-gate
 shape this project has hit three times.
 
-⚠️ **Do not put the NPCI attempt-cap OR the pending-notification compliance
-claim in the pitch or the architecture doc.** Gate M1 is VACUOUS (the cap is
-never the binding constraint at either operating point) and gate M4 is
+⚠️ ~~**Do not put the NPCI attempt-cap OR the pending-notification compliance
+claim in the pitch or the architecture doc.** Gate M1 is VACUOUS and gate M4 is
 vacuous-but-green (its mutant grades itself). **Two of the five Stage 0 rules
-have no working test.** Peak-hour, notification-lead and Z9 re-presentation are
-genuinely tested and are safe to claim. See `06_MODEL_CARD.md` §4 and
-`sim/known_failures.txt` under `M4B`.
+have no working test.**~~ Peak-hour, notification-lead and Z9 re-presentation
+were always genuinely tested; **since 30 August 2026 all five are, and all five
+are safe to claim.** See `06_MODEL_CARD.md` §4.
 
 ✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
 
@@ -468,7 +477,7 @@ That is how the last four defects were found.
 1. `06_MODEL_CARD.md` — what ships, what it is worth, what it was never tested
    on. Especially §3, before you quote any number to anyone.
 2. `CLAUDE.md` — the ten hard rules, the environment, the numbers rule.
-3. `03_ERRORS.md` — twenty-six errors with mechanisms. Pitch material.
+3. `03_ERRORS.md` — twenty-seven errors with mechanisms. Pitch material.
 4. `01_FACTS.md` — every external fact with its source tag. **Nothing outside
    this file is established**, and the legality of the cross-merchant moat is
    still `[GUESS]`.
@@ -617,7 +626,7 @@ that bound every LLM number: `06_MODEL_CARD.md` section 7.**
 `agent/eval/injection.py:diagnosis_has_temporal_field()` asserts it by
 inspecting the type, so an injected "retry at 11am" has nowhere to land. And the
 **judge must stay a different SKU from the diagnoser**: same-model-grading-itself
-is the same-party failure this project has now hit twenty-six times.
+is the same-party failure this project has now hit twenty-seven times.
 
 **The deterministic fallback stays the default and produces the gated number.**
 The LLM is an overlay measured against it. A headline that needs an API key is

@@ -4846,3 +4846,486 @@ unchanged and each still carries its written reason.
 **Parity re-verified after the harness edit: bit-exact 24/24.** T9 passes — all
 28 configs exact, 20 at float level — because every change sits inside a
 `mutate` branch or is conditioned on one.
+
+---
+
+# 2026-08-30 (later) — PRE-REGISTER: W7, transient holds, before a line of it is built
+
+Queue item 1. `04_BUILD_PLAN.md` W7. The claim under test is the one written
+earlier today: **this world has no transient failures, and that single absence
+explains why V3 is too low and V7 too slow.** Registered then as: *"adding
+transients at a swept rate moves V3 into 20–40% and V7 above 60%, without
+moving V5 out of 70–85%."*
+
+## First: that registration is ambiguous, and I am resolving it before measuring, not after
+
+At the reported calibration (`pop_spend=0.80`, `p_missed_credit=0.00`) **V5 is
+already 97.38%, which is outside 70–85%.** So "without moving V5 out of
+70–85%" cannot be scored there as literally written — V5 is not in the band to
+be moved out of. It is only in band at (0.80, 0.08), where it reads 80.44%.
+
+Rather than pick the reading that is easiest to satisfy after seeing the
+numbers, both readings are scored, and the sweep runs at `p_missed_credit` ∈
+{0.00, 0.08} so that both are measurable:
+
+* **reading (i)** — transients must not push V5 *further* from the band. At
+  `p_missed=0.00`, V5 stays above 70%.
+* **reading (ii)** — where V5 *is* in band, transients must not knock it out.
+  At `p_missed=0.08`, V5 stays inside 70–85%.
+
+Both are below as W7-3 and W7-4. If they disagree, that is reported as a split,
+not resolved by choosing one.
+
+## The mechanism, exactly as it will be built
+
+**A transient failure here is a temporary hold on the account's available
+balance.** For `transient_h` hours the balance cannot be reached; afterwards it
+is exactly what it would have been. This is the "temporary hold, momentary
+shortfall, topped up the same evening" class — the money is real, it is back
+within a day or two, and no schedule that waits for payday needs to exist to
+collect it.
+
+Five choices, and why each is the one taken:
+
+1. **It lives in `w3.balance_trace`, not in the executor.** That is where W2 put
+   `p_missed_credit`, and it is the only place that makes the change visible to
+   `at_risk_cycles()` and `unwinnable_cycles()` without editing either. Both
+   arms therefore share an identical at-risk denominator, which is the property
+   that makes their recovery rates comparable at all.
+2. **The decline code stays `Z9`.** A lien makes available balance < amount,
+   which *is* insufficient funds — it is what the bank returns. No new code
+   enters the vocabulary, so `agent/ports.py`, the diagnosis layer and the
+   audit trail are untouched. W7 is a world change and nothing else.
+3. **The hold blocks the whole available balance**, not a drawn amount. A
+   partial hold needs a magnitude parameter with no source behind it (rule 5).
+   The full block is the strong form; a partial one is strictly weaker and
+   would move every number below toward zero.
+4. **Drawn per customer per DAY**, onset at hour 0, duration `transient_h`.
+   Per-cycle onset uniform over the cycle was rejected: with a 30-day cycle a
+   24h hold covers a given due date about 3% of the time, so a per-cycle rate
+   would need to exceed 1.0 to matter. A per-day rate is directly readable —
+   `p_transient=0.10` means the account is held on one day in ten.
+5. **Guarded, so it is inert at 0.0.** No draw is taken at the default, the
+   shared RNG stream does not move, parity stays bit-exact and T9 still holds.
+   Same construction as `p_missed_credit`, same reason.
+
+Swept, never picked: `p_transient` ∈ {0.00, 0.05, 0.10, 0.20}, `transient_h` ∈
+{24, 48}. **No source anywhere gives a rate for how often an Indian savings
+account carries a temporary lien**, so the rate is `[GUESS]` and stays swept,
+exactly as `p_missed_credit`, the decline mix and outage severity are.
+
+**Why the duration is swept and not fixed, and it is the interesting half.**
+The agent never presents on the due date — it needs 24h notice and only becomes
+actionable on day T (queue item 8), so its first attempt is T+1. A 24h hold is
+therefore *invisible* to it: the hold releases before the agent ever knocks. A
+48h hold is not — the agent attempts at T+1, meets the hold, takes a `Z9`, and
+`observe(amount, False)` censors its posterior above `amount`. From there its
+forecast says nothing recovers until payday, so it waits — while the fixed
+schedule, which does not think, knocks again at T+2 and gets paid. **The 48h
+cells are where the fixed schedule should beat the agent**, and that is a
+prediction the agent can lose.
+
+## Registered, before the code exists
+
+| id | prediction | band |
+|---|---|---|
+| **W7-0** | the mechanism does anything at all: V1, the first-presentation failure rate, rises with `p_transient` | above 13.68% at every non-zero rate |
+| **W7-1** | **V3 rises and at least one swept cell lands it inside 20–40%** | max V3 over the grid in 20–60% |
+| **W7-2** | **V7, the agent's early share, rises above 60% in at least one cell** | max V7 over the grid ≥ 60% |
+| **W7-3** | V5 does not fall below 70% at `p_missed=0.00` — reading (i) | min V5 over the grid ≥ 70% |
+| **W7-4** | V5 stays inside 70–85% at `p_missed=0.08` — reading (ii) | every 24h cell in 70–85% |
+| **W7-5** | the agent's lead over the fixed schedule **shrinks**, as the build plan warns it must | gap narrows by 5–35 pts at the highest rate |
+| **W7-6** | at 48h the agent does **worse relative to the fixed schedule** than at 24h, because its belief is poisoned by the T+1 failure | (fixed − agent) recovery gap is larger at 48h than at 24h, at matched rate |
+| **W7-7** | **V1 BREAKS above 15% before V3 reaches 20%** — transients are not free, and buying V3 costs the one target this world hit without being fitted | V1 > 15% in the lowest cell where V3 ≥ 20% |
+
+**W7-7 is the one that matters and it is registered as a prediction against my
+own interest.** V1 is the strongest evidence this project has: 13.68% inside a
+published 8–15% band, at a `pop_spend` that is `harness.run`'s own default from
+long before the target existed. If transients can only fix V3 by breaking V1,
+then W7 corroborates the *mechanism* and does **not** licence a new
+calibration — and I will report it that way rather than quietly lowering
+`pop_spend` to hold V1 while `p_transient` holds V3. **That is the (0.70, 0.08)
+trap in a new costume: two dials, two hits, no evidence.**
+
+## What this may NOT be used for, decided now
+
+**No transient rate will be adopted as the default calibration on the strength
+of this run.** `p_transient` ships at 0.0 and inert, like `p_missed_credit`.
+Choosing the rate that puts V3 in band would fit V3, and V3 would stop being
+the independent corroboration that makes it worth quoting. The build plan's own
+rule — *fit to at most one target and say which* — already spends the budget on
+the ~30% per-attempt approval anchor.
+
+W7's deliverable is therefore a **direction and a curve**, not a number: does
+the missing-transients diagnosis survive contact with a world that has them?
+
+## How this could be biased toward the answer I want
+
+* **The mechanism was designed after seeing which targets missed.** V3 too low,
+  V7 too slow, and a hold released within a day or two moves exactly those two.
+  It would be difficult for this *not* to work in the registered direction,
+  which is precisely why W7-7 is registered — the test with real content is
+  whether it works *without collateral damage*, not whether it works.
+* **The full-balance block is the strongest available form of the mechanism.**
+  It maximises the measured effect per unit of `p_transient`. Any partial hold
+  gives a smaller effect at the same rate, so every number below is an upper
+  bound on what transients can do at that rate.
+* **The 24h/48h split is chosen to bracket the agent's 24h notification lead**,
+  which is the interval the outcome is most sensitive to. A duration drawn from
+  a distribution straddling it would smear the two regimes together; two clean
+  cells make the mechanism legible, and the cost is that neither is realistic
+  on its own.
+* **The at-risk denominator moves.** Transients enlarge it, so V3 and V5 are
+  ratios over a different, larger set at every non-zero rate — they are not
+  comparable point-to-point with the 30 August table, only in direction. Said
+  here rather than discovered in the results.
+* `p_transient` is a pure `[GUESS]` with no source, and unlike `pop_spend` it
+  has no long-standing default to appeal to. It was invented for this test.
+
+*n=100, k=5, 8 held-out populations (700–707), 120d, `payday_err=7`,
+`pop_spend=0.80`, `w3.FITTED_BELIEF`, arms `degenerate` and `doc_legal`. One
+process per run via `agent/tests/_parallel.py`.*
+
+---
+
+# 2026-08-30 — W7 BUILT AND MEASURED: 6/8, and both breaks are worth more than the six
+
+`python agent/tests/test_transient_sweep.py`. *n=100, k=5, 8 held-out
+populations (700–707), 120d, `payday_err=7`, `pop_spend=0.80`,
+`w3.FITTED_BELIEF`. 224 runs, 7 transient cells × 2 insolvency rates × 8
+populations × 2 arms, one process per run.* Raw table in
+`logs/w7_transient_sweep.json`. **Not gate-protected**; reproduce with the
+command above.
+
+## The measurement, at `p_missed_credit=0.00`
+
+| `p_transient` | hold | arm | 1st-pres fail (V1) | recovery | ≤10d | at risk |
+|---|---|---|---|---|---|---|
+| 0.00 | — | agent | 13.68% | **97.38%** | 41.8% | 1658 |
+| 0.00 | — | fixed | 13.68% | **27.85%** | 100.0% | 1658 |
+| 0.05 | 24h | agent | 17.50% | 96.56% | 42.8% | 2120 |
+| 0.05 | 24h | fixed | 17.50% | **40.64%** | 100.0% | 2120 |
+| 0.10 | 24h | agent | 21.38% | 96.14% | 42.0% | 2590 |
+| 0.10 | 24h | fixed | 21.38% | 48.69% | 100.0% | 2590 |
+| 0.20 | 24h | agent | 29.25% | 94.25% | 39.3% | 3544 |
+| 0.20 | 24h | fixed | 29.25% | 58.67% | 100.0% | 3544 |
+| 0.20 | 48h | agent | 42.88% | 87.25% | 34.3% | 5196 |
+| 0.20 | 48h | fixed | 42.88% | 57.68% | 100.0% | 5196 |
+
+The 48h rows at 0.05 and 0.10, and the whole `p_missed_credit=0.08` panel, are
+in the script's output and in the JSON. **The oracle stays at 100.00%
+collectable at every cell**, which is the check that the mechanism built is the
+mechanism specified: a hold blocks money, it does not destroy it.
+
+## Six held
+
+**W7-0** V1 rises at every rate — the mechanism does something. **W7-3** V5
+never falls below 70% at `p_missed=0.00` (min 87.25%). **W7-4** V5 stays inside
+70–85% at `p_missed=0.08` across every 24h cell (81.16–82.92%) — so both
+readings of the ambiguous V5 clause are satisfied, and they agree. **W7-5** the
+agent's lead over the fixed schedule shrinks by 33.95 pts, as the build plan
+warned it must. **W7-6** the fixed schedule's edge is larger at 48h than at 24h
+at every rate (+8.75, +9.02, +6.00 pts). **W7-7** V1 breaks above 15% in the
+lowest cell where V3 reaches 20% — 17.50%, against a published 8–15%.
+
+**W7-7 was registered against my own interest and it held.** Transients are not
+free: they enlarge the at-risk set, so buying V3 costs V1 — the one target this
+world hit without being fitted to it.
+
+## W7-1 BROKE, and it broke by less than one standard error
+
+Registered: V3 rises and **at least one swept cell lands it inside 20–40%**.
+Measured: **no cell does.** V3 goes 27.85% → **40.64%** at the very lowest rate
+swept, overshooting the band's ceiling.
+
+**The margin is 0.64 points and the 2 SE on that figure is ±2.03.** The miss is
+not statistically distinguishable from a hit. Saying "V3 missed" and stopping
+there would be as wrong as claiming the hit.
+
+What actually happened is that **the grid is too coarse at the bottom**: V3
+crosses the entire published 20–40% band somewhere between `p_transient=0.00`
+and `0.05`. The prediction assumed the band was wide enough to catch a swept
+point and it is not — 5% of account-days carrying a hold is already more
+transient failure than the published fixed-schedule figure implies.
+
+**I am not adding a finer cell, and the reason matters more than the result.**
+A rate near 0.02 would land V3 in band and, interpolating V1 between 13.68% and
+17.50%, would leave V1 at roughly 15% — the edge of *its* band. So a refined
+grid would very likely produce a cell hitting V1 and V3 together. **That is the
+(0.70, 0.08) trap in a new costume**, and this time the curve lets me say so
+without running it: across the measured cells V5 sits at 96–97% and V7 at
+42–43%, both flat in `p_transient` and both far outside their bands. Any cell
+found by refining the grid would be **2/4 with the two unfitted targets
+missing** — which is exactly the shape of the trap that was caught on 30 August.
+Searching for it after seeing that V3 missed is the definition of fitting.
+
+**The honest inversion, and it is a result rather than a calibration:** if the
+published 20–40% band describes reality, then this world says the transient
+rate is **under 5% of account-days**. That is an inference from a curve, it is
+not adopted anywhere, and it is the first quantitative statement this project
+has been able to make *about the world* from a published figure rather than
+about itself.
+
+## W7-2 BROKE, and this one is a finding about the AGENT
+
+Registered: V7, the agent's early share, rises above 60% somewhere. Measured:
+**42.78% at best.** It barely moves from 41.84%, at any rate, at either
+duration.
+
+The registered reasoning was "recoveries land inside ten days because the money
+returned inside ten days". **That is true of the fixed schedule — 100% early at
+every cell — and false of the agent**, which is the arm V7 is defined on. I
+wrote a prediction about one arm using a mechanism that only applies to the
+other.
+
+### Why, measured rather than argued
+
+`p_transient=0.10`, 24h, population 700, one run, recoveries reconstructed from
+the audit log's OUTCOME rows (the independent path `test_recovery_metric.py`
+checks):
+
+| cycles at risk because… | recovered | early (≤10d) | median |
+|---|---|---|---|
+| …they were at risk in the base world | 181/201 | 36.5% | 13.0d |
+| **…ONLY because of a hold** | 126/127 | **51.6%** | **10.0d** |
+| all at-risk cycles — this is V7 | 307/328 | 42.7% | 12.0d |
+
+**Only 15.1% of the transient-only cycles were collected at T+1** — the first
+legal day, by which time the money was already back. **48.4% took longer than
+ten days.** And the wait tracks the calendar, not the failure:
+
+| next payday in | n | median recovery | early |
+|---|---|---|---|
+| 0–4 days | 15 | 3.0d | 80.0% |
+| 5–9 days | 15 | 9.0d | 53.3% |
+| 10–14 days | 30 | 10.0d | 56.7% |
+| 15–19 days | 23 | 14.0d | 47.8% |
+| 20–24 days | 24 | 16.5d | 25.0% |
+
+*(the 25–29 bucket reads 10.0d / 57.9%: a due date 1–5 days AFTER payday, where
+the account is full and the agent collects immediately. Consistent.)*
+
+**The agent waits for payday on money that is already in the account.** Two
+causes, both structural:
+
+1. **It never presents on the due date.** It needs 24h notice and only becomes
+   actionable on day T, so its first attempt is T+1 (queue item 8). A 24h hold
+   has released by then — the agent never observes the transient at all, and
+   simply applies its normal policy to a cycle it has no reason to think is
+   unusual.
+2. **It could not tell the difference if it did observe one.**
+   `w3.BeliefPD.observe(amount, success)` **takes no decline code** — already
+   `[VERIFIED]` in `01_FACTS.md`, and until now that was a note about the
+   interface rather than a measured cost. A lien and an empty account produce
+   the identical posterior update, so the timing brain censors its balance
+   distribution and waits for salary.
+
+**This is the sharpest argument yet for W5** (queue item 2, decline taxonomy on
+by default) and for the diagnosis layer being load-bearing rather than an
+overlay. It is *not* an argument for putting the LLM on the timing path —
+ADR-005 stands. The question it raises is a design one and it is Tanmay's:
+**should the belief be able to condition on the decline family, or should the
+action space gain a "re-present sooner" intervention that the diagnosis layer
+can choose?** Both keep timing in the policy. I have not built either.
+
+## A DEFECT IN MY OWN IMPLEMENTATION, found mid-measurement and fixed
+
+The first version drew the holds from `rng` — **the money path's generator** —
+inside `balance_trace`. The draw is `days` values taken before the spend loop,
+so turning transients on **shifted every later draw and re-drew every
+customer's entire balance trace.** The sweep was comparing the mechanism *plus
+a different world*.
+
+`sim_executor.py` already states the rule verbatim, twice, for the decline
+taxonomy and for the nudge: *turning enrichment on must not shift a single draw
+taken by the money path, or the enriched world would be a DIFFERENT world
+rather than the same world with better labels.* I wrote the comment's violation
+into the file that carries the comment.
+
+**Fixed:** holds come from a per-customer generator seeded `seed + 8237 + 31*ci`,
+the way `harness.py:158` seeds `donor_bal`. `p_transient > 0` without a
+`hold_rng` now **raises**, because a silent fallback to `rng` is precisely the
+defect. Verified afterwards: the balance array is bit-identical outside held
+hours, and the generator position is unmoved at both `p=0` and `p>0`.
+
+**It changed the answer, and it changed a verdict.** At (0.05, 24h):
+
+| | V3 | W7-1 |
+|---|---|---|
+| holds drawn from `rng` (wrong) | 39.06% | HELD |
+| holds drawn from `hold_rng` (right) | **40.64%** | **BROKE** |
+
+A 1.58-point move flipped a pre-registered prediction. Had I not looked, the
+project would have recorded 7/8 and a V3 hit, from a comparison that was
+changing two things at once.
+
+**A second-order effect worth recording**, checked rather than assumed: the
+at-risk set with holds is *not* a strict superset of the base one. At
+`p_transient=0.10` three base cycles stop being at risk, and **3/3 are
+explained** by an earlier newly-held debit on the same customer in the same
+payday epoch: a held debit takes no money, so a later mandate finds more
+available. That is the drain accounting behaving correctly.
+
+## The same defect is present in W2, and I am NOT silently fixing it
+
+`p_missed_credit` draws `rng.random(days // cyc + 2)` from the money path's
+generator, guarded. So the W2 insolvency sweep also compares worlds that differ
+by more than the mechanism: each rate is a fresh draw plus missed credits.
+
+**W2's five predictions were directional and averaged over 8 populations, so
+they stand** — and W7's own experience says the shift is worth roughly a point
+or two, not a reversal. But repairing it would restate W2's published table,
+and that is a decision about the deliverable rather than a bug fix. **Queued,
+flagged, not touched.** Tanmay's call.
+
+## Housekeeping: one run died and it was the machine
+
+The second full sweep ended in `BrokenProcessPool`. That is open item 0a —
+intermittent SIGSEGV/SIGILL on this machine, root cause never found. **I did not
+assume it**: 16 runs on the new code path, both durations, both insolvency
+rates, one process each, all returned clean. The 224-run sweep then completed on
+the next attempt. `run_jobs` raising rather than dropping the dead worker is
+what made this visible at all.
+
+## How this could be biased toward the answer I want
+
+- **The mechanism was designed after seeing which targets missed**, and it moves
+  them in the registered direction. That was declared in advance as the reason
+  W7-7 exists: the test with content is whether it works *without collateral
+  damage*, and it does not — V1 breaks. The six held predictions are worth
+  much less than the two that broke.
+- **The full-balance block is the strongest form of the mechanism.** Every
+  effect above is an upper bound on what a hold at that rate can do; a partial
+  lien would move V3 less per unit of `p_transient` and would also break V1
+  less.
+- **The V7 diagnostic is one population and one run**, n=127 transient-only
+  cycles. The direction is unambiguous and the payday gradient is monotone
+  across five of six buckets, but the bucket counts are 15–30 and no confidence
+  interval is attached. It is a mechanism demonstration, not an estimate.
+- **`p_transient` is a pure `[GUESS]`** with no source and, unlike `pop_spend`,
+  no long-standing default to appeal to. It was invented for this test.
+- **The at-risk denominator moves at every non-zero rate**, so V3 and V5 are
+  ratios over a larger set than the 30 August table's. They are comparable in
+  direction, not point to point.
+
+## What W7 settles, and what it does not
+
+**Settles:** the missing-transients diagnosis is real in direction — V3 moves,
+and it moves hard. It is **not** a licence to recalibrate, because the same
+mechanism breaks V1 and leaves V5 and V7 untouched. `p_transient` ships at 0.0
+and inert, exactly as pre-committed before the run.
+
+**Does not settle:** V7. The build plan's claim that W7 would move it is
+**withdrawn** — V7's causes are the payday offset (W6) *and* the agent's
+structural blindness to transients, which is a new item and not W6. The queue
+line "the only item that moves three validation targets at once" was wrong; W7
+moves one target into range, breaks another, and diagnoses a third.
+
+---
+
+# 2026-08-30 (end) — A COLD-READ AUDIT OF EVERY DOC, AND IT FOUND MORE THAN W7 DID
+
+The instruction was: make sure a fresh agent reading this repo cold gets the
+truth. So every judge-facing and agent-facing document was read against the
+code and against `sim/gate.py`'s actual output rather than against memory.
+
+**Eight staleness defects and two direct self-contradictions.** Every one dated
+from 30 August — the day M1 and M4B were repaired — and every one made the
+project look **worse** than it is. That is the opposite of the usual direction
+in `03_ERRORS.md`, and it has an obvious cause: the 30 August session updated
+the documents it was editing and did not sweep the ones it was not.
+
+That session's own handoff note claimed *"Seven documents carried the 'two of
+five untested' claim; all seven now carry the resolution beside the original
+text."* **That claim was false.** Three did not.
+
+## What was wrong
+
+| where | claimed | actually |
+|---|---|---|
+| **`docs/index.html`** — the public page | "Two of the five mandate rules have no working test"; "Six of twenty-five checks are red" | both fixed on 30 Aug: all five tested, **four** red |
+| **`06_MODEL_CARD.md` §4** — "read before quoting a number" | "The six failing gates"; "25 gates: 5 FAIL, 1 VACUOUS"; M1 VACUOUS with an "untried fix"; M4B FAIL | 4 FAIL, 0 VACUOUS. The "untried fix" **was applied** and is what made M1 green |
+| **`06_MODEL_CARD.md` §3 item 7** | the `topup_p` sweep "has **not** been redone properly on `w3`" | redone 29 Aug: **+0.02 pts (2 SE 0.59)** on the shipping config |
+| **`02_RESULTS.md`** test-suite section | "Six are red … M4B FAIL, M1 VACUOUS" | four, and the same stale topup line |
+| **`CLAUDE.md`** gate table | M1 VACUOUS, M4B FAIL | both green |
+| **`00_HANDOFF.md`** | "Six gates are red" | four |
+| **`00_HANDOFF.md`** | **"THE MODEL IS FROZEN"** as its own section | the same file's header says the freeze is **lifted** — a flat self-contradiction inside the cold-start document |
+| **`00_HANDOFF.md`** deliverables | "`git remote -v` is empty, none of it is visible to a judge" | the remote exists and is pushed; local is ahead by one |
+| **`README.md`** | "the project **also reports** the non-pooled configuration and treats pooling as consent-gated" | **neither is true.** W9 is unbuilt. A judge-facing claim about work not done |
+| **`03_ERRORS.md`** and six other files | "twenty-six errors" | twenty-seven — error 27 was written up in `NOTES.md` today and never added to the catalogue |
+
+## The one that matters most
+
+**The public page told judges the project had two untested compliance rules
+that it had already fixed.** Of everything found today that is the most
+expensive: it is the artifact with the widest audience, it was volunteering a
+weakness that no longer existed, and the fix was one line.
+
+**The lesson is not "check the docs".** It is that *retractions do not
+propagate*. A correction lands in the file the session is editing; the same
+sentence survives in four others because nobody greps for it. Six of the eight
+defects above would have been caught by a single `grep` for the retracted
+sentence — which is exactly the check the 30 August session believed it had
+performed.
+
+## What is now protected, and what is not
+
+`sim/verify_brief.py` asserts `07_AGENT_BRIEF.md` matches the code, and it
+passes. **Nothing checks any of the other seven documents against anything.**
+The gate suite protects numbers; no gate protects a retracted claim from
+outliving its retraction. That is a real gap and it is now queued as a doc gate.
+
+## Also corrected: "bandit"
+
+`CLAUDE.md`, `07_AGENT_BRIEF.md` and `00_HANDOFF.md` all said "**the bandit
+policy** decides *when*". `w3.index_score` is
+`amount * (p_now - discount * p_later)` — a one-step lookahead comparing now
+against the best remaining day, in the *style* of a Whittle index. **There is no
+exploration/exploitation trade, no learned index and no indexability proof, so
+"bandit" was an overclaim** and a technical judge would have been right to
+challenge it. The README had it right all along ("the belief filter decides
+*when*"); the three internal documents did not. Now consistent.
+
+## Research done today, and what it changes
+
+- **Razorpay has a working test mode** with its own API keys and test VPAs
+  (`success@razorpay`, `failure@razorpay`); mandate registration is mocked.
+  That means the standing "nothing in the Razorpay backend has ever talked to
+  Razorpay" is **fixable**, at least in part, and it moves from Limitations to
+  the queue. `[REPORTED]`, Razorpay docs.
+- **DPDP Rules 2025 were notified 14 November 2025**, operationalising the DPDP
+  Act 2023's consent and purpose-limitation provisions. This is the on-point
+  instrument for the pooling question — much more so than the RBI PA
+  Directions, whose segregation requirements are about **funds**, not data.
+  It reframes W9: consent-gating is not a hedge against an unresolved question,
+  it is the design the statute points at. `[REPORTED]`.
+- **A published decline mix exists** — Churnkey: roughly half insufficient
+  funds, a quarter to a third risk flags, 10–15% card issues. It is **card
+  subscriptions, not UPI AutoPay**, so the claim "no source gives AutoPay
+  decline frequencies" survives intact — but `DeclineMix`'s sweep range now has
+  a published shape to be anchored against instead of being pure invention.
+- **The "no public benchmark" claim survives.** Searching again found the same
+  two USPTO dunning patents and no dataset, no leaderboard, no shared task.
+  Searching the restless-bandit literature found no work on payment retry with
+  censored balance observations either — the formulation appears to be novel,
+  which is a point *for* the architecture doc rather than a gap.
+- **The buildathon's "Failure Recovery" criterion is about RUNTIME failures and
+  graceful fallbacks**, not only about development-time mistakes. This project
+  is extremely strong on the second and has the first (LLM→rule-engine
+  fallback, Stage 0 refusal, crashed-worker detection, `LogFileNotEmpty`,
+  idempotent retries, the `pending` outcome) without ever collecting them in
+  one place. That is a presentation gap, not an engineering one.
+
+## How this audit could be biased toward the answer I want
+
+- **I audited work I largely did not write, which is the easy direction.** The
+  one document I did write today (the W7 sections) got the same treatment, and
+  error 27 is mine — but a self-audit of one's own prose an hour after writing
+  it is the weakest check in this file, and `CLAUDE.md` says so.
+- **"Every defect made the project look worse" is a satisfying finding** and I
+  should distrust it. The honest reading is narrower: the defects I *searched
+  for* were retracted-caveat survivals, and a retracted caveat is by
+  construction something that made the project look worse. A search for stale
+  claims in the flattering direction would have to start somewhere else, and I
+  did not run one. **That is the next outside read's job**, and it is a better
+  use of a stranger than another sweep.

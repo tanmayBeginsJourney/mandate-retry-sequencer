@@ -17,6 +17,12 @@ PRE-REGISTERED IN NOTES.md, 30 August 2026, BEFORE THIS RAN. R-1 through R-6.
 The predictions are printed beside the measurements and scored, because a
 prediction recorded and then not checked is worse than none.
 
+THE TWO MISSES BELOW HAVE TWO CAUSES, NOT ONE. This file used to say otherwise.
+W2 (`test_insolvency_sweep.py`) tested the V5 half and confirmed it; W7
+(`test_transient_sweep.py`) tested the V7 half and REFUTED it. Neither is
+adopted as a calibration -- both break V1, which is the target this world hit
+without being fitted to it.
+
 NOT gate-protected in the `sim/gate.py --tier full` sense. Reproduce with
 `python agent/tests/test_recovery_rates.py` from the repo root.
 
@@ -164,12 +170,23 @@ def main() -> int:
     print(f"  {n_hit}/{len(targets)} targets hit at pop_spend={REALISTIC}, "
           f"none of them fitted.")
     print()
-    print("  THE TWO MISSES ARE ONE MISSING MECHANISM. Recovery is too HIGH")
-    print("  (V5) and too SLOW (V7) because in this world the money always")
-    print("  arrives eventually -- the oracle is 100% at every calibration, so")
-    print("  no customer is ever unable to pay. W2 in docs/04_BUILD_PLAN.md")
-    print("  adds insolvency, and the registered prediction is that it pulls")
-    print("  V5 down into the 70-85% band.")
+    print("  THE TWO MISSES HAVE TWO DIFFERENT CAUSES, and this line used to")
+    print("  say they had one. Both have since been tested.")
+    print()
+    print("  V5 is too HIGH because no customer here is ever unable to pay --")
+    print("  the oracle is 100% at every calibration. W2 added insolvency and")
+    print("  brings V5 into the 70-85% band at p_missed_credit=0.08, 5/5")
+    print("  pre-registered. It is NOT adopted: V1 breaks there.")
+    print("    python agent/tests/test_insolvency_sweep.py")
+    print()
+    print("  V7 is too SLOW, and W7 predicted transient failures would fix it.")
+    print("  THEY DO NOT -- 41.84% -> 42.78% at best across 14 worlds. V7 has")
+    print("  its own two causes: due dates drawn independently of paydays (W6)")
+    print("  and the agent being structurally blind to transient failures. It")
+    print("  never presents on the due date, and w3.BeliefPD.observe takes no")
+    print("  decline code, so it waits for payday on money already in the")
+    print("  account. docs/02_RESULTS.md, W7.")
+    print("    python agent/tests/test_transient_sweep.py")
     print()
     print("  R-3 CORRECTED. It was registered against `payday_wait`, which")
     print("  times its attempts to an estimated payday and is therefore a")

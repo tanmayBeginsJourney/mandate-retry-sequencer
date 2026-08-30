@@ -13,20 +13,37 @@ the README's Limitations section and nowhere else.
 
 | # | Item | Why it ranks here | State |
 |---|---|---|---|
-| **1** | **W7 — transient failures** | The only item that moves **three** validation targets at once (V3, V5, V7). Also the answer to why a 4-day fixed schedule recovers 20–40% in the real world and ~19% here. | specced below, registered |
-| **2** | **W5 — decline taxonomy ON by default** | Nearly free; `DeclineMix` already exists and the headline batch runs it at zero. It is why the LLM does not move the money: with every failure being insufficient funds there is nothing to diagnose. Turning it on makes the diagnosis layer load-bearing. | code exists, switched off |
-| **3** | **W9 — measure the non-pooled configuration** | Cross-merchant pooling is worth +9.53 pts and its legality is unresolved (`01_FACTS.md`). `solo_pop_pd` already exists, so the compliant-by-default number is one run away. Ship pooling as consent-gated with a measured price rather than as an assumption. | policy arm exists |
-| **4** | **W1 — declare the operating point** | Do this *after* W7, not before: transients change the failure mix, so any calibration chosen now is chosen against a world that is about to move. | blocked by W7 |
-| **5** | **Architecture doc** | A judged deliverable and the only one never started. | not started |
-| **6** | **W6 — due dates that cluster near paydays** | Fixes V7's remaining gap. Partly subsumed by W7; re-measure before building. | specced below |
-| **7** | **W8 — simulate the two Razorpay decline states** | `funds_blocked_by_mandate` and `deemed_transaction` are routed by the diagnosis layer but modelled by nothing. Add them to `DeclineMix` at swept rates, exactly like every other family. | not started |
-| **8** | **The agent forfeits the due date** | It only becomes actionable on day T and needs 24h notice, so it can never present on T. A real merchant notifies ahead of a due date it has known for a month. Needs a notification for cycle N+1 while cycle N is open, which collides with the one-pending-notification rule. | diagnosed, not built |
-| **9** | **Pitch video** | | not started |
-| 10 | Sweep `reasoning_effort` | Every LLM score is at `low`; 10/21 may be a floor. | not started |
-| 11 | Adjudicate the 19 judge-vs-author disagreements | The eval's only validation step. | not started |
+| **1** | **Architecture doc** | A judged deliverable, never started, and the only one that cannot be recovered by a good README. One page. | not started |
+| **2** | **Pitch video, 5 minutes** | Judged deliverable, never started. Open with the errors, then the mechanism, then the demo, then the conditional result. | not started |
+| **3** | **Razorpay TEST MODE — send a real request** | **Turns the project's largest standing limitation into a demo.** Razorpay test mode has its own API keys and test VPAs (`success@razorpay`, `failure@razorpay`); mandate registration is mocked. Today `razorpay_executor.py` has never sent a byte. Even the floor of this ladder — authenticate, take a real 401/400, prove `_outcome_from_payment` parses a real Razorpay error envelope — converts "never tested" into "transport and error parsing validated against the live API". Do it as a ladder so it cannot fail entirely. | researched, not started |
+| **4** | **Put the validation suite on `docs/index.html`** | **The strongest trust argument the project has is missing from the artifact with the widest audience.** The page explains the mechanism well and never shows that the world reproduces published figures it was not fitted to. One table, four rows. | not started |
+| **5** | **W9 — non-pooled default + consent-gating** | **Also fixes a false claim in the README**, which said the project already reports the non-pooled configuration and treats pooling as consent-gated. It does neither. And the legal framing got much stronger: the **DPDP Rules 2025, notified 14 November 2025**, operationalise the DPDP Act's consent and purpose-limitation provisions — so consent-gating is the design the statute points at, not a hedge. `solo_pop_pd` exists. | policy arm exists |
+| **6** | **Package the RUNTIME failure-recovery story** | The rubric says *"Failure Recovery: how the applicant identified system failures **at runtime** and engineered graceful fallbacks."* `03_ERRORS.md` answers the *development-time* half brilliantly and the runtime half is scattered: LLM→rule-engine fallback (94.8%), Stage 0 refusal, crashed-worker detection, `LogFileNotEmpty`, idempotent retries, the `pending` outcome. **Nothing collects them in one place.** A presentation gap, not an engineering one. | parts exist, unassembled |
+| **7** | **W5 — decline taxonomy ON by default** | Nearly free; `DeclineMix` exists and the headline batch runs it at zero. It is why the LLM does not move the money: with every failure being insufficient funds there is nothing to diagnose. **W7 raised its value** — the agent is measurably blind to a failure class it cannot name. | code exists, switched off |
+| **8** | **The agent is blind to transient failures** | **Measured 30 August, not guessed.** It never presents on the due date, and `w3.BeliefPD.observe` takes no decline code, so a lien and an empty account give the identical posterior. It waits for payday on money already in the account — **15.1%** of transient-only cycles collected on the first legal day, **48.4%** over ten days. Fix is a design choice: let the belief condition on the decline family, or add a "re-present sooner" intervention. **Neither puts the LLM on the timing path.** | diagnosed, not built |
+| **9** | **A doc gate — stop retractions from outliving their retraction** | The 30 August session believed it had swept every copy of a retracted claim and had missed three, including one on the public page. `sim/verify_brief.py` protects exactly one document. A grep-based gate over a small list of retracted sentences would have caught six of the eight defects found on 30 August. | not started |
+| 10 | **W6 — due dates that cluster near paydays** | **No longer "partly subsumed by W7" — W7 measured V7 and did not move it** (42.78% at best against 41.84%). W6 is one of V7's two remaining causes. | specced below |
+| 11 | **W1 — declare the operating point** | **Unblocked.** W7 landed and did not move it: `p_transient` ships at 0.0. | ready |
+| 12 | **W8 — the two Razorpay decline states** | `funds_blocked_by_mandate` and `deemed_transaction` are routed by the diagnosis layer and modelled by nothing. Add to `DeclineMix` at swept rates. | not started |
+| 13 | **The agent forfeits the due date** | Actionable only from day T and needs 24h notice, so it can never present on T. **W7 priced this**: it is half of why transients are missed. | diagnosed, not built |
+| 14 | **Anchor `DeclineMix`'s sweep against a published mix** | A published decline breakdown exists (Churnkey: ~half insufficient funds, a quarter to a third risk flags, 10–15% card issues). It is **card subscriptions, not UPI AutoPay**, so "no source gives AutoPay decline frequencies" still holds — but the sweep range can stop being pure invention and be anchored to a published shape, tagged for what it is. | researched, not started |
+| 15 | Sweep `reasoning_effort` | Every LLM score is at `low`; 10/21 may be a floor. | not started |
+| 16 | Adjudicate the 19 judge-vs-author disagreements | The eval's only validation step. | not started |
+| 17 | **Error 27 in W2: `p_missed_credit` shifts the money path's RNG** | W7's equivalent was fixed to draw from its own generator; W2's was not, so each insolvency rate is a fresh draw of the world plus missed credits. W2's 5/5 were directional and stand. Repairing it **restates W2's published table** — a call about the deliverable, not a bug fix. | flagged, Tanmay's call |
+| 18 | Build V2, V4, V6, V8 | Four validation targets are still "not built", so the suite scores 4 of 9. | not started |
+
+⚠️ **Items 1–4 are the submission. Everything below 6 is the project.** If time
+runs short, a judge sees the architecture doc, the video, the README and the
+page — not the queue.
 
 **Recently closed, so nobody re-opens them:**
 
+- **W7 — transient failures.** Done, **6/8 pre-registered**, and the two that
+  broke are worth more than the six that held. `p_transient` + `transient_h` in
+  `w3.balance_trace`, guarded and inert at 0.0, holds drawn from their own
+  generator so the transient world is the base world PLUS holds.
+  `agent/tests/test_transient_sweep.py`. **It did not licence a
+  recalibration** — see the W7 section below and `NOTES.md`, 30 August.
 - **W0 — the recovery-rate metric.** Done. `agent/metrics.py`,
   `test_recovery_metric.py` (5 checks, 5 mutants), `test_recovery_rates.py`.
 - **W2 — insolvent customers.** Done, 5/5 pre-registered.
@@ -176,7 +193,50 @@ being an overlay that changes nothing and starts being load-bearing.
 
 Rates stay `[GUESS]` and stay swept, exactly as now.
 
-## W7. Transient failures — the highest-value world item. Added 30 August 2026.
+## W7. Transient failures — ✅ DONE 30 August 2026. 6/8 pre-registered.
+
+*Built as `p_transient` + `transient_h` in `w3.balance_trace`: a temporary hold
+that blocks the whole available balance for `transient_h` hours, drawn per
+customer per day from **its own generator** so the transient world is the base
+world plus holds rather than a fresh draw of it. Guarded and inert at 0.0.
+Swept {0.00, 0.05, 0.10, 0.20} × {24h, 48h} × `p_missed_credit` {0.00, 0.08},
+never picked. `agent/tests/test_transient_sweep.py`; raw table in
+`logs/w7_transient_sweep.json`.*
+
+**THE RESULT DID NOT LICENCE A RECALIBRATION, AND THAT WAS DECIDED BEFORE IT
+RAN.** `p_transient` ships at 0.0. Full scoring and both broken predictions in
+`NOTES.md`, 30 August; the summary:
+
+| id | prediction | outcome |
+|---|---|---|
+| W7-0 | V1 rises at every non-zero rate | HELD |
+| **W7-1** | **at least one swept cell lands V3 inside 20–40%** | **BROKE** — none does. V3 overshoots to 40.64% at the lowest rate swept, and 2 SE is ±2.03, so the miss is inside one standard error |
+| **W7-2** | **V7 rises above 60%** | **BROKE** — 42.78% at best, against 41.84% |
+| W7-3 | V5 stays above 70% at `p_missed=0.00` | HELD (min 87.25%) |
+| W7-4 | V5 stays in 70–85% at `p_missed=0.08` | HELD (81.16–82.92%) |
+| W7-5 | the agent's lead over the fixed schedule shrinks | HELD (−33.95 pts) |
+| W7-6 | the fixed schedule's edge is larger at 48h than 24h | HELD (+6.00 to +9.02 pts) |
+| **W7-7** | **V1 breaks above 15% before V3 reaches its band** | **HELD — 17.50%.** Registered against our own interest |
+
+**Three things it settled.**
+
+1. **Transients are not free.** They enlarge the at-risk set, so V3 rises only
+   by breaking V1 — the one target this world hit unfitted. No single world in
+   the grid hits more than 2 of 4 targets, and the best is still
+   `p_transient=0.00`.
+2. **The grid is too coarse at the bottom, and refining it would be the trap.**
+   V3 crosses the whole 20–40% band between 0.00 and 0.05. A rate near 0.02
+   would very likely hit V1 and V3 together — and V5 (96–97%) and V7 (42–43%)
+   are flat in `p_transient`, so that cell would be **2/4 with both unfitted
+   targets missing**. That is the (0.70, 0.08) trap in a new costume.
+   **The inversion is the honest result: if the published 20–40% band is real,
+   this world says the transient rate is under 5% of account-days.**
+3. **V7's cause is not transients.** The claim that W7 moves three targets was
+   wrong. See the new queue item 2.
+
+### The original statement of W7, kept
+
+## W7 (original). Transient failures — the highest-value world item.
 
 **One mechanism explains three of the four validation misses**, and it is the
 only outstanding item that moves more than one.
@@ -279,7 +339,10 @@ way `05_TEST_DESIGN.md` already requires.
 | V9 | mandate cancellation rate over the horizon | ~18% | 23.4% mandate death, indicative |
 
 **Scored 30 August 2026: 2 of 4 measurable targets hit, neither fitted**, at
-`pop_spend=0.80` with no insolvency.
+`pop_spend=0.80`, no insolvency, no transients — which after W7 is a choice
+that has been tested rather than a default that was never questioned. W7 swept
+14 alternative worlds and **none of them hits more than 2 of 4 either**, so the
+reported calibration is the best available and not merely the first one tried.
 
 ⚠️ **W2 landed and the honest reading got harder.** Insolvency brings V5 into
 band at `p_missed_credit=0.08`, but V1 breaks there; a (0.70, 0.08) calibration
@@ -289,9 +352,13 @@ dials are a curve fit, not corroboration. **The 0.80 / 0.00 pair, where two
 unfitted targets hit, remains the stronger evidence and the reported
 calibration.** `NOTES.md`, 30 August, and W7 below. The
 fixed-schedule arm that made V3 measurable is `agent/policy/fixed_schedule.py`;
-`02_RESULTS.md` has the table and the caveats. **Both misses are W2** — recovery
-is too high and too slow because no customer in this world is ever unable to
-pay.
+`02_RESULTS.md` has the table and the caveats.
+
+⚠️ **"Both misses are W2" was wrong and W7 disproved half of it.** V5 is
+insolvency, as W2 showed. **V7 is not**, and it is not transients either: W7
+moved it from 41.84% to 42.78% at best. V7 has two causes and both are open —
+the due-date/payday offset (W6) and the agent's structural blindness to
+transient failures (queue item 2).
 
 **V3 and V5 are the pair that carries the pitch.** `baseline_doc` is a faithful
 rendering of Razorpay's own documented schedule, so V3 asks whether this world
@@ -398,7 +465,7 @@ calibration gate pointed at the wrong object. It is now frozen at tag
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the errors** (there are **twenty-six**; see `03_ERRORS.md`). Lead
+- **Open with the errors** (there are **twenty-seven**; see `03_ERRORS.md`). Lead
   with error 5, the broken oracle, then error 7, the ML result that reversed,
   then **error 11** — the mutation test that graded itself, found by an
   outside reader against a suite built specifically to prevent it. Error 11 is
@@ -452,7 +519,9 @@ and it is directly judged: "AI Judgment: whether AI tools, LLMs, or agents were
 applied appropriately instead of forcing unnecessary tech stacks."
 
 Four research-only policy variants were built. **None of them is the product**
-and none may be reopened — the model is frozen:
+and none may be reopened. *(This line used to read "the model is frozen". The
+freeze was lifted on 30 August 2026; these four stay closed on their merits,
+not on the freeze.)*
 
 - **`explore`** — uniformly random legal day within the cycle, under the same
   Stage 0 constraints as everything else. Generates an unbiased training set.

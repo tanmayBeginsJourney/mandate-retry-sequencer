@@ -1,4 +1,4 @@
-# 03 — THE TWENTY-SIX ERRORS
+# 03 — THE TWENTY-SEVEN ERRORS
 
 **Errors 1-18 all made the project look BETTER than it was.** Errors 19-23,
 added 29 August 2026, break the streak: 19 and 23 were latent defects that had
@@ -817,7 +817,66 @@ into an accuracy would be inventing evidence.
 
 ---
 
-## The tally after twenty-six
+# Error 27 — found 30 August 2026, building W7
+
+**27. An enrichment parameter that perturbed the stream it was supposed to leave
+alone, so a controlled experiment changed two things at once.**
+
+W7 adds transient failures to the world: a temporary hold that blocks the
+balance for a few hours and then releases. The rate is swept, and the whole
+point of a sweep is that the cells differ **only** in the thing being swept.
+
+The first implementation drew the holds inside `w3.balance_trace` from `rng` —
+the generator the money path uses. The draw is `days` values taken before the
+spend loop, so at any non-zero rate **every later draw shifted and every
+customer's entire balance trace was re-drawn.** Each cell of the sweep was
+therefore a different world *plus* holds, not the same world *with* holds.
+
+*How it was caught:* not by a gate. It was caught while building a diagnostic
+that needed the set of cycles at risk *only because of a hold* — which requires
+the transient world to be the base world plus holds. It is not, so the set
+difference was meaningless, and the reason it was meaningless was the defect.
+**The measurement that exposed it was being built for a different purpose.**
+
+*What it cost:* V3 at the lowest swept rate moved **39.06% → 40.64%** once the
+generators were separated. The published band's ceiling is 40%. So the defect
+**flipped a pre-registered prediction from HELD to BROKE**, and without the fix
+the project would have recorded 7/8 and a V3 hit from a comparison that was
+changing two things at once.
+
+*Mechanism:* the rule this breaks was already written down, twice, in the file
+next door. `agent/execution/sim_executor.py` says it for the decline taxonomy
+and again for the nudge: *turning enrichment on must not shift a single draw
+taken by the money path, or the enriched world would be a DIFFERENT world rather
+than the same world with better labels.* `DeclineState` obeys it with its own
+generator; the nudge obeys it with `nrng`; W2 and W7 did not. **A convention
+enforced by comment in one file and by nothing at all in the next.**
+
+*Guard:* holds now come from a per-customer generator seeded the way
+`harness.py:158` seeds `donor_bal`. `p_transient > 0` **without** a `hold_rng`
+raises, because a silent fallback to `rng` is exactly the defect. Verified: the
+balance array is bit-identical outside held hours and the generator position is
+unmoved at both `p=0` and `p>0`.
+
+⚠️ **The same defect is still live in W2.** `p_missed_credit` draws from `rng`,
+so its insolvency sweep also compares worlds that differ by more than the
+mechanism. W2's five predictions were directional and averaged over eight
+populations, so they stand — but repairing it would restate W2's published
+table, which is a decision about the deliverable rather than a bug fix. It is
+**queued and flagged, not silently fixed.** Recording a known defect and
+declining to fix it unilaterally is the correct move here; hiding it would not
+be.
+
+*The shape, for the tally:* **an invariant stated as a comment in one module and
+relied on by another.** Errors 11 and 13 are the same family — a rule the
+measuring apparatus is assumed to follow, with nothing checking that it does.
+This is the fourth time the defect has been in the apparatus rather than in the
+product, and the second time it was found only because something else was being
+built on top of it.
+
+---
+
+## The tally after twenty-seven
 
 The seven guardrails that measured nothing are unchanged (`assert violations
 == 0`; peak hours unrepresentable; oracle approval ~100%; **M1**; **M4**; the
@@ -836,6 +895,7 @@ is a vacuous gate:
 | a set-coverage check standing in for a provenance check | **24** (invented code) |
 | a cross-check whose two sides can only differ in a regime the display never enters | **25** (gate vs auditor) |
 | a claim about someone else's product, asserted rather than read | **26** (downtime feed) |
+| an invariant stated as a comment in one module and relied on by another | **27** (W7's hold generator) |
 
 **The two encouraging lines.** Error 23 was found by an independent checker
 running on a *different model family*, on its first outing, in the measuring
@@ -849,7 +909,7 @@ The two-implementation discipline has now caught something three times:
 `auditor.py` versus `Stage0Gate`, GLM-5.3 versus our own regex list, and R1b
 versus R1a.
 
-⚠️ **And the count is still the point.** Twenty-six errors, and **the ones
+⚠️ **And the count is still the point.** Twenty-seven errors, and **the ones
 found by an outsider or by a deliberately adversarial check are consistently
 the ones a careful self-audit missed.** Errors 11-13 came from an outside
 reader with `docs/` and half a day. Error 23 came from a different model.

@@ -286,7 +286,8 @@ class SimExecutor:
                  nudge_p: float = 0.0, outage: "OutageSchedule | None" = None,
                  per_customer_tech_rng: bool = False,
                  declines: "DeclineMix | None" = None, n_banks: int = N_BANKS,
-                 p_missed_credit: float = 0.0):
+                 p_missed_credit: float = 0.0,
+                 p_transient: float = 0.0, transient_h: int = 24):
         self.pop = pop
         self.days = pop[0]["days"]
         self.cyc = pop[0]["cycle_days"]
@@ -346,8 +347,24 @@ class SimExecutor:
 
         self.worlds: dict[int, CustomerWorld] = {}
         for ci, c in enumerate(pop):
+            # W7's transient holds live in the BALANCE, not here, so
+            # `at_risk_cycles()` and `unwinnable_cycles()` see them without
+            # either method knowing they exist -- which is what keeps both arms
+            # on one shared denominator.
+            #
+            # THE HOLD GENERATOR IS PER CUSTOMER AND IS NOT `rng`, seeded the
+            # way `harness.py:158` seeds `donor_bal`. It therefore consumes
+            # nothing from the money path and is independent of iteration
+            # order, so `p_transient=0.10` is the SAME WORLD as
+            # `p_transient=0.00` with holds added -- not a fresh draw of it.
+            # Getting this wrong is a live defect in this file's history: see
+            # NOTES.md, 30 August, W7.
             bal = w3.balance_trace(c, rng, decay=spend_decay,
-                                   p_missed_credit=p_missed_credit)
+                                   p_missed_credit=p_missed_credit,
+                                   p_transient=p_transient,
+                                   transient_h=transient_h,
+                                   hold_rng=np.random.default_rng(
+                                       seed + 8237 + 31 * ci))
             est_sal = c["salary"] * rng.uniform(0.7, 1.3)
             est_pay = int((c["payday"] +
                            rng.integers(-payday_err, payday_err + 1)) % self.cyc)

@@ -57,7 +57,8 @@ def make_pop(n: int, k: int, pop_seed: int, spend: float = 1.05,
 
 
 def at_risk_cycles(pop, seed: int, payday_err: int = 7,
-                   p_missed_credit: float = 0.0) -> dict:
+                   p_missed_credit: float = 0.0,
+                   p_transient: float = 0.0, transient_h: int = 24) -> dict:
     """The world's revenue-at-risk set, without running a policy.
 
     Exposed HERE rather than imported from `agent.execution` by the caller,
@@ -70,15 +71,21 @@ def at_risk_cycles(pop, seed: int, payday_err: int = 7,
     {(mandate_uid, cycle): due_day}. See `SimExecutor.at_risk_cycles`.
     """
     return SimExecutor(pop, seed, payday_err,
-                       p_missed_credit=p_missed_credit).at_risk_cycles()
+                       p_missed_credit=p_missed_credit,
+                       p_transient=p_transient,
+                       transient_h=transient_h).at_risk_cycles()
 
 
 def unwinnable_cycles(pop, seed: int, payday_err: int = 7,
-                      p_missed_credit: float = 0.0) -> dict:
+                      p_missed_credit: float = 0.0,
+                      p_transient: float = 0.0,
+                      transient_h: int = 24) -> dict:
     """The oracle's ceiling: cycles no schedule could collect. Routed through
     the composition root for the same reason `at_risk_cycles` is."""
     return SimExecutor(pop, seed, payday_err,
-                       p_missed_credit=p_missed_credit).unwinnable_cycles()
+                       p_missed_credit=p_missed_credit,
+                       p_transient=p_transient,
+                       transient_h=transient_h).unwinnable_cycles()
 
 
 def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
@@ -101,6 +108,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              declines: DeclineMix | None = None,
              decline_kw: dict | None = None,
              p_missed_credit: float = 0.0,
+             p_transient: float = 0.0, transient_h: int = 24,
              use_llm: bool = False,
              llm_max_calls: int | None = 150,
              executor=None) -> dict:
@@ -142,7 +150,9 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                                nudge_p=nudge_p, outage=outage,
                                per_customer_tech_rng=per_customer_tech_rng,
                                declines=declines,
-                               p_missed_credit=p_missed_credit)
+                               p_missed_credit=p_missed_credit,
+                               p_transient=p_transient,
+                               transient_h=transient_h)
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)
@@ -221,6 +231,8 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         discount=discount, topup_p=topup_p, nudge_p=nudge_p,
         allow_nudge=allow_nudge, allow_escalate=allow_escalate,
         allow_stop=allow_stop,
+        p_missed_credit=p_missed_credit, p_transient=p_transient,
+        transient_h=transient_h,
         n_customers=len(pop), k=len(pop[0]["mandates"]),
         days=pop[0]["days"], cycle_days=pop[0]["cycle_days"],
         bcfg=bcfg, bcfg_sha=hashlib.sha256(

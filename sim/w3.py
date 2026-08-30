@@ -110,7 +110,8 @@ def hourly_spend_profile(cycle_days, decay=DEFAULT_DECAY):
     return w / w.sum()
 
 
-def balance_trace(c, rng, decay=None, p_missed_credit=0.0):
+def balance_trace(c, rng, decay=None, p_missed_credit=0.0,
+                  p_transient=0.0, transient_h=24, hold_rng=None):
     """True balance at every hour. Salary lands at hour 0 of payday.
 
     `decay` shifts the WORLD's spend curve away from what the beliefs assume.
@@ -129,6 +130,44 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0):
     number measured before W2 is unchanged. Removing the guard would shift the
     shared RNG stream and silently move every historical result; gate T9
     catches that, and it should never have to.
+
+    `p_transient` is W7 (docs/04_BUILD_PLAN.md): a TEMPORARY HOLD on the
+    account. With probability `p_transient`, on any given day, the balance
+    cannot be reached for `transient_h` hours from hour 0 -- and afterwards it
+    is exactly what it would have been. It is the third class of decline, the
+    one this world had none of: a lien, a momentary shortfall, a balance topped
+    up the same evening. The money is real and it is back within a day or two.
+
+    Three things about it, all deliberate:
+
+      * **the decline code stays Z9.** A hold makes available balance < amount,
+        which IS insufficient funds and IS what the bank returns. Nothing in
+        `agent/ports.py`, the diagnosis layer or the audit trail changes.
+      * **the whole available balance is blocked, not a drawn amount.** A
+        partial hold needs a magnitude parameter no source supports (CLAUDE.md
+        rule 5). This is the strong form; a partial hold is strictly weaker, so
+        every effect measured against `p_transient` is an upper bound on what a
+        hold at that rate can do.
+      * **the customer's spending is unaffected by the hold.** They spend from
+        elsewhere, or defer. Modelling the alternative -- blocked spending, so
+        a HIGHER balance on release -- would make the hold partly a gift, and
+        the conservative reading is the one taken.
+
+    ⚠️ **THE HOLDS COME FROM `hold_rng`, NOT FROM `rng`, AND THAT IS THE WHOLE
+    POINT.** Drawing them from the money path's generator would shift every
+    later draw, so the transient world would be a DIFFERENT world rather than
+    the same world with holds on it -- and the sweep below it would be
+    comparing two things at once. `sim_executor.py` already states this rule
+    for the decline taxonomy and for the nudge; this obeys it. Passing
+    `p_transient > 0` without a `hold_rng` raises rather than silently falling
+    back to `rng`, because the fallback is exactly the defect.
+
+    The consequence worth having: at any rate, the transient world is the base
+    world PLUS holds, cycle for cycle. That is what makes "which cycles are at
+    risk only because of a hold" a well-defined set.
+
+    Guarded exactly like `p_missed_credit` and inert at 0.0 for the same
+    reason.
     """
     days, cyc = c["days"], c["cycle_days"]
     T = days * HOURS
@@ -139,6 +178,22 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0):
     # on which days happen to be paydays.
     missed = (rng.random(days // cyc + 2) < p_missed_credit
               if p_missed_credit > 0 else None)
+    # W7. One draw per DAY, taken up front for the same reason `missed` is: the
+    # stream position must not depend on which days happen to be paydays. A
+    # per-CYCLE onset uniform over the cycle was rejected -- a 24h hold covers
+    # a given due date about 3% of the time, so the rate would have to exceed
+    # 1.0 to matter. Per-day is also directly readable: 0.10 is "held one day
+    # in ten".
+    if p_transient > 0 and transient_h > 0:
+        if hold_rng is None:
+            raise ValueError(
+                "p_transient > 0 needs its own hold_rng. Drawing holds from "
+                "the money path's rng shifts every later draw, which makes "
+                "the transient world a different world rather than the same "
+                "world with holds on it.")
+        holds = hold_rng.random(days) < p_transient
+    else:
+        holds = None
     for d in range(days):
         phase = (d - c["payday"]) % cyc
         # Which cycle of THIS customer's salary calendar d falls in. Used only
@@ -155,6 +210,13 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0):
         for h in range(HOURS):
             b = max(b - day_spend / HOURS * rng.uniform(0.4, 1.6), 0.0)
             bal[d * HOURS + h] = b
+    # W7, applied AFTER the trace exists: a hold blocks access to money that is
+    # otherwise there, so it is an overlay on the balance rather than a change
+    # to how the balance evolves. Overlapping holds simply merge.
+    if holds is not None:
+        for d in np.flatnonzero(holds):
+            lo = int(d) * HOURS
+            bal[lo:min(lo + transient_h, T)] = 0.0
     return bal
 
 

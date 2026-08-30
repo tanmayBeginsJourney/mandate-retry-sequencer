@@ -147,9 +147,12 @@ def main() -> int:
               f"({'HIT ' if h5 else 'MISS'} vs 70-85%)"
               f"   V7 {r7*100:6.2f}% ({'HIT ' if h7 else 'MISS'} vs 85-95%)")
     print()
-    print("  V7 is expected to stay a MISS at every rate. Its cause is W6 --")
-    print("  due dates drawn independently of paydays -- and no amount of")
-    print("  insolvency touches it. That is what W2-3 tests.")
+    print("  V7 is expected to stay a MISS at every rate. That is what W2-3")
+    print("  tests, and it held. W7 then tested the other candidate cause --")
+    print("  transient failures -- and V7 did not move for those either")
+    print("  (41.84% -> 42.78% at best). Its two live causes are the")
+    print("  due-date/payday offset (W6) and the agent's blindness to")
+    print("  transients. docs/04_BUILD_PLAN.md.")
     return 0
 
 

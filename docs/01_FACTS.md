@@ -529,6 +529,53 @@ space, no money, and no NPCI constraints. Neither has usable public code.
   largest single sensitivity in the agent (0.00 / 0.05 / 0.15 →
   0.00 / −2.87 / −13.46 pts) and must never be quoted as a point.**
 
+- `[REPORTED]` **Razorpay operates a test mode** with its own API key pair,
+  test UPI VPAs (`success@razorpay` / `failure@razorpay`) and mocked mandate
+  registration and authentication. No real money moves. Read 30 August 2026,
+  Razorpay docs (`razorpay.com/docs/payments/dashboard/test-live-modes/` and
+  the UPI AutoPay S2S recurring pages).
+  ⚠️ `[GUESS]` **whether `POST /v1/payments/create/recurring` — the endpoint
+  `agent/execution/razorpay_executor.py` calls — is reachable in test mode
+  without Razorpay enabling S2S recurring on the account.** Not established.
+  Queue item 3 is written as a ladder for exactly that reason.
+
+- `[REPORTED]` **The DPDP Rules, 2025 were notified on 14 November 2025**,
+  operationalising the Digital Personal Data Protection Act, 2023, whose s.4
+  (consent) and s.5 (purpose limitation) require free, specific, informed
+  consent and restrict processing to the purpose communicated at collection.
+  Phased compliance. Source: MeitY notification as summarised by Wikipedia and
+  PIB, read 30 August 2026; **the primary MeitY text was not read** (PIB
+  returned HTTP 403), so this is `[REPORTED]` and not `[VERIFIED]`.
+  **Why it matters here:** this, not the RBI PA Directions, is the on-point
+  instrument for cross-merchant pooling. The PA Directions''' segregation
+  requirements govern **funds**, not customer data. DPDP points at
+  consent-gating as the design the law would require — which is what W9 builds.
+
+- `[GUESS]` **The published decline MIX is card, not UPI.** One vendor
+  (Churnkey) publishes a breakdown of failed subscription payments: roughly
+  half insufficient funds, a quarter to a third risk-management hard flags,
+  10-15% card issues. `[REPORTED]`, read 30 August 2026. **It describes CARD
+  subscriptions in a mostly non-Indian base, so it is not a UPI AutoPay decline
+  distribution and the claim that no source gives AutoPay-specific rates
+  stands.** Its use is to anchor the RANGE `DeclineMix` is swept over, so the
+  sweep stops being pure invention. Do not calibrate to it.
+
+- `[GUESS]` **How often an account carries a temporary hold.** W7's
+  `p_transient` — the per-customer, per-day probability that a lien, a
+  momentary shortfall or a pending transaction blocks the balance. **No source
+  found gives a rate**, for India or anywhere, so it is **swept
+  {0.00, 0.05, 0.10, 0.20} × {24h, 48h} and never picked**, and it ships at
+  0.0. The hold duration is equally unsourced and is swept for a specific
+  reason: 24h is under the agent's notification lead and 48h is over it, so the
+  two cells bracket the interval the outcome is most sensitive to.
+
+  **What the sweep lets us say in the other direction, and it is the useful
+  half.** If the published 20–40% fixed-interval recovery band describes
+  reality, then this world places the transient rate **under 5% of
+  account-days** — because at 5% the fixed schedule already recovers 40.64%.
+  That is an inference from a measured curve, it is `[GUESS]` like everything
+  else here, and it is adopted nowhere. `02_RESULTS.md`, W7.
+
 - `[GUESS]` **Bank assignment.** `agent/ports.py` spreads customers uniformly
   over `N_BANKS = 8` handles. Real Indian UPI share is heavily skewed and
   nothing found gives **per-bank AutoPay mandate share**, so a skew we invented

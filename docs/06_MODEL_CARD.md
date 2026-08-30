@@ -177,6 +177,27 @@ safe. `02_RESULTS.md` has the mechanism: it is the one failure family where the
 money IS there, and the frozen policy re-presents the same amount until the cap
 kills the mandate.
 
+## 2c. The two world parameters that ship INERT. Added 30 August 2026.
+
+Both exist, both are swept, **both default to 0.0 and neither is adopted.** A
+reader who greps for them and finds no headline built on them is seeing the
+intended state, not an oversight.
+
+| parameter | what it models | swept over | why it ships at 0.0 |
+|---|---|---|---|
+| `p_missed_credit` (W2) | the salary credit does not arrive, so the cycle is genuinely uncollectable | {0.00, 0.03, 0.08} | Brings V5 into its published band at 0.08 — **and breaks V1 there.** Adopting it would trade a target the world hit unfitted for one it was tuned to. |
+| `p_transient` + `transient_h` (W7) | a temporary hold blocks the balance for a few hours and then releases | {0.00, 0.05, 0.10, 0.20} × {24h, 48h} | Moves V3 hard and **breaks V1 doing it.** Across 14 swept worlds none hits more than 2 of 4 targets, and the best is still 0.00. |
+
+**Both are guarded so they consume nothing at 0.0**, which is what keeps parity
+bit-exact at 24/24 and gate T9 green. `p_transient` additionally draws from its
+own per-customer generator, so the transient world is the base world *plus*
+holds rather than a fresh draw of it — `p_missed_credit` does **not** yet do
+this, which is **error 27** and is queued rather than silently repaired.
+
+`agent/tests/test_insolvency_sweep.py` and `agent/tests/test_transient_sweep.py`
+are the measurements. Neither is gate-protected; both are named so they can be
+re-run.
+
 ## 3. What this has NEVER been tested on
 
 Read this section before quoting anything above to anyone outside the team.
@@ -211,9 +232,14 @@ Eleven items, three of them added by the outside audit on 28 August 2026.
    customer is **unresolved** — `01_FACTS.md` tags it `[GUESS]`. The moat is the
    central claim and its legal basis is unread.
 7. **Top-up is pinned at 0** in everything except the one `topup_p=0.25` row.
-   On the old harness, roughly half the apparent gain was "customers never top
-   up". That sweep has **not** been redone properly on `w3`.
-8. **Two of the five Stage 0 guarantees have no working test.** The attempt
+   On the OLD harness, roughly half the apparent gain was "customers never top
+   up". ✅ **Redone on `w3` 29 August 2026, and the old worry does not
+   survive**: sweeping the unconditional `topup_p` on the shipping
+   configuration moves it **+0.02 pts (2 SE 0.59)**, while the same sweep moves
+   `payday_wait` by **+11.4 pts**. The mechanism is live; the shipping policy
+   simply has nothing left to recover at 95.3%. `02_RESULTS.md`, the action-space
+   section.
+8. ~~**Two of the five Stage 0 guarantees have no working test.**~~ The attempt
    cap (M1 is VACUOUS) and the pending notification (M4 passes by
    construction — its mutant increments the counter itself; caught by M4B on
    28 Aug 2026). See §4 and error 11.
@@ -234,25 +260,27 @@ Eleven items, three of them added by the outside audit on 28 August 2026.
 
 ---
 
-## 4. The six failing gates, and why each is failing
+## 4. The four failing gates, and why each is failing
 
-The suite is **25 gates: 5 FAIL, 1 VACUOUS, 19 pass.** All six are listed in
-`sim/known_failures.txt` with a written reason. None may be fixed by loosening a
-threshold.
+**Updated 30 August 2026.** The suite is **25 gates: 4 FAIL, 0 VACUOUS,
+21 pass.** All four are listed in `sim/known_failures.txt` with a written
+reason. None may be fixed by loosening a threshold.
 
-⚠️ **TWO OF THE FIVE STAGE 0 RULES HAVE NO WORKING TEST** — the attempt cap
-(M1, vacuous) and the pending notification (M4, vacuous-but-green, caught by
-M4B on 28 Aug). Keep both out of the pitch and the architecture doc. Peak-hour,
-notification-lead and Z9 re-presentation are genuinely tested.
+✅ **ALL FIVE STAGE 0 RULES NOW HAVE A WORKING TEST.** M1 runs its mutant at
+`cap_override=2` so the attempt-cap counter binds; the `pending` and `represent`
+mutants create illegal state instead of writing the counters they are graded
+on, so M4B is green. **The attempt cap and the pending notification are now
+safe to claim** — the caveat that they were not is kept below, struck through,
+as the record of what was wrong. Do not reintroduce it.
 
 | Gate | State | Why it is red |
 |---|---|---|
 | **S1** | FAIL | Calibration of `w3.Belief` (point-estimate payday) via `portfolio`. ECE 0.091 — *inside* the 0.10 bound — but the reliability curve is **not monotone**. **S1 does not measure the shipping filter**; that was error 9. |
 | **S1_PD** | FAIL | The same threshold on the filter that *does* ship. ECE **0.026**, still not monotone. Fitting halved the error and did not order the curve. The remaining break is structural: the filter models no balance floor at zero, and approximates the world's hourly `U(0.4,1.6)` spend jitter with a fixed 3-tap kernel. **Neither is a parameter you can fit.** |
-| **M1** | VACUOUS | The attempt-cap mutant cannot trip the counter at either operating point: the deepest any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d, against `NPCI_MAX=4`, so a 5th attempt never happens. **Consequence: the NPCI attempt-cap compliance claim has no working test. Do not put it in the pitch.** Untried fix: run the mutant with `cap_override=2`, which tests the counter mechanism rather than the NPCI-specific value. |
+| ~~**M1**~~ | ✅ **GREEN** | Was VACUOUS: the mutant could not trip the counter at either operating point, because the deepest any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d against `NPCI_MAX=4`, so a 5th attempt never happened. **Fixed 30 August 2026** by running the mutant at `cap_override=2`, which tests the counter mechanism rather than the NPCI-specific value. The attempt-cap claim now has a working test. |
 | **S2b** | FAIL | The placebo control is not neutral (−14.09 pts). A finding about the *control's design*, not a code defect: `solo_placebo` injects observations computed against a different customer's balance, so it is actively misleading rather than merely uninformative. Left visible on purpose. A clean control — label-shuffled observations at the matched base rate — has not been built. |
 | **S2_LEGACY** | FAIL | The retired point-estimate S2, kept unchanged and failing on purpose so the S2 rewrite is auditable rather than looking like test-loosening. Goes only when the point-estimate architecture is formally removed. |
-| **M4B** | FAIL | **Added 28 Aug 2026.** No mutation branch may increment the counter its gate reads. Two do: `mutate="pending"` (`harness.py:610-612`) and `mutate="represent"` (`harness.py:333`). Measured: `pending` is **1066 counted, 1066 self-written, 0 independent** — so **gate M4 is vacuous and has been reporting PASS**. `represent` still binds (304 of 608 found independently); it only double-counts. Repair is in `harness.py`, which is frozen, and would move T9's reference. Procedure written in `sim/known_failures.txt`. |
+| ~~**M4B**~~ | ✅ **GREEN** | **Added 28 Aug 2026, fixed 30 Aug.** No mutation branch may increment the counter its gate reads. Two did: `mutate="pending"` was **1066 counted, 1066 self-written, 0 independent**, so gate M4 was passing by construction. `pending` now drops the pending filter so the harness's own check counts the second notification; `represent` no longer double-writes and M5 fell to 304, all independent — exactly the number the 28 August instrumented analysis predicted was real. **It went green because the mutants were repaired, not because the detector was narrowed**, and M4B still parses `harness.py` and would flag either branch the moment a `V.<field> += 1` returned to it. |
 
 ---
 
