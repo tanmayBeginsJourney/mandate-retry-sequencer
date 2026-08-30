@@ -402,6 +402,128 @@ def gate_R8() -> None:
        == ("VENDOR_ONLY", "WE_SEE_ONLY", "BOTH", "NEITHER"))
 
 
+# ===========================================================================
+# R9  a refused CREDENTIAL is not a declined CUSTOMER
+# ===========================================================================
+#: THE ONLY FIXTURE IN THIS FILE THAT RAZORPAY WROTE. Captured 30 August 2026
+#: by `scripts/razorpay_ladder.py`, which POSTs the real recurring-charge URL
+#: with an empty credential and records what comes back. Every other payload
+#: here was transcribed from their docs by us; this one came off the wire.
+LIVE_401 = {"error": {"code": "BAD_REQUEST_ERROR",
+                      "description": "Authentication failed"}}
+
+#: What a payment-level failure looks like: `reason`, `source`, `step` and a
+#: `metadata.payment_id`. `[REPORTED]` from the docs -- NOT observed, because
+#: observing it needs a key. R9 uses it to prove the fix does not overreach.
+DOC_400_DECLINE = {"error": {"code": "BAD_REQUEST_ERROR",
+                             "description": "payment failed",
+                             "source": "bank", "step": "payment_authorization",
+                             "reason": "insufficient_funds",
+                             "metadata": {"payment_id": "pay_x"}}}
+
+
+def gate_R9(mutant: str | None = None) -> None:
+    print("\nR9  an authentication failure must not become a customer decline")
+    print("    mutant: `blind`, the pre-30-August behaviour -- hand every")
+    print("            response with a status to the payment parser")
+
+    def outcome_for(payload, status):
+        ex = _ex(FakeTransport(payload=payload, status=status))
+        if mutant == "blind":
+            ex._is_configuration_fault = staticmethod(lambda s, p: False)
+        try:
+            return ex.attempt(REF, 550.0, 8, action_id="a1"), None
+        except Exception as e:                      # noqa: BLE001
+            return None, e
+
+    # (a) the real envelope, off the wire.
+    out, err = outcome_for(LIVE_401, 401)
+    ok("R9a  a live 401 raises RazorpayError instead of returning an outcome",
+       out is None and type(err).__name__ == "RazorpayError",
+       f"outcome={out} err={type(err).__name__ if err else None}")
+
+    # (b) what it used to do, and why it mattered. Shown, not asserted about
+    #     the shipping code -- this is the mutant's job.
+    if mutant == "blind":
+        ok("R9b  MUTANT: without the check it is a SILENT DECLINE",
+           out is None or (out.success is False and out.pending is False),
+           "U30, success=False -- which w3.py:432 reads as `balance < amount`")
+
+    # (c) no overreach: a real payment decline is still a decline.
+    out, err = outcome_for(DOC_400_DECLINE, 400)
+    ok("R9c  a 400 that IS a payment decline stays a decline",
+       err is None and out is not None and out.success is False
+       and out.raw_code == "insufficient_funds",
+       f"err={err} raw={getattr(out, 'raw_code', None)!r}")
+
+    # (d) no overreach: a captured payment is untouched.
+    out, err = outcome_for({"id": "pay_1", "status": "captured"}, 200)
+    ok("R9d  a 200 captured payment is untouched",
+       err is None and out is not None and out.success is True)
+
+    # (e) a 200 whose body is an API error is NOT reclassified -- the widening
+    #     branch is deliberately restricted to 4xx.
+    ok("R9e  the widening branch never fires below 400",
+       RazorpayExecutor._is_configuration_fault(200, LIVE_401) is False)
+
+    # (f) the fixture is still what the wire said, if the transcript is here.
+    path = os.path.join(PKG, "logs", "razorpay_ladder.json")
+    if os.path.exists(path):
+        import json
+        with open(path, encoding="utf-8") as fh:
+            rungs = json.load(fh)["rungs"]
+        bodies = [r["body"] for r in rungs
+                  if r.get("rung") in (1, 2) and r.get("http_status") == 401]
+        ok("R9f  the fixture still matches the captured transcript",
+           bool(bodies) and all(b == LIVE_401 for b in bodies),
+           f"{len(bodies)} captured 401 bodies")
+    else:
+        print("       R9f  SKIPPED -- no logs/razorpay_ladder.json in this clone")
+
+
+# ===========================================================================
+# R10  Stage 0 hands the executor the id it audited
+# ===========================================================================
+def gate_R10(tmp: str, mutant: str | None = None) -> None:
+    print("\nR10 the idempotency key is derived from the AUDITED action_id")
+    print("    mutant: `drop`, dispatch without the action_id -- which is")
+    print("            what Stage 0 did until 30 August 2026")
+
+    t = FakeTransport(payload={"id": "pay_ok", "status": "captured"}, status=200)
+    ex = _ex(t)
+    if mutant == "drop":
+        real = ex.attempt
+        ex.attempt = lambda ref, amount, tt, aid="": real(ref, amount, tt)
+    ledger = AttemptLedger()
+    path = os.path.join(tmp, "r10.jsonl")
+    if os.path.exists(path):
+        os.remove(path)
+    log = AuditLog(path, "r10")
+    gate = Stage0Gate(ex, ledger, log)
+    ledger.open_cycle(REF.uid, 0)
+
+    target_t = 11 * w3.HOURS + w3.DECISION_HOUR       # 08:00, not a peak hour
+    aid = action_id("r10", REF, 0, target_t, 1)
+    a = MoneyAction(action_id=aid, ref=REF, amount=550.0, cycle=0,
+                    target_t=target_t, notify_t=target_t - 24,
+                    decided_at_t=target_t - 24, kind=InterventionKind.RETRY)
+    gate.issue_notification(REF, 0, a.notify_t, a.target_t, a.decided_at_t)
+    gate.submit(a)
+
+    want = RazorpayExecutor.idempotency_key(aid, REF, target_t)
+    weak = RazorpayExecutor.idempotency_key(f"{REF.uid}@{target_t}", REF, target_t)
+    got = t.keys[-1] if t.keys else None
+
+    ok("R10a the executor was reached", bool(t.keys), f"calls={t.calls}")
+    ok("R10b the key is derived from the audited action_id", got == want,
+       f"got={got}")
+    ok("R10c and is NOT the weaker mandate@hour fallback", got != weak,
+       "the fallback is still deterministic, but not tied to the trail")
+    ok("R10d the same action_id reproduces the same key after a restart",
+       RazorpayExecutor.idempotency_key(aid, REF, target_t) == want,
+       "which is the entire point of an idempotency key")
+
+
 def report() -> None:
     print("\n" + "=" * 74)
     print("WHAT OUR FAMILIES DO NOT COVER IN RAZORPAY'S OWN VOCABULARY")
@@ -420,8 +542,56 @@ def report() -> None:
           f"{cov['distinctions_lost']} distinctions recorded as lost")
 
 
+def run_mutants(tmp: str) -> int:
+    """Run every gate that takes a NAMED mutant, and require it to go red.
+
+    ⚠️ THIS RUNNER DID NOT EXIST UNTIL 30 AUGUST 2026, AND THIS FILE'S OWN
+    DOCSTRING SAID IT DID. Gates R2-R8 run their mutants inline, so their
+    claims were sound; R1 carried a `mutant` parameter nothing ever passed, and
+    R9/R10 were written the same way an hour earlier. A test file that
+    advertises a mutation runner it does not have is the measuring apparatus
+    lying about itself, which is errors 11-13 in `docs/03_ERRORS.md` and is the
+    reason `--mutants` is now real instead of the sentence being deleted.
+
+    A mutant that breaks NOTHING is reported as VACUOUS and fails the run --
+    same rule as `sim/gate.py`.
+    """
+    global _results
+    print("\n" + "=" * 74)
+    print("MUTANTS -- each must break at least one check that passes clean")
+    print("=" * 74)
+    cases = [("R1/drop_funds", lambda: gate_R1(mutant="drop_funds")),
+             ("R9/blind", lambda: gate_R9(mutant="blind")),
+             ("R10/drop", lambda: gate_R10(tmp, mutant="drop"))]
+    verdicts = []
+    for name, run in cases:
+        saved, _results = _results, []
+        try:
+            run()
+            broke = sum(1 for good, _, _ in _results if not good)
+        finally:
+            mutant_results, _results = _results, saved
+        state = "TRIPPED" if broke else "VACUOUS"
+        verdicts.append((name, state, broke))
+        print(f"\n  {state:<8} {name}: {broke} check(s) went red "
+              f"of {len(mutant_results)}")
+        for good, cname, detail in mutant_results:
+            if not good:
+                print(f"           - {cname}")
+    bad = [v for v in verdicts if v[1] == "VACUOUS"]
+    print("\n" + "=" * 74)
+    print(f"{len(verdicts) - len(bad)}/{len(verdicts)} mutants tripped their gate")
+    print("=" * 74)
+    for name, _, _ in bad:
+        print(f"  VACUOUS  {name} -- the gate cannot see its own named mutant")
+    return 1 if bad else 0
+
+
 def main() -> int:
     import tempfile
+    if "--mutants" in sys.argv:
+        with tempfile.TemporaryDirectory(prefix="rzp-mutants-") as tmp:
+            return run_mutants(tmp)
     print("=" * 74)
     print("RAZORPAY BACKEND GATES -- all offline, no API key, no network")
     print("=" * 74)
@@ -440,6 +610,8 @@ def main() -> int:
         gate_R6(tmp)
         gate_R7()
         gate_R8()
+        gate_R9()
+        gate_R10(tmp)
 
     report()
     n_bad = sum(1 for good, _, _ in _results if not good)

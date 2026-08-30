@@ -507,7 +507,22 @@ class SimExecutor:
         return codes[int(self.drng.integers(0, len(codes)))]
 
     # ---- the money path
-    def attempt(self, ref: MandateRef, amount: Rupees, t: int) -> AttemptOutcome:
+    def attempt(self, ref: MandateRef, amount: Rupees, t: int,
+                action_id: str = "") -> AttemptOutcome:
+        """`action_id` is accepted and IGNORED, on purpose.
+
+        Added 30 August 2026. Stage 0 always had the audited `action_id` on the
+        line above the dispatch and never passed it, so `RazorpayExecutor`'s
+        idempotency key silently used its weaker `mandate@hour` fallback rather
+        than the audited action -- the opposite of what that file's docstring
+        described. Fixing it meant the port had to carry the parameter, and a
+        port both backends implement is better than an introspection check at
+        the call site.
+
+        This executor is the simulation and has no idempotency to protect, so
+        it reads the parameter nowhere. That is what keeps parity with
+        `harness.run` bit-exact: an ignored argument cannot change a draw.
+        """
         w = self.worlds[ref.customer_id]
         day = t // w3.HOURS
 

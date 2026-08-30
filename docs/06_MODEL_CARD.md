@@ -443,12 +443,34 @@ because gate I2 already forbids every one of them from importing
 `agent.execution` at all. The switch is one argument in `agent/batch.py`:
 `run_once(..., executor=RazorpayExecutor(...))`.
 
-⚠️ **NOTHING IN IT HAS EVER TALKED TO RAZORPAY.** No API key has been used by
-this project and no request has ever been sent. The request shapes come from
-their public documentation, read 29 August 2026 and recorded in `01_FACTS.md`.
-Every unverified line is marked `# UNVERIFIED` at the line. **A doc-derived
-request body that has never received a 200 is a hypothesis**, and the gates
-below deliberately do not touch it.
+⚠️ ~~**NOTHING IN IT HAS EVER TALKED TO RAZORPAY.**~~ **UPDATED 30 AUGUST
+2026, AND THE LINE MOVED RATHER THAN VANISHED.** `scripts/razorpay_ladder.py`
+sends real requests to `https://api.razorpay.com/v1/payments/create/recurring`
+through the shipped transport. **No API key has been used by this project and
+no request has ever been AUTHENTICATED**, so the rungs that ran are the ones
+that need no account:
+
+| rung | what it establishes | state |
+|---|---|---|
+| 0 | DNS, and a TLS 1.3 handshake against a DigiCert-issued `*.razorpay.com` certificate | **RUN** |
+| 1 | an unauthenticated POST to the real charge URL returns a real status and a real error envelope | **RUN**, HTTP 401 |
+| 2 | the same POST with a well-formed but fake `rzp_test_` key | **RUN**, HTTP 401, identical envelope |
+| 3 | the shipped parser and the shipped `attempt()` on those real envelopes | **RUN** — and it **failed**, see error 28 |
+| 4 | authenticate successfully and take a 200 | **NOT RUN** — needs a `rzp_test_` key |
+| 5 | charge `success@razorpay` / `failure@razorpay` | **NOT RUN** — needs a key and an authorised test mandate |
+
+`logs/razorpay_ladder.json` is the transcript. **Rungs 4 and 5 are not counted
+as passes anywhere and nothing in `docs/` may claim them.**
+
+**What rungs 1-3 do NOT establish.** They are rejected at the authentication
+layer, so **Razorpay never read the request body.** The request shapes still
+come from their public documentation, read 29 August 2026 and recorded in
+`01_FACTS.md`; every unverified line is still marked `# UNVERIFIED` at the
+line. **A doc-derived request body that has never received a 200 is still a
+hypothesis.** What changed is that the *error envelope* is now recorded from
+the wire instead of transcribed from a doc page — and that one contact found
+two defects on the money path (errors 28 and 29) that eight green offline
+gates could not.
 
 | what | state |
 |---|---|
@@ -458,7 +480,12 @@ below deliberately do not touch it.
 | Stage 0 refuses before the executor is reached, zero network | **gated**, R6, and demonstrated end to end by `scripts/prove_stage0_refuses.py` |
 | `SimExecutor` unaffected by the `AttemptOutcome` change | **gated**, R7, and parity is still **bit-exact 24/24** |
 | the Payment Downtime feed parses and normalises | **gated**, R8 |
-| whether Razorpay accepts our request body | **UNTESTED** |
+| a refused CREDENTIAL is not recorded as a declined CUSTOMER | **gated**, R9, against the envelope captured from the live API. Error 28 |
+| Stage 0 hands the executor the `action_id` it audited | **gated**, R10. Error 29 |
+| every named mutant trips its own gate | **gated**, `--mutants`, 3/3. Error 30 |
+| DNS, TLS and transport against the live API | **RUN**, `scripts/razorpay_ladder.py` rungs 0-2 |
+| whether Razorpay accepts our request body | **UNTESTED** — rungs 1-2 are rejected before the body is read |
+| whether an authenticated request succeeds at all | **UNTESTED** — rung 4, needs a key |
 | whether test mode returns populated `error_reason` values | **UNTESTED** |
 | whether the Downtime feed is seeded in test mode | **UNTESTED** |
 | the pre-debit notification call | **DESIGNED, WIRED TO NOTHING.** `RazorpayExecutor.notify()` raises `NotImplementedError` on purpose — wiring it needs a change to `Stage0Gate`, and "Stage 0 is unchanged when the backend changes" is the claim the whole file rests on |

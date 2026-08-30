@@ -168,7 +168,12 @@ class Stage0Gate:
         # ---- legal. Execute.
         self.allowed += 1
         attempt_no = self.ledger.attempts(a.ref.uid, a.cycle) + 1
-        outcome = self._executor.attempt(a.ref, a.amount, a.target_t)
+        # `a.action_id` is passed so a real backend's idempotency key is keyed
+        # on the SAME identity this trail audits. It was not passed until
+        # 30 August 2026, which silently left RazorpayExecutor on its weaker
+        # `mandate@hour` fallback. SimExecutor ignores it.
+        outcome = self._executor.attempt(a.ref, a.amount, a.target_t,
+                                         a.action_id)
         self.ledger.record_attempt(a.ref.uid, a.cycle, outcome.code)
 
         self.log.emit(EventKind.MONEY_ACTION, a.target_t,

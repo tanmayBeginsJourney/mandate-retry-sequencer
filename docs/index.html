@@ -284,6 +284,7 @@ footer{padding:56px 0 90px}
       <a href="#outage">Outages</a>
       <a href="#pooling">Pooling</a>
       <a href="#declines">Declines</a>
+      <a href="#validation">Validation</a>
       <a href="#scope">Limits</a>
     </div>
     <button class="themebtn" id="theme" aria-label="Switch between light and dark">◐</button>
@@ -795,10 +796,127 @@ footer{padding:56px 0 90px}
 <!-- =====================================================================
      07 — SCOPE AND LIMITS
      ===================================================================== -->
-<section id="scope">
+<!-- =====================================================================
+     07 — THE VALIDATION SUITE
+     ===================================================================== -->
+<section id="validation">
   <div class="wrap">
     <div class="shead">
       <div class="n">07</div>
+      <div>
+        <h2>Does this world behave like the real one?</h2>
+        <p>A simulated result cannot be checked by a reader. What can be checked is whether
+        the world producing it reproduces figures published by other people — figures this
+        project did not fit to. There is no public benchmark for payment retry scheduling:
+        no shared dataset, no held-out set, no leaderboard. What exists is aggregate
+        statistics published by companies that sell recovery software. They are second-hand
+        and they aggregate customer bases that are not comparable. They are still the only
+        outside check available, and the world was scored against four of them.</p>
+      </div>
+    </div>
+
+    <div class="figure">
+      <div class="figure-head">
+        <div>
+          <h3>Four published figures, scored not fitted</h3>
+          <p class="tiny" style="margin:0">The world is calibrated against a single anchor.
+          None of the four below was used to set a parameter.</p>
+        </div>
+      </div>
+      <div class="figure-foot">
+        <div class="tablewrap">
+          <table>
+            <thead><tr>
+              <th>What was measured</th>
+              <th class="n">This world</th>
+              <th class="n">Published</th>
+              <th></th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>Share of debits failing on their due date</td>
+                <td class="n pos">13.68%</td>
+                <td class="n">8–15%</td>
+                <td><span class="tag good">hit</span></td>
+              </tr>
+              <tr>
+                <td>Recovery under a fixed-interval retry schedule</td>
+                <td class="n pos">27.85%</td>
+                <td class="n">20–40%</td>
+                <td><span class="tag good">hit</span></td>
+              </tr>
+              <tr>
+                <td>Recovery under smart retry timing</td>
+                <td class="n neg">97.38%</td>
+                <td class="n">70–85%</td>
+                <td><span class="tag warn">miss — too high</span></td>
+              </tr>
+              <tr>
+                <td>Share of recoveries landing inside 10 days</td>
+                <td class="n neg">41.84%</td>
+                <td class="n">85–95%</td>
+                <td><span class="tag warn">miss — too slow</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tiny" style="margin-top:14px">
+          100 customers × 5 mandates, 8 held-out populations, 120 days, at
+          <code>pop_spend=0.80</code> — the calibration whose due-date failure rate matches
+          the published record. Reproduce with
+          <code>python agent/tests/test_recovery_rates.py</code>.
+          <span class="tag">not gate-protected</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:22px">
+      <div class="card">
+        <h3>Why two hits matter more than they look</h3>
+        <p class="tiny" style="margin:8px 0 0">They are properties of different parts of the
+        model. The first is a property of the simulated world — how often an account is short
+        on the due date. The second is a property of a baseline policy running inside that
+        world — what Razorpay's own documented schedule of T, T+1, T+2, T+3 recovers. Two
+        different pieces agreeing with the outside record at the same setting is harder to
+        arrange by accident than one.</p>
+      </div>
+      <div class="card">
+        <h3>The two misses have two different causes</h3>
+        <p class="tiny" style="margin:8px 0 0">Recovery is too high because no simulated
+        customer is ever simply unable to pay — a clairvoyant scheduler collects 100% here.
+        Recovery is too slow because a mandate's due date and its customer's payday are drawn
+        independently, so the wait between them averages half a cycle. Both are properties of
+        the world, not of the agent. They were once written down as sharing one cause; that
+        was checked and corrected.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <h3>Calibrations that score better were found twice, and rejected both times</h3>
+      <p class="tiny" style="margin:8px 0 0">Adding customers who cannot pay brings the third
+      row inside its band. So does adding temporary holds on the account. Each was swept, and
+      each one <b>broke the first row</b> — the target that currently hits — while doing it.
+      A grid search found a cell satisfying two targets at once; at that cell, both targets it
+      had <i>not</i> been tuned against missed. Two hits obtained by turning two dials are a
+      curve fit with four points, so no recalibration was taken and the reported setting is
+      unchanged. Across fourteen alternative worlds swept so far, none scores better than the
+      one above.</p>
+    </div>
+
+    <p class="tiny" style="margin-top:22px">
+      What this cannot establish: the published figures are vendor marketing material, none is
+      ground truth, and a world can reproduce an aggregate statistic while being wrong about
+      the mechanism underneath it. Four numbers is a small suite, and five more targets are
+      specified but not yet built. This is the strongest outside check the project has, and it
+      is not a benchmark.
+    </p>
+  </div>
+</section>
+
+<section id="scope">
+  <div class="wrap">
+    <div class="shead">
+      <div class="n">08</div>
       <div>
         <h2>What is simulated, and what is known</h2>
         <p>No Razorpay transaction, mandate or decline code has been observed by this project.
@@ -836,15 +954,19 @@ footer{padding:56px 0 90px}
           <li>How accurately payday can be predicted in India</li>
           <li>Whether cross-merchant pooling is legally permitted</li>
           <li>What fraction of debits fail during a UPI incident</li>
-          <li>Whether Razorpay's API accepts the request bodies written here — none has been sent</li>
+          <li>Whether Razorpay's API accepts the request bodies written here. Requests have now been
+            sent, but they are rejected at authentication before the body is read</li>
         </ul>
       </div>
     </div>
 
     <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">The limits worth knowing before quoting anything</h3>
     <ul class="limits" style="margin-top:14px">
-      <li><b>The headline is conditional on one parameter.</b> At ±1 day of payday error the simple
-        baseline wins by 3.5 points. The +36.66 point figure is measured at ±7 days.</li>
+      <li><b>The headline is conditional on two parameters, not one.</b> At ±1 day of payday error
+        the simple baseline wins by 3.5 points; the +36.66 point figure is measured at ±7 days.
+        It also depends on how hard the world is: the uplift runs +3.51 to +36.43 across the
+        plausible range of spending pressure, and is +6.29 at the setting where this world's
+        due-date failure rate matches the published record.</li>
       <li><b>The headline batch runs with the richer decline taxonomy switched off.</b> No frozen
         accounts, revoked mandates or limit hits. Switching it on costs between 0 and 13.5 points,
         and every rate in that sweep is a guess.</li>
@@ -870,6 +992,7 @@ footer{padding:56px 0 90px}
     <p class="small" style="margin:0">Built for Razorpay's AI Buildathon, Track 3.</p>
     <div class="flinks">
       <a href="../">Repository and README</a>
+      <a href="08_ARCHITECTURE.md">Architecture — one page</a>
       <a href="06_MODEL_CARD.md">Model card — what ships and what it was never tested on</a>
       <a href="02_RESULTS.md">Full results</a>
       <a href="03_ERRORS.md">Errors found in this project's own work</a>

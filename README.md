@@ -370,8 +370,9 @@ established.
 **Not known.** Real AutoPay decline frequencies. How accurately payday can be
 predicted in India. Whether an aggregator may lawfully use one merchant's
 outcomes to schedule another's debit for the same customer. Whether Razorpay's
-API accepts the request bodies in `agent/execution/razorpay_executor.py`, which
-are derived from documentation and have never been sent.
+API accepts the request bodies in `agent/execution/razorpay_executor.py`: they
+are derived from documentation, and the requests that have been sent were
+rejected at authentication before the body was read.
 
 ## Limitations
 
@@ -411,16 +412,17 @@ work, not here as excuses.
 
 | Path | What is there |
 |---|---|
+| [`docs/08_ARCHITECTURE.md`](docs/08_ARCHITECTURE.md) | **The architecture document.** One page: the layers, the seams, the decision rule, and what the number is conditional on |
 | [`docs/06_MODEL_CARD.md`](docs/06_MODEL_CARD.md) | What ships, what it is worth, and eleven things it was never tested on. Read before quoting a number. |
 | [`docs/02_RESULTS.md`](docs/02_RESULTS.md) | Every result, with its experimental design and bias analysis |
 | [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) | What is being built next, and the validation suite |
-| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Twenty-seven errors found in this project's own work, with the mechanism and the guard added for each |
+| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Thirty errors found in this project's own work, with the mechanism and the guard added for each |
 | [`docs/01_FACTS.md`](docs/01_FACTS.md) | Every external fact, with a source and a confidence tag |
 | [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | The interface between the agent and the simulation |
 | [`NOTES.md`](NOTES.md) | The decision log, append-only and unedited |
 | `agent/` | Policy, constraints, context, execution, LLM layer, audit trail, eval |
 | `sim/` | The simulated world, the belief filters and the 25-gate suite |
-| `scripts/` | Page data, the constraint-layer demonstration, the calibration sweep, git hooks |
+| `scripts/` | Page data, the constraint-layer demonstration, the Razorpay ladder, the calibration sweep, git hooks |
 
 ## Running the tests
 

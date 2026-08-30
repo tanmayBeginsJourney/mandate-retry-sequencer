@@ -766,7 +766,20 @@ class StopRule(Enum):
 class Executor(Protocol):
     """The world. Only `agent.constraints.stage0.Stage0Gate` may hold one."""
 
-    def attempt(self, ref: MandateRef, amount: Rupees, t: int) -> AttemptOutcome:
+    def attempt(self, ref: MandateRef, amount: Rupees, t: int,
+                action_id: str = "") -> AttemptOutcome:
+        """`action_id` is the id Stage 0 already audited this action under.
+
+        It is here so a backend that needs an idempotency key can derive one
+        from the SAME identity the audit trail uses, rather than from wall
+        clock or a fresh uuid -- the whole point of an idempotency key being
+        that a retried request after a crash produces the same key. Backends
+        that do not need it, such as `SimExecutor`, accept and ignore it.
+
+        Defaulted, so an implementation written against the three-parameter
+        version still satisfies the protocol. Added 30 August 2026: Stage 0 had
+        the id on the line above the dispatch and was not passing it.
+        """
         ...
 
 

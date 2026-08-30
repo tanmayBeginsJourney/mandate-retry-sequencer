@@ -31,9 +31,17 @@ WHAT IS TESTED AND WHAT IS NOT. Read this before believing anything below.
   * a transport failure never raises and never fabricates a decline
   * Stage 0 refuses a peak-hour action against this executor without calling it
 
+**Verified against the LIVE API, 30 August 2026** (`scripts/razorpay_ladder.py`,
+transcript in `logs/razorpay_ladder.json`, no key needed):
+  * DNS, TLS 1.3, and the charge URL existing and answering
+  * the shape of a real API-level error envelope -- `code` and `description`
+    alone, no `reason`, no `source`, no `step`, no `metadata`
+  * that this file used to turn that envelope into a customer decline. Error 28.
+
 **NOT TESTED, PENDING CREDENTIALS.** Every line marked `# UNVERIFIED` below.
-No Razorpay key has been used by this project and no request has ever been
-sent. Specifically unverified:
+No Razorpay key has been used by this project and **no request has ever been
+authenticated**, so Razorpay has never read one of our request bodies.
+Specifically unverified:
   * the exact request body Razorpay wants for a recurring UPI charge
   * whether test mode returns populated `error_reason` values on
     `failure@razorpay`, or a single generic one
@@ -104,6 +112,13 @@ API_BASE = "https://api.razorpay.com/v1"
 #: does rather than a strawman we drew.
 VENDOR_RETRY_OFFSETS_DAYS = (0, 1, 2, 3)
 VENDOR_TERMINAL_STATE = "halted"
+
+#: HTTP statuses that mean the credential was refused, so the request never
+#: reached payment processing. 401 is `[VERIFIED]` against the live API --
+#: `scripts/razorpay_ladder.py`, 30 August 2026. 403 is `[GUESS]`, grouped with
+#: it on the same reasoning and never observed. See
+#: `RazorpayExecutor._is_configuration_fault`.
+CONFIG_FAULT_STATUSES = (401, 403)
 
 
 class RazorpayError(RuntimeError):
@@ -244,12 +259,17 @@ class RazorpayExecutor:
                 action_id: str = "") -> AttemptOutcome:
         """Charge one mandate. NEVER RAISES for a decline or a network fault.
 
+        It DOES raise `RazorpayError` for a configuration fault -- a refused
+        credential -- which is that exception's declared job. See
+        `_is_configuration_fault` for why that is not a decline, and error 28
+        in `docs/03_ERRORS.md` for what this code did before 30 August 2026.
+
         `action_id` is optional so the signature still satisfies the `Executor`
-        protocol, which declares three parameters. When Stage 0 passes it the
-        idempotency key is tied to the audited action; without it the key falls
-        back to the mandate and hour, which is still deterministic but is a
-        weaker guarantee across runs. Said out loud because a silently weaker
-        guarantee is worse than a documented one.
+        protocol. Stage 0 passes it, so the idempotency key is tied to the
+        audited action; a caller that omits it falls back to the mandate and
+        hour, which is still deterministic but is a weaker guarantee across
+        runs. Said out loud because a silently weaker guarantee is worse than a
+        documented one.
         """
         b = self._binding(ref)
         key = self.idempotency_key(action_id or f"{ref.uid}@{t}", ref, t)
@@ -277,6 +297,15 @@ class RazorpayExecutor:
             return AttemptOutcome(t=t, code=code_for_reason("deemed_transaction"),
                                   success=False, pending=True,
                                   raw_code="transport_failure")
+        if self._is_configuration_fault(status, payload):
+            err = (payload.get("error") or {})
+            raise RazorpayError(
+                f"Razorpay refused the REQUEST, not the payment: HTTP {status}, "
+                f"code={err.get('code')!r}, description={err.get('description')!r}. "
+                f"No payment was created, so this is not evidence about the "
+                f"customer's balance and must not be recorded as a decline. "
+                f"Check RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET and the request "
+                f"shape. Reproduce the envelope with scripts/razorpay_ladder.py.")
         return self._outcome_from_payment(payload, t)
 
     def _post_with_retries(self, url: str, body: dict, key: str):
@@ -297,6 +326,66 @@ class RazorpayExecutor:
                 if i < self.max_transport_retries:
                     time.sleep(0.4 * (2 ** i))
         return None, {"transport_error": repr(last)}
+
+    @staticmethod
+    def _is_configuration_fault(status, payload: dict) -> bool:
+        """Did Razorpay reject the REQUEST, or report on a PAYMENT?
+
+        THIS DISTINCTION WAS MISSING UNTIL 30 AUGUST 2026 AND IT WAS A DEFECT
+        ON THE MONEY PATH. `attempt` handed every response with a status to
+        `_outcome_from_payment`, which sees no `reason` and no payment `status`
+        and returns the AMBIGUOUS code `U30` with `success=False`. The loop
+        then feeds that to `BeliefBook.record_outcome`, and `w3.py:432`
+        hard-zeroes every balance bin at or above the amount. So a wrong or
+        expired API key would have taught the belief filter that the customer's
+        account was empty -- for every mandate, on every attempt, silently, and
+        because one belief is shared by all `k` mandates of a customer, one bad
+        response corrupts all `k`. It would also have burned all four legal
+        NPCI attempts and let the mandate die. `docs/03_ERRORS.md` error 28.
+
+        Two signals, and the narrow one is the verified one.
+
+        **401 and 403 -- the credential was refused, so no payment was ever
+        created.** `[VERIFIED]` 30 August 2026: an unauthenticated POST to the
+        real recurring-charge endpoint returns exactly
+
+            401 {"error": {"code": "BAD_REQUEST_ERROR",
+                           "description": "Authentication failed"}}
+
+        with no `reason`, no `source`, no `step` and no `metadata`.
+        `scripts/razorpay_ladder.py` sends that request and
+        `logs/razorpay_ladder.json` is the transcript. 403 is grouped with it
+        on the same reasoning and has NOT been observed -- `[GUESS]`.
+
+        **The wider signal, for other 4xx.** `[REPORTED]`, from Razorpay's
+        error documentation read 29 August 2026: a payment-level failure
+        carries `reason`, `source`, `step` and `metadata.payment_id`; an
+        API-level rejection carries `code` and `description` alone. So a 4xx
+        whose error object has neither a `reason` nor a `metadata.payment_id`,
+        and no payment `status`, is treated as a request that never became a
+        payment. This branch is inference, not observation, and it is the one
+        to re-check the day a real key exists.
+
+        **Why raising is the right failure here.** The two ways to be wrong are
+        not symmetric. Raising when we should not stops the run with a message
+        naming the status and the envelope -- loud, immediate, recoverable.
+        Declining when we should not corrupts every belief in the book and
+        reports a plausible-looking recovery rate -- silent, and this project
+        already has an error catalogue full of that shape. A design that
+        returned a new `CONFIG_FAULT` outcome for the loop to count and skip
+        was considered and not taken: it puts new vocabulary in `ports.py` for
+        a case that should stop the run anyway.
+        """
+        if status in CONFIG_FAULT_STATUSES:
+            return True
+        if status is None or status < 400:
+            return False
+        err = payload.get("error") or {}
+        if not err:
+            return False
+        if err.get("reason") or (err.get("metadata") or {}).get("payment_id"):
+            return False                     # a real payment outcome
+        return bool(err.get("code")) and not payload.get("status")
 
     def _outcome_from_payment(self, payload: dict, t: int) -> AttemptOutcome:
         """Normalise one Razorpay payment/error object into our vocabulary.

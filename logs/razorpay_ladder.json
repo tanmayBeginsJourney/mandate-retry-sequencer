@@ -1,0 +1,85 @@
+{
+  "api_base": "https://api.razorpay.com/v1",
+  "generated_by": "scripts/razorpay_ladder.py",
+  "rungs": [
+    {
+      "cert_cn": "*.razorpay.com",
+      "cert_expires": "Nov  9 23:59:59 2026 GMT",
+      "cert_issuer": "DigiCert Inc",
+      "dns": "13.126.111.88",
+      "ok": true,
+      "rung": 0,
+      "tls_version": "TLSv1.3"
+    },
+    {
+      "body": {
+        "error": {
+          "code": "BAD_REQUEST_ERROR",
+          "description": "Authentication failed"
+        }
+      },
+      "elapsed_ms": 108,
+      "http_status": 401,
+      "label": "no credential",
+      "rung": 1,
+      "transport_error": null,
+      "url": "https://api.razorpay.com/v1/payments/create/recurring"
+    },
+    {
+      "body": {
+        "error": {
+          "code": "BAD_REQUEST_ERROR",
+          "description": "Authentication failed"
+        }
+      },
+      "elapsed_ms": 87,
+      "http_status": 401,
+      "label": "fake rzp_test_ key",
+      "rung": 2,
+      "transport_error": null,
+      "url": "https://api.razorpay.com/v1/payments/create/recurring"
+    },
+    {
+      "cases": [
+        {
+          "attempt": {
+            "code": "U30",
+            "pending": false,
+            "raw_code": "unknown",
+            "success": false
+          },
+          "http_status": 401,
+          "label": "no credential",
+          "parser": {
+            "code": "U30",
+            "pending": false,
+            "raw_code": "unknown",
+            "success": false
+          }
+        },
+        {
+          "attempt": {
+            "code": "U30",
+            "pending": false,
+            "raw_code": "unknown",
+            "success": false
+          },
+          "http_status": 401,
+          "label": "fake rzp_test_ key",
+          "parser": {
+            "code": "U30",
+            "pending": false,
+            "raw_code": "unknown",
+            "success": false
+          }
+        }
+      ],
+      "rung": 3
+    },
+    {
+      "reason": "no credentials",
+      "rung": "4-5",
+      "state": "SKIPPED"
+    }
+  ]
+}

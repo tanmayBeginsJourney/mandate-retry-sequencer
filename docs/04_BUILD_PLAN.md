@@ -13,12 +13,12 @@ the README's Limitations section and nowhere else.
 
 | # | Item | Why it ranks here | State |
 |---|---|---|---|
-| **1** | **Architecture doc** | A judged deliverable, never started, and the only one that cannot be recovered by a good README. One page. | not started |
+| ~~**1**~~ | ~~**Architecture doc**~~ | ✅ **DONE 30 August 2026.** `docs/08_ARCHITECTURE.md`, one page: the problem, the division of labour, ADR-005, the layer diagram, the three seams, the decision rule, the stopping rules, the measured result with **both** conditioning parameters as tables, the runtime failure-recovery table, and what is not tested. Linked from the README map and the public page footer. | **DONE** |
 | **2** | **Pitch video, 5 minutes** | Judged deliverable, never started. Open with the errors, then the mechanism, then the demo, then the conditional result. | not started |
-| **3** | **Razorpay TEST MODE — send a real request** | **Turns the project's largest standing limitation into a demo.** Razorpay test mode has its own API keys and test VPAs (`success@razorpay`, `failure@razorpay`); mandate registration is mocked. Today `razorpay_executor.py` has never sent a byte. Even the floor of this ladder — authenticate, take a real 401/400, prove `_outcome_from_payment` parses a real Razorpay error envelope — converts "never tested" into "transport and error parsing validated against the live API". Do it as a ladder so it cannot fail entirely. | researched, not started |
-| **4** | **Put the validation suite on `docs/index.html`** | **The strongest trust argument the project has is missing from the artifact with the widest audience.** The page explains the mechanism well and never shows that the world reproduces published figures it was not fitted to. One table, four rows. | not started |
+| **3** | **Razorpay TEST MODE — send a real request** | **Rungs 0–3 are DONE and they found two defects on the money path** (errors 28 and 29). `scripts/razorpay_ladder.py`, transcript in `logs/razorpay_ladder.json`. **Rungs 4–5 are BLOCKED: there are no Razorpay credentials on this machine.** They need a `rzp_test_` key pair, and rung 5 additionally needs an authorised test mandate — test-mode registration is mocked, so it is obtainable without a bank but not without an account. **This is the only queue item blocked on something outside the repo.** | **floor DONE, 4–5 need a key** |
+| ~~**4**~~ | ~~**Put the validation suite on `docs/index.html`**~~ | ✅ **DONE 30 August 2026.** New section 07, *"Does this world behave like the real one?"*, with the four-row table, why two hits at one calibration are harder to arrange than one, the two misses and their two separate causes, and the fact that better-scoring calibrations were found twice and rejected both times. The old section 07 (limits) is now 08 and the nav carries a `Validation` link. Verified rendered: same figure width as the existing results section, no horizontal overflow, hit/miss tags resolve in both light and dark, no console errors. | **DONE** |
 | **5** | **W9 — non-pooled default + consent-gating** | **Also fixes a false claim in the README**, which said the project already reports the non-pooled configuration and treats pooling as consent-gated. It does neither. And the legal framing got much stronger: the **DPDP Rules 2025, notified 14 November 2025**, operationalise the DPDP Act's consent and purpose-limitation provisions — so consent-gating is the design the statute points at, not a hedge. `solo_pop_pd` exists. | policy arm exists |
-| **6** | **Package the RUNTIME failure-recovery story** | The rubric says *"Failure Recovery: how the applicant identified system failures **at runtime** and engineered graceful fallbacks."* `03_ERRORS.md` answers the *development-time* half brilliantly and the runtime half is scattered: LLM→rule-engine fallback (94.8%), Stage 0 refusal, crashed-worker detection, `LogFileNotEmpty`, idempotent retries, the `pending` outcome. **Nothing collects them in one place.** A presentation gap, not an engineering one. | parts exist, unassembled |
+| **6** | **Package the RUNTIME failure-recovery story** | The rubric says *"Failure Recovery: how the applicant identified system failures **at runtime** and engineered graceful fallbacks."* **Half done 30 August 2026:** `08_ARCHITECTURE.md` now carries a nine-row table collecting them — LLM→rule-engine fallback (94.8%), governance rejection, Stage 0 refusal, outage suppression, the `pending` outcome, idempotent retries, the refused-credential raise (error 28), crashed-worker detection, `LogFileNotEmpty`. **What is left is the judge-facing half:** neither `README.md` nor `docs/index.html` says any of it. | **collected in the arch doc; not on either public artifact** |
 | **7** | **W5 — decline taxonomy ON by default** | Nearly free; `DeclineMix` exists and the headline batch runs it at zero. It is why the LLM does not move the money: with every failure being insufficient funds there is nothing to diagnose. **W7 raised its value** — the agent is measurably blind to a failure class it cannot name. | code exists, switched off |
 | **8** | **The agent is blind to transient failures** | **Measured 30 August, not guessed.** It never presents on the due date, and `w3.BeliefPD.observe` takes no decline code, so a lien and an empty account give the identical posterior. It waits for payday on money already in the account — **15.1%** of transient-only cycles collected on the first legal day, **48.4%** over ten days. Fix is a design choice: let the belief condition on the decline family, or add a "re-present sooner" intervention. **Neither puts the LLM on the timing path.** | diagnosed, not built |
 | **9** | **A doc gate — stop retractions from outliving their retraction** | The 30 August session believed it had swept every copy of a retracted claim and had missed three, including one on the public page. `sim/verify_brief.py` protects exactly one document. A grep-based gate over a small list of retracted sentences would have caught six of the eight defects found on 30 August. | not started |
@@ -37,6 +37,17 @@ runs short, a judge sees the architecture doc, the video, the README and the
 page — not the queue.
 
 **Recently closed, so nobody re-opens them:**
+
+- **The Razorpay ladder, rungs 0–3.** Done 30 August 2026.
+  `scripts/razorpay_ladder.py` sends real requests through the shipped
+  transport with no credentials and records what comes back.
+  **It found two defects on the money path and one in the test file**, all
+  fixed: a refused credential was being recorded as a declined customer
+  (**error 28**), Stage 0 never passed the `action_id` its own trail audited so
+  the real backend's idempotency key was always the weaker fallback (**error
+  29**), and `test_razorpay_mapping.py` advertised a `--mutants` runner that did
+  not exist (**error 30**). New gates **R9** and **R10**, and `--mutants` is now
+  real at 3/3. Parity still bit-exact 24/24.
 
 - **W7 — transient failures.** Done, **6/8 pre-registered**, and the two that
   broke are worth more than the six that held. `p_transient` + `transient_h` in
@@ -465,7 +476,7 @@ calibration gate pointed at the wrong object. It is now frozen at tag
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the errors** (there are **twenty-seven**; see `03_ERRORS.md`). Lead
+- **Open with the errors** (there are **thirty**; see `03_ERRORS.md`). Lead
   with error 5, the broken oracle, then error 7, the ML result that reversed,
   then **error 11** — the mutation test that graded itself, found by an
   outside reader against a suite built specifically to prevent it. Error 11 is

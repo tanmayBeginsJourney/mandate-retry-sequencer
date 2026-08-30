@@ -119,6 +119,7 @@ credentials, no model download. Only `--llm` needs a key.
 | Every external fact with a source tag | `docs/01_FACTS.md` |
 | Errors found in this project's own work | `docs/03_ERRORS.md` |
 | The interface between agent and simulation | `docs/07_AGENT_BRIEF.md` |
+| The architecture document, one page | `docs/08_ARCHITECTURE.md` |
 | The append-only decision log | `NOTES.md` |
 | The rules you must follow | `CLAUDE.md` |
 
@@ -366,8 +367,9 @@ The original text, kept as the record:
 - [x] Stopping rules explicit and demonstrable
 - [x] One failure handled gracefully, on camera —
       `scripts/prove_stage0_refuses.py` is the one to film
-- [ ] Architecture doc, one page
-- [ ] 5-minute pitch video, opening with the errors (there are **twenty-seven**)
+- [x] **Architecture doc, one page** — `docs/08_ARCHITECTURE.md`, written
+      30 August 2026. Linked from the README map and the public page's footer.
+- [ ] 5-minute pitch video, opening with the errors (there are **thirty**)
 - [x] `NOTES.md` full of real mess
 - [x] A public page — `docs/index.html`, static, Pages from `/docs`.
       **Rewritten 29 August; no longer a draft.**

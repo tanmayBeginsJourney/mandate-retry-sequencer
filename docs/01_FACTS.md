@@ -178,9 +178,25 @@ anything the project reports.
 
 Read directly from Razorpay's public documentation on 29 August 2026, while
 building `agent/execution/razorpay_executor.py`. **No API key has been used by
-this project and no request has ever been sent**, so everything here is
-documentation read, not behaviour observed. That distinction is the whole
-difference between `[VERIFIED]` and "it works".
+this project and no request has ever been AUTHENTICATED**, so everything in
+this section is documentation read, not behaviour observed. That distinction is
+the whole difference between `[VERIFIED]` and "it works".
+
+⚠️ **One thing here IS now behaviour observed, added 30 August 2026.**
+`scripts/razorpay_ladder.py` POSTs the real recurring-charge endpoint with no
+credential. It returns
+
+```
+401 {"error": {"code": "BAD_REQUEST_ERROR", "description": "Authentication failed"}}
+```
+
+`[VERIFIED]` — transcript in `logs/razorpay_ladder.json`, reproducible with no
+account. **An API-level rejection carries `code` and `description` and nothing
+else: no `reason`, no `source`, no `step`, no `metadata`.** That is the fact
+that distinguishes it from a payment-level decline, and reading it off the wire
+found errors 28 and 29. The claim that a *payment-level* failure carries
+`reason`, `source`, `step` and `metadata.payment_id` remains `[REPORTED]` from
+the docs — it needs a key to observe.
 
 - `[VERIFIED]` **Razorpay's documented retry schedule for a failed subscription
   charge is T, T+1, T+2, T+3, after which the subscription moves to `halted`.**

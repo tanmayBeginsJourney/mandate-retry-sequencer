@@ -1,4 +1,4 @@
-# 03 — THE TWENTY-SEVEN ERRORS
+# 03 — THE THIRTY ERRORS
 
 **Errors 1-18 all made the project look BETTER than it was.** Errors 19-23,
 added 29 August 2026, break the streak: 19 and 23 were latent defects that had
@@ -876,7 +876,7 @@ built on top of it.
 
 ---
 
-## The tally after twenty-seven
+## The tally after twenty-seven — SUPERSEDED, see "The tally after thirty" at the end
 
 The seven guardrails that measured nothing are unchanged (`assert violations
 == 0`; peak hours unrepresentable; oracle approval ~100%; **M1**; **M4**; the
@@ -915,3 +915,163 @@ the ones a careful self-audit missed.** Errors 11-13 came from an outside
 reader with `docs/` and half a day. Error 23 came from a different model.
 Errors 24 and 25 came from checks written to disagree with their own author.
 Nothing in this list was found by re-reading code and feeling confident.
+
+---
+
+# Errors 28-30 — found 30 August 2026, sending the first real Razorpay request
+
+**All three were found by one action: pointing the shipped transport at the
+real API with no credentials and reading what came back.** No key, no account,
+no money, about ninety seconds of network time. Every offline gate in
+`test_razorpay_mapping.py` was green before and after.
+
+**28. An authentication failure was recorded as a statement about the
+customer's bank balance.**
+
+`RazorpayExecutor.attempt` passed every response that had an HTTP status to
+`_outcome_from_payment`. That function looks for `error.reason` and for a
+payment `status`. A real Razorpay authentication failure has neither:
+
+```
+401 {"error": {"code": "BAD_REQUEST_ERROR", "description": "Authentication failed"}}
+```
+
+so the parser fell through to its last branch and returned the AMBIGUOUS code
+`U30` with `success=False, pending=False`. **That is a decline.** `agent/loop.py`
+hands it to `BeliefBook.record_outcome`, and `w3.py:432` hard-zeroes every
+balance bin at or above the amount.
+
+*What it would have cost:* a wrong, expired or revoked API key would have
+taught the belief filter that the customer's account was empty — for every
+mandate, on every attempt, silently. **One belief is shared by all `k` mandates
+of a customer**, which is the project's central claim, so one bad response
+corrupts all `k` at once. All four legal NPCI attempts would have burned and
+every mandate would have died at the cap. The run would not have crashed. It
+would have printed a plausible recovery rate for a world in which nothing had
+been asked of anybody.
+
+*How it was caught:* by sending the request. Nothing else would have done it —
+and specifically, **the offline gates could not have.** Every fixture in
+`test_razorpay_mapping.py` was a *payment object* transcribed from Razorpay's
+docs, `{"status": "failed", "error": {"reason": ...}}`. Not one represented an
+*API-level* rejection, because nobody had ever seen one. The suite was total
+over the vocabulary it knew and blind to the vocabulary it had never met.
+
+*Mechanism:* the file had already reasoned about this exact hazard one level
+down. Design decision 2 in its own docstring says a transport failure must be
+`pending` and never a decline, because *"returning `Z9` would tell the belief
+filter the account was empty — which is a lie about the customer derived from a
+fact about our network."* **The same sentence applies word for word to a
+refused credential.** The author thought about the socket and did not think
+about the key. A principle stated for one instance and not generalised.
+
+*Guard:* `RazorpayExecutor._is_configuration_fault` splits "Razorpay rejected
+the REQUEST" from "Razorpay reported on a PAYMENT", and `attempt` raises
+`RazorpayError` — already declared as the home for configuration faults —
+rather than returning an outcome. Gate **R9** asserts it against the envelope
+captured from the wire, which is the only fixture in that file Razorpay wrote,
+and its named mutant `blind` restores the old behaviour and prints the `U30`
+decline so the defect is visible in the test output. R9c and R9d prove the fix
+does not overreach: a documented payment decline is still a decline and a
+captured 200 is untouched.
+
+*The asymmetry that decided the fix:* raising when we should not stops the run
+with a message naming the status and the envelope. Declining when we should not
+corrupts every belief and reports a number that looks fine. Loud and wrong is
+recoverable; quiet and wrong is what this catalogue is made of.
+
+---
+
+**29. A guarantee documented in the callee and never wired at the caller.**
+
+`RazorpayExecutor.attempt`'s docstring: *"When Stage 0 passes it the idempotency
+key is tied to the audited action; without it the key falls back to the mandate
+and hour, which is still deterministic but is a weaker guarantee across runs."*
+
+**Stage 0 never passed it.** `stage0.py:171` read
+
+```python
+outcome = self._executor.attempt(a.ref, a.amount, a.target_t)
+```
+
+with `a.action_id` on the line above, already computed, already written into
+the audit trail as the identity of that money action. So every idempotency key
+the real backend could ever have produced was the weaker fallback, and the
+stronger guarantee existed only in prose — in a file whose stated purpose is
+that a retried request after a crash cannot become a second debit.
+
+*How it was caught:* while writing the test for error 28, by asking what
+`action_id` a real dispatch would actually carry.
+
+*Mechanism:* **a property tested at the callee and never at the caller.** Gate
+R5 checks key derivation thoroughly — stable, collision-free, right shape — by
+calling the executor **directly**. `SimExecutor` has no idempotency to protect,
+so the one integration path that exercises Stage 0 could never notice. The
+seam between two correct components, which is where errors 19 and 21 also
+lived.
+
+*Guard:* `ports.Executor.attempt` now carries `action_id: str = ""`,
+`SimExecutor` accepts and ignores it, Stage 0 passes it. Gate **R10** puts a
+real `MoneyAction` through `Stage0Gate` and asserts the key the transport saw
+equals `idempotency_key(a.action_id, ...)` and is **not** the fallback; its
+mutant `drop` reproduces the old call and turns R10b and R10c red. Parity with
+the frozen harness is still bit-exact 24/24 — an ignored argument cannot change
+a draw.
+
+---
+
+**30. A test file that advertised a mutation runner it did not have.**
+
+`test_razorpay_mapping.py`, line 12, in capitals: *"EVERY GATE CARRIES A NAMED
+MUTANT AND `--mutants` RUNS THEM."* There was no `--mutants` flag. Gates R2-R8
+run their mutants inline, so their claims were sound; **R1 carried a `mutant`
+parameter that nothing anywhere ever passed**, and the two gates written for
+errors 28 and 29 were about to be added in the same shape.
+
+*How it was caught:* by trying to use the advertised feature.
+
+*Mechanism:* **the measuring apparatus describing itself wrongly** — errors 11,
+12 and 13 exactly, and the fifth time the defect has been in the apparatus
+rather than in the product. A sentence in a docstring is not a check, and this
+project has now written that down four times and been caught by it five.
+
+*Guard:* `--mutants` is real. It runs each named mutant in isolation and
+requires it to turn at least one clean check red; a mutant that breaks nothing
+is reported **VACUOUS** and fails the run, which is the same rule `sim/gate.py`
+applies. **3/3 trip.** The fix was to make the sentence true, never to delete
+it — deleting it would have removed the record that it was once false.
+
+---
+
+## The tally after thirty
+
+Errors 28-30 add these shapes:
+
+| shape | instance |
+|---|---|
+| a fault in OUR configuration recorded as evidence about the WORLD | **28** (401 as a decline) |
+| a principle stated for one instance and not generalised to its twin | **28** (socket considered, credential not) |
+| a guarantee tested at the callee and never at the caller | **29** (the unpassed `action_id`) |
+| a test file documenting a capability it does not have | **30** (the missing `--mutants`) |
+
+**The line worth keeping from this batch.** Errors 28 and 29 sat behind a suite
+that was *total over the vocabulary it knew*: 111 reasons mapped, every
+dangerous case routed, every mutant tripping, 53/53 green. It had never seen a
+response Razorpay wrote. **One unauthenticated request — no key, no account, no
+money, ninety seconds — found two defects on the money path that eight offline
+gates could not.** That is the same lesson as errors 11-13 in a different
+costume: the cheapest outside contact beats another pass of self-audit.
+
+**And the direction is back to normal.** The 30 August doc audit found ten
+defects that all made the project look *worse* than it was. These three make it
+look **better** than it was, which is the direction `CLAUDE.md` warns about and
+the direction most of this catalogue runs in.
+
+⚠️ **And the count is still the point.** Thirty errors, and **the ones found by
+an outsider, by a deliberately adversarial check, or by contact with something
+this project did not write are consistently the ones a careful self-audit
+missed.** Errors 11-13 came from an outside reader with `docs/` and half a day.
+Error 23 came from a different model family. Errors 24 and 25 came from checks
+written to disagree with their own author. Errors 28 and 29 came from a server
+in Mumbai answering a request. **Nothing in this list was found by re-reading
+code and feeling confident.**

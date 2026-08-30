@@ -5329,3 +5329,334 @@ challenge it. The README had it right all along ("the belief filter decides
   claims in the flattering direction would have to start somewhere else, and I
   did not run one. **That is the next outside read's job**, and it is a better
   use of a stranger than another sweep.
+
+---
+
+# 2026-08-30 (later) — PRE-REGISTRATION: the Razorpay ladder, written before a single byte is sent
+
+Queue item 3. `agent/execution/razorpay_executor.py` has existed since
+29 August and **has never sent a request**. Its own docstring says so, and
+`06_MODEL_CARD.md` §6b-2 draws the line between what is gated offline and what
+is untested. The queue's instruction was to climb it as a ladder so it cannot
+fail entirely.
+
+## What is available, and what is not
+
+**There are no Razorpay credentials on this machine.** `.env` carries
+`ZAI_API_KEY` and nothing else. So the rungs split:
+
+| rung | needs | state |
+|---|---|---|
+| **0** DNS + TLS to `api.razorpay.com` | nothing | runnable |
+| **1** unauthenticated POST to the real recurring-charge endpoint | nothing | runnable |
+| **2** POST with a syntactically valid but fake `rzp_test_` key | nothing | runnable |
+| **3** feed both REAL envelopes through `_outcome_from_payment` | nothing | runnable |
+| 4 authenticate successfully, `GET` an entity, take a 200 | a `rzp_test_` key | **blocked** |
+| 5 charge `success@razorpay` / `failure@razorpay` | a key + an authorised test mandate | **blocked** |
+
+Rungs 0–3 are the floor the queue described: *"authenticate, take a real
+401/400, prove `_outcome_from_payment` parses a real Razorpay error envelope."*
+They are runnable with no account, and they are what this entry pre-registers.
+**Rungs 4 and 5 stay untested and will be reported as untested.**
+
+Sending an unauthenticated POST moves no money and touches no account. It is
+rejected at the authentication layer before the body is read.
+
+## Pre-registered, before anything is sent
+
+| id | prediction | falsifying band |
+|---|---|---|
+| **RZ-1** | rung 1 returns **HTTP 401** | any other status. A 400 or 403 is still an auth-class rejection with a real envelope, but I am registering 401 and will call anything else a BREAK |
+| **RZ-2** | the body is JSON with the error object nested under a top-level `"error"` key, carrying at least `code` and `description` | a non-JSON body, an empty body, or error fields sitting at the top level |
+| **RZ-3** | the error object carries **no `reason` that matches any of the 110 published payment reasons** — an authentication failure is not a payment decline | a populated decline reason such as `payment_failed` or an NPCI-shaped code |
+| **RZ-4** | **`_outcome_from_payment` mishandles it.** It returns a customer DECLINE — `success=False, pending=False` — for what is a configuration fault, because `attempt()` never inspects the HTTP status: it passes the payload to the parser for every status that is not `None` | the parser returning `pending=True`, or `attempt()` raising `RazorpayError`, or anything else that is not a silent decline |
+| **RZ-5** | the real envelope's **shape matches the hand-written fixtures** already in `test_razorpay_mapping.py`, so rungs 1–3 validate transport, TLS, the URL and status handling — **and not** the parser's shape assumptions | a materially different nesting or different field names, which would mean the offline fixtures were wrong all along |
+
+## RZ-4 is the one worth watching
+
+If it holds it is a defect on the money path, and a nasty one: a wrong,
+expired or revoked API key would be reported to the belief filter as *"this
+customer's account is empty"*, for every mandate, on every attempt, silently.
+`w3.py:432` hard-zeroes every balance bin at or above the amount on a failure,
+so the filter would not merely record a miss — it would learn a false fact
+about the customer from a fact about our own configuration. That is the exact
+shape of design decision 2 in the executor's own docstring, which reasoned
+carefully about *transport* failures and did not consider *auth* failures.
+
+## How this is biased toward the answer I want
+
+**I want RZ-4 to hold, because a found defect is worth more to this project
+than a clean pass, and that is the wrong incentive to be carrying into a
+measurement.** Registering the consequence now: **if RZ-4 BREAKS — if the
+parser handles a 401 correctly — the honest report is "transport validated, no
+defect found", the floor rung is worth less than I hoped, and I will write it
+up that way rather than hunting for a different envelope that does break it.**
+
+**RZ-5 is registered against my own interest.** I expect the shape to match,
+and a match makes this rung *smaller*: it means the offline fixtures were
+already faithful and the only genuinely new information is transport, URL and
+status. I would rather report a small true result than inflate it, so the
+prediction is written down before the answer is known.
+
+**The design's own weakness, stated up front.** Two unauthenticated requests
+are a sample of two, against one endpoint, at one moment. They cannot tell us
+anything about the request *body* — Razorpay never reads it — so the largest
+standing unknown in that file, *"the exact request body Razorpay wants for a
+recurring UPI charge"*, is untouched by this and stays untested. Anyone
+reading the result should take it as "the transport and the error path are
+real" and nothing more.
+
+---
+
+# 2026-08-30 (later) — THE LADDER RAN. 4/5 HELD, AND IT FOUND TWO DEFECTS ON THE MONEY PATH
+
+`python scripts/razorpay_ladder.py` — transcript in `logs/razorpay_ladder.json`.
+
+**The executor has now sent a request.** Rung 0 resolved `api.razorpay.com` and
+completed a TLS 1.3 handshake against a DigiCert-issued `*.razorpay.com`
+certificate. Rungs 1 and 2 POSTed the real recurring-charge URL, once with an
+empty credential and once with a well-formed but fake `rzp_test_` key. Both
+came back in under 110 ms:
+
+```
+    status 401
+    body   {
+      "error": {
+        "code": "BAD_REQUEST_ERROR",
+        "description": "Authentication failed"
+      }
+    }
+```
+
+## The scorecard against what was registered
+
+| id | prediction | outcome |
+|---|---|---|
+| **RZ-1** | HTTP 401 | **HELD.** 401 on both rungs |
+| **RZ-2** | JSON, error nested under a top-level `"error"`, with `code` and `description` | **HELD**, exactly |
+| **RZ-3** | no `reason` matching a published payment reason | **HELD**, and more strongly than registered: there is no `reason` key at all, and no `source`, `step` or `metadata` either |
+| **RZ-4** | the parser mishandles it and returns a silent customer decline | **HELD.** `_outcome_from_payment` → `code='U30' success=False pending=False raw_code='unknown'`, and `attempt()` returns the same |
+| **RZ-5** | the real envelope's shape matches the hand-written fixtures | **BROKE** |
+
+**RZ-5 is the one I registered against my own interest, and losing it makes the
+rung bigger, not smaller.** Every fixture in `test_razorpay_mapping.py` was a
+*payment object* — `{"status": "failed", "error": {"reason": ...}}` — and the
+real envelope is an *API-level error*: no `status`, no `reason`, a `code` and a
+`description`. The nesting under `"error"` matched, which is what I was
+predicting on, but the field names did not, and **no fixture in the file had
+ever represented an API-level rejection at all.** That absence is precisely why
+the defect below survived the offline gates. I predicted the small result and
+got the large one; recording it that way round because the prediction is on the
+record above.
+
+## Defect 1 — a refused CREDENTIAL was recorded as a declined CUSTOMER
+
+`attempt()` handed every response with a status to `_outcome_from_payment`,
+which looks for `error.reason` and a payment `status`, finds neither, and
+returns the AMBIGUOUS code `U30` with `success=False, pending=False`. That is a
+decline. The loop feeds it to `BeliefBook.record_outcome`, and `w3.py:432`
+hard-zeroes every balance bin at or above the amount.
+
+So a wrong, expired or revoked API key would have taught the belief filter
+**that the customer's account was empty** — for every mandate, on every
+attempt, silently. And because one belief is shared by all `k` mandates of a
+customer, which is the whole moat, **one bad response corrupts all `k` at
+once.** It would also have burned all four legal NPCI attempts and let each
+mandate die at the cap. A run against a misconfigured key would not have
+crashed; it would have produced a plausible-looking, entirely fictional
+recovery rate.
+
+The file had reasoned carefully about exactly this hazard one level down.
+Design decision 2 in its own docstring says a transport failure must be
+`pending` and never a decline, because *"returning Z9 would tell the belief
+filter the account was empty — which is a lie about the customer derived from a
+fact about our network."* **The same sentence applies word for word to an
+authentication failure, and the case was not considered.** The author thought
+about the socket and not about the credential.
+
+*Fixed.* `_is_configuration_fault(status, payload)` splits "Razorpay rejected
+the REQUEST" from "Razorpay reported on a PAYMENT", and `attempt()` raises
+`RazorpayError` — which that exception's docstring already declared as its job
+— instead of returning an outcome. 401/403 is the narrow rule and 401 is now
+`[VERIFIED]`. A wider rule covers other 4xx whose error object carries neither
+a `reason` nor a `metadata.payment_id`; that half is `[REPORTED]` from the docs
+and is the thing to re-check the day a real key exists.
+
+**Why raising rather than a new outcome kind.** The two ways to be wrong are
+not symmetric. Raising when we should not stops the run with a message naming
+the status and the envelope — loud, immediate, recoverable. Declining when we
+should not corrupts every belief in the book and reports a number that looks
+fine — silent, and this catalogue is already full of that shape. A
+`CONFIG_FAULT` outcome for the loop to count and skip was considered and not
+taken: it adds vocabulary to `ports.py` for a case that should stop the run
+anyway. If that trade looks wrong, it is one function to change.
+
+## Defect 2 — the idempotency guarantee the file documents was never in force
+
+Found while writing the test for defect 1, not by the ladder.
+
+`RazorpayExecutor.attempt`'s docstring says *"When Stage 0 passes it the
+idempotency key is tied to the audited action; without it the key falls back to
+the mandate and hour, which is still deterministic but is a weaker guarantee."*
+**Stage 0 never passed it.** `stage0.py:171` called
+`self._executor.attempt(a.ref, a.amount, a.target_t)` — with `a.action_id`
+sitting on the line above, already computed, already written into the audit
+trail. So every idempotency key the real backend would ever have produced was
+the weaker fallback, and the stronger guarantee existed only in prose.
+
+Nothing caught it because `SimExecutor` has no idempotency to protect and the
+gate R5 that checks key derivation calls the executor **directly**, never
+through Stage 0. A guarantee tested at the callee and never at the caller.
+
+*Fixed.* `ports.Executor.attempt` now carries `action_id: str = ""`,
+`SimExecutor` accepts and ignores it, and Stage 0 passes it. Gate **R10** puts
+a real `MoneyAction` through `Stage0Gate` and asserts the key the transport
+saw equals `idempotency_key(a.action_id, ...)` and is *not* the fallback.
+Parity is still **bit-exact 24/24** — an ignored argument cannot change a draw.
+
+## Defect 3 — the test file advertised a mutation runner it did not have
+
+`test_razorpay_mapping.py`'s docstring: *"EVERY GATE CARRIES A NAMED MUTANT AND
+`--mutants` RUNS THEM."* There was no `--mutants` flag. Gates R2–R8 run their
+mutants inline so their claims were sound, but R1 carried a `mutant` parameter
+nothing ever passed, and the two gates I had just written were about to join it.
+
+This is the errors 11–13 family again — the measuring apparatus describing
+itself wrongly — and the fix is the one rule 1a implies: **make the sentence
+true rather than delete it.** `--mutants` now runs each named mutant in
+isolation and requires it to turn at least one clean check red, reporting
+`VACUOUS` and failing the run if it does not. **3/3 trip.** The R9/blind mutant
+prints the pre-fix behaviour verbatim, so the defect is in the test output
+rather than only in this file.
+
+## What this rung does NOT establish, stated plainly
+
+Rungs 1 and 2 are rejected at the authentication layer, so **Razorpay never
+read the request body.** The largest standing unknown in that file — whether
+the recurring-charge body shape is right — is untouched and stays untested.
+Rungs 4 and 5 need a `rzp_test_` key that does not exist on this machine; the
+script prints them as SKIPPED and they are **not** counted as passes.
+
+What moved is narrower and real: the URL exists, TLS works, the shipped
+`_UrllibTransport` sends and parses a genuine response, the error envelope's
+shape is now recorded from the wire instead of transcribed from a doc page, and
+the money path no longer converts our own misconfiguration into a fact about a
+customer.
+
+## How this could be biased toward the answer I wanted
+
+**I said before running that I wanted RZ-4 to hold, and it held.** So the
+honest check is whether I would have found the defect had the prediction gone
+the other way — and I would not have looked, because a clean parse is a
+non-event. The defect was found by the *envelope*, not by my prediction: any
+first real request would have surfaced it, which is the argument for the rung
+existing rather than for the reasoning that preceded it.
+
+**A sample of two, at one moment, against one endpoint.** Both rungs produced
+the identical envelope, which is weak evidence that it is stable and no
+evidence at all about any other status code. The 403 half of
+`CONFIG_FAULT_STATUSES` is `[GUESS]` and has never been seen.
+
+**The wider 4xx branch is inference dressed as a rule.** It rests on the
+documented claim that a payment-level failure always carries a `reason`. If
+Razorpay ever declines a payment with a bare `code`/`description`, this fix
+converts a decline into a crash. That is the safer direction of the two, and it
+is still a guess, and it is written into the code as `[REPORTED]` rather than
+as fact.
+
+---
+
+# 2026-08-30 (later still) — THE ARCHITECTURE DOC, AND THE VALIDATION SUITE REACHES THE PUBLIC PAGE
+
+## Queue item 1 — `docs/08_ARCHITECTURE.md`
+
+Written. One page: the problem, the division of labour, ADR-005 stated as a
+decision with the mechanism that enforces it, a layer diagram, the three seams
+that carry the weight, the decision rule written out as code, the eight named
+stopping rules, where the language model earns its place and where it does not,
+the measured result, **both** conditioning parameters as tables, the validation
+suite, a runtime failure-recovery table, and what is not tested.
+
+**Every number in it was checked against another file before the file was
+installed**, mechanically: eighteen figures, each corroborated in at least one
+other document. That check caught a real hazard.
+
+**The 3.51 collision.** `CLAUDE.md` says the uplift *"runs +3.51 → +36.43
+across the plausible range of world hardness"*. The `payday_err` sweep in
+`02_RESULTS.md` reports **−3.51** at ±1 day, where the heuristic wins, and
+**+36.43** at ±7. Two sweeps, two identical-looking pairs. They are not a
+duplication: the `pop_spend` sweep genuinely reads +3.51 at 0.60 and the
+`payday_err` sweep genuinely reads −3.51 at ±1, and both are internally
+consistent with their own columns (99.98 − 96.48 = 3.50; 95.73 − 99.24 =
+−3.51). The **+36.43** cell *is* shared, correctly — it is the same
+configuration appearing in both tables.
+
+So nothing is wrong, but a judge cross-reading the two tables would see the same
+number twice with opposite signs and reasonably suspect an error. The
+architecture doc prints both tables in full, with the scripts that produce them
+named separately (`sim/headline.py` and `scripts/spend_sweep.py`), and says the
+coincidence out loud in one parenthetical.
+
+**A near-miss caught by the same check.** My first draft put a "due-date
+failure" column on the spend-sweep table, filled with **67.60%** from the
+4-population batch report. The recovery study measures **68.71%** at the same
+`pop_spend` over 8 populations. Those are two experiments and the column would
+have silently mixed them — exactly the error the README fixed on 29 August. The
+column is gone; the two due-date figures are quoted only where their own
+experiment is named.
+
+## Queue item 4 — the validation suite on `docs/index.html`
+
+The strongest trust argument in the project was on the README and in `docs/`
+and **not** on the artifact with the widest audience. It is now section 07.
+Four rows, the two hits marked as hits and the two misses marked as misses, the
+calibration and the reproducing command stated, and `not gate-protected` on the
+caption like every other table on that page.
+
+Three things went on it beyond the table, because the table alone invites the
+wrong reading:
+
+- **why two hits are worth more than one.** They are properties of *different
+  parts* of the model — one of the world, one of a baseline policy running
+  inside it — agreeing with the outside record at the same setting.
+- **the two misses have two separate causes.** That was once written down as
+  one cause, checked, and corrected; the page says the corrected version.
+- **better-scoring calibrations were found twice and rejected both times.**
+  This is the part that is actually persuasive and it existed nowhere public.
+  A reader's first thought on seeing 2/4 is "why not tune it until it's 4/4",
+  and the answer — that we tried, twice, and each time the tuning broke a
+  target it had not been fitted to — is a better argument for the world than
+  4/4 would have been.
+
+The section ends by saying what it cannot establish: vendor marketing material,
+not ground truth, four targets is a small suite, five more are specified and
+unbuilt, and a world can reproduce an aggregate while being wrong about the
+mechanism underneath it.
+
+**Verified rendered rather than assumed.** Served over HTTP and audited in the
+DOM: the new figure is 1016px wide, identical to the existing results figure,
+so the class reuse is exact; no horizontal overflow at the table or the body;
+`tag good` and `tag warn` resolve to real colours in **both** light and dark;
+no console errors; sections renumber cleanly 01-08 and the nav gained one link.
+**The screenshot pipeline timed out repeatedly on this page** — it is ~12,500px
+tall with several heavy inline SVGs — so this was checked by measuring the
+rendered geometry, not by looking at a picture of it. Saying so because "I
+verified it visually" would not be true.
+
+## Also fixed while there: two stale claims on the public page
+
+Both are the retraction-propagation failure again, and both were on the
+judge-facing artifact.
+
+- **"The headline is conditional on one parameter."** It is conditional on two,
+  and `CLAUDE.md` has said so since 29 August — including the sentence *"Both
+  artifacts now say so"*, which was **false for `index.html`**. The page now
+  carries the `pop_spend` range and the +6.29 figure alongside the payday one.
+- **"Whether Razorpay's API accepts the request bodies written here — none has
+  been sent."** Requests have now been sent. The precise claim survives and is
+  now stated precisely: they are rejected at authentication before the body is
+  read.
+
+That is the second consecutive session to find a stale claim on `index.html`
+that a grep would have caught. **The doc gate is queue item 9 and it keeps
+earning its position.**
