@@ -481,7 +481,7 @@ work, not here as excuses.
 | [`docs/06_MODEL_CARD.md`](docs/06_MODEL_CARD.md) | What ships, what it is worth, and eleven things it was never tested on. Read before quoting a number. |
 | [`docs/02_RESULTS.md`](docs/02_RESULTS.md) | Every result, with its experimental design and bias analysis |
 | [`docs/04_BUILD_PLAN.md`](docs/04_BUILD_PLAN.md) | What is being built next, and the validation suite |
-| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Thirty errors found in this project's own work, with the mechanism and the guard added for each |
+| [`docs/03_ERRORS.md`](docs/03_ERRORS.md) | Thirty-two errors found in this project's own work, with the mechanism and the guard added for each |
 | [`docs/01_FACTS.md`](docs/01_FACTS.md) | Every external fact, with a source and a confidence tag |
 | [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | The interface between the agent and the simulation |
 | [`NOTES.md`](NOTES.md) | The decision log, append-only and unedited |

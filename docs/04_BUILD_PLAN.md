@@ -496,7 +496,7 @@ calibration gate pointed at the wrong object. It is now frozen at tag
 - One page. Compress the research here. This is where Notion gets distilled.
 
 ## Day 8 — pitch video
-- **Open with the errors** (there are **thirty**; see `03_ERRORS.md`). Lead
+- **Open with the errors** (there are **thirty-two**; see `03_ERRORS.md`). Lead
   with error 5, the broken oracle, then error 7, the ML result that reversed,
   then **error 11** — the mutation test that graded itself, found by an
   outside reader against a suite built specifically to prevent it. Error 11 is

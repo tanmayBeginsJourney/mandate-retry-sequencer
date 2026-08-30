@@ -379,7 +379,7 @@ The original text, kept as the record:
       `scripts/prove_stage0_refuses.py` is the one to film
 - [x] **Architecture doc, one page** — `docs/08_ARCHITECTURE.md`, written
       30 August 2026. Linked from the README map and the public page's footer.
-- [ ] 5-minute pitch video, opening with the errors (there are **thirty**)
+- [ ] 5-minute pitch video, opening with the errors (there are **thirty-two**)
 - [x] `NOTES.md` full of real mess
 - [x] A public page — `docs/index.html`, static, Pages from `/docs`.
       **Rewritten 29 August; no longer a draft.**

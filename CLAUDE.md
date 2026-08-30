@@ -74,7 +74,7 @@ interesting to a judge?"** — not "does this fit before Friday."
 
 The single most important thing about this project:
 
-> **It has found thirty significant errors in its own work. Almost every one
+> **It has found thirty-two significant errors in its own work. Almost every one
 > made the project look BETTER than it was.** That is not coincidence. It is
 > what happens when the same party builds the measuring stick and the thing
 > being measured. You are now that party. Behave accordingly.
@@ -273,7 +273,7 @@ docs/
                        (start at 07_AGENT_BRIEF.md if you are building the agent)
   01_FACTS.md          every external fact, with source and confidence
   02_RESULTS.md        gated simulation results. See also 06_MODEL_CARD.md.
-  03_ERRORS.md         THIRTY errors, with mechanism + guard. Pitch material.
+  03_ERRORS.md         THIRTY-TWO errors, with mechanism + guard. Pitch material.
   04_BUILD_PLAN.md     what is left, dated
   05_TEST_DESIGN.md    test philosophy, written BEFORE the harness on purpose
   06_MODEL_CARD.md     WHAT SHIPS. Read this before touching sim/ or agent/.

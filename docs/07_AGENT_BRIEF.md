@@ -139,7 +139,7 @@ Judged on, among other things — `[REPORTED]`, see `01_FACTS.md`:
 
 Applicants are explicitly asked to **explain what broke during development and
 how they recovered**. That is why `NOTES.md` and `03_ERRORS.md` exist and why
-they are judged deliverables, not housekeeping. `03_ERRORS.md` has **thirty**
+they are judged deliverables, not housekeeping. `03_ERRORS.md` has **thirty-two**
 entries with mechanisms and guards. **Open the pitch with them.** Errors 11-13
 were found by an outside reader checking `docs/` against `sim/` on 28 Aug --
 all three in the measuring apparatus, all three past a suite built to stop
@@ -477,7 +477,7 @@ That is how the last four defects were found.
 1. `06_MODEL_CARD.md` — what ships, what it is worth, what it was never tested
    on. Especially §3, before you quote any number to anyone.
 2. `CLAUDE.md` — the ten hard rules, the environment, the numbers rule.
-3. `03_ERRORS.md` — thirty errors with mechanisms. Pitch material.
+3. `03_ERRORS.md` — thirty-two errors with mechanisms. Pitch material.
 4. `01_FACTS.md` — every external fact with its source tag. **Nothing outside
    this file is established**, and the legality of the cross-merchant moat is
    still `[GUESS]`.
@@ -629,7 +629,7 @@ that bound every LLM number: `06_MODEL_CARD.md` section 7.**
 `agent/eval/injection.py:diagnosis_has_temporal_field()` asserts it by
 inspecting the type, so an injected "retry at 11am" has nowhere to land. And the
 **judge must stay a different SKU from the diagnoser**: same-model-grading-itself
-is the same-party failure this project has now hit thirty times.
+is the same-party failure this project has now hit thirty-two times.
 
 **The deterministic fallback stays the default and produces the gated number.**
 The LLM is an overlay measured against it. A headline that needs an API key is

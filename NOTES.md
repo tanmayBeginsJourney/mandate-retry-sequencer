@@ -6683,3 +6683,23 @@ behaviour from an incomplete marker list, not a false positive to be silenced
 by narrowing the pattern. `refuted`, `does not survive` and `claim under test`
 are now markers, alongside `overclaim`, `is **dead**` and `never quote` — words
 this project actually uses when it withdraws something. Selftest 15/15.
+
+## Errors 31 and 32 catalogued, and the doc gate's own prediction came true
+
+The catalogue is at **thirty-two**, propagated across README, CLAUDE.md and five
+docs in one pass, with the thirty-tally marked SUPERSEDED rather than deleted.
+
+**And `stale-error-count` expired exactly as predicted this morning.** When that
+rule was written its `why` said *"There are THIRTY errors as of 30 Aug 2026"* —
+a fact about the **state of the project**, which is the shape I flagged as
+expiring. It expired within hours, in the same session.
+
+The fix is the one the flag implied: the rule no longer names the current count
+at all. It matches **every count this project has ever published** — twenty-six
+through thirty-one — and its `why` points at `docs/03_ERRORS.md` as the source
+of truth. **A rule that must be edited every time the thing it guards changes
+is a rule that is wrong between edits.**
+
+`no-request-ever-sent` still has the same shape and will expire the day rung 4
+of the Razorpay ladder runs. Left as-is deliberately: it is accurate today, and
+rewriting it speculatively is how a guard drifts away from the thing it guards.

@@ -361,7 +361,7 @@ development. Every one of these is in the shipping path:
   Stage 0 owns notification bookkeeping today, and wiring the real one is the
   single remaining integration step.
 
-**Thirty errors have been found in this project's own work**, catalogued with
+**Thirty-two errors have been found in this project's own work**, catalogued with
 mechanism and guard in `docs/03_ERRORS.md`. Almost every one made the project
 look better than it was. That is what happens when the same party builds the
 measuring stick and the thing being measured, and it is the reason the
@@ -374,5 +374,5 @@ constraint layer is recounted by a component forbidden from importing it.
 | What ships and what it is worth | `docs/06_MODEL_CARD.md` |
 | Every result with its bias analysis | `docs/02_RESULTS.md` |
 | Every external fact with a source tag | `docs/01_FACTS.md` |
-| The thirty errors | `docs/03_ERRORS.md` |
+| The thirty-two errors | `docs/03_ERRORS.md` |
 | The decision log | `NOTES.md` |

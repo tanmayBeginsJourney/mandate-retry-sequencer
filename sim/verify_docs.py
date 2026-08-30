@@ -185,11 +185,19 @@ RETRACTIONS = [
     # NOTES.md, 30 August 2026, in the same commit that removed the rule.
     Retraction(
         id="stale-error-count",
-        pattern=r"twenty-six errors|twenty-seven errors|26 errors|27 errors"
-                r"|(THE )?TWENTY-(SIX|SEVEN) ERRORS",
-        why="There are THIRTY errors as of 30 Aug 2026. Errors 28-30 came from "
-            "the first real Razorpay request. Update the count everywhere at "
-            "once; docs/03_ERRORS.md is the source of truth.",
+        # Every count this project has ever published, so a superseded one
+        # cannot sit unmarked. The CURRENT count is deliberately absent: a rule
+        # that has to be edited every time the thing it guards changes is a
+        # rule that will be wrong between edits.
+        pattern=r"twenty-(six|seven|eight|nine) errors|thirty errors"
+                r"|2[6-9] errors|30 errors|31 errors"
+                r"|(THE )?TWENTY-(SIX|SEVEN|EIGHT|NINE) ERRORS"
+                r"|(THE )?THIRTY ERRORS",
+        why="The error count changes as errors are found, and every document "
+            "that states one goes stale together. docs/03_ERRORS.md is the "
+            "source of truth -- read the tally at the END of that file and "
+            "propagate it everywhere in the same commit. A superseded count "
+            "may stay as a marked record; it may not stay live.",
         retracted_on="2026-08-30",
     ),
     Retraction(

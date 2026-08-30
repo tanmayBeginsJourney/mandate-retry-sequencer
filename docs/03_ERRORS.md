@@ -1,4 +1,4 @@
-# 03 — THE THIRTY ERRORS
+# 03 — THE THIRTY-TWO ERRORS
 
 **Errors 1-18 all made the project look BETTER than it was.** Errors 19-23,
 added 29 August 2026, break the streak: 19 and 23 were latent defects that had
@@ -1045,7 +1045,7 @@ it — deleting it would have removed the record that it was once false.
 
 ---
 
-## The tally after thirty
+## The tally after thirty — SUPERSEDED, see "The tally at thirty-two" at the end
 
 Errors 28-30 add these shapes:
 
@@ -1069,7 +1069,8 @@ defects that all made the project look *worse* than it was. These three make it
 look **better** than it was, which is the direction `CLAUDE.md` warns about and
 the direction most of this catalogue runs in.
 
-⚠️ **And the count is still the point.** Thirty errors, and **the ones found by
+⚠️ **And the count is still the point.** *(SUPERSEDED — the count is now
+thirty-two; kept as the record of the tally at thirty.)* Thirty errors, and **the ones found by
 an outsider, by a deliberately adversarial check, or by contact with something
 this project did not write are consistently the ones a careful self-audit
 missed.** Errors 11-13 came from an outside reader with `docs/` and half a day.
@@ -1077,3 +1078,135 @@ Error 23 came from a different model family. Errors 24 and 25 came from checks
 written to disagree with their own author. Errors 28 and 29 came from a server
 in Mumbai answering a request. **Nothing in this list was found by re-reading
 code and feeling confident.**
+
+---
+
+# Errors 31-32 — found 30 August 2026, sweeping the model's reasoning setting
+
+**31. A response cache keyed on some of the inputs that change the answer, and
+not on the two the experiment was about.**
+
+`agent/llm/client.py` cached responses under `(model, prompt_id, case_hash)`.
+The request body also carries `reasoning_effort` and `max_tokens`, and both
+change what the model returns — the same file's own docstring says so in
+capitals: *"a reasoning model on its lowest reasoning setting may well answer
+worse than the same model on `high`."*
+
+Neither was in the key.
+
+*What it would have cost:* `docs/00_HANDOFF.md` calls sweeping
+`reasoning_effort` "the first thing to sweep", and that sweep would have done
+one of two things.
+
+1. **Hit the `low` cache and returned the `low` answers at `high`**, reporting
+   *"reasoning effort makes no difference"*. A false negative manufactured by
+   the measuring apparatus. **This is the worse of the two, because it looks
+   like a result** — a clean table, a plausible conclusion, and nothing
+   anywhere to say the model was never asked.
+2. Or, on a cold cache, **written `high` answers under the `low` key**, so
+   committing the cache would silently change what `--replay` reproduces and
+   break the byte-identical-offline claim the whole eval rests on.
+
+*How it was caught:* by reading the key function before spending money, because
+the sweep's first pre-registered prediction was *"the cache genuinely misses"* —
+a construction check written to catch exactly this, and the only reason it was
+looked at.
+
+*Mechanism:* **a rule applied to one parameter and not to its neighbours.**
+`prompt_id` is in the key **on purpose**, and the docstring boasts about it:
+"a prompt edit misses the cache and shows as a diff". `reasoning_effort` sits
+three lines below `prompt_id` in the same request body and got none of that
+reasoning. This is the same shape as error 28, where a docstring reasoned
+carefully about transport failures and never considered credential failures —
+**the second time in one day that a correct principle was stated for one
+instance and not generalised to its twin.**
+
+*Guard:* the key now carries both settings, except at the exact values the
+committed caches were recorded at (`low`, 2000), which keep the three-field key
+so all 385 + 80 paid responses stay valid. Verified before spending:
+`--replay` still reproduces 10/21, 13/19, 4/4 and 19 judge disagreements,
+offline, 50/50 cached, $0.00. `ModelDiagnoser`'s live-call cap was building the
+key separately with the old signature and is now aligned — otherwise the cap
+would have asked about a different cache entry than the one the call would hit,
+which is a second instance of the same defect hiding inside the first.
+
+*The near-miss worth recording:* at `reasoning_effort=max`, 32 of 50 calls hit
+the token cap, returned unparseable payloads and fell back to the rule engine.
+That arm reports **9/21 ambiguous and 19/19 clean — exactly the rule engine's
+scores, including the best clean score in the whole table.** Reported from the
+score table alone it is "max is the best setting". What stopped that was
+`ModelDiagnoser`'s `n_fallback` counter and its reason string printing beside
+the score. **That is not an error; it is the one place today where existing
+instrumentation caught something before it became one**, and it is why the
+runtime-fallback counters are worth their cost.
+
+---
+
+**32. A hardcoded caveat, and a new flag that turned it into a lie.**
+
+`agent/batch_report.py` ends with a block titled "WHAT THIS NUMBER IS NOT",
+whose entire job is to stop a reader mis-reading the number above it. One line
+read:
+
+> `* The decline taxonomy is OFF here (every rate 0), so this is the world
+> without frozen accounts, broken mandates or limit hits.`
+
+Adding `--declines` — a flag whose only purpose is to turn the taxonomy **on** —
+left that line printing unchanged. **A run with the taxonomy on announced that
+the taxonomy was off, inside the section that exists to prevent exactly that
+misreading.**
+
+*How it was caught:* by reading the output of the first run rather than only
+the numbers at the top. It survived writing the flag, running it, and reading
+the headline table.
+
+*What it cost:* nothing, because it lived for about four minutes. It is in this
+catalogue anyway, because the shape is general and the next instance may not be
+noticed the same afternoon.
+
+*Mechanism:* **a caveat is a claim, and claims printed unconditionally go stale
+exactly like claims written in documents.** This project built an entire doc
+gate today for retracted sentences surviving in Markdown, and then shipped the
+identical failure in a `print()` a few hours later. The gate cannot see it:
+`sim/verify_docs.py` scans documents, not string literals in `agent/`.
+
+*Guard:* the caveat is now conditional, and the `--declines` branch says loudly
+that the configuration is not the published one and must not be compared to the
+headline. **No automated guard exists for the general case** — a print-literal
+scanner was considered and not built, because the honest version of it is the
+same idea as the doc gate pointed at source files, and one gate written today
+against a real list of retractions is worth more than a second gate written
+speculatively. If a third instance turns up, build it.
+
+---
+
+## The tally at thirty-two
+
+| shape | instance |
+|---|---|
+| a cache keyed on some inputs that change the answer, not all | **31** (`reasoning_effort`) |
+| a principle stated for one instance and not generalised to its twin | **28** (socket vs credential), **31** (`prompt_id` vs `reasoning_effort`) |
+| a caveat printed unconditionally, made false by a new flag | **32** (`--declines`) |
+
+**Both of today's last two errors are in the measuring and reporting apparatus
+rather than in the product**, which makes it six of the last nine. That is not
+a coincidence and it is not a run of bad luck: `agent/` is gated, mutation
+tested and byte-locked, and the things that *describe* it — caches, caveats,
+docstrings, tallies — are protected by attention alone.
+
+**And the direction is worth noting.** Error 31 would have made the project
+look better than it was: a sweep that silently replayed cached answers would
+have reported "the setting does not matter", which retires an awkward caveat
+for free. Error 32 would have made a non-published configuration look like the
+published one. Both are the usual direction for this catalogue, and both were
+caught by a check written to be sceptical rather than by a re-read.
+
+⚠️ **The count, at thirty-two.** The pattern has not changed: **the errors
+found by an outsider, by a deliberately adversarial check, or by contact with
+something this project did not write are the ones a careful re-read missed.**
+Errors 11-13 came from an outside reader. Error 23 came from a different model
+family. Errors 24 and 25 came from checks written to disagree with their own
+author. Errors 28 and 29 came from a server in Mumbai answering a request.
+Error 31 came from a pre-registered construction check written to catch exactly
+it. **Nothing in this list was found by re-reading code and feeling
+confident.**
