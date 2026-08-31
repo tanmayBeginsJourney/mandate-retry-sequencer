@@ -35,7 +35,7 @@ from __future__ import annotations
 #: v2, 29 Aug 2026: WAIT removed from the action space. The ID bump is what
 #: makes the cache MISS -- a prompt edit that silently reused old responses
 #: would make prompt versioning decorative.
-DIAGNOSER_PROMPT_ID = "glm-diag-v2"
+DIAGNOSER_PROMPT_ID = "glm-diag-v3"
 
 DIAGNOSER_SYSTEM = """\
 You are the diagnosis layer of an automated subscription-recovery agent for \
@@ -94,8 +94,9 @@ cycle has ALREADY COLLECTED. Charging again is the worst outcome in the system \
 -- worse than never collecting. The answer is STOP.
   * A terminal code anywhere in the history means retrying is spending an \
 attempt on something that cannot succeed.
-  * "Another mandate on this account succeeded recently" means money reached \
-the account. It is evidence about timing, not about emptiness.
+  * "Another mandate on this account succeeded recently" is a fact about \
+another transaction. It is evidence about timing. Do not restate it as money, \
+funds or cash reaching the account, and do not infer this customer's finances.
   * The uncertainty band is OUR model's confidence about WHEN to try. It says \
 nothing about the customer's finances.
   * If every failure you can see shares one bank, that points at the bank, not \
@@ -293,3 +294,60 @@ def render_judge(view, diag) -> tuple[str, str]:
         merchant_note=(view.merchant_note or "(empty)"),
         root_cause=diag.root_cause.value, intervention=diag.intervention.value,
         confidence=f"{diag.confidence:.2f}", rationale=diag.rationale)
+
+
+# ---------------------------------------------------------------- outreach
+#: Separate from the diagnoser prompt. Choosing the intervention and writing
+#: the customer/merchant text are different jobs; mixing them would put a
+#: customer-facing sentence in a merchant-facing field.
+COMPOSE_PROMPT_ID = "glm-outreach-v1"
+
+COMPOSE_SYSTEM = """\
+You write short operational copy for an UPI AutoPay recovery agent in India.
+
+You do not decide WHEN to debit. You do not name a time, a day or a date.
+You do not mention a balance, a salary, a payday, or that money or funds \
+reached an account. You do not name a bank.
+
+If the purpose is reminder, write one or two sentences TO THE CUSTOMER:
+ask them to add funds so the next automatic debit can succeed. Do not include
+a pay-now link. Be polite. Do not threaten. Do not mention other merchants.
+
+If the purpose is backup_link, write one or two sentences TO THE CUSTOMER:
+ask them to pay this period's amount on the link. Say the automatic debit
+is paused so they will not be charged twice. Do not name a time.
+
+If the purpose is escalate, write one or two sentences TO THE MERCHANT:
+what happened, and that this case is in their queue. Do not disclose the \
+customer's finances.
+
+Return ONLY a JSON object with key "body" (string, max 280 characters)."""
+
+COMPOSE_USER = """\
+purpose      : {purpose}
+root cause   : {root_cause}
+amount       : Rs {amount:.0f}
+response codes, oldest first : {decline_history}
+merchant-facing diagnosis already chosen : {rationale}
+
+Write the {audience} message. Return the JSON object."""
+
+COMPOSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["body"],
+    "properties": {"body": {"type": "string", "maxLength": 280}},
+}
+
+
+def render_compose(view, diag, purpose: str = "") -> tuple[str, str]:
+    purpose = purpose or (
+        "escalate" if diag.intervention.value == "ESCALATE" else "reminder")
+    audience = ("merchant" if purpose == "escalate" else "customer")
+    return COMPOSE_SYSTEM, COMPOSE_USER.format(
+        purpose=purpose,
+        root_cause=diag.root_cause.value,
+        amount=view.amount,
+        decline_history=(", ".join(view.decline_history) or "(none yet)"),
+        rationale=diag.rationale,
+        audience=audience)

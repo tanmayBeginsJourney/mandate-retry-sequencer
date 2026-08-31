@@ -196,7 +196,7 @@ def main() -> int:
     print("    the run seed and never touching the money path -- error 27's")
     print("    rule. If it shared the stream, each consent rate would be a")
     print("    different world PLUS consent.")
-    return 0
+    return 0 if n_held == len(checks) else 1
 
 
 if __name__ == "__main__":

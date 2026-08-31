@@ -34,10 +34,12 @@ from __future__ import annotations
 
 import hashlib
 
-from agent.ports import CaseView, Diagnosis, InterventionKind, RootCause
+from agent.ports import (CaseView, Diagnosis, InterventionKind, RootCause,
+                         FAMILY_INDETERMINATE, INDETERMINATE_CODES, LIEN_CODES,
+                         TERMINAL_CODES, family_of)
 
 PROMPT_ID_RETRY_ONLY = "det-retry-only-v1"
-PROMPT_ID_RULES = "det-rules-v1"
+PROMPT_ID_RULES = "det-rules-v2"
 
 
 def _did(prompt_id: str, view: CaseView) -> str:
@@ -130,6 +132,39 @@ class RuleBasedDiagnoser:
                     "This billing cycle has already been collected. No further "
                     "money action is due on this mandate until the next cycle "
                     "opens.")
+
+        # Unknown outcome: the previous debit may already have succeeded.
+        # Retrying is a double-charge. This branch is not optional.
+        if last in INDETERMINATE_CODES or (
+                last is not None and family_of(last) == FAMILY_INDETERMINATE):
+            return (RootCause.OUTCOME_UNKNOWN, InterventionKind.STOP, 0.99,
+                    "The previous debit's outcome is unknown. Retrying risks "
+                    "charging the customer twice, so no further money action "
+                    "runs on this cycle.")
+
+        # Terminal decline: no retry can succeed. STOP even if the ablation
+        # switched the action off -- disabling STOP must not license a debit
+        # against a frozen account or a revoked mandate.
+        if any(c in TERMINAL_CODES for c in view.decline_history):
+            if last in ("VD", "VI", "VF"):
+                cause = RootCause.MANDATE_INVALID
+                why = ("The mandate itself has failed. No retry can succeed; "
+                       "the merchant must re-authorise.")
+            else:
+                cause = RootCause.ACCOUNT_UNAVAILABLE
+                why = ("The account is frozen, dormant or closed. No retry "
+                       "can succeed.")
+            if self.allow_escalate and last in ("VD", "VI", "VF"):
+                return (cause, InterventionKind.ESCALATE, 0.95, why)
+            return (cause, InterventionKind.STOP, 0.95, why)
+
+        if last in LIEN_CODES:
+            why = ("Another mandate has already claimed this request. "
+                   "Retrying cannot release it.")
+            if self.allow_escalate:
+                return (RootCause.FUNDS_LIENED, InterventionKind.ESCALATE,
+                        0.8, why)
+            return (RootCause.FUNDS_LIENED, InterventionKind.STOP, 0.8, why)
 
         if last == "TECH":
             return (RootCause.TECHNICAL, InterventionKind.RETRY, 0.9,

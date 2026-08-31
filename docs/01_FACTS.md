@@ -129,9 +129,9 @@ anything the project reports.
 
 - `[VERIFIED]` **What the calibration costs, measured.** At `pop_spend=1.05` the
   simulated account cannot cover the debit on its due date **53%** of the time
-  and the agent beats the baseline by **+36.43** pts. At `pop_spend=0.80` the
+  and the agent beats the baseline by **+36.48** pts. At `pop_spend=0.80` the
   baseline's per-attempt approval is **84.6%** — inside the band the sources
-  above report — and the agent is worth **+6.29** pts (2 SE 1.42), which is
+  above report — and the agent is worth **+6.36** pts (2 SE 1.43), which is
   inside the 6–8% industry benchmark below. Reproduce with
   `python scripts/spend_sweep.py`. Table in `02_RESULTS.md`.
 
@@ -321,7 +321,7 @@ the docs — it needs a key to observe.
     Act require personal data be processed for specified, legitimate purposes.
 
   **What this means for the project, and it is not "give up".** The pooled
-  configuration is worth **+9.53 points in the hard world and +3.47 at
+  configuration is worth **+8.34 points in the hard world (S2a_PD) and +3.38 at
   `pop_spend=0.80`** (W9, `02_RESULTS.md`) and it is the single largest component
   of the result. The response is to stop treating pooling as the default and
   start treating it as **consent-gated**, with the non-pooled configuration

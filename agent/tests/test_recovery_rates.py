@@ -175,8 +175,9 @@ def main() -> int:
     print()
     print("  V5 is too HIGH because no customer here is ever unable to pay --")
     print("  the oracle is 100% at every calibration. W2 added insolvency and")
-    print("  brings V5 into the 70-85% band at p_missed_credit=0.08, 5/5")
-    print("  pre-registered. It is NOT adopted: V1 breaks there.")
+    print("  brings V5 to 73.58% at p_missed_credit=0.08. After isolating")
+    print("  W2's RNG stream, 3/5 pre-registered predictions hold. It is NOT")
+    print("  adopted: V1 rises to 21.66% there.")
     print("    python agent/tests/test_insolvency_sweep.py")
     print()
     print("  V7 is too SLOW, and W7 predicted transient failures would fix it.")
@@ -194,7 +195,7 @@ def main() -> int:
     print("  to `doc_legal`, measured above. `payday_wait` still has no")
     print("  recovery rate -- it lives in the harness, which emits no")
     print("  per-cycle record.")
-    return 0
+    return 0 if n_held == len(PREREG) else 1
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """THE BATCH NUMBER. The track's actual deliverable.
 
     python -m agent.batch_report                  # deterministic arm only
-    python -m agent.batch_report --llm            # + the LLM overlay
+    python -m agent.batch_report --demo-llm       # one-pop audit: routed LLM stats
     python -m agent.batch_report --merchants 30
 
 Razorpay Track 3 asks for exactly this, verbatim:
@@ -12,8 +12,8 @@ Razorpay Track 3 asks for exactly this, verbatim:
 So: money recovered across a batch of synthetic merchants, `payday_wait`
 printed beside it and never omitted, every stopping rule that fired grouped by
 rule, every Stage 0 refusal grouped by rule WITH AN INDEPENDENT RECOUNT beside
-it, the whole chain for one recovered rupee, and the LLM's fallback rate with
-its outcomes compared against the deterministic path.
+it, the whole chain for one recovered rupee, and optional `--demo-llm` routed
+LLM audit stats (not a second money column).
 
 WHY THIS IS NOT `agent/batch.py`. That module is the COMPOSITION ROOT -- the one
 place allowed to construct both an executor and a gate, named by hand in
@@ -21,9 +21,9 @@ place allowed to construct both an executor and a gate, named by hand in
 break the import-graph gate and every measurement in the repo. This module uses
 it. The naming difference is flagged rather than silently resolved.
 
-THE DETERMINISTIC ARM PRODUCES THE NUMBER. The LLM arm is a measured overlay
-printed beside it. A headline that needs an API key is not reproducible and
-`CLAUDE.md`'s numbers rule forbids quoting it.
+THE DETERMINISTIC ARM PRODUCES THE NUMBER. The LLM is not on the money
+comparison: it is routed to merchant_note cases for diagnosis and to
+escalate copy when `--demo-llm` is set. See `agent/llm/routed_diagnoser.py`.
 
 MERCHANTS ARE A VIEW, NOT A NEW WORLD. `w3.make_pop` already assigns every
 mandate a merchant id from `range(60)`; a "batch of N merchants" is that
@@ -76,8 +76,10 @@ def main(argv=None) -> int:
     ap.add_argument("--n", type=int, default=N, help="customers per population")
     ap.add_argument("--pops", type=int, default=len(POPS),
                     help="how many held-out populations (max 8)")
+    ap.add_argument("--demo-llm", action="store_true",
+                    help="one-pop routed-LLM audit (not a second money column)")
     ap.add_argument("--llm", action="store_true",
-                    help="add the LLM overlay arm (needs a key or a warm cache)")
+                    help=argparse.SUPPRESS)
     ap.add_argument("--days", type=int, default=DAYS)
     ap.add_argument("--llm-max-calls", type=int, default=150,
                     help="hard cap on NETWORK calls per run. Cache hits are "
@@ -95,6 +97,10 @@ def main(argv=None) -> int:
                          "published configuration -- the headline is measured "
                          "with every rate at zero.")
     a = ap.parse_args(argv)
+    if a.llm:
+        a.demo_llm = True
+    if not hasattr(a, "demo_llm"):
+        a.demo_llm = False
     pops = POPS[:max(1, min(a.pops, len(POPS)))]
 
     base = dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
@@ -108,9 +114,6 @@ def main(argv=None) -> int:
         print("     the `mid` cell of the sweep in test_decline_sweep.py and")
         print("     every one is a [GUESS].")
     arms = {"agent, deterministic": dict(base, mode="full")}
-    if a.llm:
-        arms["agent, LLM overlay"] = dict(base, mode="full", use_llm=True,
-                                          llm_max_calls=a.llm_max_calls)
 
     jobs = []
     for name, kw in arms.items():
@@ -240,9 +243,12 @@ def main(argv=None) -> int:
     print("  import `constraints/rules.py` or `stage0.py` and gate I3 fails if")
     print("  it ever does. If the two columns disagree, believe the auditor --")
     print("  it was right the one time they did (docs/03_ERRORS.md).")
+    print("  These columns are not expected to agree: the gate counts actions it")
+    print("  stopped; the auditor counts illegal actions that still executed.")
+    print("  A clean run has zero in both columns for different reasons.")
     print()
     print(f"{'arm':>22s} {'rule':>11s} {'gate refused':>13s} "
-          f"{'auditor found':>14s} {'agree?':>7s}")
+          f"{'illegal executed':>17s}")
     for name in arms:
         gate_tot = collections.Counter()
         aud_tot = collections.Counter()
@@ -252,12 +258,11 @@ def main(argv=None) -> int:
             aud_tot.update(r.get("audit_detail_counts") or {})
         for rule in ("cap", "peak", "lead", "pending", "represent"):
             g, au = gate_tot.get(rule, 0), aud_tot.get(rule, 0)
-            print(f"{name:>22s} {rule:>11s} {g:13d} {au:14d} "
-                  f"{('yes' if g == au or au == 0 and g == 0 else 'NO'):>7s}")
+            print(f"{name:>22s} {rule:>11s} {g:13d} {au:17d}")
         tot_v = sum(res[(name, s)]["audit_violations"] for s in pops)
         tot_x = sum(res[(name, s)]["audit_executed"] for s in pops)
         print(f"{'':>22s} {'TOTAL':>11s} {sum(gate_tot.values()):13d} "
-              f"{tot_v:14d} {('yes' if tot_v == 0 else 'NO'):>7s}"
+              f"{tot_v:17d}"
               f"   over {tot_x} executed money actions")
 
     # ------------------------------------------------ one rupee, end to end
@@ -267,14 +272,13 @@ def main(argv=None) -> int:
     print("=" * 104)
     _one_chain(a, pops[0])
 
-    # ---------------------------------------------------------- the LLM arm
-    if a.llm:
+    # ---------------------------------------------------------- LLM demo audit
+    if a.demo_llm:
         print()
         print("=" * 104)
-        print("THE LLM OVERLAY -- fallback rate, and whether the source changes "
-              "the outcome")
+        print("ROUTED LLM DEMO -- one population, audit only (not a money arm)")
         print("=" * 104)
-        _llm_split(res, pops)
+        _llm_demo(a, pops[0])
 
     print()
     print("=" * 104)
@@ -299,7 +303,7 @@ def main(argv=None) -> int:
         print("    world without frozen accounts, broken mandates or limit hits.")
         print("    With p_limit swept 0.00/0.05/0.15 the cost is")
         print("    0.00 / -2.87 / -13.46 pts and every rate is a [GUESS].")
-    print("  * 8 populations, one run seed each. Not a large study.")
+    print(f"  * {len(pops)} populations, one run seed each. Not a large study.")
     return 0
 
 
@@ -370,6 +374,27 @@ def _one_chain(a, pop_seed: int) -> None:
             print(f"     {x.get('outcome_code')}  success={x.get('success')}  "
                   f"recovered Rs {x.get('recovered_paise', 0)/100:,.2f}")
     print(f"  full trail: {log_path}  ({len(rows)} events)")
+
+
+def _llm_demo(a, pop_seed: int) -> None:
+    """One run with routed LLM; print routing stats, not money."""
+    from agent.batch import make_pop, run_once
+    pop = make_pop(min(a.n, 40), K, pop_seed, spend=SPEND, days=a.days)
+    r = run_once(pop, RUN_SEED, payday_err=PE, pop_spend=SPEND,
+                 bcfg=w3.FITTED_BELIEF, mode="full", time_major=True,
+                 use_llm=True, llm_max_calls=a.llm_max_calls)
+    print("  Production routing: LLM diagnoser only when merchant_note is set.")
+    print("  Escalate merchant copy uses the LLM when use_llm=True.")
+    print(f"  decision ticks answered by rules only : "
+          f"{r.get('llm_n_rule_only', 0)}")
+    print(f"  decision ticks routed to LLM         : "
+          f"{r.get('llm_n_routed', 0)}")
+    print(f"  LLM answers (incl. cache)            : "
+          f"{r.get('llm_n_llm', 0)}")
+    print(f"  LLM fallbacks                        : "
+          f"{r.get('llm_n_fallback', 0)}")
+    if r.get("llm_n_llm", 0) == 0 and r.get("llm_n_routed", 0) == 0:
+        print("  (this population had no merchant_note — expected for sim)")
 
 
 def _llm_split(res, pops) -> None:

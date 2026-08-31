@@ -7,8 +7,8 @@
 # reason and only while someone intends to fix it. Adding a line here to make
 # a red suite go green is the same offence as loosening a threshold.
 #
-# Baseline 2026-08-30, after M1 and M4B were FIXED:
-# 25 gates, 4 FAIL, 0 VACUOUS, 21 pass.  Verified by a --tier full run.
+# Baseline 2026-08-31, after S2a_PD and T6_PD were added:
+# 27 gates, 4 FAIL, 0 VACUOUS, 23 pass.  Verified by a --tier full run.
 #
 # M1 and M4B were removed from this file on 30 August 2026 because they were
 # repaired, not tolerated. M1 now runs its mutant at cap_override=2, so the
@@ -63,10 +63,15 @@ S2b
 # number as "the strongest evidence we have" that pooling is information.
 # It is not. The honest moat number is S2a, +9.53 pts (+/-1.81).
 #
-# Fixing this means building a control that matches the UPDATE COUNT without
-# supplying wrong information -- e.g. label-shuffled observations with the
-# matched base rate -- not relaxing the neutrality threshold. Left failing on
-# purpose so the confound stays visible.
+# Fixing this by building a "neutral extra-update" control does not work on
+# this filter. A label-shuffle of real outcomes and a posterior-predictive
+# draw were both measured on 31 August on the T9 population; both damaged
+# the filter relative to own (shuffle 51-62% vs own 89% fitted pe=7). This
+# observe() is a hard truncation of the balance bins, not a martingale, so
+# extra unmatched likelihoods hurt whether they come from a donor, a
+# shuffled pool, or the model's own P(success). Neutrality versus own is
+# the wrong property. The moat is S2a (unfitted, +9.53) and S2a_PD
+# (shipping, +8.34). Do not quote S2c.
 
 # ---------------------------------------------------------------------------
 S2_LEGACY
@@ -88,7 +93,7 @@ S2_LEGACY
 
 # ---------------------------------------------------------------------------
 S1_PD
-# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.026, monotone=False.
+# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.029, monotone=False.
 #
 # ADDED 2026-08-28, and the reason it exists is the finding.
 #
@@ -110,11 +115,11 @@ S1_PD
 # at ~60% confidence).
 #
 # TWO DIFFERENT ECE NUMBERS EXIST FOR THIS FILTER AND THEY ARE NOT THE SAME
-# MEASUREMENT. This gate reports ECE=0.026 on populations Pc0-Pc2 (n=120,
+# MEASUREMENT. This gate reports ECE=0.029 on populations Pc0-Pc2 (n=120,
 # pop seeds 300-302, run seeds 800-802). sim/fair_audit.py reports 0.059
-# shipped -> 0.040 fitted on DIFFERENT populations (n=100, pop seeds
+# shipped -> 0.041 fitted on DIFFERENT populations (n=100, pop seeds
 # 700-702, run seeds 1600-1602). This file used to quote fair_audit's 0.040
-# as if it were the gate's. Quote 0.026 for S1_PD and name fair_audit when
+# as if it were the gate's. Quote 0.029 for S1_PD and name fair_audit when
 # quoting 0.040. Fitting improved ECE on both and made neither monotone.
 #
 # The remaining break is in the mid-range, and the plausible causes

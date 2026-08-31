@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,6 +53,7 @@ from agent.tests._parallel import run_jobs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs", "data", "scenarios.json")
+HTML = os.path.join(ROOT, "docs", "index.html")
 
 POP_SEED = 700
 RUN_SEED = 7
@@ -119,9 +121,38 @@ OUTAGE_ABLATION = [
 ]
 
 #: docs/02_RESULTS.md, "THE BATCH NUMBER". 4 held-out populations.
-BATCH = dict(agent=94.36, payday_wait=57.70, delta=36.66, two_se=2.47,
-             rupees=5994430, populations=4, money_actions=8954,
+BATCH = dict(agent=98.01, payday_wait=57.70, delta=40.30, two_se=2.32,
+             rupees=6203060, populations=4, money_actions=9428,
              stage0_refusals=0, auditor_recount=0)
+
+
+def html_batch_errors() -> list[str]:
+    """Return stale static batch figures in the page.
+
+    JavaScript hydrates these elements from scenarios.json, but the checked-in
+    fallback is what readers and link previews can see before that fetch. The
+    data check must therefore cover both files.
+    """
+    with open(HTML, encoding="utf-8") as fh:
+        html = fh.read()
+    expected = {
+        "s-agent": f"{BATCH['agent']:.2f}%",
+        "s-base": f"{BATCH['payday_wait']:.2f}%",
+        "s-rupees": f"₹{BATCH['rupees'] / 100000:.1f}L",
+        "b-agent": f"{BATCH['agent']:.2f}%",
+        "b-base": f"{BATCH['payday_wait']:.2f}%",
+        "b-delta": (f"+{BATCH['delta']:.2f} points, "
+                    f"2 SE {BATCH['two_se']:.2f}"),
+        "b-rupees": f"₹{BATCH['rupees']:,}",
+    }
+    errors = []
+    for element_id, want in expected.items():
+        match = re.search(
+            rf'id="{re.escape(element_id)}"[^>]*>([^<]*)<', html)
+        got = match.group(1).strip() if match else None
+        if got != want:
+            errors.append(f"{element_id}: expected {want!r}, found {got!r}")
+    return errors
 
 
 def _daily_balance(bal: np.ndarray, lo: int, hi: int) -> list[dict]:
@@ -398,7 +429,14 @@ def main() -> int:
         print(("PASS  " if same else "FAIL  ")
               + f"regenerated data {'matches' if same else 'DIFFERS FROM'} "
                 f"the committed {os.path.relpath(OUT, ROOT)}")
-        return 0 if same else 1
+        html_errors = html_batch_errors()
+        if html_errors:
+            print("FAIL  docs/index.html has stale batch figures:")
+            for error in html_errors:
+                print(f"  {error}")
+        else:
+            print("PASS  docs/index.html batch figures match scenarios.json")
+        return 0 if same and not html_errors else 1
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as fh:
         fh.write(blob)

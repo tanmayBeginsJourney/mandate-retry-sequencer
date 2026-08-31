@@ -37,6 +37,8 @@ having to hold an executor.
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 
 import agent  # noqa: F401  -- puts sim/ on the path
@@ -47,10 +49,11 @@ import w3
 # gate I2 forbids anything outside constraints/stage0.py importing
 # agent.execution, and the decline sweep needs them. A hash of a customer
 # index and a table of strings are vocabulary, not execution.
+from agent.audit.jsonl_queue import append_jsonl
 from agent.ports import (BANK_HANDLES, FAMILY_ACCOUNT_SHUT, FAMILY_CODES,
                          FAMILY_LIMIT, FAMILY_MANDATE_BROKEN, N_BANKS,
-                         OK, TECH, Z9, AttemptOutcome, MandateRef,
-                         Rupees, bank_of)
+                         OK, TECH, Z9, AttemptOutcome, MandateRef, Rupees,
+                         WorkflowResult, bank_of)
 
 P_TECH = harness.P_TECH             # 0.008
 
@@ -303,6 +306,8 @@ class SimExecutor:
         self.n_success = 0
         self.n_nudges = 0
         self.n_nudges_took = 0
+        self.n_escalations = 0
+        self.workflow_log: list[dict] = []
         self.n_tech = 0
         self.n_tech_in_outage = 0
         self.n_attempts_in_outage = 0
@@ -334,6 +339,21 @@ class SimExecutor:
         # draw taken by the money path, or degenerate-mode parity would break
         # for a reason that has nothing to do with the agent.
         self.nrng = np.random.default_rng(seed + 9119)
+        # Backup-checkout take-up. Swept, default 0: an unpaid link expires
+        # and the fourth mandate debit is still not fired. Own generator so a
+        # non-zero rate cannot shift the money path (error 27).
+        self.backup_pay_p = 0.0
+        self.backup_link_life = 48
+        self.brng = np.random.default_rng(seed + 9220)
+        self._backup_links: dict[str, dict] = {}
+        self.n_backup_links = 0
+        self.n_backup_paid = 0
+        self.outbox_path = os.environ.get(
+            "RECOVERY_OUTBOX",
+            os.path.join("agent", "runs", "customer_outbox.jsonl"))
+        self.queue_path = os.environ.get(
+            "RECOVERY_QUEUE",
+            os.path.join("agent", "runs", "merchant_queue.jsonl"))
         # A THIRD generator for the decline taxonomy, for the same reason the
         # nudge has its own: turning enrichment on must not shift a single draw
         # taken by the money path, or the enriched world would be a DIFFERENT
@@ -357,10 +377,13 @@ class SimExecutor:
             # nothing from the money path and is independent of iteration
             # order, so `p_transient=0.10` is the SAME WORLD as
             # `p_transient=0.00` with holds added -- not a fresh draw of it.
-            # Getting this wrong is a live defect in this file's history: see
-            # NOTES.md, 30 August, W7.
+            # Missed salary credits follow the same rule on a different stream.
+            # Getting either wrong changes spending draws as well as the named
+            # mechanism. See error 27.
             bal = w3.balance_trace(c, rng, decay=spend_decay,
                                    p_missed_credit=p_missed_credit,
+                                   missed_rng=np.random.default_rng(
+                                       seed + 104729 + 31 * ci),
                                    p_transient=p_transient,
                                    transient_h=transient_h,
                                    hold_rng=np.random.default_rng(
@@ -600,36 +623,93 @@ class SimExecutor:
         return AttemptOutcome(t=t, code=code, success=success)
 
     # ---- the non-money path
-    def nudge(self, ref: MandateRef, amount: Rupees, t: int) -> bool:
-        """Ask the customer to fund the account. Returns whether it took.
-
-        THE MODEL, AND WHY IT IS A SWEEP AND NOT A CONSTANT. `harness.run`
-        already carries `topup_p`: the probability a customer tops up after a
-        failed debit, worth `amount * topup_mult` for `topup_life` hours from
-        `t + topup_lag`. That mechanism IS a nudge -- but in the harness it
-        fires on EVERY failure, unprompted, so it is an upper bound on what a
-        nudge could be worth rather than a nudge.
-
-        Here it fires only when the agent sends one, at rate `nudge_p`. No
-        value is picked: `nudge_p` is swept and the nudge's worth is reported
-        as a curve, the same way the headline is reported conditional on
-        `payday_err`. There is no measured Indian UPI nudge take-up rate in
-        docs/01_FACTS.md and inventing one would break rule 5.
-
-        Two limits worth saying out loud. The credited amount reuses
-        `topup_mult=1.15`, which is the harness's constant for an unprompted
-        top-up, not a measured response to a prompt. And at `nudge_p > 0` the
-        oracle stops being a tight upper bound -- it reads `bal[tt] - drained`
-        with no topups (docs/06_MODEL_CARD.md Â§3, item 11), so any oracle row
-        quoted beside a nudge curve is loose.
-        """
+    def remind(self, ref: MandateRef, amount: Rupees, t: int,
+               message: str = "", action_id: str = "") -> WorkflowResult:
+        """Funding reminder. Not a Payment Link. Does not skip a debit."""
         self.n_nudges += 1
-        if self.nudge_p <= 0 or self.nrng.random() >= self.nudge_p:
-            return False
-        self.n_nudges_took += 1
-        w = self.worlds[ref.customer_id]
-        cr = amount * self.topup_mult
-        lo = min(t + self.topup_lag, self.T)
-        hi = min(t + self.topup_lag + self.topup_life, self.T)
-        w.topups[lo:hi] += cr
-        return True
+        credited = False
+        if self.nudge_p > 0 and self.nrng.random() < self.nudge_p:
+            self.n_nudges_took += 1
+            credited = True
+            w = self.worlds[ref.customer_id]
+            cr = amount * self.topup_mult
+            lo = min(t + self.topup_lag, self.T)
+            hi = min(t + self.topup_lag + self.topup_life, self.T)
+            w.topups[lo:hi] += cr
+        path = append_jsonl(self.outbox_path, {
+            "kind": "REMIND", "mandate_uid": ref.uid, "t": t,
+            "message": message, "action_id": action_id, "amount": amount})
+        self.workflow_log.append({
+            "kind": "REMIND", "mandate_uid": ref.uid, "t": t,
+            "message": message, "action_id": action_id, "credited": credited,
+            "outbox": path})
+        return WorkflowResult(executed=True, credited=credited,
+                              channel="sim_outbox", detail=path)
+
+    def nudge(self, ref: MandateRef, amount: Rupees, t: int,
+              message: str = "", action_id: str = "") -> WorkflowResult:
+        """Alias kept so older call sites still remind rather than open a link."""
+        return self.remind(ref, amount, t, message=message, action_id=action_id)
+
+    def backup_checkout(self, ref: MandateRef, amount: Rupees, t: int,
+                        message: str = "", action_id: str = "") -> WorkflowResult:
+        """Payment Link replacing the fourth mandate debit."""
+        self.n_backup_links += 1
+        vid = f"plink_sim_{ref.uid}_{t}"
+        expire_t = min(t + self.backup_link_life, self.T)
+        self._backup_links[ref.uid] = {
+            "id": vid, "status": "issued", "expire_t": expire_t,
+            "amount": amount, "t": t, "action_id": action_id,
+            "message": message}
+        self.workflow_log.append({
+            "kind": "BACKUP_LINK", "mandate_uid": ref.uid, "t": t,
+            "vendor_id": vid, "expire_t": expire_t})
+        return WorkflowResult(executed=True, channel="sim_payment_link",
+                              vendor_id=vid, status="issued",
+                              detail=f"expires t={expire_t}")
+
+    def fetch_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
+        rec = self._backup_links.get(ref.uid)
+        if rec is None:
+            return WorkflowResult(executed=False, channel="sim_payment_link",
+                                  detail="no backup link")
+        if rec["status"] == "issued":
+            if t >= rec["expire_t"]:
+                rec["status"] = "expired"
+            elif self.backup_pay_p > 0 and self.brng.random() < self.backup_pay_p:
+                rec["status"] = "paid"
+                self.n_backup_paid += 1
+        credited = rec["status"] == "paid"
+        return WorkflowResult(executed=True, credited=credited,
+                              channel="sim_payment_link",
+                              vendor_id=rec["id"], status=rec["status"])
+
+    def cancel_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
+        rec = self._backup_links.get(ref.uid)
+        if rec is None:
+            return WorkflowResult(executed=False, detail="no backup link")
+        if rec["status"] == "issued":
+            rec["status"] = "cancelled"
+        return WorkflowResult(executed=True, channel="sim_payment_link",
+                              vendor_id=rec["id"], status=rec["status"])
+
+    def escalate(self, ref: MandateRef, amount: Rupees, t: int,
+                 brief: str = "", action_id: str = "") -> WorkflowResult:
+        self.n_escalations += 1
+        path = append_jsonl(self.queue_path, {
+            "kind": "ESCALATE", "mandate_uid": ref.uid, "t": t,
+            "brief": brief, "action_id": action_id, "amount": amount})
+        self.workflow_log.append({
+            "kind": "ESCALATE", "mandate_uid": ref.uid, "t": t,
+            "brief": brief, "action_id": action_id, "queue": path})
+        return WorkflowResult(executed=True, credited=False,
+                              channel="merchant_queue",
+                              vendor_id=f"ticket_{ref.uid}_{t}",
+                              detail=path)
+
+    def notify(self, ref: MandateRef, amount: Rupees, notify_t: int,
+               target_t: int) -> dict:
+        self.workflow_log.append({
+            "kind": "NOTIFY", "mandate_uid": ref.uid,
+            "notify_t": notify_t, "target_t": target_t, "amount": amount})
+        return {"executed": True, "channel": "sim_ledger"}

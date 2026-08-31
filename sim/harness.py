@@ -35,8 +35,15 @@ INFORMATION CONDITIONS (all use identical index maths; only information moves)
                  Governance Tier 2: aggregate, non-identifying.
   solo_placebo   NEGATIVE CONTROL. Same observation schedule as solo_shared,
                  but cross-mandate observations carry outcomes computed
-                 against a DIFFERENT customer's balance. Identical mechanics,
-                 identical count, wrong information.
+                 against a DIFFERENT customer's balance. Identical count,
+                 systematically wrong information. S2b measures this and
+                 is red: extra unmatched likelihoods damage the filter,
+                 so the control is hostile rather than neutral. A
+                 posterior-predictive draw and a label-shuffle of real
+                 outcomes were both measured on the T9 population and
+                 both damaged it the same way (NOTES.md, 31 August).
+                 Neutrality versus own is the wrong property for any
+                 control that calls observe() with a non-true outcome.
   solo_shared    Own + other mandates' real observations. Governance Tier 1.
   portfolio      Pooled observations AND coordinated budget.
   oracle         True balance and true future. Must weakly dominate all.
@@ -151,11 +158,22 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
     calib = []
 
     donors = list(range(len(pop)))
-    rng.shuffle(donors)
+    rng.shuffle(donors)   # consumes the money rng for EVERY policy. Do not
+                          # skip it for non-placebo runs: that would shift
+                          # every subsequent spend draw and break T9.
+
+    hostile_placebo = policy.startswith("solo_placebo")
 
     for ci, c in enumerate(pop):
         bal = w3.balance_trace(c, rng, decay=spend_decay)
-        donor_bal = w3.balance_trace(pop[donors[ci]], np.random.default_rng(seed + 31 * ci))
+        # Hostile-control donor trace uses its own generator (seed+31*ci),
+        # never the money path. Skip the build when this run is not the
+        # hostile placebo -- that generator is otherwise unused, so skipping
+        # cannot move T9 for any locked policy.
+        donor_bal = None
+        if hostile_placebo:
+            donor_bal = w3.balance_trace(
+                pop[donors[ci]], np.random.default_rng(seed + 31 * ci))
         topups = np.zeros(T + topup_lag + topup_life + 2)
 
         est_sal = c["salary"] * rng.uniform(0.7, 1.3)
@@ -200,8 +218,8 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
             # run. Keeping k copies of one distribution costs k times the
             # advance() work for nothing, so keep one.
             #
-            # The placebo policies are excluded and MUST stay excluded: there
-            # the acting mandate gets the real outcome while the others get an
+            # The placebo policies are excluded and MUST stay excluded: the
+            # acting mandate gets the real outcome while the others get an
             # outcome computed against a different customer's balance, so the
             # beliefs genuinely diverge (measured max|diff| = 0.94).
             collapse = policy in POOLED and not policy.startswith("solo_placebo")
@@ -565,14 +583,14 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
                     # than by coincidence.
                     #
                     # It used to read `policy not in POOLED`, which was right
-                    # for the five non-placebo pooled policies (their beliefs
-                    # are provably identical, measured max|diff| = 0.0) and
-                    # WRONG for solo_placebo and solo_placebo_pd, which are
-                    # also in POOLED but whose beliefs genuinely diverge
-                    # (measured max|diff| = 0.94). Those two were scoring
-                    # mandates 2..k off mandate 1's belief. Fixed 28 Aug 2026;
-                    # it moves the placebo arms, which is why S2b and S2c
-                    # change. See NOTES.md.
+                    # for the non-placebo pooled policies (their beliefs are
+                    # provably identical, measured max|diff| = 0.0) and WRONG
+                    # for solo_placebo and solo_placebo_pd, which are also in
+                    # POOLED but whose beliefs genuinely diverge (measured
+                    # max|diff| = 0.94). Those two were scoring mandates 2..k
+                    # off mandate 1's belief. Fixed 28 Aug 2026; it moves the
+                    # placebo arms, which is why S2b and S2c change.
+                    # See NOTES.md.
                     if fc_days is None or not collapse:
                         fc_days = b.forecast(day, LOOKAHEAD_DAYS)
                     p_now_l = [(dd, p) for dd, p in fc_days if dd >= day + 1]

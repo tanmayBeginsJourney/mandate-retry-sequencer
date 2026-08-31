@@ -43,17 +43,258 @@ from agent.audit.log import AuditLog, EventKind
 from agent.constraints.stage0 import Stage0Gate, action_id
 from agent.context.rail_monitor import RailMonitor, RailState
 from agent.llm.caseview import build_case_view
+from agent.llm.compose import compose_outreach
 from agent.llm.governance import sanitise
 from agent.policy.belief_book import BeliefBook
 from agent.policy.timing import DEFAULT_DISCOUNT, Reason, propose
-from agent.ports import (TECH, Allowed, InterventionKind, MandateRef,
-                         MoneyAction, Refused, StopRule, to_paise)
+from agent.ports import (TECH, Allowed, Diagnosis, InterventionKind,
+                         MandateRef, MoneyAction, Refused, RootCause, StopRule,
+                         INDETERMINATE_CODES, to_paise)
+from agent.recovery import (UnresolvedCycle, batch_legal_ceiling,
+                            escalate_halts_cycle, fourth_debit_blocked,
+                            indeterminate_reason, is_funds_decline,
+                            is_terminal_risk_decline, should_emit_risk_retry,
+                            should_emit_risk_terminal,
+                            should_issue_backup_after_fail,
+                            should_remind_after_fail, should_report_unresolved)
 from agent.state import MandateState
 
 CAP = w3.NPCI_MAX
 HOURS = w3.HOURS
 DECISION_HOUR = w3.DECISION_HOUR        # 8
 PEER_WINDOW_DAYS = 7
+
+
+def _llm_client(ctx: LoopContext, purpose: str = ""):
+    """LLM transport for exception-facing copy only (escalate briefs)."""
+    if not ctx.compose_llm or purpose != "escalate":
+        return None
+    d = ctx.diagnoser
+    return getattr(d, "client", None)
+
+
+def _stub_diag(m, intervention=InterventionKind.NUDGE) -> Diagnosis:
+    return Diagnosis(
+        diagnosis_id=getattr(m, "_did", "") or "recovery",
+        root_cause=RootCause.INSUFFICIENT_FUNDS,
+        intervention=intervention, confidence=0.7,
+        rationale="Funds decline on the mandate path.",
+        source="recovery", prompt_id="recovery")
+
+
+def _case_view(rt: CustomerRuntime, m, day: int, ctx: LoopContext):
+    unc = ctx.book.uncertainty(rt.ci, m.ref.uid)
+    peer = any(d >= day - PEER_WINDOW_DAYS and uid != m.ref.uid
+               for d, uid in rt.recent_success)
+    return build_case_view(
+        amount=m.amount, attempts_used=m.attempts_used, attempts_cap=CAP,
+        day=day, cycle_open=m.cycle_open, cycle_close=m.cycle_close,
+        decline_history=m.decline_history, peer_success_recent=peer,
+        uncertainty=unc, merchant_note=rt.c.get("merchant_note", ""),
+        bank=rt.bank)
+
+
+def _send_reminder(ctx: LoopContext, rt: CustomerRuntime, m, t: int) -> None:
+    day = t // HOURS
+    view = _case_view(rt, m, day, ctx)
+    diag = _stub_diag(m, InterventionKind.NUDGE)
+    copy = compose_outreach(view, diag, client=_llm_client(ctx, "reminder"),
+                            purpose="reminder")
+    wr = ctx.gate.send_reminder(m.ref, m.cycle, m.amount, t,
+                                diagnosis_id=diag.diagnosis_id,
+                                message=copy.body,
+                                action_id=f"remind_{m.ref.uid}_{m.cycle}_{m.attempts_used}")
+    m.reminders_sent += 1
+    ctx.counters["reminders"] += 1
+    ctx.counters["nudges"] += 1
+    if wr.executed:
+        ctx.counters["nudges_executed"] += 1
+
+
+def _issue_backup(ctx: LoopContext, rt: CustomerRuntime, m, t: int) -> None:
+    # A notification already queued for the fourth debit must not fire.
+    ctx.gate.clear_pending(m.ref, m.cycle, t,
+                           reason="replaced by backup checkout")
+    m.pending = None
+    day = t // HOURS
+    view = _case_view(rt, m, day, ctx)
+    diag = _stub_diag(m, InterventionKind.NUDGE)
+    copy = compose_outreach(view, diag, client=_llm_client(ctx, "backup_link"),
+                            purpose="backup_link")
+    wr = ctx.gate.issue_backup_link(
+        m.ref, m.cycle, m.amount, t,
+        diagnosis_id=diag.diagnosis_id, message=copy.body,
+        action_id=f"backup_{m.ref.uid}_{m.cycle}")
+    ctx.counters["backup_links"] += 1
+    if wr.executed:
+        m.backup_vendor_id = wr.vendor_id
+        m.backup_status = wr.status or "issued"
+        m.backup_expire_t = t + 48
+    else:
+        # Link did not create. Still hold the fourth debit: failing open
+        # into a mandate-killing attempt is worse than missing this cycle.
+        m.backup_status = "expired"
+        ctx.counters["backup_expired"] += 1
+
+
+def _hold_if_ceiling(ctx: LoopContext, m, t: int) -> bool:
+    """True = this mandate must not take a money action. Circuit breaker."""
+    if ctx.counters["n_att"] < ctx.legal_ceiling:
+        return False
+    ctx.gate.clear_pending(m.ref, m.cycle, t,
+                           reason="batch legal ceiling")
+    m.pending = None
+    if m.halted_in_cycle != m.cycle:
+        m.halted_in_cycle = m.cycle
+        ctx.stops[StopRule.BATCH_LEGAL_CEILING.value] += 1
+        ctx.log.emit(EventKind.STOP, t, mandate_uid=m.ref.uid,
+                     cycle=m.cycle, rule=StopRule.BATCH_LEGAL_CEILING.value,
+                     terminal=False,
+                     detail="batch legal ceiling "
+                            f"{ctx.legal_ceiling}; holding remaining "
+                            "live mandates")
+    return True
+
+
+def _emit_risk_if_needed(ctx: LoopContext, m, t: int, code: str,
+                         *, cycle: int | None = None) -> None:
+    """Audit-only runtime risk detection. Does not change scheduling."""
+    cyc = m.cycle if cycle is None else cycle
+    if m.collected and cycle is None:
+        return
+    if should_emit_risk_retry(collected=False,
+                              already_emitted=(cycle is None
+                                               and m.risk_retry_emitted),
+                              decline_history=(m.decline_history
+                                               if cycle is None else [code]),
+                              code=code):
+        if cycle is None:
+            m.risk_retry_emitted = True
+        ctx.counters["risk_retry"] += 1
+        ctx.log.emit(EventKind.RISK_RETRY, t, mandate_uid=m.ref.uid,
+                     cycle=cyc, decline_code=code,
+                     intervention="bounded_retry",
+                     detail="first insufficient-funds decline this cycle; "
+                            "bounded retry on recovery schedule")
+    elif should_emit_risk_terminal(collected=False,
+                                   already_emitted=(cycle is None
+                                                    and m.risk_terminal_emitted),
+                                   code=code):
+        if cycle is None:
+            m.risk_terminal_emitted = True
+        ctx.counters["risk_terminal"] += 1
+        ctx.log.emit(EventKind.RISK_TERMINAL, t, mandate_uid=m.ref.uid,
+                     cycle=cyc, decline_code=code,
+                     intervention="stop_and_flag",
+                     detail="hard decline this cycle; stop re-presenting, "
+                            "flag for re-auth or manual outreach")
+
+
+def _mark_pending_outcome(ctx: LoopContext, m, t: int, outcome) -> None:
+    """Record indeterminate debit; halt cycle to block double-debit."""
+    reason = indeterminate_reason(outcome.code,
+                                  getattr(outcome, "raw_code", "") or "")
+    if m.cycle not in m.unresolved_cycles:
+        m.unresolved_cycles[m.cycle] = UnresolvedCycle(
+            cycle=m.cycle, code=outcome.code, reason=reason)
+    m.halted_in_cycle = m.cycle
+    ctx.stops[StopRule.AGENT_STOP.value] += 1
+    ctx.log.emit(EventKind.STOP, t, mandate_uid=m.ref.uid,
+                 cycle=m.cycle, rule=StopRule.AGENT_STOP.value,
+                 terminal=False,
+                 detail="debit outcome indeterminate "
+                        f"({reason}); cycle halted so no retry can "
+                        "double-debit before async confirm")
+
+
+def _resolve_earliest_pending(ctx: LoopContext, rt: CustomerRuntime, m,
+                              t: int, day: int, outcome) -> None:
+    """A definitive outcome resolves the oldest still-pending cycle."""
+    if not m.unresolved_cycles:
+        return
+    earl = min(m.unresolved_cycles)
+    pending = m.unresolved_cycles.pop(earl)
+    code = outcome.code
+    if outcome.success:
+        ctx.collected_cycles[(m.ref.uid, earl)] = day
+        m.got_cycles += 1
+        ctx.counters["recovered_paise"] += to_paise(m.amount)
+        ctx.stops[StopRule.COLLECTED.value] += 1
+        return
+    if is_funds_decline(code):
+        _emit_risk_if_needed(ctx, m, t, code, cycle=earl)
+    elif is_terminal_risk_decline(code):
+        _emit_risk_if_needed(ctx, m, t, code, cycle=earl)
+    # Other definitive codes: resolved without a risk row; pending cleared.
+    _ = pending
+
+
+def _emit_run_end_unresolved(ctx: LoopContext, runtimes, t: int) -> None:
+    """Coverage metric: one row per mandate, not per cycle."""
+    for rt in runtimes:
+        for m in rt.mands:
+            if not should_report_unresolved(m.unresolved_cycles):
+                continue
+            ctx.counters["n_unresolved"] += 1
+            earliest = min(m.unresolved_cycles)
+            last_cyc = max(m.unresolved_cycles)
+            last = m.unresolved_cycles[last_cyc]
+            ctx.log.emit(
+                EventKind.UNRESOLVED, t, mandate_uid=m.ref.uid,
+                n_unresolved_cycles=len(m.unresolved_cycles),
+                earliest_unresolved_cycle=earliest,
+                last_indeterminate_code=last.code,
+                last_indeterminate_reason=last.reason,
+                detail="coverage gap: "
+                       f"{len(m.unresolved_cycles)} cycle(s) still pending "
+                       f"at run end (earliest cycle {earliest}); "
+                       f"last indeterminate outcome {last.reason}; "
+                       "cycle was halted to prevent double-debit on "
+                       "async confirm")
+
+
+def _hold_last_attempt(ctx: LoopContext, m, t: int) -> None:
+    """Close the cycle without a fourth debit. Idempotent per cycle."""
+    if m.halted_in_cycle == m.cycle:
+        return
+    m.halted_in_cycle = m.cycle
+    ctx.stops[StopRule.LAST_ATTEMPT_HELD.value] += 1
+    ctx.log.emit(EventKind.STOP, t, mandate_uid=m.ref.uid,
+                 cycle=m.cycle, rule=StopRule.LAST_ATTEMPT_HELD.value,
+                 terminal=False,
+                 detail="backup checkout closed unpaid; fourth "
+                        "mandate debit not fired")
+
+
+def _resolve_backup(ctx: LoopContext, rt: CustomerRuntime, m, t: int, day: int) -> bool:
+    """Poll an open backup link. True = do not schedule a mandate debit."""
+    if not m.backup_status:
+        return False
+    if m.backup_status == "paid":
+        return True
+    if m.backup_status in ("expired", "cancelled"):
+        _hold_last_attempt(ctx, m, t)
+        return True
+    wr = ctx.gate.poll_backup_link(m.ref, m.cycle, t)
+    if wr.status:
+        m.backup_status = wr.status
+    if wr.credited or wr.status == "paid":
+        m.backup_status = "paid"
+        m.collected = True
+        m.got_cycles += 1
+        ctx.counters["n_ok"] += 1
+        ctx.counters["backup_paid"] += 1
+        ctx.counters["recovered_paise"] += to_paise(m.amount)
+        ctx.collected_cycles[(m.ref.uid, m.cycle)] = day
+        ctx.stops[StopRule.COLLECTED.value] += 1
+        ctx.book.record_outcome(rt.ci, m.amount, True, m.ref.uid)
+        rt.recent_success.append((day, m.ref.uid))
+        return True
+    if wr.status in ("expired", "cancelled"):
+        ctx.counters["backup_expired"] += 1
+        _hold_last_attempt(ctx, m, t)
+        return True
+    return True  # still issued
 
 
 @dataclass
@@ -74,6 +315,11 @@ class LoopContext:
     scheduler: object = None
     log_ticks: bool = False
     collect_calib: bool = False
+    compose_llm: bool = False
+    last_attempt_backup: bool = False
+    remind_on_fail: bool = False
+    # n_mandates × 4 × cycles in the horizon. Circuit breaker, not a budget.
+    legal_ceiling: int = 2 ** 31 - 1
     # ---- outage response switches, each measurable in isolation
     pause_on_outage: bool = False
     # "never" | "outage_only" | "always"
@@ -83,9 +329,13 @@ class LoopContext:
     counters: dict = field(default_factory=lambda: {
         "n_att": 0, "n_ok": 0, "recovered_paise": 0, "waits": 0,
         "nudges": 0, "escalations": 0, "agent_stops": 0,
+        "nudges_executed": 0, "escalations_executed": 0,
+        "reminders": 0, "backup_links": 0, "backup_paid": 0,
+        "backup_expired": 0,
         "paused_dispatch": 0, "paused_decisions": 0,
         "tech_updates_suppressed": 0, "tech_declines": 0,
-        "attempts_wasted_on_tech": 0})
+        "attempts_wasted_on_tech": 0,
+        "risk_retry": 0, "risk_terminal": 0, "n_unresolved": 0})
     # Attempts and money split by WHO DIAGNOSED the mandate that produced them.
     # The executor never sees a `source`, so this compares like with like --
     # but which cases fall back is NOT random, so it describes the split and
@@ -124,6 +374,14 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
     day = t // HOURS
     for m in rt.mands:
         if not m.alive or m.pending is None or m.pending.target_t != t:
+            continue
+        if m.collected or fourth_debit_blocked(m.backup_status):
+            ctx.gate.clear_pending(
+                m.ref, m.cycle, t,
+                reason="last attempt held for backup checkout")
+            m.pending = None
+            continue
+        if _hold_if_ceiling(ctx, m, t):
             continue
 
         # ---- CONTEXT GATE. Not a Stage 0 rule -- a rail judgement. It decides
@@ -195,6 +453,12 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
         m.prev_code = outcome.code
         m.decline_history.append(outcome.code)
 
+        if getattr(outcome, "pending", False) or outcome.code in INDETERMINATE_CODES:
+            _mark_pending_outcome(ctx, m, t, outcome)
+            continue
+
+        _resolve_earliest_pending(ctx, rt, m, t, day, outcome)
+
         if p_pred is not None:
             ctx.calib.append((p_pred, 1.0 if outcome.success else 0.0))
 
@@ -219,6 +483,7 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             if outcome.code == TECH:
                 ctx.counters["tech_declines"] += 1
                 ctx.counters["attempts_wasted_on_tech"] += 1
+            _emit_risk_if_needed(ctx, m, t, outcome.code)
             if m.attempts_used >= CAP:
                 m.alive = False
                 ctx.stops[StopRule.MANDATE_DEAD.value] += 1
@@ -261,9 +526,20 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             ctx.book.record_outcome(rt.ci, m.amount, outcome.success,
                                     m.ref.uid)
 
+        if (not outcome.success
+                and ctx.remind_on_fail
+                and should_remind_after_fail(m.attempts_used, outcome.code, CAP)):
+            _send_reminder(ctx, rt, m, t)
+        if (not outcome.success
+                and ctx.last_attempt_backup
+                and should_issue_backup_after_fail(m.attempts_used, outcome.code,
+                                                   CAP)
+                and not m.backup_status):
+            _issue_backup(ctx, rt, m, t)
+
         # A technical decline may auto-represent under the SAME notification.
         # A Z9 may not. (docs/01_FACTS.md)
-        if outcome.code == TECH and m.alive and m.attempts_used < CAP:
+        if outcome.code == TECH and m.alive and m.attempts_used < CAP and not m.backup_status:
             nt = harness.earliest_legal(day, t + 1)
             if nt is not None and nt < m.cycle_close * HOURS:
                 if ctx.gate.issue_notification(m.ref, m.cycle, None, nt, t) is None:
@@ -287,6 +563,12 @@ def _phase_rollover(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             m.prev_code = None
             m.halted_in_cycle = None
             m.decline_history.clear()
+            m.backup_vendor_id = ""
+            m.backup_status = ""
+            m.backup_expire_t = 0
+            m.reminders_sent = 0
+            m.risk_retry_emitted = False
+            m.risk_terminal_emitted = False
             ctx.gate.ledger.open_cycle(m.ref.uid, m.cycle)
 
 
@@ -321,6 +603,11 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
     # mandate 1's posterior for all k. That is the defect this shape
     # prevents, and it is the same one harness.py:554-560 already had once.
     for m in live:
+        if _resolve_backup(ctx, rt, m, t, day):
+            continue
+        if _hold_if_ceiling(ctx, m, t):
+            continue
+
         unc = ctx.book.uncertainty(rt.ci, m.ref.uid)   # NO balance.
         belief = ctx.book.belief_for(rt.ci, m.ref.uid)
         peer = any(d >= day - PEER_WINDOW_DAYS and uid != m.ref.uid
@@ -331,6 +618,12 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             decline_history=m.decline_history, peer_success_recent=peer,
             uncertainty=unc, merchant_note=rt.c.get("merchant_note", ""),
             bank=rt.bank)
+
+        last_code = m.decline_history[-1] if m.decline_history else ""
+        if (ctx.last_attempt_backup and m.attempts_used >= CAP - 1
+                and is_funds_decline(last_code) and not m.backup_status):
+            _issue_backup(ctx, rt, m, t)
+            continue
 
         diag = ctx.diagnoser.diagnose(view)
         safe_text, gov = sanitise(diag.rationale)
@@ -347,27 +640,35 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
         m._source = diag.source
         kind = diag.intervention
 
-        if kind is InterventionKind.NUDGE:
-            # Non-money, zero-credit. Kept as a recommendation surfaced to the
-            # merchant: the unconditional topup ceiling puts its value at
-            # +0.02 pts (2SE 0.59) on the shipping config.
-            ctx.counters["nudges"] += 1
-            ctx.gate.record_non_money(m.ref, m.cycle, "NUDGE", t,
-                                      diag.diagnosis_id, credits_money=False)
-            continue
+        # NUDGE is a reminder, not a skipped debit. Fail-path reminders already
+        # fire in dispatch; fall through to timing so attempts 1-3 still run.
         if kind is InterventionKind.ESCALATE:
-            # ZERO-CREDIT WORKFLOW ACTION. It does NOT halt attempts. It was
-            # measured at +0.759 pts when it halted them -- and that entire
-            # gain was death-prevention, i.e. it was STOP wearing a different
-            # trigger. Two actions doing one job is worse than one, so the
-            # halting behaviour lives in STOP and this is now the audit trail
-            # for "compliant escalation" and nothing else.
+            copy = compose_outreach(view, diag, client=_llm_client(ctx, "escalate"),
+                                    purpose="escalate")
+            wr = ctx.gate.send_escalate(m.ref, m.cycle, m.amount, t,
+                                        diagnosis_id=diag.diagnosis_id,
+                                        brief=copy.body,
+                                        action_id=diag.diagnosis_id)
             ctx.counters["escalations"] += 1
-            ctx.gate.record_non_money(m.ref, m.cycle, "ESCALATE", t,
-                                      diag.diagnosis_id, credits_money=False,
-                                      halts_attempts=False)
-            ctx.stops[StopRule.ESCALATED.value] += 1
+            if wr.executed:
+                ctx.counters["escalations_executed"] += 1
+            last = m.decline_history[-1] if m.decline_history else ""
+            if escalate_halts_cycle(last, diag.root_cause.value):
+                ctx.stops[StopRule.ESCALATED.value] += 1
+                m.halted_in_cycle = m.cycle
+                ctx.log.emit(EventKind.STOP, t, mandate_uid=m.ref.uid,
+                             cycle=m.cycle, rule=StopRule.ESCALATED.value,
+                             terminal=False,
+                             detail="mandate cannot be retried; queued for "
+                                    "merchant re-authorisation")
+                continue
+            # Recoverable funds: queue is written, retries continue.
         elif kind is InterventionKind.STOP:
+            last = m.decline_history[-1] if m.decline_history else ""
+            if (ctx.last_attempt_backup and m.attempts_used >= CAP - 1
+                    and is_funds_decline(last)):
+                _issue_backup(ctx, rt, m, t)
+                continue
             ctx.counters["agent_stops"] += 1
             m.halted_in_cycle = m.cycle
             ctx.gate.record_non_money(m.ref, m.cycle, "STOP", t,
@@ -379,6 +680,13 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                          detail="held back before the cap to preserve the "
                                 "mandate's remaining billing cycles")
             continue
+
+        if ctx.last_attempt_backup and m.attempts_used >= CAP - 1:
+            last = m.decline_history[-1] if m.decline_history else ""
+            if is_funds_decline(last) or fourth_debit_blocked(m.backup_status):
+                if not m.backup_status:
+                    _issue_backup(ctx, rt, m, t)
+                continue
 
         if ctx.scheduler is None:
             td = propose(belief, m.amount, day, t, m.cycle_close,
@@ -424,11 +732,17 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
               time_major: bool = False, collect_calib: bool = False,
               pause_on_outage: bool = False,
               suppress_tech_updates: str = "never",
-              scheduler=None) -> dict:
+              scheduler=None, compose_llm: bool = False,
+              last_attempt_backup: bool = False,
+              remind_on_fail: bool = False,
+              legal_ceiling: int | None = None) -> dict:
     """Run the agent over a population. Same metric names as `harness.run`."""
     days = pop[0]["days"]
     cyc = pop[0]["cycle_days"]
     T = days * HOURS
+    n_mand = sum(len(c["mandates"]) for c in pop)
+    ceiling = (legal_ceiling if legal_ceiling is not None
+               else batch_legal_ceiling(n_mand, days, cyc, CAP))
 
     ctx = LoopContext(gate=gate, book=book, log=log, diagnoser=diagnoser,
                       monitor=monitor or RailMonitor(harness.P_TECH,
@@ -437,7 +751,10 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
                       log_ticks=log_ticks, collect_calib=collect_calib,
                       pause_on_outage=pause_on_outage,
                       suppress_tech_updates=suppress_tech_updates,
-                      scheduler=scheduler)
+                      scheduler=scheduler, compose_llm=compose_llm,
+                      last_attempt_backup=last_attempt_backup,
+                      remind_on_fail=remind_on_fail,
+                      legal_ceiling=ceiling)
 
     runtimes = []
     for ci, c in enumerate(pop):
@@ -462,6 +779,8 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
             for t in range(T):
                 for phase in PHASES:
                     phase(rt, t, ctx)
+
+    _emit_run_end_unresolved(ctx, runtimes, T - 1)
 
     # ---- accounting
     cyc_due = cyc_got = n_mand = n_alive = n_starved = 0
@@ -493,12 +812,21 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
         waits=cn["waits"],
         nudges=cn["nudges"],
         escalations=cn["escalations"],
+        nudges_executed=cn["nudges_executed"],
+        escalations_executed=cn["escalations_executed"],
+        reminders=cn["reminders"],
+        backup_links=cn["backup_links"],
+        backup_paid=cn["backup_paid"],
+        backup_expired=cn["backup_expired"],
         agent_stops=cn["agent_stops"],
         paused_dispatch=cn["paused_dispatch"],
         paused_decisions=cn["paused_decisions"],
         tech_declines=cn["tech_declines"],
         tech_updates_suppressed=cn["tech_updates_suppressed"],
         attempts_wasted_on_tech=cn["attempts_wasted_on_tech"],
+        risk_retry=cn["risk_retry"],
+        risk_terminal=cn["risk_terminal"],
+        n_unresolved=cn["n_unresolved"],
         # Each transition carries the evidence that caused it, so a
         # detection study can EXPLAIN a firing instead of guessing at it.
         rail_transitions=[(t, lbl, v.n_attempts, v.n_tech, v.p_value)

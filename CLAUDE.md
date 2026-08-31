@@ -34,11 +34,11 @@ with `docs/`, `docs/` still wins and the disagreement is a bug in the rewrite �
 fix it rather than leaving both.
 
 ⚠️ **The headline is conditional on `pop_spend` as well as on `payday_err`.**
-The uplift runs **+3.51 → +36.43** across the plausible range of world hardness
-and is **+6.29** at `pop_spend=0.80`, where the world's failure rate matches the
+The uplift runs **+3.52 → +36.48** across the plausible range of world hardness
+and is **+6.36** at `pop_spend=0.80`, where the world's failure rate matches the
 published record. Both artifacts now say so. **The operating point moves again
 when W7 lands, so expect to restate these once more — and do it in every place
-at once.** `grep -rn "36.66\|36.43\|94.36" README.md docs/` finds them.
+at once.** `grep -rn "40.30\\|36.48\\|98.01" README.md docs/` finds them.
 
 ⚠️ **The README's Limitations section lists ONLY what cannot be fixed from
 here** — unobtainable data, unpublished decline rates, unresolved law,
@@ -291,7 +291,8 @@ sim/
   runner.py            parallel driver (spawn-safe). Read its docstring first.
   t9_reference.py      captures/checks sim/t9_reference.json (gate T9)
   known_failures.txt   the gates allowed to be red, each with a written reason
-  fit_belief.py        how FITTED_BELIEF was fitted. Re-runnable.
+  fit_belief.py        robust fit; selects a different config than shipping
+  fitted_belief.json   committed record of that selection mismatch
   fair_audit.py        generalisation audit of the fitted prior (~71s)
   headline.py          the conditional headline table vs payday_wait
   verify_brief.py      asserts docs/07_AGENT_BRIEF.md matches the code
@@ -463,15 +464,15 @@ Bayes-versus-ML comparison. Requiring the label is stricter in the way that
 matters — a reader can tell which is which — and the alternative was a rule
 everyone quietly broke.)*
 
-**Four gates are red on a clean checkout** (25 gates: 4 FAIL, **0 VACUOUS**,
-21 pass) — updated 30 August 2026, when M1 and M4B were repaired. Full reasons
+**Four gates are red on a clean checkout** (27 gates: 4 FAIL, **0 VACUOUS**,
+23 pass) — updated 31 August 2026, when S2a_PD and T6_PD were added. Full reasons
 in `sim/known_failures.txt`; the short version, with the two repaired rows kept
 struck through as the record:
 
 | Gate | State | What it means |
 |---|---|---|
 | **S1** calibration, point-estimate filter | FAIL | ECE 0.091, inside the 0.10 bound, but the reliability curve is **not monotone**. Note S1 runs `portfolio`, which carries `w3.Belief` — **not the filter that ships**. |
-| **S1_PD** calibration, shipping filter | FAIL | Same threshold, on `w3.BeliefPD` under `FITTED_BELIEF`. ECE 0.026, also not monotone. Added 28 Aug because S1 had never measured the product. |
+| **S1_PD** calibration, shipping filter | FAIL | Same threshold, on `w3.BeliefPD` under `FITTED_BELIEF`. ECE 0.029, also not monotone. Added 28 Aug because S1 had never measured the product. |
 | ~~**M1**~~ attempt-cap mutant | ✅ **GREEN** | Was VACUOUS. Now runs its mutant at `cap_override=2` so the counter binds. The attempt-cap claim has a working test and **is safe to claim.** |
 | ~~**M4B**~~ mutants must not grade themselves | ✅ **GREEN** | Was FAIL: `mutate="pending"` incremented `V.pending` itself, so gate M4 passed by construction — 1066 counted, 1066 self-written, 0 independent. Both mutants now create illegal state instead. **It went green because the mutants were repaired, not because the detector was narrowed.** |
 | **S2b** placebo neutrality | FAIL | −14.09 pts. A finding about the control's design, not a code defect: the placebo injects *wrong* observations, not neutral extra ones. Left visible on purpose. |
@@ -485,14 +486,18 @@ rather than missing when it turns up in an older session's notes.
 
 ✅ **RESOLVED 30 August 2026.** M1 now runs its mutant at `cap_override=2` so the attempt-cap counter binds; the `pending` and `represent` mutants create illegal state instead of writing the counters they are graded on. **All five Stage 0 rules now have a working test in `sim/`, M4B is green, and the suite has 0 vacuous gates.** The paragraph above is kept as the record of what was wrong.
 
-⚠️ **Only 2 of 25 gates run the configuration that ships** (`S1_PD` and `S4`).
-Everything else — every mutant, every invariant, the T9 byte-lock, and all
-three S2 arms — runs the **unfitted** `BeliefPD`. A green suite is much weaker
-evidence about `w3.FITTED_BELIEF` than it looks. See error 13.
+⚠️ **Mutants still run the unfitted filter on purpose.** Stage 0 mutants test
+constraint counters, not the prior. Changing their `bcfg` can make a gate
+vacuous (the M1 lesson). The shipping configuration is covered by **S1_PD,
+T6_PD, S2a_PD, S4, and T9** (own, pooled, and coordinated under
+`FITTED_BELIEF` at both operating points), and T1/T7/T8 include those
+policies. Error 13's remaining gap was the moat and the lock, not the
+mutants.
 
-**The pooling claim is resolved and is not blocked by S2b.** S2a passes at
-+9.53 pts (±1.81) and is the defensible moat number. S2c (+23.62) is
-algebraically S2a + |S2b| and must **not** be quoted as independent evidence.
+**The pooling claim is resolved and is not blocked by S2b.** S2a_PD passes at
++8.34 pts (±1.36) on the filter that ships. Unfitted S2a is +9.53 pts (±1.81).
+S2c (+23.62) is algebraically S2a + |S2b| and must **not** be quoted as
+independent evidence.
 
 Do not "fix" any of these by loosening a threshold. S1's 0.10 bound was
 declared in `05_TEST_DESIGN.md` before any result was seen, and S1_PD uses the

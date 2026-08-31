@@ -38,6 +38,9 @@ class EventKind:
     OUTCOME = "OUTCOME"
     STOP = "STOP"
     LLM_FAILURE = "LLM_FAILURE"
+    RISK_RETRY = "RISK_RETRY"
+    RISK_TERMINAL = "RISK_TERMINAL"
+    UNRESOLVED = "UNRESOLVED"
 
 
 class LogFileNotEmpty(RuntimeError):

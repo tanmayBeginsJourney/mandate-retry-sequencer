@@ -639,6 +639,25 @@ class AttemptOutcome:
 
 
 @dataclass(frozen=True)
+class WorkflowResult:
+    """Outcome of a non-money workflow (reminder, backup checkout, escalate).
+
+    `executed` is true only if the side effect actually happened: an email
+    send, a Payment Link create, a queue row. A cap skip is executed=False.
+    `credited` means this cycle's amount was collected (backup link paid).
+    `status` is the Payment Link state when the channel is a checkout:
+    issued / paid / expired / cancelled / "".
+    """
+    executed: bool
+    credited: bool = False
+    channel: str = ""
+    vendor_id: str = ""
+    detail: str = ""
+    status: str = ""
+    short_url: str = ""
+
+
+@dataclass(frozen=True)
 class Refusal:
     rule: str               # cap | peak | lead | pending | represent
     detail: str
@@ -759,7 +778,11 @@ class StopRule(Enum):
     MANDATE_DEAD = "MANDATE_DEAD"
     ESCALATED = "ESCALATED"
     AGENT_STOP = "AGENT_STOP"       # the diagnosis layer chose STOP
-    RUN_BUDGET = "RUN_BUDGET"
+    LAST_ATTEMPT_HELD = "LAST_ATTEMPT_HELD"  # 4th debit replaced by unpaid backup link
+    # Batch-wide legal maximum: n_mandates × 4 × cycles in the horizon.
+    # Circuit breaker, not a consumable. Fires only if a per-mandate cap bug
+    # would exceed that total. Expected count 0 on a clean run.
+    BATCH_LEGAL_CEILING = "BATCH_LEGAL_CEILING"
 
 
 # ------------------------------------------------------------------- ports

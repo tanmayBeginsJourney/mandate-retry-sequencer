@@ -747,7 +747,7 @@ def main() -> int:
     print(f"Gate suite: {gate_state}")
     print(f"Worker deaths re-run: {n_retries}  "
           f"(see run_chunked -- the machine fault, contained not fixed)")
-    return 0 if gate_state == "PASS" else 1
+    return 0 if gate_state == "PASS" and hits == len(v) else 1
 
 
 if __name__ == "__main__":

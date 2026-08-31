@@ -67,6 +67,11 @@ class GoldenCase:
         return self.expert_agreement <= 0.65
 
 
+def cases_with_merchant_note(cases: list[GoldenCase]) -> list[GoldenCase]:
+    """Eval subset where the LLM is invoked in production."""
+    return [c for c in cases if (c.view.merchant_note or "").strip()]
+
+
 def _load_raw(path: str = GOLDEN) -> dict:
     try:
         import yaml                                    # noqa: PLC0415

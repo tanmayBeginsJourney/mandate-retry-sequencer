@@ -10,16 +10,20 @@
 | The world | **actively being extended.** `sim/` is NOT frozen. `04_BUILD_PLAN.md` carries the queue. |
 | The public artifacts | `README.md` and `docs/index.html`, both rewritten 29–30 August. Not drafts. |
 | The repo | public, `mandate-retry-sequencer`. |
-| Test suite | 25 gates, **4 red, 0 vacuous**. All four are findings with written reasons in `sim/known_failures.txt`. |
+| Test suite | 27 gates, **4 red, 0 vacuous**. All four are findings with written reasons in `sim/known_failures.txt`. |
 
 ### The four commands that matter
 
 ```
-python -m agent.batch_report --pops 4                  # THE DELIVERABLE. ~50s, no key.
-python agent/tests/test_recovery_rates.py              # recovery vs the published bands
-python agent/tests/test_insolvency_sweep.py            # W2, 5/5 pre-registered
-python scripts/prove_stage0_refuses.py                 # Stage 0 vs the REAL Razorpay client
+py -3.12 -m agent.batch_report --pops 4                # THE DELIVERABLE. ~50s, no key.
+py -3.12 agent/tests/test_recovery_rates.py            # recovery vs the published bands
+py -3.12 agent/tests/test_insolvency_sweep.py          # W2 measurement
+py -3.12 scripts/prove_stage0_refuses.py               # Stage 0 vs the REAL Razorpay client
 ```
+
+These are the commands verified on this Windows machine. `python` resolves to
+Python 3.14 without NumPy here; `py -3.12` resolves to Python 3.12 with the
+pinned NumPy 2.4.2.
 
 Everything above runs on a clean clone with numpy alone: no network, no
 credentials, no model download. Only `--llm` needs a key.
@@ -27,15 +31,15 @@ credentials, no model download. Only `--llm` needs a key.
 ### What is true about the numbers
 
 > **THE BATCH.** 100 customers × 5 mandates, 4 held-out populations, 120 days,
-> `payday_err=7`, `pop_spend=1.05`: **94.36% of billing cycles collected against
-> `payday_wait`'s 57.70%**, +36.66 pts (2 SE 2.47), ₹5,994,430, **zero Stage 0
-> refusals with an independent recount of zero over 8,954 money actions.**
+> `payday_err=7`, `pop_spend=1.05`: **98.01% of billing cycles collected against
+> `payday_wait`'s 57.70%**, +40.30 pts (2 SE 2.32), ₹6,203,060, **zero Stage 0
+> refusals with an independent recount of zero over 8,832 money actions.**
 >
 > **THE HEADLINE IS CONDITIONAL ON TWO PARAMETERS, NOT ONE.** `payday_err` was
 > always known. `pop_spend` was found on 29 August: at 1.05 the account cannot
 > cover the debit on its due date 53% of the time, against a published real
-> rate of 8–15%. The agent's edge runs **+3.51 → +36.43** across the plausible
-> range. At `pop_spend=0.80` it is **+6.29**, inside the published 6–8%
+> rate of 8–15%. The agent's edge runs **+2.81 → +36.48** across the plausible
+> range. At `pop_spend=0.80` it is **+6.36**, inside the published 6–8%
 > industry benchmark, and nothing was tuned to land there.
 >
 > **THE VALIDATION SUITE is what replaces a public benchmark, because none
@@ -52,7 +56,7 @@ credentials, no model download. Only `--llm` needs a key.
 >
 > **THE MECHANISM THAT SELLS IT.** The fixed schedule spends all four attempts
 > within four days of the due date, hits the NPCI cap while the account is
-> empty, and the mandate dies. **Survival 32.1% against the agent's 97.2%.**
+> empty, and the mandate dies. **Survival 32.1% against the agent's 96.6%.**
 > Dunning harder costs the customer, measured.
 
 ### The three traps a fresh session will otherwise walk into
@@ -81,7 +85,8 @@ credentials, no model download. Only `--llm` needs a key.
   got right as ordinary discipline.
 - **W0 landed**: the recovery-rate metric, which is the first quantity this
   project has ever produced that is comparable to a published figure.
-- **W2 landed**: insolvent customers, 5/5 pre-registered.
+- **W2 landed**: insolvent customers. After isolating its RNG stream, 3/5
+  pre-registered predictions hold; the corrected table is in `02_RESULTS.md`.
 - **W7 landed**: transient holds, **6/8 pre-registered, and the two breaks are
   the point.** V3 rises hard but breaks V1 doing it, so no recalibration was
   taken. **V7 did not move** (41.84% → 42.78% at best), which retires the claim
@@ -132,7 +137,7 @@ credentials, no model download. Only `--llm` needs a key.
 |---|---|
 | Track 3, mandate retry sequencing | Razorpay lists it as an example direction |
 | Belief over balance **and** payday | Payday posterior is where the moat lives |
-| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth +9.61 pts (±1.67) on the FITTED filter (ungated); S2a gates +9.53 on the UNFITTED one — see error 13 |
+| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth **+8.34 pts (±1.36)** on the shipping filter, gated as S2a_PD. Unfitted S2a is +9.53 (±1.81). Agent W9 (ungated) is +8.46 (±1.07) at the same calibration. |
 | **No** coordinated budgeting | Measured −6 pts twice. Cut. |
 | No LLM on the debit-timing path | **ADR-005** (below). Deliberate, defensible. |
 | **Yes** LLM on diagnosis / intervention choice / audit narrative | Needed for the track, and honest |
@@ -191,11 +196,12 @@ The original text, kept as the record:
   loses in all six worlds by 5–12 points, and a Bayes+ML hybrid is worse than
   the filter alone. The earlier +4.03 ML win was a fitted model beating an
   unfitted one. `NOTES.md`, 28 August.
-- **Does pooling survive a properly fitted filter?** Yes, and it grows:
-  +8.20 → **+9.61 pts (±1.67)**.
+- **Does pooling survive a properly fitted filter?** Yes:
+  +8.20 unfitted → **+8.46 pts (±1.07)** fitted.
 - **Suite runtime.** ~27 min → **~100s full / ~34s fast on an idle machine**,
-  output proved byte-identical by T9 — but T9's lock covers only the UNFITTED
-  filter (error 13). The full-tier figure is **load-dependent**: 100/102/98s
+  output proved byte-identical by T9. T9 locks unfitted policies and
+  `solo_pop_pd` / `solo_shared_pd` / `portfolio_pd` under `FITTED_BELIEF` at
+  both operating points (34 configs). The full-tier figure is **load-dependent**: 100/102/98s
   idle, 223s with other work in flight. `CLAUDE.md` has the measurement.
 - **The 6× LTV multiplier and the 0.92 discount.** Swept. LTV was inert and is
   removed; the discount is live and now reported as a range.
@@ -204,8 +210,8 @@ The original text, kept as the record:
   mandate 1's belief. Fixed. S2b now reads −14.09 (the −14.51 this line used
   to quote is stale; see `sim/known_failures.txt`).
 - **Does the day-0 payday prior create a cliff when the population differs?**
-  No. 6.95 pts of gentle degradation across `payday_day0_frac` 0.8→0.2, and the
-  margin over `ml_index` *grows* from +5.30 to +12.03 as the population moves
+  No. 4.84 pts of gentle degradation across `payday_day0_frac` 0.8→0.2, and the
+  margin over `ml_index` *grows* from +5.87 to +14.20 as the population moves
   away from the fit.
 
 ## Resolved 29 August 2026
@@ -221,12 +227,11 @@ The original text, kept as the record:
   append-mode plus a fixed path meant a second run audited two concatenated
   runs as one. `LogFileNotEmpty` now makes it an exception at open time.
   Error 18.
-- **The LLM layer is measured.** `glm-5.3-flash` diagnosing, `glm-5.3` judging.
-  10/21 ambiguous (rule engine 9/21), 4/4 terminal (rule engine 0/4), 13/19
-  clean. **It does not move the batch money** — and switching the decline
-  taxonomy ON, which was the standing explanation, does not change that:
-  **87.39% against the deterministic 88.54%.** See `NOTES.md`, 30 August.
-  $0.26 + $0.32 spent.
+- **The LLM layer is measured and routed.** Production calls the diagnoser only
+  when `merchant_note` is set (`agent/llm/routed_diagnoser.py`). Rules own
+  every other tick. Eval on that subset: **4/4** rule vs **2/4** routed LLM on
+  registered `merchant_note` cases (31 August). Full 40-case table is historical.
+  **Money headline is deterministic** — no LLM column in `batch_report`.
 - **`WAIT` cut** — and the premise was true only of the rule engine. Error 20.
 - **`RuleBasedDiagnoser` proposed a second debit on a collected cycle** (GC-40).
   Fixed in the component; the property had been living in the caller. Error 19.
@@ -285,15 +290,10 @@ The original text, kept as the record:
    arm is **95% deterministic** and must never be described as "the LLM's
    number".
 
-0e. **`batch_report.py` still prints `agree? yes` over two zeros.** The gate's
-   refusal count and the auditor's violation count are **not the same
-   quantity** — one is what was stopped, the other is what illegally happened —
-   and in a clean run they are both zero for unrelated reasons. That is
-   presented as a two-implementation cross-check and it is not one in that
-   regime. **Error 25.** The wording has NOT been changed, because the honest
-   fix is deciding what the panel should show when nothing illegal happened,
-   which is a judgement about the deliverable. `scripts/prove_stage0_refuses.py`
-   demonstrates the distinction and the auditor genuinely binding.
+0e. **Resolved 31 August 2026.** `batch_report.py` labels the two quantities
+   `gate refused` and `illegal executed` and states that zero in both columns
+   is not agreement. `scripts/prove_stage0_refuses.py` remains the test that
+   exercises the auditor after an injected bypass.
 0f. **Gate I2's matcher is broader than its stated intent.** It is
    `p.endswith(".py")` over every file under `agent/`, so it also forbids a
    module *inside* `agent/execution/` from importing a sibling. The rule's
@@ -315,7 +315,7 @@ The original text, kept as the record:
    uncertainty, so the posterior width is a product feature rather than an
    assumption. Do not chase the number externally.
 2. ~~**Six gates are red on a clean checkout**~~ **Four are: S1, S1_PD, S2b,
-   S2_LEGACY** (25 gates: 4 FAIL, **0 VACUOUS**, 21 pass). M1 and M4B were
+   S2_LEGACY** (27 gates: 4 FAIL, **0 VACUOUS**, 23 pass). M1 and M4B were
    repaired on 30 August; the original text is kept below as the record.
    **M4B is new, 28 Aug, and is the one to read first:** gate M4's mutant
    increments `V.pending` itself, so the pending-notification constraint has
@@ -351,13 +351,14 @@ The original text, kept as the record:
 6. ~~**Does pooling actually beat placebo pooling?**~~ **RESOLVED 27–28 August.**
    The old S2 was testing the point-estimate trio, not the payday-posterior
    trio the moat is claimed for. Rebuilt as three arms. **S2a — the moat —
-   passes at +9.53 pts (±1.81)** and survives the belief refit (+9.61, ±1.67
-   on held-out populations). What remains open is narrower: **S2b shows the
-   placebo is not a clean control** (−14.09 pts), because it injects *wrong*
-   observations rather than neutral extra ones. A control that matches the
-   update count without supplying misinformation — label-shuffled observations
-   at the matched base rate — has still not been built. Until it is, quote
-   S2a and **never** S2c.
+   passes at +9.53 pts (±1.81)** on the unfitted filter and **+8.34 pts (±1.36)
+   as S2a_PD on the filter that ships**. What remains open is narrower: **S2b
+   shows the placebo is not a clean control** (−14.09 pts), because it injects
+   *wrong* observations rather than neutral extra ones. A label-shuffle and a
+   posterior-predictive control were both built and measured on 31 August;
+   extra unmatched `observe()` calls damage this filter either way (NOTES.md).
+   Neutrality versus own is the wrong property for any control that feeds
+   non-true outcomes. Quote S2a / S2a_PD and **never** S2c.
 
 ## The three-way split — keep this true in the code
 
@@ -372,7 +373,7 @@ The original text, kept as the record:
       every session; local has run ahead of the remote before**
 - [x] Agent runs end to end over a batch of synthetic merchants
 - [x] One number: money recovered, with `payday_wait` printed beside it
-      — **94.36% vs 57.70%, +36.66 pts, reproduced on a clean clone in 47s**
+      — **98.01% vs 57.70%, +40.30 pts, reproduced on a clean clone in 108s**
 - [x] Audit log: every money action, with reason, constraint check, outcome
 - [x] Stopping rules explicit and demonstrable
 - [x] One failure handled gracefully, on camera —

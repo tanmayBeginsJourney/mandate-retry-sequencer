@@ -19,9 +19,9 @@ Three checks:
      looked superb (+15.37) and was brittle: at payday_err=14 it measured
      -4.85, WORSE than the filter it replaced, because the true payday fell
      outside the window at weight 1e-6 and could never be recovered. The
-     config was re-fitted against the mean across payday_err. Keep running
-     this: a config whose gain peaks at the operating point it was fitted on
-     is tuned to the harness, not fitted to the population.
+       The shipping config is selected by sim/fit_belief.py on the training
+       objective. Former values are in sim/fitted_belief.json as
+       former_shipping.
 
   2. WHOSE CALIBRATION DOES S1 ACTUALLY MEASURE? S1 runs `portfolio`, which
      does NOT end in "_pd" and therefore carries w3.Belief -- the POINT
@@ -91,31 +91,25 @@ def main():
     print("   pe=14.")
     print()
     print("   *** READ THIS BEFORE QUOTING THE TABLE BELOW. ***")
-    print("   This script used to claim the current config 'is selected against")
-    print("   the mean across pe'. That is NOT what sim/fit_belief.py does:")
-    print("   it selects at PE=7 only (fit_belief.py:35) and has no prior_floor")
-    print("   in its search space at all, so it CANNOT emit w3.FITTED_BELIEF.")
-    print("   The claim was corrected 28 Aug 2026 -- see NOTES.md and error 12")
-    print("   in docs/03_ERRORS.md. The OUTCOME below still holds and is the")
-    print("   thing that matters: the gain grows with payday uncertainty rather")
-    print("   than peaking at pe=7. Trust the measurement, not the provenance.")
+    print("   The table below measures the shipping config, selected by")
+    print("   sim/fit_belief.py on the training objective. Former shipping")
+    print("   values are in sim/fitted_belief.json as former_shipping.")
     PES = (1, 3, 5, 7, 10, 14)
     jobs = []
     for pe in PES:
-        for label, cfg in (("shipped", BASE), ("fair", FAIR)):
+        for label, cfg in (("old", BASE), ("shipping", FAIR)):
             for s in EVAL:
                 jobs.append((f"{pe}|{label}|{s}", "solo_shared_pd",
                              (100, 5, s, 1.05, 120), 900 + s,
                              dict(payday_err=pe, pop_spend=1.05, bcfg=cfg)))
     res = runner.run_jobs(jobs)
-    print(f"\n   {'payday_err':<12}{'shipped':>10}{'fitted':>10}{'gain':>22}")
+    print(f"\n   {'payday_err':<12}{'old':>10}{'shipping':>10}{'gain':>22}")
     for pe in PES:
-        a = [res[f"{pe}|shipped|{s}"]["cycle_rec"] for s in EVAL]
-        b = [res[f"{pe}|fair|{s}"]["cycle_rec"] for s in EVAL]
+        a = [res[f"{pe}|old|{s}"]["cycle_rec"] for s in EVAL]
+        b = [res[f"{pe}|shipping|{s}"]["cycle_rec"] for s in EVAL]
         m, e = paired(a, b)
-        mark = "   <-- fitted here" if pe == 7 else ""
         print(f"   {pe:<12}{np.mean(a)*100:>9.2f}%{np.mean(b)*100:>9.2f}%"
-              f"   {m:+6.2f}+/-{e:.2f} {'SIG ' if abs(m) > e else 'n.s.'}{mark}")
+              f"   {m:+6.2f}+/-{e:.2f} {'SIG' if abs(m) > e else 'n.s.'}")
 
     print()
     print("=" * 78)

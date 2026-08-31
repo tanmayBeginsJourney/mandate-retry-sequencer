@@ -46,7 +46,7 @@ check("harness.LOOKAHEAD_DAYS", harness.LOOKAHEAD_DAYS, 12)
 check("harness.P_TECH", harness.P_TECH, 0.008)
 check("(w3.Z9, w3.TECH, w3.OK)", (w3.Z9, w3.TECH, w3.OK), ("Z9", "TECH", "OK"))
 check("w3.FITTED_BELIEF", w3.FITTED_BELIEF,
-      dict(stride=1, prior_w=12, prior_day0=8.0, prior_floor=0.25,
+      dict(stride=1, prior_w=9, prior_day0=8.0, prior_floor=0.5,
            spend_beta=0.0))
 check("index_score signature",
       list(w3.index_score.__code__.co_varnames[:4]),

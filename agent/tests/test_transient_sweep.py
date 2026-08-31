@@ -277,7 +277,7 @@ def main() -> int:
                   fh, indent=1, sort_keys=True)
     print()
     print(f"  raw table written to {os.path.relpath(dump, ROOT)}")
-    return 0
+    return 0 if n_held == len(checks) else 1
 
 
 if __name__ == "__main__":

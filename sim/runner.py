@@ -9,6 +9,11 @@ result cannot depend on which process it ran in, on how many workers there
 were, or on the order the jobs completed. Parallelising over (policy, seed)
 pairs is therefore identity-preserving BY CONSTRUCTION, not by measurement.
 
+Every harness.run also builds, unconditionally, `default_rng(seed + 4242)`
+(explore). It is isolated from the money path: never touched unless that run
+is the matching policy, so adding the control cannot shift an existing
+policy's T9 fingerprint.
+
 That claim is not taken on trust: gate T9 in sim/tests.py compares every
 policy's output against sim/t9_reference.json, and is paired with a mutant
 (`shared_seed_mutant` below) that seeds the pool from ONE shared RNG instead

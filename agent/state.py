@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from agent.ports import MandateRef, PendingNotification, Rupees
+from agent.recovery import UnresolvedCycle
 
 
 @dataclass
@@ -35,6 +36,18 @@ class MandateState:
     # ESCALATE holds for the rest of THAT cycle and releases at rollover
     halted_in_cycle: int | None = None
     decline_history: list[str] = field(default_factory=list)
+    # Backup Payment Link that replaces the fourth mandate debit this cycle.
+    # `backup_status`: "" | issued | paid | expired | cancelled
+    backup_vendor_id: str = ""
+    backup_status: str = ""
+    backup_expire_t: int = 0
+    reminders_sent: int = 0
+    # Runtime risk detection: one row per class per cycle (reset at rollover).
+    risk_retry_emitted: bool = False
+    risk_terminal_emitted: bool = False
+    # Cycles whose debit outcome is still unknown. Survives rollover until
+    # a definitive outcome resolves them or the run ends.
+    unresolved_cycles: dict[int, UnresolvedCycle] = field(default_factory=dict)
 
     @property
     def cycle_open(self) -> int:

@@ -36,6 +36,7 @@ from agent.loop import run_agent
 from agent import metrics
 from agent.policy.belief_book import BeliefBook
 from agent.policy.timing import DEFAULT_DISCOUNT
+from agent.recovery import batch_legal_ceiling
 
 LOG_DIR = os.path.join(agent._PKG_ROOT, "agent", "runs")
 
@@ -112,7 +113,10 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              pooling: str = "all", consent_frac: float | None = None,
              use_llm: bool = False,
              llm_max_calls: int | None = 150,
-             executor=None) -> dict:
+             executor=None,
+             last_attempt_backup: bool | None = None,
+             remind_on_fail: bool | None = None,
+             legal_ceiling: int | None = None) -> dict:
     """One agent run over one population.
 
     `mode="degenerate"` is retry-only with the deterministic diagnoser: the
@@ -174,13 +178,16 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
             # is what makes a batch number reproducible offline.
             from agent.llm.client import DIAGNOSER_MODEL, ResponseCache, ZaiClient
             from agent.llm.model_diagnoser import ModelDiagnoser
+            from agent.llm.routed_diagnoser import MerchantNoteRoutedDiagnoser
             cache_path = os.path.join(agent._PKG_ROOT, "agent", "eval",
                                       "_cache", f"{DIAGNOSER_MODEL}.json")
-            diagnoser = ModelDiagnoser(
+            rules = diagnoser
+            llm = ModelDiagnoser(
                 client=ZaiClient(model=DIAGNOSER_MODEL,
                                  cache=ResponseCache(cache_path)),
-                fallback=diagnoser, log=log,
+                fallback=rules, log=log,
                 max_live_calls=llm_max_calls)
+            diagnoser = MerchantNoteRoutedDiagnoser(rules, llm)
 
     # THE BASELINE ARM. `mode="doc_legal"` swaps the belief-driven index for a
     # fixed daily schedule. Everything else -- Stage 0, the audit trail, the
@@ -262,6 +269,11 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         transient_h=transient_h,
         n_customers=len(pop), k=len(pop[0]["mandates"]),
         days=pop[0]["days"], cycle_days=pop[0]["cycle_days"],
+        legal_ceiling=(legal_ceiling if legal_ceiling is not None
+                       else batch_legal_ceiling(
+                           sum(len(c["mandates"]) for c in pop),
+                           pop[0]["days"], pop[0]["cycle_days"],
+                           w3.NPCI_MAX)),
         bcfg=bcfg, bcfg_sha=hashlib.sha256(
             json.dumps(bcfg or {}, sort_keys=True).encode()).hexdigest()[:16],
         outage=outage.asdict() if outage else None,
@@ -290,7 +302,14 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                     time_major=time_major, collect_calib=collect_calib,
                     pause_on_outage=pause_on_outage,
                     suppress_tech_updates=suppress_tech_updates,
-                    scheduler=scheduler)
+                    scheduler=scheduler, compose_llm=use_llm,
+                    last_attempt_backup=(mode == "full"
+                                         if last_attempt_backup is None
+                                         else last_attempt_backup),
+                    remind_on_fail=(mode == "full"
+                                    if remind_on_fail is None
+                                    else remind_on_fail),
+                    legal_ceiling=legal_ceiling)
     res["run_id"] = run_id
     res["log_path"] = log_path
     res["mode"] = mode
@@ -324,13 +343,25 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         res.pop("collected_cycles", None)
         res["recovery"] = None
     st = getattr(diagnoser, "stats", None)
-    if st is not None:
+    inner = getattr(diagnoser, "llm", None)
+    if inner is not None and hasattr(inner, "stats"):
+        ist = inner.stats
+        res["llm_n_llm"] = ist.get("n_llm", 0)
+        res["llm_n_fallback"] = ist.get("n_fallback", 0)
+        res["llm_reasons"] = dict(ist.get("reasons", {}))
+        res["llm_spend_usd"] = ist.get("spend_usd", 0.0)
+        res["llm_n_capped"] = ist.get("n_capped", 0)
+        prov["llm_spend_usd"] = ist.get("spend_usd", 0.0)
+    elif st is not None and "n_llm" in st:
         res["llm_n_llm"] = st["n_llm"]
         res["llm_n_fallback"] = st["n_fallback"]
         res["llm_reasons"] = dict(st["reasons"])
         res["llm_spend_usd"] = st["spend_usd"]
         res["llm_n_capped"] = st.get("n_capped", 0)
         prov["llm_spend_usd"] = st["spend_usd"]
+    if st is not None:
+        res["llm_n_rule_only"] = st.get("n_rule_only", 0)
+        res["llm_n_routed"] = st.get("n_routed", 0)
 
     _skip = ("stops", "gate_refusals", "calib", "rail_transitions")
     log.emit(EventKind.RUN_END, 0,

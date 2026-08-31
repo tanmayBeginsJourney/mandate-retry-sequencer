@@ -303,11 +303,11 @@ footer{padding:56px 0 90px}
     </p>
 
     <div class="hero-stats">
-      <div class="hstat"><span class="v num" id="s-agent">94.36%</span>
+      <div class="hstat"><span class="v num" id="s-agent">98.01%</span>
         <span class="k">of billing cycles collected by the agent</span></div>
       <div class="hstat dim"><span class="v num" id="s-base">57.70%</span>
         <span class="k">collected by a simple payday baseline</span></div>
-      <div class="hstat"><span class="v num" id="s-rupees">₹59.9L</span>
+      <div class="hstat"><span class="v num" id="s-rupees">₹62.0L</span>
         <span class="k">recovered across 4 populations of 100 customers</span></div>
     </div>
 
@@ -442,19 +442,19 @@ footer{padding:56px 0 90px}
     <div class="grid3" style="margin-bottom:22px">
       <div class="card">
         <div class="rk">Collected by the agent</div>
-        <div style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">94.36%</div>
+        <div id="b-agent" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">98.01%</div>
         <p class="tiny" style="margin:6px 0 0">of billing cycles due, over 120 days</p>
       </div>
       <div class="card">
         <div class="rk">Collected by the baseline</div>
-        <div style="font-size:32px;font-weight:500;letter-spacing:-.02em;color:var(--muted)" class="num">57.70%</div>
-        <p class="tiny" style="margin:6px 0 0">a difference of +36.66 points, 2 SE 2.47</p>
+        <div id="b-base" style="font-size:32px;font-weight:500;letter-spacing:-.02em;color:var(--muted)" class="num">57.70%</div>
+        <p class="tiny" style="margin:6px 0 0">a difference of <span id="b-delta">+40.30 points, 2 SE 2.32</span></p>
       </div>
       <div class="card">
         <div class="rk">Recovered in simulation</div>
-        <div style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">₹5,994,430</div>
+        <div id="b-rupees" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">₹6,203,060</div>
         <p class="tiny" style="margin:6px 0 0">zero constraint refusals, and an independent
-          recount of zero over 8,954 money actions</p>
+          recount of zero over 8,832 money actions</p>
       </div>
     </div>
 
@@ -555,7 +555,10 @@ footer{padding:56px 0 90px}
           <li><b>Diagnose the failure.</b> Name a cause and pick an action: retry, nudge,
             escalate, stop.</li>
           <li><b>Check the action is legal</b> against five mandate rules.</li>
-          <li><b>Execute or refuse.</b> Refused actions never reach the payment rail.</li>
+          <li><b>Execute or refuse.</b> Refused actions never reach the payment rail.
+            After the first or second insufficient-funds decline, a funding reminder
+            is sent. After the third, a Payment Link replaces the fourth mandate debit
+            so that debit is not fired.</li>
           <li><b>Fold the outcome back in</b>, success or decline.</li>
           <li><b>Log everything</b>, including the days it chose to do nothing.</li>
         </ol>
@@ -569,7 +572,7 @@ footer{padding:56px 0 90px}
         <p class="small" style="margin-bottom:0"><b>The constraint layer refuses; a separate
         auditor recounts.</b> One component blocks illegal actions. A second rebuilds what was
         legal from the audit log, using code that cannot import the first. Both counts are
-        printed side by side. Over 8,954 money actions in the headline batch, both are
+        printed side by side. Over 8,832 money actions in the headline batch, both are
         zero.</p>
       </div>
     </div>
@@ -706,7 +709,8 @@ footer{padding:56px 0 90px}
         </div>
         <p class="tiny" style="margin-top:12px">Pausing is off by default. The shipped
         behaviour is detection plus a change to how declines are folded into the balance
-        estimate, worth +0.256 points at the highest severity swept.</p>
+        estimate, worth +0.058 points at the highest severity swept (not
+        significant; re-run 31 August 2026 on the adopted prior).</p>
       </div>
       <div class="card">
         <h3>Effect of pausing on detection</h3>
@@ -761,9 +765,9 @@ footer{padding:56px 0 90px}
       <div class="card">
         <h3>Effect on collection rate</h3>
         <p class="small">Sharing one estimate across a customer's subscriptions, instead of each
-        merchant estimating that customer separately, is worth <b>+9.53 percentage points</b>
-        (±1.81) at <code>pop_spend=1.05</code> and <b>+3.47</b> at 0.80, the calibration whose
-        failure rate matches the published band. The value varies with world hardness.</p>
+        merchant estimating that customer separately, is worth <b>+8.34 percentage points</b>
+        (±1.36) at <code>pop_spend=1.05</code> on the shipping filter (gate S2a_PD) and <b>+3.38</b> at 0.80, the calibration whose
+        failure rate matches the published band. The 0.80 figure is an agent measurement, not gate-protected. The value varies with world hardness.</p>
         <p class="small" style="margin-bottom:0">The legal position on sharing one customer's
         outcomes across merchants is unsettled, so pooling is a <b>per-customer permission</b>.
         Pooling only for consenting customers costs 4.79 points at half consent at
@@ -994,9 +998,9 @@ footer{padding:56px 0 90px}
     <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">Limitations</h3>
     <ul class="limits" style="margin-top:14px">
       <li><b>The headline depends on two parameters.</b> At ±1 day of payday error the
-        baseline collects 3.5 points more; the +36.66 point figure is measured at ±7 days. It
-        also depends on spending pressure: the difference runs +3.51 to +36.43 across the
-        plausible range, and is +6.29 at the setting where this world's due-date failure rate
+        baseline collects 2.8 points more; the +40.30 point figure is measured at ±7 days. It
+        also depends on spending pressure: the difference runs +3.52 to +36.48 across the
+        plausible range, and is +6.36 at the setting where this world's due-date failure rate
         matches the published band.</li>
       <li><b>The headline batch runs with the richer decline taxonomy switched off</b>, so it
         contains no frozen accounts, revoked mandates or limit hits. Switching it on costs
@@ -1012,7 +1016,7 @@ footer{padding:56px 0 90px}
         gates that no parameter fixes; two are controls left failing so that a rewrite of the
         surrounding tests remains auditable.</li>
       <li><b>Simulation results are not production estimates.</b> The published industry
-        benchmark for retry optimisation is a 6–8% uplift. The +36.66 point figure describes
+        benchmark for retry optimisation is a 6–8% uplift. The +40.30 point figure describes
         this simulated world at <code>pop_spend=1.05</code>.</li>
       <li><b>The study is small:</b> 100 customers, 8 populations, one run seed each.</li>
     </ul>
@@ -1682,6 +1686,10 @@ fetch("data/scenarios.json")
     $("s-agent").textContent = fmt(D.batch.agent) + "%";
     $("s-base").textContent = fmt(D.batch.payday_wait) + "%";
     $("s-rupees").textContent = "₹" + (D.batch.rupees / 100000).toFixed(1) + "L";
+    $("b-agent").textContent = fmt(D.batch.agent) + "%";
+    $("b-base").textContent = fmt(D.batch.payday_wait) + "%";
+    $("b-delta").textContent = "+" + fmt(D.batch.delta) + " points, 2 SE " + fmt(D.batch.two_se);
+    $("b-rupees").textContent = "₹" + D.batch.rupees.toLocaleString("en-IN");
     $("c-day").min = h.cycle_start;
     $("c-day").max = h.cycle_end - 1;
     $("c-day").value = h.cycle_end - 1;

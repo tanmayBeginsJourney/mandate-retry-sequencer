@@ -169,7 +169,7 @@ def main() -> int:
         print("A BROKEN prediction here means the mechanism story is wrong and")
         print("the +1.371 has an unidentified cause. Do not quote it until the")
         print("cause is named.")
-    return 0
+    return 0 if hits == len(v) else 1
 
 
 if __name__ == "__main__":

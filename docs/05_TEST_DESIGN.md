@@ -159,7 +159,7 @@ difference is the finding.
 | ID | What it does | Mutant |
 |---|---|---|
 | **T8** | Every `COMPLIANT` policy must record zero Stage 0 violations, and `baseline_doc` must record some. **Not in the pre-registration above and not previously listed here — added to this table 28 Aug 2026.** An undeclared gate is a small version of the same problem as a vacuous one: nobody agreed in advance what it was for. | `baseline_doc` is the mutant: it is a real policy that must come back dirty (974 re-presentations) |
-| **T9** | Every policy's output must equal `sim/t9_reference.json` exactly, at both operating points. Metrics catch a changed decision; `calib_sha256` catches a changed float. **Covers the UNFITTED filter only** — none of its 28 configs passes `bcfg`. See error 13. | worker pool seeded from one shared RNG instead of per-run seeds |
+| **T9** | Every policy's output must equal `sim/t9_reference.json` exactly, at both operating points. Metrics catch a changed decision; `calib_sha256` catches a changed float. Locks unfitted policies and `solo_pop_pd` / `solo_shared_pd` / `portfolio_pd` under `FITTED_BELIEF` (34 configs). | worker pool seeded from one shared RNG instead of per-run seeds |
 | **S4** | The fitted belief configuration beats the shipped one by >2 SE. The decision number for which probability engine ships. ⚠️ **This ID was pre-registered for a different test** — see "Specified but NOT implemented". | `ignore_bcfg` — drops the fitted config, gain collapses to +0.00 |
 | **S1_PD** | S1's threshold, unchanged, applied to `w3.BeliefPD` — the filter that actually ships. S1 runs `portfolio`, which carries `w3.Belief`, so it has never measured the product. **Note S1 runs at `pe=1` and S1_PD at `pe=7`**: same threshold, different operating point, so 0.091 vs 0.026 is not a like-for-like comparison. | shares S1's binning; fails on monotonicity |
 | **M4B** | No mutation branch may increment the violation counter its gate reads. Static parse of `sim/harness.py`. **Added 28 Aug 2026 after M4 was found to be vacuous-but-green.** | its own falsifiability check: reports VACUOUS if it flags all five mutants, i.e. if it cannot discriminate |
@@ -233,12 +233,16 @@ asked for. What is missing is the systematic per-baseline sweep.)*
 - **T6.** Spec names a policy `solo_own`. **No such policy exists.** The
   harness has `solo_naive` / `solo_pop` / `solo_shared` / `solo_placebo` and
   their `_pd` variants. The gate compares `solo_pop` with `solo_shared`.
+  **T6_PD** is the same identity on `solo_pop_pd` / `solo_shared_pd` under
+  `FITTED_BELIEF`.
 - **S2.** Rebuilt as three arms (`S2a` moat, `S2b` confound check, `S2c` the
-  old headline) on the **payday-posterior** policies at ±7d. The original
-  point-estimate gate is retained, still failing, as `S2_LEGACY`. See
-  `02_RESULTS.md` — the old real-minus-placebo headline was ~60% placebo
-  damage, because `solo_placebo` injects wrong observations rather than neutral
-  extra ones.
+  old headline) on the **payday-posterior** policies at ±7d. **S2a_PD** is
+  the moat on `FITTED_BELIEF`. The original point-estimate gate is retained,
+  still failing, as `S2_LEGACY`. See `02_RESULTS.md` — the old
+  real-minus-placebo headline was ~60% placebo damage, because `solo_placebo`
+  injects wrong observations rather than neutral extra ones. A label-shuffle
+  and a posterior-predictive control were measured on 31 August and also
+  damaged the filter; extra unmatched `observe()` is not a martingale here.
 - **S3.** Implemented as a test of the significance machinery (a positive
   control that must read significant, a null control that must not), reporting
   the headline with its SE but deliberately not gating on it.

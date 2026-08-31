@@ -247,9 +247,9 @@ def main() -> int:
     print()
     print(f"Pre-registration record for this measurement: {hits}/{len(verdicts)}")
     print()
-    print("A BROKEN prediction is not a failed test. It is a finding, and it")
-    print("goes in NOTES.md with its mechanism (docs/CLAUDE.md rule 3).")
-    return 0
+    print("A BROKEN prediction is a finding and goes in NOTES.md with its")
+    print("mechanism. The non-zero exit prevents automation calling it a pass.")
+    return 0 if hits == len(verdicts) else 1
 
 
 if __name__ == "__main__":

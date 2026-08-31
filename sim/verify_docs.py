@@ -151,6 +151,18 @@ RETRACTIONS = [
         retracted_on="2026-08-30",
     ),
     Retraction(
+        id="only-3-of-25-shipping",
+        pattern=r"[Oo]nly [23] of 25 gates"
+                r"|[Oo]nly [23]/25 gates"
+                r"|Three of 25 gates now run",
+        why="Coverage expanded 31 Aug 2026: S1_PD, T6_PD, S2a_PD, S4, and T9 "
+            "(own/pooled/coordinated under FITTED_BELIEF) run the shipping "
+            "filter. T1/T7/T8 include those policies. Do not restate the old "
+            "coverage number as current. Historical mentions in error 13 must "
+            "sit next to a retraction marker.",
+        retracted_on="2026-08-31",
+    ),
+    Retraction(
         id="retired-headline",
         pattern=r"41\.7\s*%.{0,12}76\.3\s*%|76\.3\s*%.{0,12}41\.7\s*%"
                 r"|\+\s*5\.4\s*(pts|points).{0,30}pool"

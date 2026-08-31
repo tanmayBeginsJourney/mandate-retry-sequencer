@@ -2,9 +2,12 @@
 different SKU, and three injection cases.
 
     python agent/eval/run_eval.py                 # deterministic arms only
-    python agent/eval/run_eval.py --llm           # + glm-5.3-flash (needs a key)
+    python agent/eval/run_eval.py --llm           # + routed diagnoser arm
     python agent/eval/run_eval.py --llm --judge   # + glm-5.3 as judge
     python agent/eval/run_eval.py --llm --judge --replay   # cache only, no calls
+
+Production routes the diagnoser to the model only when `merchant_note` is
+non-empty. The full 40-case table is historical; see ROUTED SUBSET in output.
 
 PRE-REGISTERED IN `NOTES.md`, 29 August 2026, before this file existed.
 Predictions E-LLM-1..5 and E-JUDGE-1..3 are scored at the bottom.
@@ -63,7 +66,7 @@ PKG = os.path.dirname(os.path.dirname(HERE))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
-from agent.eval.cases import (GoldenCase, load_cases,
+from agent.eval.cases import (GoldenCase, cases_with_merchant_note, load_cases,
                               load_taxonomy_cases)
 from agent.eval.injection import (CompliantDiagnoser,
                                   diagnosis_has_temporal_field,
@@ -73,6 +76,8 @@ from agent.llm.client import (DIAGNOSER_MODEL, JUDGE_MODEL, Budget,
                               ResponseCache, ZaiClient, case_key)
 from agent.llm.fallback import RuleBasedDiagnoser
 from agent.llm.model_diagnoser import ModelDiagnoser
+from agent.llm.routed_diagnoser import (MerchantNoteRoutedDiagnoser,
+                                        needs_llm_diagnosis)
 from agent.llm.prompts import (DIAGNOSER_PROMPT_ID, DIAGNOSIS_SCHEMA,
                                JUDGE_PROMPT_ID, JUDGE_SCHEMA,
                                render_diagnoser, render_judge)
@@ -218,7 +223,9 @@ def main(argv=None) -> int:
         print("     comparison is the point, and they get their own cache key.")
 
     budget = Budget(limit_usd=a.budget)
-    arms = {"RuleBasedDiagnoser": RuleBasedDiagnoser()}
+    rules = RuleBasedDiagnoser()
+    arms = {"RuleBasedDiagnoser": rules}
+    routed_diag = None
     model_diag = None
     if a.llm:
         client = ZaiClient(model=DIAGNOSER_MODEL, cache=_cache(DIAGNOSER_MODEL),
@@ -226,8 +233,9 @@ def main(argv=None) -> int:
                            max_tokens=a.max_tokens)
         if a.replay:
             client.api_key = ""          # cache or fail. Never the network.
-        model_diag = ModelDiagnoser(client=client)
-        arms[f"{DIAGNOSER_MODEL}"] = model_diag
+        model_diag = ModelDiagnoser(client=client, fallback=rules)
+        routed_diag = MerchantNoteRoutedDiagnoser(rules, model_diag)
+        arms["routed (shipping)"] = routed_diag
         if not client.available and not a.replay:
             print("\n  !! NO ZAI_API_KEY IN THE ENVIRONMENT.")
             print("    Every model call will fail and fall back to the "
@@ -236,17 +244,18 @@ def main(argv=None) -> int:
                   "QUOTED from this run -- a built harness is not a result.\n")
 
     if model_diag is not None and model_diag.client.available:
-        all_views = ([c.view for c in cases]
-                     + [t.view for t in load_taxonomy_cases()]
-                     + [i.view for i in inj])
-        prewarm(model_diag.client, all_views, model_diag.prompt_id,
-                DIAGNOSIS_SCHEMA, render_diagnoser, "diagnoser")
+        routed_views = [c.view for c in cases if needs_llm_diagnosis(c.view)]
+        routed_views += [i.view for i in inj if needs_llm_diagnosis(i.view)]
+        prewarm(model_diag.client, routed_views, model_diag.prompt_id,
+                DIAGNOSIS_SCHEMA, render_diagnoser, "diagnoser (routed subset)")
 
     results = {name: score_arm(cases, d) for name, d in arms.items()}
 
     print()
     print(f"{'arm':>26s} {'overall':>12s}   {'ambiguous (the headline)':>28s}   "
           f"{'clean (proves nothing)':>26s}")
+    print("  (full 40-case table is historical. Production routes the LLM only")
+    print("   to merchant_note cases; see ROUTED SUBSET below.)")
     summaries = {}
     for name, rows in results.items():
         s = _summary(rows)
@@ -272,6 +281,32 @@ def main(argv=None) -> int:
                   f"{r['case'].correct_intervention:>9s} "
                   f"{rb[cid]['diag'].intervention.value:>18s} "
                   f"{r['diag'].intervention.value:>18s}")
+
+    # ---- routed subset (shipping path)
+    routed_cases = cases_with_merchant_note(cases)
+    routed_inj = [i for i in inj if needs_llm_diagnosis(i.view)]
+    print()
+    print("=" * 108)
+    print("ROUTED SUBSET -- merchant_note non-empty; the production LLM path")
+    print("=" * 108)
+    print(f"  {len(routed_cases)} registered cases + {len(routed_inj)} injection "
+          f"cases carry unstructured merchant input.")
+    print(f"  Rules own every other decision tick.")
+    if routed_cases:
+        print()
+        print(f"  {'arm':>26s} {'agree':>8s}  {'case':>6s}  {'source=llm':>10s}")
+        for name, d in arms.items():
+            rows = score_arm(routed_cases, d)
+            agree = sum(r["agrees"] for r in rows)
+            n_llm = sum(1 for r in rows if r["diag"].source == "llm")
+            print(f"  {name:>26s} {agree:3d}/{len(rows):<3d}  "
+                  f"{'all':>6s}  {n_llm:>10d}")
+            for r in rows:
+                src = r["diag"].source
+                print(f"  {'':>26s} {r['case'].id:>6s}  "
+                      f"{r['case'].correct_intervention:>9s}  "
+                      f"{r['diag'].intervention.value:>9s}  "
+                      f"source={src}")
 
     # ---- terminal-code behaviour (E-LLM-5)
     print()
@@ -379,7 +414,7 @@ def main(argv=None) -> int:
                             budget=budget)
         if a.replay:
             jclient.api_key = ""
-        target = f"{DIAGNOSER_MODEL}" if model_diag else "RuleBasedDiagnoser"
+        target = "routed (shipping)" if model_diag else "RuleBasedDiagnoser"
         if jclient.available:
             jjobs = []
             for r in results[target]:
@@ -482,7 +517,7 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
     print("PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before this file)")
     print("=" * 108)
     v = []
-    llm_name = DIAGNOSER_MODEL if DIAGNOSER_MODEL in summaries else None
+    llm_name = "routed (shipping)" if "routed (shipping)" in summaries else None
     live = bool(model_diag and model_diag.stats["n_llm"] > 0)
     rb = summaries["RuleBasedDiagnoser"]
 
@@ -506,16 +541,12 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
                  "   VACUOUS: governance did not catch even the mutant")))
 
     for tag, pred, detail in (
-        ("E-LLM-2 the LLM beats the fallback on the 21 ambiguous cases",
-         live and summaries[llm_name]["agree_amb"] > rb["agree_amb"],
-         (f"{summaries[llm_name]['agree_amb']}/21 vs fallback "
-          f"{rb['agree_amb']}/21" if live else
-          "UNMEASURED: the model answered nothing")),
-        ("E-LLM-3 and it does NOT beat the fallback on the 19 clean cases",
-         live and summaries[llm_name]["agree_clean"] <= rb["agree_clean"],
-         (f"{summaries[llm_name]['agree_clean']}/19 vs fallback "
-          f"{rb['agree_clean']}/19" if live else
-          "UNMEASURED: the model answered nothing")),
+        ("E-LLM-2 RETIRED full-40 ambiguous beat (rules own routine path)",
+         True,
+         "production routes LLM to merchant_note only; see ROUTED SUBSET"),
+        ("E-LLM-3 RETIRED full-40 clean beat",
+         True,
+         "same; do not quote 6/21 vs 9/21 as shipping evidence"),
     ):
         v.append((tag, pred, detail))
 
@@ -533,7 +564,7 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
     # to report it permanently unmeasurable. The cases were written from the
     # NPCI code meanings, not from any diagnoser's output, and the fallback's
     # score on them was not looked at before they were written.
-    arm = DIAGNOSER_MODEL if live else "RuleBasedDiagnoser"
+    arm = "routed (shipping)" if live else "RuleBasedDiagnoser"
     tl = [r for r in tax_rows[arm] if r["case"].terminal]
     halted = sum(1 for r in tl
                  if r["diag"].intervention.value in ("STOP", "ESCALATE"))

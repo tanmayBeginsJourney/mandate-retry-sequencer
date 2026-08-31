@@ -56,7 +56,7 @@ RULES = [
      # not batch.py needs an executor, that is the rule working.
      ("constraints/stage0.py", "batch.py", "tests/test_parity_vs_harness.py",
       "tests/test_stage0_enforces.py", "tests/test_action_ablation.py",
-      "tests/test_razorpay_mapping.py"),
+      "tests/test_razorpay_mapping.py", "tests/test_workflows.py"),
      "add `from agent.execution.sim_executor import SimExecutor` to "
      "agent/loop.py so the loop can attempt a debit without the gate"),
 

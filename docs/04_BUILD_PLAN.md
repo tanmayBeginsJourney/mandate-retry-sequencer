@@ -29,7 +29,7 @@ the README's Limitations section and nowhere else.
 | ~~14~~ | ~~**Anchor `DeclineMix`'s sweep against a published mix**~~ | ✅ **DONE 30 August 2026, and the answer is mostly no.** Three combined cells were added so the sweep produces a decline *shape* at all, and it is printed against Churnkey's card mix. **Insufficient funds straddles (41.4–69.6% vs 45–55%) — anchored. Technical sits entirely below (1.1–1.9% vs 10–15%) and that is EXPECTED**, because `01_FACTS.md` carries a UPI-specific claim of under 1% of failures and the two published sources contradict each other. **Hard flags sit entirely below (4.9–11.5% vs 25–33%) and remain genuinely invented** — either UPI has far fewer terminal declines, or those two rates are swept several times too low, and nothing here distinguishes them. `--shape-only` reruns just the 24 cells. | **DONE — 1 row anchored, 1 explained, 1 still a guess** |
 | ~~15~~ | ~~Sweep `reasoning_effort`~~ | ✅ **DONE 30 August 2026, $0.172, and the caveat pointed the WRONG WAY.** `low` is the best of the three permitted settings on the ambiguous set — **10/21 low, 7/21 high, 9/21 max** — so 10/21 is not a floor. **`max`'s row is the rule engine**: 32 of 50 calls hit the 2,000-token cap and fell back, and it reports the rule engine's exact scores. **The terminal-code result, 4/4 against 0/4, is invariant across all three settings** — the claim the LLM layer rests on does not depend on a configuration. ⚠️ **The marginal one does: at `high` the model LOSES on ambiguous cases, 7/21 against 9/21.** Also fixed **error 31**: the cache key omitted `reasoning_effort`, so this sweep would have silently replayed the `low` answers. | **DONE** |
 | 16 | Adjudicate the 19 judge-vs-author disagreements | The eval's only validation step. | not started |
-| 17 | **Error 27 in W2: `p_missed_credit` shifts the money path's RNG** | W7's equivalent was fixed to draw from its own generator; W2's was not, so each insolvency rate is a fresh draw of the world plus missed credits. W2's 5/5 were directional and stand. Repairing it **restates W2's published table** — a call about the deliverable, not a bug fix. | flagged, Tanmay's call |
+| ~~17~~ | ~~**Error 27 in W2: `p_missed_credit` shifts the money path's RNG**~~ | **FIXED 31 August 2026.** Missed credits now use a per-customer generator. The no-miss trace and the next money draw are bit-identical, and omitting the isolated generator at a positive rate raises. The corrected sweep is 3/5 pre-registered; W2-2 and W2-4 broke. | **DONE — W2 table restated** |
 | 18 | Build V2, V4, V6, V8 | Four validation targets are still "not built", so the suite scores 4 of 9. | not started |
 
 ⚠️ **Items 1–4 are the submission. Everything below 6 is the project.** If time
@@ -57,8 +57,8 @@ page — not the queue.
   recalibration** — see the W7 section below and `NOTES.md`, 30 August.
 - **W0 — the recovery-rate metric.** Done. `agent/metrics.py`,
   `test_recovery_metric.py` (5 checks, 5 mutants), `test_recovery_rates.py`.
-- **W2 — insolvent customers.** Done, 5/5 pre-registered.
-  `p_missed_credit`, guarded and inert at 0.0.
+- **W2 — insolvent customers.** Done, 3/5 pre-registered after RNG isolation.
+  `p_missed_credit` is guarded, inert at 0.0, and uses its own generator.
 - **The fixed-schedule baseline.** Done. `agent/policy/fixed_schedule.py`.
 - **M1 and M4B — ~~the two Stage 0 rules with no working test~~.** **FIXED
   30 August 2026.** M1 runs its mutant at `cap_override=2` so the attempt-cap
@@ -105,8 +105,8 @@ idea.
 **Built, gated, measured and wired into `batch_report.py`.** `agent/metrics.py`,
 `SimExecutor.at_risk_cycles()`, `agent/tests/test_recovery_metric.py` (5 checks,
 5 mutants, all trip), `agent/tests/test_recovery_rates.py` (the measurement).
-Parity is still bit-exact 24/24 and isolation still 5/5; the batch headline is
-unchanged at 94.36% / 57.70% / +36.66.
+Parity is still bit-exact 24/24 and isolation still 5/5; the batch headline after
+the 31 August prior adoption is 98.01% / 57.70% / +40.30.
 
 **V1 is hit and was not fitted: 13.68% first-presentation failure at
 `pop_spend=0.80`, inside the published 8–15%.** Full table and the two broken
@@ -152,7 +152,8 @@ about +6 points, at ~60% about +36.
 ## W2. Customers who genuinely cannot pay — ✅ DONE 30 August 2026
 
 *Built as `p_missed_credit`, swept {0.00, 0.03, 0.08}, guarded so it is
-inert at 0.0. 5/5 pre-registered. `agent/tests/test_insolvency_sweep.py`.
+inert at 0.0. The corrected isolated-RNG sweep is 3/5 pre-registered.
+`agent/tests/test_insolvency_sweep.py`.
 The result argued against adopting it as the default calibration — see
 `NOTES.md`, 30 August. Spec kept below for the reasoning.*
 
@@ -201,7 +202,7 @@ and makes `days_to_recovery` comparable to the published distribution.
 with every rate at zero. Frozen accounts, revoked mandates, limit hits.
 
 ~~Consequence, and it is the reason to do it: **the diagnosis layer currently
-does not move the money** (94.33% against 94.36%) *because there is nothing in
+does not move the money** (94.33% against 94.36% on the previous prior) *because there is nothing in
 the world to diagnose*. Every failure is insufficient funds, and the frozen
 policy is exactly indifferent to decline reasons. Switch the taxonomy on and
 terminal codes exist — the case where the LLM already scores **4/4 against the
@@ -434,8 +435,8 @@ Three things a judge needs and cannot currently get:
 **Scope added and not in the original plan:** a context layer (rail-outage
 detection), built because the action space measured only +1.371 pts against a
 policy already at 95.31% — the world is saturated at the scheduling task. The
-context layer's own recovery value is +0.256 pts at the most extreme severity
-swept; its defensible claim is a capability, not a number. `02_RESULTS.md`.
+context layer's own recovery value is +0.058 pts at the most extreme severity
+swept (not significant on the adopted prior; re-run 31 August 2026); its defensible claim is a capability, not a number. `02_RESULTS.md`.
 
 ## WHERE WE ACTUALLY WERE, 28 August — HISTORICAL, kept for the reasoning
 
@@ -535,8 +536,10 @@ wrong.
 > representable true payday; `est_salary` is wrong by ±30% by construction and
 > `est_spend` was a population rate.
 >
-> **Those three parameters have since been fitted** (`w3.FITTED_BELIEF`,
-> `sim/fit_belief.py`), which is worth **+11.66 pts (±1.61)**, gated as S4.
+> **The configured values improve the filter by +11.66 pts (±1.61), gated as
+> S4.** S4 proves the configuration is applied, not how it was selected. The
+> repaired `sim/fit_belief.py` selects a different prior; the mismatch is
+> committed in `sim/fitted_belief.json`.
 >
 > **And that reversed the ML result.** An intermediate finding on this page's
 > earlier revision — "`ml_index` beats `solo_shared_pd` in world A by +4.03" —

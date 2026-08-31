@@ -3,8 +3,9 @@
 T9 REFERENCE CAPTURE.
 
 Writes sim/t9_reference.json: the exact output of every policy at both
-operating points, captured BEFORE any performance work, so that any later
-optimisation can be proved to have changed nothing.
+operating points. The original cases were captured before performance work.
+The fitted shipping policy was added on 31 August 2026; its recapture diff is
+recorded in NOTES.md.
 
 WHY THE BITS MATTER. Every scalar is stored as `float.hex()`, which
 round-trips exactly. Storing rounded decimals would make T9 a gate that
@@ -57,6 +58,11 @@ POLICIES = ("baseline_doc", "baseline_legal", "payday_wait", "myopic",
             "solo_naive", "solo_pop", "solo_placebo", "solo_shared",
             "portfolio", "solo_pop_pd", "solo_shared_pd", "portfolio_pd",
             "solo_placebo_pd", "oracle")
+# Shipping-filter lock: own, pooled, and coordinated, each under
+# FITTED_BELIEF at both operating points. solo_shared_pd was the first
+# fitted case (31 August); own and coordinated close error 13's remaining
+# coverage gap on the policies the product actually runs.
+FITTED_POLICIES = ("solo_pop_pd", "solo_shared_pd", "portfolio_pd")
 
 SCALARS = ("cycle_rec", "approval", "survival", "att_per_cycle", "starvation")
 
@@ -65,6 +71,16 @@ def build_pop():
     s = POP_SPEC
     return w3.make_pop(s["n"], s["k"], np.random.default_rng(s["seed"]),
                        days=s["days"], spend=s["spend"])
+
+
+def cases():
+    """Yield every locked case as (key, policy, run kwargs)."""
+    for pe in PAYDAY_ERRS:
+        for pol in POLICIES:
+            yield f"{pol}|pe{pe}", pol, dict(payday_err=pe)
+        for pol in FITTED_POLICIES:
+            yield (f"{pol}|fitted|pe{pe}", pol,
+                   dict(payday_err=pe, bcfg=w3.FITTED_BELIEF))
 
 
 def fingerprint(res):
@@ -94,24 +110,27 @@ def fingerprint(res):
 def capture():
     pop = build_pop()
     runs = {}
-    for pe in PAYDAY_ERRS:
-        for pol in POLICIES:
-            t0 = time.perf_counter()
-            res = harness.run(pol, pop, RUN_SEED, payday_err=pe,
-                              pop_spend=POP_SPEND, collect_calib=True)
-            dt = time.perf_counter() - t0
-            key = f"{pol}|pe{pe}"
-            runs[key] = fingerprint(res)
-            print(f"  {key:<28} rec={res['cycle_rec']*100:6.2f}%  "
-                  f"calib_n={runs[key]['calib_n']:>6}  {dt:6.2f}s", flush=True)
+    for key, pol, kw in cases():
+        t0 = time.perf_counter()
+        res = harness.run(pol, pop, RUN_SEED, pop_spend=POP_SPEND,
+                          collect_calib=True, **kw)
+        dt = time.perf_counter() - t0
+        runs[key] = fingerprint(res)
+        print(f"  {key:<28} rec={res['cycle_rec']*100:6.2f}%  "
+              f"calib_n={runs[key]['calib_n']:>6}  {dt:6.2f}s", flush=True)
     return runs
 
 
 def meta():
     return dict(
-        note="Captured before any performance work. See sim/t9_reference.py.",
+        note=("Original cases captured before performance work; fitted shipping "
+              "cases added 31 August 2026 and expanded the same week to own, "
+              "pooled, and coordinated under FITTED_BELIEF. Recapture diffs "
+              "in NOTES.md."),
         pop_spec=POP_SPEC, run_seed=RUN_SEED, pop_spend=POP_SPEND,
         payday_errs=list(PAYDAY_ERRS), policies=list(POLICIES),
+        fitted_policies=list(FITTED_POLICIES),
+        fitted_belief=dict(w3.FITTED_BELIEF),
         collect_calib=True,
         numpy=np.__version__,
         python=sys.version.split()[0],

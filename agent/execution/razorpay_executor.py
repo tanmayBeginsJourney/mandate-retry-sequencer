@@ -1,13 +1,10 @@
 """`RazorpayExecutor` -- the same port, a different world.
 
 THE POINT OF THIS FILE IS THAT NOTHING ELSE CHANGES. `agent/ports.py` declares
-one method:
-
-    class Executor(Protocol):
-        def attempt(self, ref, amount, t) -> AttemptOutcome: ...
-
-`SimExecutor` implements it against the frozen simulation. This implements it
-against Razorpay's live API. `agent/loop.py`, `agent/policy/`,
+the executor port. `attempt()` is the money path. `remind()` writes a funding
+notice (never a Payment Link). `backup_checkout()` is the last-attempt Payment
+Link. `escalate()` appends a merchant-queue file. `SimExecutor` implements the
+same methods against the simulation. `agent/loop.py`, `agent/policy/`,
 `agent/constraints/` and `agent/audit/` are byte-identical either way, because
 gate **I2** already forbids anything but `constraints/stage0.py` and the
 composition root from holding an executor at all. The switch is one argument in
@@ -88,6 +85,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
@@ -95,8 +93,9 @@ from dataclasses import dataclass
 # sibling import inside agent/execution, and rule I1 forbids agent/llm from
 # reaching agent.execution at all -- so a table the narrative layer may need
 # could never have lived in this package. See ports.py.
-from agent.ports import (OK, AttemptOutcome, MandateRef, Rupees, bank_of,
-                         code_for_reason, is_pending, to_paise)
+from agent.audit.jsonl_queue import append_jsonl
+from agent.ports import (OK, AttemptOutcome, MandateRef, Rupees, WorkflowResult,
+                         bank_of, code_for_reason, is_pending, to_paise)
 
 API_BASE = "https://api.razorpay.com/v1"
 
@@ -146,6 +145,9 @@ class MandateBinding:
     #: sharpen. Neither is measured here. `docs/00_HANDOFF.md` open item 1.
     est_salary: float = 0.0
     est_payday: int = 0
+    #: Explicit index into the simulated population, if this binding was
+    #: created from one. Ordinary Razorpay customer ids do not encode this.
+    sim_customer_id: int | None = None
 
 
 class _UrllibTransport:
@@ -193,10 +195,34 @@ class RazorpayExecutor:
     def __init__(self, bindings: dict[str, MandateBinding],
                  key_id: str | None = None, key_secret: str | None = None,
                  transport=None, currency: str = "INR",
-                 max_transport_retries: int = 2):
+                 max_transport_retries: int = 2,
+                 max_live_nudges: int | None = None,
+                 max_live_escalations: int | None = None):
         self.bindings = bindings
         self.currency = currency
         self.max_transport_retries = max_transport_retries
+        self.max_live_nudges = max_live_nudges
+        if self.max_live_nudges is None:
+            self.max_live_nudges = int(os.environ.get("RAZORPAY_MAX_LIVE_NUDGES", "5"))
+        self.max_live_escalations = max_live_escalations
+        if self.max_live_escalations is None:
+            self.max_live_escalations = int(
+                os.environ.get("RAZORPAY_MAX_LIVE_ESCALATIONS", "5"))
+        self.n_live_nudges = 0
+        self.n_live_escalations = 0
+        self.n_live_backups = 0
+        self.n_nudges_took = 0
+        self.n_escalations = 0
+        self.n_backup_links = 0
+        self.notify_email = os.environ.get("RECOVERY_NOTIFY_EMAIL", "").strip()
+        self.outbox_path = os.environ.get(
+            "RECOVERY_OUTBOX",
+            os.path.join("agent", "runs", "customer_outbox.jsonl"))
+        self.queue_path = os.environ.get(
+            "RECOVERY_QUEUE",
+            os.path.join("agent", "runs", "merchant_queue.jsonl"))
+        self._backup_ids: dict[str, str] = {}
+        self.workflow_log: list[dict] = []
         self.calls = 0
         self.pending_outcomes = 0
         #: `{customer_id: handle}`, the same shape `SimExecutor` exposes, so
@@ -420,49 +446,234 @@ class RazorpayExecutor:
                               pending=pending, raw_code=reason)
 
     # -------------------------------------------------------- non-money path
-    def nudge(self, ref: MandateRef, amount: Rupees, t: int) -> bool:
-        """Ask the customer to fund the account.
+    def _notify_email(self, fallback: str = "") -> str:
+        return self.notify_email or fallback
 
-        NOT IMPLEMENTED AND DELIBERATELY NOT FAKED. A nudge is an SMS, a push
-        or an email through a channel this project has not chosen, and there is
-        no measured Indian UPI nudge take-up rate in `docs/01_FACTS.md` to
-        model one with. Returning `False` means "no top-up resulted", which is
-        the conservative reading and credits no money. `NUDGE` measures
-        approximately zero in the action ablation anyway
-        (`docs/02_RESULTS.md`), so this is an honest stub rather than a hole.
+    def _try_smtp(self, to_addr: str, subject: str, body: str) -> str:
+        """Send if SMTP_HOST is set. Returns a short result, never raises."""
+        host = os.environ.get("SMTP_HOST", "").strip()
+        if not host or not to_addr:
+            return "smtp_skipped"
+        try:
+            import smtplib
+            from email.message import EmailMessage
+            msg = EmailMessage()
+            msg["Subject"] = subject
+            msg["From"] = os.environ.get("SMTP_FROM", "recovery@localhost")
+            msg["To"] = to_addr
+            msg.set_content(body)
+            port = int(os.environ.get("SMTP_PORT", "587"))
+            user = os.environ.get("SMTP_USER", "")
+            password = os.environ.get("SMTP_PASSWORD", "")
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.starttls()
+                if user:
+                    s.login(user, password)
+                s.send_message(msg)
+            return "smtp_sent"
+        except Exception as e:
+            return f"smtp_failed:{type(e).__name__}"
+
+    def remind(self, ref: MandateRef, amount: Rupees, t: int,
+               message: str = "", action_id: str = "") -> WorkflowResult:
+        """Funding reminder. Must not create a Payment Link."""
+        if self.n_live_nudges >= self.max_live_nudges:
+            append_jsonl(self.outbox_path, {
+                "kind": "REMIND", "mandate_uid": ref.uid, "capped": True,
+                "message": message, "action_id": action_id})
+            return WorkflowResult(
+                executed=False, channel="local_quota",
+                detail=f"live reminder cap {self.max_live_nudges} reached; "
+                       "outbox written, email not sent")
+        to_addr = self._notify_email()
+        path = append_jsonl(self.outbox_path, {
+            "kind": "REMIND", "mandate_uid": ref.uid, "t": t,
+            "message": message, "action_id": action_id, "amount": amount,
+            "to": to_addr})
+        smtp = self._try_smtp(
+            to_addr, "Subscription payment reminder",
+            message or "Please add funds so the next automatic debit can succeed.")
+        emailed = smtp == "smtp_sent"
+        if emailed:
+            self.n_live_nudges += 1
+        self.workflow_log.append({"kind": "REMIND", "mandate_uid": ref.uid,
+                                  "emailed": emailed, "smtp": smtp})
+        return WorkflowResult(
+            executed=emailed, channel="email" if emailed else "outbox",
+            detail=f"{smtp} outbox={path}", status="sent" if emailed else "")
+
+    def nudge(self, ref: MandateRef, amount: Rupees, t: int,
+              message: str = "", action_id: str = "") -> WorkflowResult:
+        return self.remind(ref, amount, t, message=message, action_id=action_id)
+
+    def backup_checkout(self, ref: MandateRef, amount: Rupees, t: int,
+                        message: str = "", action_id: str = "") -> WorkflowResult:
+        """Create a Payment Link that replaces the fourth mandate debit.
+
+        Email notify is on when RECOVERY_NOTIFY_EMAIL is set. SMS stays off.
         """
-        return False
+        existing = self._backup_ids.get(ref.uid)
+        if existing:
+            http_st, payload = self._t.get(f"{API_BASE}/payment_links/{existing}")
+            if http_st is not None and http_st < 400 and payload.get("id"):
+                vid = str(payload.get("id"))
+                url = str(payload.get("short_url") or "")
+                st = self._map_link_status(str(payload.get("status") or "issued"))
+                return WorkflowResult(
+                    executed=True, channel="razorpay_payment_link",
+                    vendor_id=vid, status=st, short_url=url,
+                    detail=f"http replay id={vid}")
+        if self.n_live_backups >= self.max_live_nudges:
+            return WorkflowResult(
+                executed=False, channel="local_quota",
+                detail=f"live backup-link cap {self.max_live_nudges} reached")
+        to_addr = self._notify_email(f"backup.{ref.uid}@example.com")
+        notify_on = bool(self.notify_email)
+        expire_by = int(time.time()) + 48 * 3600
+        body = {
+            "amount": max(to_paise(amount), 100),
+            "currency": self.currency,
+            "description": (message or "Pay this period's subscription. "
+                            "The automatic debit is paused so you are not "
+                            "charged twice.")[:2048],
+            "reference_id": (action_id or f"{ref.uid}_{t}")[:40],
+            "expire_by": expire_by,
+            "customer": {
+                "name": f"Customer {ref.customer_id}",
+                "email": to_addr,
+                "contact": f"+9190{ref.customer_id % 100000000:08d}",
+            },
+            "notify": {"sms": False, "email": notify_on},
+            "notes": {"kind": "BACKUP_CHECKOUT", "mandate_uid": ref.uid,
+                      "action_id": action_id},
+        }
+        key = self.idempotency_key(action_id or f"backup:{ref.uid}@{t}", ref, t)
+        status, payload = self._post_with_retries(
+            f"{API_BASE}/payment_links", body, key)
+        vid = str(payload.get("id") or "")
+        url = str(payload.get("short_url") or "")
+        st = self._map_link_status(str(payload.get("status") or "issued"))
+        ok = status is not None and status < 400 and bool(vid)
+        recovered = False
+        err = (payload.get("error") or {})
+        if not ok:
+            desc = str(err.get("description") or "")
+            if "already exists" in desc.lower():
+                found = self._fetch_link_by_reference(body["reference_id"])
+                if found:
+                    vid, url, st = found
+                    ok = True
+                    recovered = True
+        if ok:
+            prev = self._backup_ids.get(ref.uid)
+            if prev != vid:
+                self._backup_ids[ref.uid] = vid
+                if prev is None:
+                    self.n_live_backups += 1
+        detail = (f"http {'recovered' if recovered else status} id={vid} "
+                  f"notify_email={notify_on} short_url={bool(url)}"
+                  if ok else
+                  f"http {status} {err.get('code')} {err.get('description')}")
+        self.workflow_log.append({"kind": "BACKUP_LINK", "mandate_uid": ref.uid,
+                                  "vendor_id": vid, "ok": ok, "status": st,
+                                  "recovered": recovered})
+        return WorkflowResult(executed=ok, channel="razorpay_payment_link",
+                              vendor_id=vid, detail=detail, status=st,
+                              short_url=url)
+
+    @staticmethod
+    def _map_link_status(raw: str) -> str:
+        return {"created": "issued", "issued": "issued", "paid": "paid",
+                "cancelled": "cancelled", "expired": "expired"}.get(raw, raw)
+
+    def _fetch_link_by_reference(self, reference_id: str):
+        """Existing link for this action_id. Razorpay rejects a second create."""
+        if not reference_id:
+            return None
+        q = urllib.parse.quote(reference_id, safe="")
+        http_st, payload = self._t.get(
+            f"{API_BASE}/payment_links/?reference_id={q}")
+        if http_st is None or http_st >= 400:
+            return None
+        items = payload.get("items") or []
+        if not items:
+            return None
+        p = items[0]
+        vid = str(p.get("id") or "")
+        if not vid:
+            return None
+        return (vid, str(p.get("short_url") or ""),
+                self._map_link_status(str(p.get("status") or "issued")))
+
+    def fetch_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
+        vid = self._backup_ids.get(ref.uid, "")
+        if not vid:
+            return WorkflowResult(executed=False, channel="razorpay_payment_link",
+                                  detail="no backup link id")
+        st, payload = self._t.get(f"{API_BASE}/payment_links/{vid}")
+        raw = str(payload.get("status") or "")
+        mapped = self._map_link_status(raw)
+        ok = st is not None and st < 400
+        credited = mapped == "paid"
+        return WorkflowResult(executed=ok, credited=credited,
+                              channel="razorpay_payment_link", vendor_id=vid,
+                              status=mapped,
+                              short_url=str(payload.get("short_url") or ""),
+                              detail=f"http {st} status={raw}")
+
+    def cancel_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
+        vid = self._backup_ids.get(ref.uid, "")
+        if not vid:
+            return WorkflowResult(executed=False, detail="no backup link id")
+        key = self.idempotency_key(f"cancel:{vid}", ref, t)
+        st, payload = self._post_with_retries(
+            f"{API_BASE}/payment_links/{vid}/cancel", {}, key)
+        raw = str(payload.get("status") or "")
+        mapped = "cancelled" if raw in ("cancelled", "") and st and st < 400 \
+            else raw
+        ok = st is not None and st < 400
+        if ok:
+            mapped = "cancelled"
+        return WorkflowResult(executed=ok, channel="razorpay_payment_link",
+                              vendor_id=vid, status=mapped,
+                              detail=f"http {st} status={raw}")
+
+    def escalate(self, ref: MandateRef, amount: Rupees, t: int,
+                 brief: str = "", action_id: str = "") -> WorkflowResult:
+        """Append a merchant-queue row. That file is the queue."""
+        self.n_escalations += 1
+        path = append_jsonl(self.queue_path, {
+            "kind": "ESCALATE", "mandate_uid": ref.uid, "t": t,
+            "brief": brief, "action_id": action_id, "amount": amount})
+        self.workflow_log.append({"kind": "ESCALATE", "mandate_uid": ref.uid,
+                                  "queue": path})
+        return WorkflowResult(executed=True, channel="merchant_queue",
+                              vendor_id=f"ticket_{ref.uid}_{t}", detail=path)
 
     def notify(self, ref: MandateRef, amount: Rupees, notify_t: int,
                target_t: int) -> dict:
-        """Send the pre-debit notification Razorpay requires before a debit.
+        """Pre-debit notice.
 
-        ⚠️ **WIRED TO NOTHING.** `Stage0Gate.issue_notification` records
-        pendency in its own ledger and does not call the executor, and it was
-        left that way ON PURPOSE: the headline claim of this file is that
-        Stage 0, the loop, the belief and the audit trail are unchanged when
-        the backend changes, and adding a hook to the gate for one backend's
-        benefit would make that claim false. Wiring it is the one remaining
-        integration step and it should be done against a live key, where the
-        response can be checked, not against a docstring.
+        AutoPay's regulatory pre-debit API is not called: that path needs an
+        authorised mandate, which this test account does not have. The notice
+        is recorded on the executor so Stage 0 is no longer talking to a
+        method that raises.
         """
-        raise NotImplementedError(
-            "pre-debit notification is designed but not wired -- see the "
-            "docstring. Stage 0 owns notification bookkeeping today.")
+        self.workflow_log.append({
+            "kind": "NOTIFY", "mandate_uid": ref.uid,
+            "notify_t": notify_t, "target_t": target_t, "amount": amount})
+        return {"executed": False, "channel": "local_ledger",
+                "detail": "AutoPay pre-debit API not called; no authorised mandate"}
 
     # --------------------------------------------------------- introspection
     def estimates(self, customer_id: int) -> tuple[float, int]:
         """`(est_salary, est_payday)` for the belief filter's cold start.
 
-        `SimExecutor` can answer this because the simulation drew the noisy
-        estimate itself. A real integration cannot: nobody hands you a
-        customer's salary. The binding carries whatever the caller could
-        supply, and zeros mean "no prior" -- which the belief filter must then
-        be started wide enough to survive. THIS IS THE LARGEST UNSOLVED
-        INTEGRATION PROBLEM IN THIS FILE and it is not a line of code, it is a
-        missing measurement.
+        Uses the explicit `sim_customer_id` on a binding. Ordinary Razorpay
+        ids such as `cust_ABC123` do not encode a simulation index and must
+        not be parsed as one.
         """
         for b in self.bindings.values():
-            if b.rzp_customer_id.endswith(f":{customer_id}"):
+            if b.sim_customer_id is not None and b.sim_customer_id == customer_id:
                 return b.est_salary, b.est_payday
         return 0.0, 0

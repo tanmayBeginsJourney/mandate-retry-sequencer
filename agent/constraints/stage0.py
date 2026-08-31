@@ -27,7 +27,7 @@ from agent.audit.log import AuditLog, EventKind
 from agent.constraints.rules import (ALL_RULES, AttemptLedger, check_notification)
 from agent.ports import (Allowed, AttemptOutcome, Decision, Executor, MandateRef,
                          MoneyAction, PendingNotification, Refusal, Refused,
-                         to_paise)
+                         WorkflowResult, to_paise)
 
 
 def action_id(run_id: str, ref: MandateRef, cycle: int, target_t: int,
@@ -69,6 +69,16 @@ class Stage0Gate:
         self.log.emit(EventKind.NOTIFICATION_ISSUED, decided_at_t,
                       mandate_uid=ref.uid, merchant_id=ref.merchant_id,
                       cycle=cycle, notify_t=notify_t, target_t=target_t)
+        notify = getattr(self._executor, "notify", None)
+        if notify is not None:
+            try:
+                notify(ref, 0.0, notify_t if notify_t is not None else decided_at_t,
+                       target_t)
+            except Exception as e:
+                self.log.emit(EventKind.NON_MONEY_ACTION, decided_at_t,
+                              mandate_uid=ref.uid, cycle=cycle,
+                              action_kind="NOTIFY", executed=False,
+                              detail=f"notify failed: {type(e).__name__}")
         return None
 
     def clear_pending(self, ref: MandateRef, cycle: int = 0, t: int = 0,
@@ -96,32 +106,93 @@ class Stage0Gate:
                       cycle=cycle, reason=reason or "cancelled")
 
     # ---------------------------------------------------------- non-money
-    def send_nudge(self, ref: MandateRef, cycle: int, amount: float, t: int,
-                   diagnosis_id: str = "") -> bool:
-        """A customer contact, not a debit.
-
-        It routes through the gate anyway, for one reason: the gate is the only
-        holder of the executor, and keeping it that way is what makes "nothing
-        else in agent/ can act on the world" a checkable property rather than a
-        convention. Stage 0's five rules are about moving money and do not
-        apply to a message -- that is stated here rather than silently implied,
-        because an unadjudicated action passing through an adjudicating gate is
-        exactly the kind of thing that reads as tested when it is not.
-
-        There is no NPCI rule in docs/01_FACTS.md governing nudge frequency.
-        If one is found, it belongs in rules.py with its own predicate and its
-        own mutant, not in a comment here.
-        """
-        took = self._executor.nudge(ref, amount, t)
+    def _emit_wf(self, kind: str, ref: MandateRef, cycle: int, t: int,
+                 wr: WorkflowResult, diagnosis_id: str = "",
+                 action_id: str = "", **extra) -> WorkflowResult:
         self.log.emit(EventKind.NON_MONEY_ACTION, t, mandate_uid=ref.uid,
                       customer_id=ref.customer_id, merchant_id=ref.merchant_id,
-                      cycle=cycle, action_kind="NUDGE", diagnosis_id=diagnosis_id,
-                      adjudicated=False, took=took)
-        return took
+                      cycle=cycle, action_kind=kind, diagnosis_id=diagnosis_id,
+                      adjudicated=False, executed=wr.executed,
+                      credited=wr.credited, channel=wr.channel,
+                      vendor_id=wr.vendor_id or None, detail=wr.detail or None,
+                      status=wr.status or None,
+                      short_url=wr.short_url or None,
+                      action_id=action_id or None, **extra)
+        return wr
+
+    def send_reminder(self, ref: MandateRef, cycle: int, amount: float, t: int,
+                      diagnosis_id: str = "", message: str = "",
+                      action_id: str = "") -> WorkflowResult:
+        fn = getattr(self._executor, "remind", None) or getattr(
+            self._executor, "nudge", None)
+        if fn is None:
+            wr = WorkflowResult(executed=False, channel="missing",
+                                detail="executor has no remind()")
+        else:
+            wr = fn(ref, amount, t, message=message, action_id=action_id)
+            if not isinstance(wr, WorkflowResult):
+                wr = WorkflowResult(executed=bool(wr), channel="legacy_bool")
+        return self._emit_wf("REMIND", ref, cycle, t, wr,
+                             diagnosis_id=diagnosis_id, action_id=action_id)
+
+    def send_nudge(self, ref: MandateRef, cycle: int, amount: float, t: int,
+                   diagnosis_id: str = "", message: str = "",
+                   action_id: str = "") -> WorkflowResult:
+        """Reminders, not a Payment Link. Kept as a name the loop used."""
+        return self.send_reminder(ref, cycle, amount, t,
+                                  diagnosis_id=diagnosis_id, message=message,
+                                  action_id=action_id)
+
+    def issue_backup_link(self, ref: MandateRef, cycle: int, amount: float,
+                          t: int, diagnosis_id: str = "", message: str = "",
+                          action_id: str = "") -> WorkflowResult:
+        fn = getattr(self._executor, "backup_checkout", None)
+        if fn is None:
+            wr = WorkflowResult(executed=False, channel="missing",
+                                detail="executor has no backup_checkout()")
+        else:
+            wr = fn(ref, amount, t, message=message, action_id=action_id)
+            if not isinstance(wr, WorkflowResult):
+                wr = WorkflowResult(executed=False, detail="bad backup result")
+        return self._emit_wf("BACKUP_LINK", ref, cycle, t, wr,
+                             diagnosis_id=diagnosis_id, action_id=action_id)
+
+    def poll_backup_link(self, ref: MandateRef, cycle: int, t: int) -> WorkflowResult:
+        fn = getattr(self._executor, "fetch_backup", None)
+        if fn is None:
+            return WorkflowResult(executed=False, detail="no fetch_backup")
+        wr = fn(ref, t)
+        if not isinstance(wr, WorkflowResult):
+            wr = WorkflowResult(executed=False, detail="bad fetch result")
+        return self._emit_wf("BACKUP_POLL", ref, cycle, t, wr)
+
+    def cancel_backup_link(self, ref: MandateRef, cycle: int, t: int) -> WorkflowResult:
+        fn = getattr(self._executor, "cancel_backup", None)
+        if fn is None:
+            return WorkflowResult(executed=False, detail="no cancel_backup")
+        wr = fn(ref, t)
+        if not isinstance(wr, WorkflowResult):
+            wr = WorkflowResult(executed=False)
+        return self._emit_wf("BACKUP_CANCEL", ref, cycle, t, wr)
+
+    def send_escalate(self, ref: MandateRef, cycle: int, amount: float, t: int,
+                      diagnosis_id: str = "", brief: str = "",
+                      action_id: str = "") -> WorkflowResult:
+        fn = getattr(self._executor, "escalate", None)
+        if fn is None:
+            wr = WorkflowResult(executed=False, channel="missing",
+                                detail="executor has no escalate()")
+        else:
+            wr = fn(ref, amount, t, brief=brief, action_id=action_id)
+            if not isinstance(wr, WorkflowResult):
+                wr = WorkflowResult(executed=True, channel="legacy")
+        return self._emit_wf("ESCALATE", ref, cycle, t, wr,
+                             diagnosis_id=diagnosis_id, action_id=action_id,
+                             credits_money=False)
 
     def record_non_money(self, ref: MandateRef, cycle: int, kind: str, t: int,
                          diagnosis_id: str = "", **extra) -> None:
-        """ESCALATE / STOP. Audited, no world effect, no money."""
+        """STOP and other non-executing notes."""
         self.log.emit(EventKind.NON_MONEY_ACTION, t, mandate_uid=ref.uid,
                       customer_id=ref.customer_id, merchant_id=ref.merchant_id,
                       cycle=cycle, action_kind=kind, diagnosis_id=diagnosis_id,

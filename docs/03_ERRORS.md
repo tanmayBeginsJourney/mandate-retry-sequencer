@@ -87,11 +87,11 @@ populations** flipped the result: the filter now wins in all six worlds by 5–1
 points, and a Bayes+ML hybrid is *worse* than the filter alone.
 Mechanism: a comparison where one side had been tuned and the other had not,
 with nothing in the process asking whether the baseline was fairly configured.
-*Guard:* `sim/fit_belief.py` is committed, so the fit is reproducible and its
-objective is visible. Gate **S4** holds the result (+11.66 pts, ±1.61) and is
-paired with the `ignore_bcfg` mutant, under which the measured gain collapses
-to +0.00. **Before comparing anything to a baseline, ask when the baseline was
-last fitted.**
+*Guard:* gate **S4** holds the configured-vs-default result (+11.66 pts,
+±1.61) and is paired with the `ignore_bcfg` mutant, under which the measured
+gain collapses to +0.00. S4 proves the configuration is applied; it does not
+prove how the values were selected. `sim/fitted_belief.json` now records that
+the reproducible fit selects a different prior.
 
 **8. A fitted constant that peaked exactly where it was fitted.**
 The first fit of the payday prior was selected at `payday_err=7` and produced a
@@ -104,11 +104,10 @@ could never be recovered by any amount of evidence.
 Mechanism: hyperparameter selected at a single operating point, then evaluated
 at that same operating point.
 *Guard:* `sim/fair_audit.py` sweeps `payday_err` and is expected to be re-run
-after any change to `FITTED_BELIEF`. The rule it enforces: **a fitted value
-whose benefit peaks at the operating point it was fitted on is tuned to the
-harness, not fitted to the population.** The refitted version selects against
-the *mean* across `payday_err` and its gain now grows with payday uncertainty
-(+2.12 at ±1 to +19.76 at ±14) instead of peaking.
+after any change to `FITTED_BELIEF`. The retained shipping configuration's
+gain grows with payday uncertainty (+2.12 at ±1 to +19.76 at ±14) instead of
+peaking. This is a robustness result, not evidence that the reproducible fit
+selected the configuration.
 
 **9. The calibration gate measured a filter that was never the product.**
 Gate S1 — "the entire project rests on the belief filter being
@@ -197,14 +196,22 @@ Separately, `ml_artifacts/belief_fit.json` — the only stored provenance record
 Mechanism: the guard for errors 7 and 8 was "the fit is reproducible and its
 objective is visible". Nobody ran it again. A committed script is not a
 reproduction; **only a re-run is a reproduction.**
-*What is NOT wrong:* the constant's measured behaviour. Its gain grows from
-+2.12 at ±1 day to +19.76 at ±14 (`sim/fair_audit.py`) instead of peaking at
-the operating point it was selected on — exactly the property error 8 demands.
-**The value is fine; the provenance is fiction.**
-*Guard:* a warning header in `sim/fit_belief.py` stating what it cannot
-produce, `fair_audit.py`'s false claim removed, and this entry. **Not fixed by
-extending the search** — that re-opens a frozen constant eight days before a
-deadline, which is error 8's other half. Post-deadline job.
+*What is NOT wrong:* the constant's measured behaviour. After adoption its gain
+grows from +2.82 at ±1 day to +18.58 at ±14 (`sim/fair_audit.py`) instead of
+peaking at the operating point it was selected on — exactly the property error 8
+demands. Provenance now matches the script.
+**Re-run 31 August 2026, then adopted.** The fitter now includes `prior_floor`
+and selects against mean cycle collection over all six stated `payday_err`
+cells. It selected `(stride=1, prior_w=9, prior_day0=8, prior_floor=0.5,
+spend_beta=0)`. That configuration was adopted as `w3.FITTED_BELIEF`. The
+previous shipping values `(1, 12, 8, 0.25, 0)` remain in `sim/fitted_belief.json`
+as `former_shipping`. The train winner scored 94.90% against former 94.53%; on
+held-out evaluation the former led 95.29% to 94.94%. Shipping the train winner
+is the point of the split. Headline tables were re-measured after adoption.
+
+*Guard:* `sim/fitted_belief.json` commits the full train/evaluation record.
+`sim/fit_belief.py --check` verifies that its shipping field matches
+`w3.FITTED_BELIEF` and that `matches_shipping` agrees with both configs.
 
 **13. The byte-lock does not cover the thing that ships.**
 Gate T9 is sold in `CLAUDE.md` and `06_MODEL_CARD.md` §5 as what makes the
@@ -215,7 +222,8 @@ the belief filter". Its reference is 14 policies × 2 operating points, and
 configuration is the **unfitted** `BeliefPD`. The entire fitted-prior branch —
 `w3.py:358-367`, where `prior_w`, `prior_day0` and `prior_floor` do their work
 — is outside the lock. More broadly, **only 2 of 25 gates run the shipping
-configuration** (`tests.py:567` S1_PD, `tests.py:645-647` S4), and one of those
+configuration** (the coverage when this error was logged; **superseded**
+31 August — see below) (`tests.py:567` S1_PD, `tests.py:645-647` S4), and one of those
 two is red. The gated moat number S2a (+9.53) is also measured unfitted.
 Mechanism: the fitted config arrived *after* T9's reference was captured, and
 nothing re-asked what the lock covered. A gate named for a property
@@ -224,6 +232,26 @@ nothing re-asked what the lock covered. A gate named for a property
 nobody reads T9's green as covering `FITTED_BELIEF`. The real repair is to add
 the fitted configs to `t9_reference.py:POLICIES` and re-capture, which is a
 deliberate re-baseline and belongs after 5 September.
+
+**Resolved 31 August 2026 (morning).** T9 now includes `solo_shared_pd` under
+`FITTED_BELIEF` at both existing operating points. A second recapture the same
+day, after the new prior was adopted, changed only those two fitted cases.
+Three of 25 gates ran the fitted configuration: S1_PD, S4, and T9.
+**Superseded the same afternoon.**
+
+**Resolved 31 August 2026 (afternoon).** The remaining coverage gap was the
+moat and the lock, not a sentence. S2a_PD gates pooling on `FITTED_BELIEF`
+(+8.34 ±1.36). T6_PD is the k=1 identity on the shipping filter. T9 locks
+own, pooled, and coordinated under `FITTED_BELIEF` at both operating points
+(34 configs). T1, T7 and T8 include those policies. Five dedicated gates of
+27 run the shipping configuration. Stage 0 mutants stay unfitted on purpose:
+they test constraint counters, and changing their prior can make a gate
+vacuous.
+
+A working *neutral* extra-update control was also attempted (label-shuffle
+and posterior-predictive). Both damaged the filter relative to own, because
+this `observe()` is a hard truncation, not a martingale. That is why S2b
+stays red. Quote S2a / S2a_PD.
 
 ---
 
@@ -758,12 +786,10 @@ touching no counter — and shows the auditor finding it from the log alone
 (`peak: 1`). The script states the distinction in its own output. `README.md`
 and this entry state it in prose.
 
-⚠️ **STILL OPEN, DELIBERATELY.** `agent/batch_report.py` still prints
-`agree? yes` over two zeros. Fixing the wording is a five-minute change and it
-has **not been made**, because the honest fix is not a rename — it is deciding
-what that panel should show when nothing illegal happened, and that is a
-judgement about the deliverable rather than a typo. Written down rather than
-quietly patched.
+**Resolved 31 August 2026.** `agent/batch_report.py` now labels the quantities
+`gate refused` and `illegal executed` and states that zero in both columns is
+not agreement. The injected-bypass proof remains the check that exercises the
+auditor in the failing regime.
 
 > **New rule: before presenting two numbers as a cross-check, state the regime
 > in which they could differ, and check that the display is ever in it.**
@@ -858,14 +884,12 @@ raises, because a silent fallback to `rng` is exactly the defect. Verified: the
 balance array is bit-identical outside held hours and the generator position is
 unmoved at both `p=0` and `p>0`.
 
-⚠️ **The same defect is still live in W2.** `p_missed_credit` draws from `rng`,
-so its insolvency sweep also compares worlds that differ by more than the
-mechanism. W2's five predictions were directional and averaged over eight
-populations, so they stand — but repairing it would restate W2's published
-table, which is a decision about the deliverable rather than a bug fix. It is
-**queued and flagged, not silently fixed.** Recording a known defect and
-declining to fix it unilaterally is the correct move here; hiding it would not
-be.
+**Resolved 31 August 2026.** `p_missed_credit` now draws from a separate
+per-customer generator and raises if a positive rate is passed without it. A
+construction check proves that a no-miss overlay leaves both the balance trace
+and the next money RNG draw bit-identical. The corrected 48-run sweep moved the
+W2 table and reduced its pre-registration record from 5/5 to 3/5; W2-2 and
+W2-4 broke. The corrected numbers are in `02_RESULTS.md`.
 
 *The shape, for the tally:* **an invariant stated as a comment in one module and
 relied on by another.** Errors 11 and 13 are the same family — a rule the

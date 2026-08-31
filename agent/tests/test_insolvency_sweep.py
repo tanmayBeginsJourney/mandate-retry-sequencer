@@ -66,7 +66,40 @@ def oracle_ceiling(rate: float) -> float:
     return hit / tot
 
 
+def rng_isolation_check() -> tuple[bool, str]:
+    """W2 must add missed credits without moving the spending RNG stream."""
+    class NeverMiss:
+        @staticmethod
+        def random(size=None):
+            return np.ones(size) if size is not None else 1.0
+
+    c = make_pop(1, 1, 700, spend=SPEND, days=DAYS)[0]
+    base_rng = np.random.default_rng(1234)
+    overlay_rng = np.random.default_rng(1234)
+    base = w3.balance_trace(c, base_rng, p_missed_credit=0.0)
+    overlay = w3.balance_trace(
+        c, overlay_rng, p_missed_credit=0.50, missed_rng=NeverMiss())
+    same_trace = np.array_equal(base, overlay)
+    same_next_draw = base_rng.random() == overlay_rng.random()
+    refused_shared_stream = False
+    try:
+        w3.balance_trace(
+            c, np.random.default_rng(1234), p_missed_credit=0.50)
+    except ValueError:
+        refused_shared_stream = True
+    ok = same_trace and same_next_draw and refused_shared_stream
+    return ok, (
+        f"same trace={same_trace}, same next money draw={same_next_draw}, "
+        f"missing isolated RNG refused={refused_shared_stream}")
+
+
 def main() -> int:
+    isolated, isolation_detail = rng_isolation_check()
+    print("W2 RNG ISOLATION")
+    print(f"  {'PASS' if isolated else 'FAIL'}  {isolation_detail}")
+    if not isolated:
+        return 1
+
     jobs = []
     for rate in RATES:
         for ps in POPS:
@@ -153,7 +186,7 @@ def main() -> int:
     print("  (41.84% -> 42.78% at best). Its two live causes are the")
     print("  due-date/payday offset (W6) and the agent's blindness to")
     print("  transients. docs/04_BUILD_PLAN.md.")
-    return 0
+    return 0 if n_held == len(checks) else 1
 
 
 if __name__ == "__main__":

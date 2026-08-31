@@ -93,19 +93,42 @@ def harness_job(spec):
 
 
 def run_jobs(fn, jobs, workers: int = 8) -> dict:
-    """Run `jobs` through `fn`, one fresh process per job. Raises on any death."""
+    """Run `jobs` through `fn`, one fresh process per job. Raises on any death.
+
+    If the pool itself dies (Windows BrokenProcessPool), the entire job set
+    is retried ONCE from scratch. A partial result is never returned. A
+    second death still fails the measurement. This is not sample selection:
+    either every job returns or the call raises.
+    """
+    try:
+        from concurrent.futures import BrokenProcessPool
+    except ImportError:  # Python 3.12+: lives in the process submodule
+        from concurrent.futures.process import BrokenProcessPool
     from concurrent.futures import ProcessPoolExecutor
     jobs = list(jobs)
     if not jobs:
         return {}
-    out = {}
-    with ProcessPoolExecutor(max_workers=min(workers, len(jobs)),
-                             max_tasks_per_child=1) as ex:
-        for key, res in ex.map(fn, jobs, chunksize=1):
-            out[key] = res
-    if len(out) != len(jobs):
-        raise RuntimeError(
-            f"{len(jobs) - len(out)} of {len(jobs)} jobs did not return. A "
-            f"crashed worker is a FAILED measurement, not a missing one -- "
-            f"dropping it would silently change the sample a mean is over.")
-    return out
+
+    def _once():
+        out = {}
+        with ProcessPoolExecutor(max_workers=min(workers, len(jobs)),
+                                 max_tasks_per_child=1) as ex:
+            for key, res in ex.map(fn, jobs, chunksize=1):
+                out[key] = res
+        if len(out) != len(jobs):
+            raise RuntimeError(
+                f"{len(jobs) - len(out)} of {len(jobs)} jobs did not return. A "
+                f"crashed worker is a FAILED measurement, not a missing one -- "
+                f"dropping it would silently change the sample a mean is over.")
+        return out
+
+    try:
+        return _once()
+    except BrokenProcessPool as exc:
+        print("\n" + "!" * 78, flush=True)
+        print(f"_parallel: process pool broke ({type(exc).__name__}: {exc}).",
+              flush=True)
+        print("_parallel: retrying the ENTIRE job set once. Partial results "
+              "are discarded.", flush=True)
+        print("!" * 78 + "\n", flush=True)
+        return _once()

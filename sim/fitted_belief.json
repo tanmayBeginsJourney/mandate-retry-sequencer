@@ -1,0 +1,160 @@
+{
+ "base": {
+  "prior_day0": 1.0,
+  "prior_floor": 1e-06,
+  "prior_w": null,
+  "spend_beta": 0.045,
+  "stride": 3
+ },
+ "days": 120,
+ "evaluation_by_payday_err": {
+  "1": {
+   "base": 0.9361148986533014,
+   "former": 0.957336152921556,
+   "selected": 0.9643580890344259,
+   "shipping": 0.9643580890344259
+  },
+  "10": {
+   "base": 0.798669536988539,
+   "former": 0.9561765582153081,
+   "selected": 0.941418492994105,
+   "shipping": 0.941418492994105
+  },
+  "14": {
+   "base": 0.7340235826596377,
+   "former": 0.9316020209857505,
+   "selected": 0.9198661378249,
+   "shipping": 0.9198661378249
+  },
+  "3": {
+   "base": 0.8861961863004094,
+   "former": 0.9582446223925292,
+   "selected": 0.960628679992115,
+   "shipping": 0.960628679992115
+  },
+  "5": {
+   "base": 0.8356562534054577,
+   "former": 0.9582370856280963,
+   "selected": 0.9537824724995072,
+   "shipping": 0.9537824724995072
+  },
+  "7": {
+   "base": 0.8215823064660218,
+   "former": 0.9556800388769262,
+   "selected": 0.9562647047451205,
+   "shipping": 0.9562647047451205
+  }
+ },
+ "evaluation_mean": {
+  "base": 0.8353737940788944,
+  "former": 0.9528794131700278,
+  "selected": 0.9493864295150289,
+  "shipping": 0.9493864295150289
+ },
+ "evaluation_populations": [
+  700,
+  701,
+  702,
+  703,
+  704,
+  705,
+  706,
+  707
+ ],
+ "former_shipping": {
+  "prior_day0": 8.0,
+  "prior_floor": 0.25,
+  "prior_w": 12,
+  "spend_beta": 0.0,
+  "stride": 1
+ },
+ "k": 5,
+ "matches_shipping": true,
+ "model_fingerprint": "e4f36b356c4300f199550a60610dcc3d36ce2ce599b2e2752bfa478d59f6d8fd",
+ "n": 100,
+ "numpy": "2.4.2",
+ "objective": "mean cycle_rec across payday_err cells on training populations",
+ "payday_errs": [
+  1,
+  3,
+  5,
+  7,
+  10,
+  14
+ ],
+ "pop_spend": 1.05,
+ "procedure": "two-pass coordinate search",
+ "python": "3.12.0",
+ "schema": 1,
+ "selected": {
+  "prior_day0": 8.0,
+  "prior_floor": 0.5,
+  "prior_w": 9,
+  "spend_beta": 0.0,
+  "stride": 1
+ },
+ "selection_margin_points": 0.0,
+ "shipping": {
+  "prior_day0": 8.0,
+  "prior_floor": 0.5,
+  "prior_w": 9,
+  "spend_beta": 0.0,
+  "stride": 1
+ },
+ "spend": 1.05,
+ "status": "reproduced",
+ "train_by_payday_err": {
+  "1": {
+   "base": 0.9273634850327936,
+   "former": 0.9528548534331462,
+   "selected": 0.9612710081894253,
+   "shipping": 0.9612710081894253
+  },
+  "10": {
+   "base": 0.7809149169131745,
+   "former": 0.9526138954773781,
+   "selected": 0.9454286811745487,
+   "shipping": 0.9454286811745487
+  },
+  "14": {
+   "base": 0.7416545287764024,
+   "former": 0.9186954502964704,
+   "selected": 0.9229863798620273,
+   "shipping": 0.9229863798620273
+  },
+  "3": {
+   "base": 0.8812248681598664,
+   "former": 0.9505453349000714,
+   "selected": 0.955494052448041,
+   "shipping": 0.955494052448041
+  },
+  "5": {
+   "base": 0.8532362030855645,
+   "former": 0.9498885338853936,
+   "selected": 0.9532708442455196,
+   "shipping": 0.9532708442455196
+  },
+  "7": {
+   "base": 0.8206040253426626,
+   "former": 0.9474919846000102,
+   "selected": 0.9553401619285847,
+   "shipping": 0.9553401619285847
+  }
+ },
+ "train_mean": {
+  "base": 0.8341663378850774,
+  "former": 0.945348342098745,
+  "selected": 0.9489651879746911,
+  "shipping": 0.9489651879746911
+ },
+ "train_populations": [
+  600,
+  601,
+  602,
+  603,
+  604,
+  605,
+  606,
+  607
+ ]
+}

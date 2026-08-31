@@ -55,9 +55,9 @@ hour is a model on the timing path via the merchant's eyeballs.
 The reason for the rule is narrow and not ideological: debit timing is a
 numerical inference from censored observations with a hard legality boundary.
 That is not a task where a language model is the right instrument, and putting
-it there would make every money action unreproducible. Diagnosis and
-explanation are the opposite — open-vocabulary, and where the model measurably
-beats the rules it replaces (below).
+it there would make every money action unreproducible. Diagnosis, explanation,
+and the customer or merchant copy for reminder, last-attempt checkout, and
+escalate are the opposite.
 
 ---
 
@@ -99,8 +99,11 @@ beats the rules it replaces (below).
    +--------------------------------+---------------------------------+
                                     |
    +--------------------------------v---------------------------------+
-   |  EXECUTION    ports.Executor   ONE method: attempt(ref, amount,   |
-   |                                t, action_id)                      |
+   |  EXECUTION    ports.Executor   attempt() for debits; remind()     |
+   |                                writes a funding notice (not a     |
+   |                                Payment Link); backup_checkout()   |
+   |                                is the last-attempt Payment Link;  |
+   |                                escalate() appends a merchant queue|
    |               sim_executor.py       the simulated world           |
    |               razorpay_executor.py  Razorpay's live API           |
    +--------------------------------+---------------------------------+
@@ -126,14 +129,16 @@ any other layer knowing.
 **1. One belief per customer, shared by all `k` mandates.** This is the claim
 the project is built on: a failed debit for merchant A is evidence about the
 same customer's ability to pay merchant B. Build one filter per *mandate* and
-you have a system that works and is **9.5 points worse** in the hard world —
+you have a system that works and is **8.3 points worse** in the hard world on
+the shipping filter (gate S2a_PD) —
 and nothing tells you, because both configurations run clean.
 `agent/policy/belief_book.py` enforces the sharing and
 `agent/tests/test_one_belief.py` asserts it.
 
 **It is a curve, not a number, and it is reported as one.** Pooling is worth
-**+9.54 points at `pop_spend=1.05` and +3.47 at `pop_spend=0.80`**, the same
-two calibrations the headline is reported over.
+**+8.34 points (S2a_PD, gated) at `pop_spend=1.05` and +3.38 at `pop_spend=0.80`**,
+the same two calibrations the headline is reported over. The 0.80 cell is an
+agent measurement, not gate-protected.
 
 **And it is a per-customer permission, not an assumption.** Sharing one
 customer's outcomes across merchants is the part of this design with a live
@@ -196,33 +201,34 @@ indexability proof. The 0.92 is a hand-chosen discount, swept, and it moves the
 headline by about 7 points across a plausible range — the single largest
 hand-set sensitivity in the system, and it is reported rather than buried.
 
-**Stopping is explicit, not emergent.** Eight named rules, counted and logged:
+**Stopping is explicit, not emergent.** Nine named rules, counted and logged:
 `COLLECTED`, `CAP_REACHED`, `CYCLE_CLOSED`, `NO_LEGAL_SLOT`, `MANDATE_DEAD`,
-`ESCALATED`, `AGENT_STOP` (the diagnosis layer chose to stop), `RUN_BUDGET`.
+`ESCALATED`, `AGENT_STOP` (the diagnosis layer chose to stop),
+`LAST_ATTEMPT_HELD` (fourth debit replaced by an unpaid backup checkout),
+`BATCH_LEGAL_CEILING` (n_mandates × 4 × cycles in the horizon; circuit
+breaker, expected 0 on a clean run).
 
 ---
 
 ## Where the language model earns its place, and where it does not
 
-The rule engine and the model were scored against 40 registered cases, with a
-**different model family as judge** — `glm-5.3` grading `glm-5.3-flash`, and
-`run_eval.py --judge` refuses to run if the two SKU names match.
+The shipping path routes the diagnoser to the model **only when `merchant_note`
+is non-empty**. Terminal codes, indeterminate outcomes, wide uncertainty bands,
+and TECH streaks stay on the rule engine. The model writes escalate merchant
+copy when `use_llm=True`; reminders and backup links use templates.
 
-| | ambiguous (21) | clean (19) | terminal (4) |
-|---|---|---|---|
-| deterministic rule engine | 9/21 | 19/19 | **0/4** |
-| `glm-5.3-flash` | 10/21 | 13/19 | **4/4** |
+| | `merchant_note` registered (4) | injection (3) |
+|---|---|---|
+| rule engine | 4/4 | structural pass |
+| routed LLM (`glm-diag-v3`) | 2/4 | structural pass |
 
-The clean column is the floor — that is what thirty lines of if-else are for.
-The model earns its place on **terminal decline codes**: a frozen account or a
-revoked mandate, where no retry can ever succeed and the index rule has no slot
-for the fact.
+Measured 31 August 2026, `run_eval.py --llm --judge --replay`. The full
+40-case table is kept for history; do not quote 6/21 vs 9/21 as shipping
+evidence.
 
-**It does not move the batch money: 94.33% against the deterministic 94.36%** — and that survived the obvious explanation. Switching the richer decline taxonomy on, so terminal codes exist everywhere, leaves it at **87.39% against 88.54%**: still not ahead. What it does instead is stop twice as often and kill fewer mandates, trading collection for survival.
-And the loop asks for a diagnosis 119,667 times over a four-population batch,
-against a hard cap of 120 live calls per run, so **the batch's model arm is
-about 95% deterministic**. That is the design, not a workaround, and it is why
-this number must never be described as "the model's number".
+**The money headline is filter plus rules only** — `batch_report` has no LLM
+column. `--demo-llm` prints routed-call stats on one population (zero routed
+calls in the default sim, which has no merchant notes).
 
 ---
 
@@ -239,14 +245,14 @@ the command above.*
 | arm | cycles collected | ₹ recovered | survival | att/cycle |
 |---|---|---|---|---|
 | `payday_wait` (rival) | 57.70% | — | 60.75% | 1.493 |
-| agent, deterministic | **94.36%** | ₹5,994,430 | **99.85%** | 1.476 |
+| agent, deterministic | **98.01%** | ₹6,203,060 | **99.85%** | 1.554 |
 
-**+36.66 pts, 2 SE 2.47.** Stage 0 refusals: **0**, with an independent recount
-of **0** over **8,954 executed money actions**.
+**+40.30 pts, 2 SE 2.32.** Stage 0 refusals: **0**, with an independent recount
+of **0** over **8,832 executed money actions**.
 
 **Survival is the more interesting row.** The fixed schedule spends its four
 attempts in four days, hits the cap while the account is empty, and the mandate
-dies — **32.1% survival against the agent's 97.2%**. Dunning harder costs the
+dies — **32.1% survival against the agent's 96.6%**. Dunning harder costs the
 merchant the customer, and the cycle-based metric prices that automatically
 without inventing a lifetime-value constant.
 
@@ -260,37 +266,34 @@ Named separately so it is not mistaken for the 4-population batch above.*
 
 | `payday_err` | `payday_wait` | agent | agent − baseline |
 |---|---|---|---|
-| ±1 day | **99.24%** | 95.73% | **−3.51** ±0.36 — **the heuristic wins** |
-| ±3 days | 94.65% | 95.82% | +1.17 ±1.35, not significant |
-| ±7 days | 59.14% | **95.57%** | **+36.43** ±3.37 |
+| ±1 day | **99.24%** | 96.44% | **−2.81** ±0.46 — **the heuristic wins** |
+| ±3 days | 94.65% | 96.06% | +1.41 ±1.08 |
+| ±7 days | 59.14% | **95.63%** | **+36.48** ±3.20 |
 
 **How hard the world is** — `pop_spend`, the share of salary spent per cycle.
 *Same design.*
 
 | `pop_spend` | `payday_wait` | agent | agent − baseline |
 |---|---|---|---|
-| 0.60 | 96.48% | 99.98% | **+3.51** ±0.88 |
-| **0.80** | 93.21% | 99.50% | **+6.29** ±1.42 |
-| 0.90 | 82.96% | 97.70% | +14.73 ±1.83 |
-| 1.05 | 59.14% | 95.57% | **+36.43** ±3.37 |
+| 0.60 | 96.48% | 100.00% | **+3.52** ±0.90 |
+| **0.80** | 93.21% | 99.56% | **+6.36** ±1.43 |
+| 0.90 | 82.96% | 97.89% | +14.93 ±1.96 |
+| 1.05 | 59.14% | 95.63% | **+36.48** ±3.20 |
 
 *Neither table is gate-protected. Reproduce with `python sim/headline.py` and
 `python scripts/spend_sweep.py`.*
 
 **Read those two tables together and the honest summary is this.** The system's
 advantage is not a constant; it is a curve in two variables. It **loses** to a
-five-line heuristic when payday is already known to within a day, ties at three
-days, and only becomes large when payday is genuinely uncertain and the
-customer is genuinely stretched. At `pop_spend=0.80`, the setting where this
-world's due-date failure rate lands inside the published 8–15% band, the agent
-is worth **+6.29 points** — which sits inside the published 6–8% industry
+five-line heuristic when payday is already known to within a day, is slightly
+ahead at three days, and only becomes large when payday is genuinely uncertain
+and the customer is genuinely stretched. At `pop_spend=0.80`, the setting where
+this world's due-date failure rate lands inside the published 8–15% band, the
+agent is worth **+6.36 points** — which sits inside the published 6–8% industry
 benchmark for retry optimisation, and nothing was tuned to land there.
 
-*(The two tables both contain a **3.51**, with opposite signs. They are
-different measurements at different corners and the coincidence is only that:
-−3.51 is the heuristic beating the agent at ±1 day, +3.51 is the agent beating
-the heuristic in an easy world. The +36.43 cell is genuinely shared — it is the
-same configuration appearing in both sweeps.)*
+The ±1-day cell and the easy-world cell are different measurements. The +36.48
+cell is the same configuration appearing in both sweeps.
 
 `payday_wait` is a permanent row in the report and cannot be switched off. It
 is what a good rival builds in an afternoon, and the case for this system has
@@ -345,21 +348,20 @@ development. Every one of these is in the shipping path:
 - **No real transaction data exists in this project.** Every figure is
   simulation. No Razorpay transaction, mandate or decline code has ever been
   observed.
-- **The Razorpay backend has never been authenticated.** Rungs 0–3 of
-  `scripts/razorpay_ladder.py` are real — DNS, TLS, a live 401 and its
-  envelope, and the shipped parser against it. Rungs 4 and 5 need a
-  `rzp_test_` key that does not exist on this machine, so **whether Razorpay
-  accepts our request body is unknown**: the requests sent were rejected before
-  the body was read.
-- **Only 2 of 25 gates run the exact configuration that ships.** A green suite
-  is weaker evidence about the fitted filter than it looks. Error 13.
+- **The Razorpay client authenticates in test mode.** Payment Links and
+  Customer records have been created against `rzp_test_` keys
+  (`scripts/prove_workflows.py`). A recurring-charge body has never been
+  submitted on an authorised mandate.
+- **Stage 0 mutants still run the unfitted filter.** They test constraint
+  counters, not the prior. The moat, the calibration, the k=1 identity, and
+  the byte-lock run `FITTED_BELIEF` (S1_PD, T6_PD, S2a_PD, S4, T9).
 - **Four gates are red on a clean checkout, on purpose**, each with a written
   reason: two calibration gates that fail on monotonicity for structural
   reasons no parameter fixes, one retired architecture kept red so a rewrite
   stays auditable, and one negative control that turned out not to be neutral.
-- **The pre-debit notification call is designed and wired to nothing.**
-  Stage 0 owns notification bookkeeping today, and wiring the real one is the
-  single remaining integration step.
+- **AutoPay pre-debit notify is a local ledger.** Stage 0 records pendency
+  and calls the executor hook; the Razorpay AutoPay pre-debit API is not
+  invoked.
 
 **Thirty-two errors have been found in this project's own work**, catalogued with
 mechanism and guard in `docs/03_ERRORS.md`. Almost every one made the project

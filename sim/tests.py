@@ -32,7 +32,7 @@ threshold:
 3. TWO TIERS. `--tier fast` runs the gates that test whether the CODE is
    correct (all mutants, all invariants, plus S1, which is cheap). `--tier
    full` adds the gates that test whether a STATISTICAL CLAIM holds -- S2a/b/c,
-   S2_LEGACY, S3 -- which need 8 populations at n=100 to have any power.
+   S2a_PD, S2_LEGACY, S3 -- which need 8 populations at n=100 to have any power.
    Those are never run at reduced n to fit a time budget: shrinking them would
    be weakening a test, which is CLAUDE.md rule 1. They run properly or they
    do not run, and a tier that did not run them says so.
@@ -63,6 +63,13 @@ PE_CONT = 7     # contended. Payday known to +/-7 days.
 POLS = ["baseline_doc", "baseline_legal", "payday_wait", "myopic",
         "solo_naive", "solo_pop", "solo_placebo", "solo_shared", "portfolio",
         "explore"]
+# Payday-posterior policies. Unfitted defaults unless a caller passes bcfg.
+# T1/T7/T8 run these as well as POLS so the shipping class is inside the
+# invariant gates, not only inside S1_PD/S4/T9.
+PD_POLS = ["solo_pop_pd", "solo_shared_pd", "portfolio_pd",
+           "solo_placebo_pd"]
+# The three that ship: own, pooled, coordinated, all under FITTED_BELIEF.
+PD_SHIP = ["solo_pop_pd", "solo_shared_pd", "portfolio_pd"]
 
 S2_SEEDS = range(8)
 
@@ -78,9 +85,9 @@ POP_SPECS.update({f"Pc{r}": (120, 5, 300 + r, 1.05, 120) for r in range(3)})
 POP_SPECS.update({f"S2P{r}": (100, 5, 400 + r, 1.05, 120) for r in S2_SEEDS})
 
 FAST_GATES = ("M1", "M2", "M3", "M4", "M4B", "M5", "M6", "M8",
-              "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9",
+              "T1", "T2", "T3", "T4", "T5", "T6", "T6_PD", "T7", "T8", "T9",
               "S1", "S1_PD")
-FULL_ONLY = ("S2a", "S2b", "S2c", "S2_LEGACY", "S3", "S4")
+FULL_ONLY = ("S2a", "S2b", "S2c", "S2a_PD", "S2_LEGACY", "S3", "S4")
 
 _POPS = {}
 _CACHE = {}
@@ -182,9 +189,6 @@ MUTANTS = [
     ("M5", "represent", "represent", "Z9 re-presented under old notice", PE_FLAT, {}),
 ]
 
-T9_POLICIES = t9_reference.POLICIES
-
-
 # ============================================================== THE JOB PLAN
 def plan_jobs(tier):
     """Every harness.run the selected tier will ask for, enumerated up front."""
@@ -209,6 +213,10 @@ def plan_jobs(tier):
         J("oracle", "P", 7, payday_err=pe)
         for p in POLS:
             J(p, "P", 7, payday_err=pe)
+        for p in PD_POLS:
+            J(p, "P", 7, payday_err=pe)
+        for p in PD_SHIP:
+            J(p, "P", 7, payday_err=pe, bcfg=w3.FITTED_BELIEF)
 
     # T5
     J("portfolio", "P", 7, cap_override=2, payday_err=PE_CONT)
@@ -217,11 +225,13 @@ def plan_jobs(tier):
     # T6
     J("solo_pop", "P1", 7)
     J("solo_shared", "P1", 7)
+    # T6_PD: same identity on the filter that ships
+    J("solo_pop_pd", "P1", 7, bcfg=w3.FITTED_BELIEF)
+    J("solo_shared_pd", "P1", 7, bcfg=w3.FITTED_BELIEF)
 
     # T9
-    for pe in (PE_FLAT, PE_CONT):
-        for pol in T9_POLICIES:
-            J(pol, "P", 7, payday_err=pe)
+    for _key, pol, kw in t9_reference.cases():
+        J(pol, "P", 7, **kw)
 
     # S1 (point-estimate belief) and S1_PD (the belief that ships)
     for r in range(3):
@@ -244,6 +254,11 @@ def plan_jobs(tier):
               bcfg=w3.FITTED_BELIEF)
             J("solo_shared_pd", f"S2P{r}", 950 + r, payday_err=PE_CONT,
               bcfg=w3.FITTED_BELIEF, mutate="ignore_bcfg")
+            # S2a_PD: the moat on the filter that ships. S4 already planned
+            # solo_shared_pd + FITTED_BELIEF; this is own under the same
+            # config. Hostile placebo stays unfitted (S2b).
+            J("solo_pop_pd", f"S2P{r}", 950 + r, payday_err=PE_CONT,
+              bcfg=w3.FITTED_BELIEF)
     return jobs
 
 
@@ -431,6 +446,17 @@ def tier2():
         orc_pe = R("oracle", "P", 7, payday_err=pe)["cycle_rec"]
         t1_orc[pe] = orc_pe
         t1_bad += [(pe,) + tuple(b) for b in dominated_by(orc_pe, pe)]
+        # Shipping-class policies, unfitted and fitted. Folded into T1
+        # rather than a new ID: "oracle dominates every policy" includes
+        # the filter that ships.
+        for p in PD_POLS:
+            r = R(p, "P", 7, payday_err=pe)["cycle_rec"]
+            if r > orc_pe + 1e-9:
+                t1_bad.append((pe, p, round(r * 100, 1)))
+        for p in PD_SHIP:
+            r = R(p, "P", 7, payday_err=pe, bcfg=w3.FITTED_BELIEF)["cycle_rec"]
+            if r > orc_pe + 1e-9:
+                t1_bad.append((pe, p + "|fitted", round(r * 100, 1)))
     t1_mut_fires = bool(dominated_by(
         R("oracle", "P", 7, mutate="weak_oracle")["cycle_rec"], PE_FLAT))
     t1_margin = t1_orc[PE_FLAT] - max(
@@ -504,6 +530,12 @@ def tier2():
            PASS if abs(a["cycle_rec"] - b_["cycle_rec"]) < 1e-12 else FAIL,
            f"{a['cycle_rec']*100:.3f}% vs {b_['cycle_rec']*100:.3f}%")
 
+    a_pd = R("solo_pop_pd", "P1", 7, bcfg=w3.FITTED_BELIEF)
+    b_pd = R("solo_shared_pd", "P1", 7, bcfg=w3.FITTED_BELIEF)
+    record("T6_PD", "k=1: pooled == own on the shipping filter",
+           PASS if abs(a_pd["cycle_rec"] - b_pd["cycle_rec"]) < 1e-12 else FAIL,
+           f"{a_pd['cycle_rec']*100:.3f}% vs {b_pd['cycle_rec']*100:.3f}%")
+
     # T7 HARD BOUNDS + PER-EVENT CAP.
     # The cap clause used to compare att_per_cycle -- a MEAN over all cycles --
     # against the cap. A mean cannot exceed 4 unless the breach is
@@ -528,6 +560,10 @@ def tier2():
         return bad
 
     t7_rows = [(p, R(p, "P", 7, payday_err=PE_CONT)) for p in POLS + ["oracle"]]
+    t7_rows += [(p, R(p, "P", 7, payday_err=PE_CONT)) for p in PD_POLS]
+    t7_rows += [(p + "|fitted",
+                 R(p, "P", 7, payday_err=PE_CONT, bcfg=w3.FITTED_BELIEF))
+                for p in PD_SHIP]
     t7_real = t7_complaints(t7_rows)
     _poison = dict(t7_rows[0][1])
     _poison["cycle_rec"] = 1.5
@@ -545,6 +581,9 @@ def tier2():
     # T8 compliant policies must be clean; baseline_doc must NOT be
     bad = [p for p in harness.COMPLIANT if p in POLS + ["oracle"]
            and R(p, "P", 7)["violations"] != 0]
+    bad += [p for p in PD_POLS if R(p, "P", 7)["violations"] != 0]
+    bad += [p + "|fitted" for p in PD_SHIP
+            if R(p, "P", 7, bcfg=w3.FITTED_BELIEF)["violations"] != 0]
     doc_v = R("baseline_doc", "P", 7)["vdetail"]["represent"]
     record("T8", "compliant policies clean; documented baseline is not",
            PASS if not bad and doc_v > 0 else FAIL,
@@ -582,27 +621,25 @@ def gate_t9(workers):
         return [f"{key}.{f}" for f in sorted(set(want) | set(fp))
                 if want.get(f) != fp.get(f)]
 
+    locked_cases = list(t9_reference.cases())
     real_bad, n_hash = [], 0
-    for pe in t9_reference.PAYDAY_ERRS:
-        for pol in T9_POLICIES:
-            key = f"{pol}|pe{pe}"
-            fp = t9_reference.fingerprint(R(pol, "P", 7, payday_err=pe))
-            if fp.get("calib_sha256"):
-                n_hash += 1
-            real_bad += diff(fp, key)
+    for key, pol, kw in locked_cases:
+        fp = t9_reference.fingerprint(R(pol, "P", 7, **kw))
+        if fp.get("calib_sha256"):
+            n_hash += 1
+        real_bad += diff(fp, key)
 
     # the mutant, run through the real parallel driver
     mut_jobs = []
-    for pe in t9_reference.PAYDAY_ERRS:
-        for pol in T9_POLICIES:
-            kw = norm(dict(payday_err=pe))
-            mut_jobs.append((f"{pol}|pe{pe}", pol, POP_SPECS["P"], 7, kw))
+    for key, pol, case_kw in locked_cases:
+        kw = norm(case_kw)
+        mut_jobs.append((key, pol, POP_SPECS["P"], 7, kw))
     mut_res = runner.run_jobs(mut_jobs, workers=workers, shared_seed_mutant=True)
     mut_bad = []
     for key, res in mut_res.items():
         mut_bad += diff(t9_reference.fingerprint(res), key)
 
-    n_cfg = len(T9_POLICIES) * len(t9_reference.PAYDAY_ERRS)
+    n_cfg = len(locked_cases)
     if real_bad:
         record("T9", "output identical to the pre-optimisation reference", FAIL,
                f"{len(real_bad)} field(s) differ: {real_bad[:6]}")
@@ -717,6 +754,21 @@ def tier3_stats():
     record("S2c", "headline: shared_pd beats placebo_pd (>2SE)",
            PASS if m_c > e_c else FAIL, f"{m_c:+.2f} pts (+/-{e_c:.2f})")
 
+    # Shipping-filter moat. S2a above stays on the unfitted BeliefPD so the
+    # original experiment is still the original experiment. S2a_PD asks the
+    # same question of FITTED_BELIEF, which is what ships.
+    own_f, real_f = [], []
+    for r in S2_SEEDS:
+        kw = dict(payday_err=PE_CONT, bcfg=w3.FITTED_BELIEF)
+        own_f.append(R("solo_pop_pd", f"S2P{r}", 950 + r, **kw)["cycle_rec"])
+        real_f.append(R("solo_shared_pd", f"S2P{r}", 950 + r, **kw)["cycle_rec"])
+    m_ap, e_ap = paired(own_f, real_f)
+    print(f"       pe=7, n=100, {len(S2_SEEDS)} pops, FITTED_BELIEF")
+    print(f"         own      solo_pop_pd      {np.mean(own_f)*100:6.2f}%")
+    print(f"         real     solo_shared_pd   {np.mean(real_f)*100:6.2f}%")
+    record("S2a_PD", "moat on shipping filter: shared_pd beats own_pd (>2SE)",
+           PASS if m_ap > e_ap else FAIL, f"{m_ap:+.2f} pts (+/-{e_ap:.2f})")
+
     # S2_LEGACY: the original point-estimate gate, unchanged, at its original
     # operating point. RETIRED ARCHITECTURE. Kept as a record, not as evidence.
     real, plac, own = [], [], []
@@ -830,7 +882,8 @@ def main(argv=None):
     if args.tier == "full":
         tier3_stats()
     else:
-        print("       S2a / S2b / S2c / S2_LEGACY / S3 NOT RUN in the fast tier.")
+        print("       S2a / S2b / S2c / S2a_PD / S2_LEGACY / S3 NOT RUN "
+              "in the fast tier.")
         print("       They need 8 populations at n=100 to have power and are")
         print("       never shrunk to fit a time budget. Run --tier full.")
 

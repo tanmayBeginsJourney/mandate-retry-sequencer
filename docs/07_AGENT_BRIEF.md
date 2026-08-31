@@ -52,7 +52,7 @@ Every term below is used across `docs/` without definition. Read this once.
 | **the metric** | Billing cycles collected ÷ cycles due, over the full horizon. A dead mandate forfeits its remaining cycles, which prices mandate death without an invented LTV constant. |
 | **oracle** | A clairvoyant policy with the true balance and true future. The upper bound; must weakly dominate everything (gate T1). |
 | **degenerate mode** | The agent with its action space switched off: retry-only, deterministic diagnoser, no nudge/escalate/stop, no rail monitor. It reproduces `harness.run("solo_shared_pd", ...)` **bit-exactly**, which is what makes every agent number comparable to a gated one. Added 28 Aug 2026. |
-| **full mode** | Degenerate plus the action space. The difference between the two is the agent's own contribution, isolated. |
+| **full mode** | Degenerate plus the action space: funding reminders after the 1st and 2nd insufficient-funds fails, a Payment Link in place of the 4th mandate debit after the 3rd, escalate as a merchant-queue file. Degenerate keeps `last_attempt_backup` and `remind_on_fail` off so parity with `harness.run` stays bit-identical. |
 | **the rail** | The payment network itself, as opposed to a customer's account. `w3.BeliefPD` has no representation of it — that is why the context layer exists. |
 
 ### Running anything
@@ -176,7 +176,7 @@ Concretely:
 
 | Layer | Owns | Implementation |
 |---|---|---|
-| LLM | root-cause diagnosis, intervention choice (retry / nudge / escalate / stop), human-readable justification per money action | **BUILT** — `agent/llm/`, `glm-5.3-flash` as an overlay over a deterministic rule engine. `WAIT` was cut and `PARTIAL` is a recommendation only; see §8. |
+| LLM | root-cause diagnosis, intervention choice (retry / nudge / escalate / stop), human-readable justification per money action, customer copy for reminder and last-attempt checkout, merchant copy for escalate | **BUILT** — `agent/llm/`, `glm-5.3-flash` as an overlay over a deterministic rule engine. `WAIT` was cut and `PARTIAL` is a recommendation only; see §8. Compose: `agent/llm/compose.py`. |
 | Policy | which mandate, which day | `w3.BeliefPD` + `w3.index_score` — **frozen, wire it in** |
 | Constraints | whether the chosen action is legal | **BUILT** — `agent/constraints/`, enforced not counted. §4 explains why that was the first real task and what the simulation does differently. |
 
@@ -210,8 +210,8 @@ b = w3.BeliefPD(
     days,                   # horizon, e.g. 120
     est_spend=est_spend,
     pop_info=True,          # INERT on BeliefPD -- see below. Harmless.
-    **cfg,                  # stride=1, prior_w=12, prior_day0=8.0,
-)                           # prior_floor=0.25
+    **cfg,                  # stride=1, prior_w=9, prior_day0=8.0,
+)                           # prior_floor=0.5
 ```
 
 With the fitted `spend_beta=0.0` the `est_spend` line reduces to `pop_spend`,
@@ -507,6 +507,8 @@ agent/
                       reason -> family map -- agent/llm may not import
                       agent.execution, so ports.py is the only lawful home.
   state.py            per-mandate bookkeeping (the POLICY's view, not the gate's)
+  recovery.py         when to remind, when to issue a last-attempt Payment Link,
+                      when the 4th debit is blocked, when escalate actually halts
   loop.py             detect -> diagnose -> choose -> schedule -> enforce -> execute -> log
   batch.py            composition root: the only place that builds an executor AND a gate,
                       and the one place the BACKEND is chosen (`executor=`)
@@ -518,9 +520,11 @@ agent/
                       razorpay_downtime.py - their Payment Downtime feed
                       razorpay_reasons.txt - their 110 reasons, verbatim
   audit/              log.py - append-only JSONL, one row per event
+                      jsonl_queue.py - reminder outbox and merchant queue files
   llm/                caseview.py (redaction boundary), fallback.py (deterministic),
                       governance.py, client.py (Z.ai transport), prompts.py
-                      (versioned), model_diagnoser.py (the LLM overlay)
+                      (versioned), model_diagnoser.py (the LLM overlay),
+                      compose.py (reminder / backup-link / escalate copy)
   eval/               golden_cases.yaml (40 + 7 taxonomy + 3 injection),
                       cases.py, injection.py, run_eval.py, _cache/
   batch_report.py     THE TRACK DELIVERABLE. Not batch.py, the composition root.
@@ -594,7 +598,8 @@ run if the two SKU names are equal, so Flash never grades itself. **$0.26 spent.
 if-else are for. Where the model earns its place is **terminal decline codes**:
 a frozen account (`ZX`, `YE`) or a revoked mandate (`VI`, `VD`), where no retry
 can ever succeed and `w3.index_score` has no slot for the fact. **It does not
-move the batch money** - 94.33% against the deterministic 94.36%.
+move the batch money** - 94.33% against the deterministic 94.36% on the
+previous prior (overlay not re-run after adoption).
 
 **Full tables and every caveat: `02_RESULTS.md`. Summary and the three things
 that bound every LLM number: `06_MODEL_CARD.md` section 7.**

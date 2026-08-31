@@ -357,7 +357,7 @@ def main() -> int:
         print(f"           [{detail}]")
     print()
     print(f"Pre-registration record for this measurement: {hits}/{len(v)}")
-    return 0
+    return 0 if hits == len(v) else 1
 
 
 if __name__ == "__main__":

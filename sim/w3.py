@@ -38,17 +38,24 @@ NPCI_MAX = 4
 
 Z9, TECH, OK = "Z9", "TECH", "OK"
 
-# The fitted BeliefPD configuration. NOT an invented constant: every value was
-# selected by sim/fit_belief.py, by outcome, on TRAINING populations 600-607 --
-# the same 800 customers the ML baseline was allowed to fit itself to -- and
-# reported on populations it had never seen. The three values replace three
-# hand-set ones that had never been checked against anything:
+# The shipping BeliefPD configuration. Selected 31 August 2026 by
+# sim/fit_belief.py: two-pass coordinate search maximising mean cycle
+# collection across payday_err in {1,3,5,7,10,14} on training populations
+# 600-607. sim/fitted_belief.json is the committed record.
+#
+# The previous shipping values (prior_w=12, prior_floor=0.25) are stored
+# there as former_shipping. They scored slightly higher on held-out
+# evaluation populations and slightly lower on the training objective.
+# Shipping the train winner rather than the eval winner is the point of
+# the split. See NOTES.md, 31 August 2026.
+#
+# The values replaced three hand-set defaults:
 #
 #   stride       3 -> 1        the old grid [0,3,...,27] left 26% of
 #                              customers with no representable true payday
-#   prior        exp(-0.10d) -> a window of half-width 12 around est_payday
+#   prior        exp(-0.10d) -> a window of half-width 9 around est_payday
 #                              with 8x weight on hypothesis 0 and a SOFT
-#                              floor of 0.25 outside it
+#                              floor of 0.5 outside it
 #   spend_beta   0.045 -> 0.0   the hand-derived cross-mandate correction
 #                              turns out to be worth less than nothing
 #
@@ -58,14 +65,12 @@ Z9, TECH, OK = "Z9", "TECH", "OK"
 # payday falls outside the window, gets weight 1e-6, and can never be
 # recovered -- that configuration measured -4.85 pts, i.e. actively WORSE than
 # the filter it replaced. The gain peaked exactly at the operating point it
-# had been fitted on. Re-selected on training populations against the MEAN
-# across payday_err in {1,3,5,7,10,14}, because the true operating point is
-# not known. See NOTES.md, 28 August 2026.
+# had been fitted on.
 #
 # Gate S4 holds this, paired with the `ignore_bcfg` mutant so the gate goes
 # red if the plumbing that applies it is ever broken.
-FITTED_BELIEF = dict(stride=1, prior_w=12, prior_day0=8.0,
-                     prior_floor=0.25, spend_beta=0.0)
+FITTED_BELIEF = dict(stride=1, prior_w=9, prior_day0=8.0,
+                     prior_floor=0.5, spend_beta=0.0)
 
 
 def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
@@ -110,7 +115,7 @@ def hourly_spend_profile(cycle_days, decay=DEFAULT_DECAY):
     return w / w.sum()
 
 
-def balance_trace(c, rng, decay=None, p_missed_credit=0.0,
+def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
                   p_transient=0.0, transient_h=24, hold_rng=None):
     """True balance at every hour. Salary lands at hour 0 of payday.
 
@@ -125,11 +130,10 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0,
     100% at every calibration tested, so the agent was solving a pure timing
     problem and never a collectability one.
 
-    ⚠️ **INERT AT 0.0 AND THAT IS LOAD-BEARING.** The draw is guarded, so at
-    the default this function consumes nothing extra from `rng` and every
-    number measured before W2 is unchanged. Removing the guard would shift the
-    shared RNG stream and silently move every historical result; gate T9
-    catches that, and it should never have to.
+    Missed-credit draws come from `missed_rng`, not the money path's `rng`.
+    Turning W2 on therefore overlays missed credits on the same spending trace
+    instead of changing all later spend draws. Passing a positive rate without
+    the separate generator raises. At 0.0 no missed-credit draw is made.
 
     `p_transient` is W7 (docs/04_BUILD_PLAN.md): a TEMPORARY HOLD on the
     account. With probability `p_transient`, on any given day, the balance
@@ -175,9 +179,17 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0,
     b = c["salary"] * rng.uniform(0.0, 0.06)
     prof = hourly_spend_profile(cyc, DEFAULT_DECAY if decay is None else decay)
     # One draw per cycle, taken up front so the stream position does not depend
-    # on which days happen to be paydays.
-    missed = (rng.random(days // cyc + 2) < p_missed_credit
-              if p_missed_credit > 0 else None)
+    # on which days happen to be paydays. This must not consume from `rng`:
+    # otherwise every W2 cell changes both insolvency and the spending trace.
+    if p_missed_credit > 0:
+        if missed_rng is None:
+            raise ValueError(
+                "p_missed_credit > 0 needs its own missed_rng. Drawing missed "
+                "credits from the money path's rng shifts every later spend "
+                "draw and changes two mechanisms at once.")
+        missed = missed_rng.random(days // cyc + 2) < p_missed_credit
+    else:
+        missed = None
     # W7. One draw per DAY, taken up front for the same reason `missed` is: the
     # stream position must not depend on which days happen to be paydays. A
     # per-CYCLE onset uniform over the cycle was rejected -- a 24h hold covers

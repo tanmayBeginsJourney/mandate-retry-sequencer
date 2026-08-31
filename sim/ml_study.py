@@ -46,13 +46,9 @@ TRAIN_POPS = list(range(600, 608))     # 8 populations for fitting
 HELDOUT_POPS = list(range(608, 610))   # 2 never seen during fitting
 EVAL_POPS = list(range(700, 708))      # 8 more, used only for policy runs
 
-FIT_PATH = os.path.join(ART, "belief_fit.json")
-
-
 def fair_cfg():
-    """The fitted belief configuration. See sim/fit_belief.py."""
-    with open(FIT_PATH) as fh:
-        return json.load(fh)["fitted"]
+    """The configuration that ships; its selection mismatch is recorded."""
+    return dict(w3.FITTED_BELIEF)
 
 
 N = 100

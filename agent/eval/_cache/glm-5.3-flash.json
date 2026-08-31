@@ -7458,5 +7458,605 @@
   },
   "prompt_tokens": 1060,
   "text": "```json\n{\n  \"root_cause\": \"UNKNOWN\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.55,\n  \"rationale\": \"No debit has been attempted yet and no response codes exist, so there is no diagnostic evidence of any failure. A nudge to fund the account costs none of the four attempts and improves the odds that our model's highest-scored window succeeds on the first presentation.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|05f1015a05a45d67": {
+  "cached_tokens": 832,
+  "completion_tokens": 97,
+  "parsed": {
+   "confidence": 0.93,
+   "intervention": "ESCALATE",
+   "rationale": "The most recent response code (YE) indicates a blocked or frozen account, which is terminal \u2014 no further attempt can succeed, so retrying would waste one of the mandate's remaining attempts. Escalating to the merchant's queue lets them resolve the account status with the customer directly, at no attempt cost.",
+   "root_cause": "ACCOUNT_UNAVAILABLE"
+  },
+  "prompt_tokens": 1081,
+  "text": "{\"root_cause\": \"ACCOUNT_UNAVAILABLE\", \"intervention\": \"ESCALATE\", \"confidence\": 0.93, \"rationale\": \"The most recent response code (YE) indicates a blocked or frozen account, which is terminal \u2014 no further attempt can succeed, so retrying would waste one of the mandate's remaining attempts. Escalating to the merchant's queue lets them resolve the account status with the customer directly, at no attempt cost.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|0fa168b4ff1ca7c5": {
+  "cached_tokens": 832,
+  "completion_tokens": 150,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "No debit has been presented this cycle and no failure evidence exists, so the standard first presentation is the correct action. Our timing model scores this window as the highest-confidence available for this mandate.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1083,
+  "text": "```json\n{\"root_cause\": \"UNKNOWN\", \"intervention\": \"RETRY\", \"confidence\": \"medium\", \"rationale\": \"No debit has been presented this cycle and no failure evidence exists, so the standard first presentation is the correct action. Our timing model scores this window as the highest-confidence available for this mandate.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|12e87a47aa3f1139": {
+  "cached_tokens": 0,
+  "completion_tokens": 127,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "All three declines were insufficient-funds responses, and with one attempt left before the mandate cap our model scores this window highest only after the customer is asked to fund the account \u2014 a further attempt now risks forfeiting every future cycle.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1087,
+  "text": "```json\n{\n  \"root_cause\": \"INSUFFICIENT_FUNDS\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"All three declines were insufficient-funds responses, and with one attempt left before the mandate cap our model scores this window highest only after the customer is asked to fund the account \u2014 a further attempt now risks forfeiting every future cycle.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|1b316488171138e0": {
+  "cached_tokens": 0,
+  "completion_tokens": 63,
+  "parsed": {
+   "confidence": 0.55,
+   "intervention": "RETRY",
+   "rationale": "No attempts have been used and no failure evidence exists yet, so the first presentation should proceed; our model scores this window as acceptable for an initial debit.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1082,
+  "text": "{\"root_cause\": \"UNKNOWN\", \"intervention\": \"RETRY\", \"confidence\": 0.55, \"rationale\": \"No attempts have been used and no failure evidence exists yet, so the first presentation should proceed; our model scores this window as acceptable for an initial debit.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|20ebee2d7933014c": {
+  "cached_tokens": 832,
+  "completion_tokens": 171,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "RETRY",
+   "rationale": "The rail returned a limit-exceeded code, which indicates the requested amount was refused against a mandate cap rather than a shortfall on the account. Re-presenting the debit under the same notification is the appropriate next step; our model scores this window highest, and no terminal condition appears in the history.",
+   "root_cause": "LIMIT_EXCEEDED"
+  },
+  "prompt_tokens": 1084,
+  "text": "```json\n{\n  \"root_cause\": \"LIMIT_EXCEEDED\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": 0.72,\n  \"rationale\": \"The rail returned a limit-exceeded code, which indicates the requested amount was refused against a mandate cap rather than a shortfall on the account. Re-presenting the debit under the same notification is the appropriate next step; our model scores this window highest, and no terminal condition appears in the history.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|218999ab12fbfe1b": {
+  "cached_tokens": 0,
+  "completion_tokens": 81,
+  "parsed": {
+   "confidence": "0.62",
+   "intervention": "RETRY",
+   "rationale": "A recent successful mandate on this account shows activity on the rail, and our timing model scores the current window highest, so re-presenting the debit is the appropriate next step. No terminal or technical decline is present in the history.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1079,
+  "text": "{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"RETRY\", \"confidence\": \"0.62\", \"rationale\": \"A recent successful mandate on this account shows activity on the rail, and our timing model scores the current window highest, so re-presenting the debit is the appropriate next step. No terminal or technical decline is present in the history.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|23ccabca05288938": {
+  "cached_tokens": 832,
+  "completion_tokens": 69,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "The two Z9 declines point to a funding issue, with TECH declines interspersed and one attempt still available; our model scores this window highest for a re-presentation.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1087,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"RETRY\", \"confidence\": \"medium\", \"rationale\": \"The two Z9 declines point to a funding issue, with TECH declines interspersed and one attempt still available; our model scores this window highest for a re-presentation.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|24f671c2971fea22": {
+  "cached_tokens": 0,
+  "completion_tokens": 108,
+  "parsed": {
+   "confidence": 0.75,
+   "intervention": "NUDGE",
+   "rationale": "All three declines this cycle were insufficient-funds responses, and only one attempt remains before the mandate is lost. A customer prompt to fund the account preserves the final attempt, which our timing model scores as a strong window.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1087,
+  "text": "```json\n{\n  \"root_cause\": \"INSUFFICIENT_FUNDS\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.75,\n  \"rationale\": \"All three declines this cycle were insufficient-funds responses, and only one attempt remains before the mandate is lost. A customer prompt to fund the account preserves the final attempt, which our timing model scores as a strong window.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|25a0d539c615242f": {
+  "cached_tokens": 832,
+  "completion_tokens": 176,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "No attempts have been used and no declines exist yet, so there is no failure to diagnose; with three retries still in reserve, presenting the debit now is low-risk. Our model scores this window as a strong candidate for collection this cycle.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1084,
+  "text": "{\"root_cause\": \"UNKNOWN\", \"intervention\": \"RETRY\", \"confidence\": \"medium\", \"rationale\": \"No attempts have been used and no declines exist yet, so there is no failure to diagnose; with three retries still in reserve, presenting the debit now is low-risk. Our model scores this window as a strong candidate for collection this cycle.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|27f2957a5342fc86": {
+  "cached_tokens": 832,
+  "completion_tokens": 79,
+  "parsed": {
+   "confidence": "high",
+   "intervention": "STOP",
+   "rationale": "The mandate-level failure code VD has occurred on every attempt, indicating a broken amount rule or invalid mandate that no retry can succeed against. The mandate must be re-authorised by the customer, so no further debit attempts should be spent.",
+   "root_cause": "MANDATE_INVALID"
+  },
+  "prompt_tokens": 1085,
+  "text": "{\"root_cause\": \"MANDATE_INVALID\", \"intervention\": \"STOP\", \"confidence\": \"high\", \"rationale\": \"The mandate-level failure code VD has occurred on every attempt, indicating a broken amount rule or invalid mandate that no retry can succeed against. The mandate must be re-authorised by the customer, so no further debit attempts should be spent.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|2a38d4920f296133": {
+  "cached_tokens": 832,
+  "completion_tokens": 106,
+  "parsed": {
+   "confidence": 0.62,
+   "intervention": "NUDGE",
+   "rationale": "Repeated declines on the same day pattern suggest the presentation window is misaligned rather than a hard block; our timing model scores this window narrow, so asking the customer to fund the account costs no attempt. With only one attempt left, preserving it for a better-scored window protects the mandate's future cycles.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1087,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.62,\n  \"rationale\": \"Repeated declines on the same day pattern suggest the presentation window is misaligned rather than a hard block; our timing model scores this window narrow, so asking the customer to fund the account costs no attempt. With only one attempt left, preserving it for a better-scored window protects the mandate's future cycles.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|2dc9bd3ad845fa4c": {
+  "cached_tokens": 832,
+  "completion_tokens": 137,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "RETRY",
+   "rationale": "The latest debit was returned with a technical decline, which is eligible for re-presentation under the same notification, and no funds-related or terminal codes appear in the history. One attempt has been used, so a re-presented debit can proceed within this cycle.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1086,
+  "text": "```json\n{\n  \"root_cause\": \"TECHNICAL\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": 0.72,\n  \"rationale\": \"The latest debit was returned with a technical decline, which is eligible for re-presentation under the same notification, and no funds-related or terminal codes appear in the history. One attempt has been used, so a re-presented debit can proceed within this cycle.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|2f45e756d25cc526": {
+  "cached_tokens": 0,
+  "completion_tokens": 155,
+  "parsed": {
+   "confidence": 0.62,
+   "intervention": "NUDGE",
+   "rationale": "All three declines this cycle were the same non-terminal funds-availability code, and our timing model shows only narrow confidence in the current window. With one attempt left and the mandate's future cycles at stake, we ask the customer to fund the account rather than spend the final attempt now.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1089,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.62,\n  \"rationale\": \"All three declines this cycle were the same non-terminal funds-availability code, and our timing model shows only narrow confidence in the current window. With one attempt left and the mandate's future cycles at stake, we ask the customer to fund the account rather than spend the final attempt now.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|3201f317f415a38b": {
+  "cached_tokens": 0,
+  "completion_tokens": 109,
+  "parsed": {
+   "confidence": 0.7,
+   "intervention": "NUDGE",
+   "rationale": "A recent successful mandate on this account suggests funds arrive on a different rhythm than our presentment day, and our timing model's window is wide. A no-cost customer nudge preserves the mandate's remaining attempts while prompting funding.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1082,
+  "text": "{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"NUDGE\", \"confidence\": 0.7, \"rationale\": \"A recent successful mandate on this account suggests funds arrive on a different rhythm than our presentment day, and our timing model's window is wide. A no-cost customer nudge preserves the mandate's remaining attempts while prompting funding.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|368197e51858b6e8": {
+  "cached_tokens": 832,
+  "completion_tokens": 186,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "The decline history shows only technical codes, which are explicitly re-presentable under the same notification, and no funds-related or terminal declines appear. Two attempts remain in this cycle, so our model scores this window highest for a re-presentation.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1092,
+  "text": "```json\n{\n  \"root_cause\": \"TECHNICAL\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": \"medium\",\n  \"rationale\": \"The decline history shows only technical codes, which are explicitly re-presentable under the same notification, and no funds-related or terminal declines appear. Two attempts remain in this cycle, so our model scores this window highest for a re-presentation.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|64af2562e507f360": {
+  "cached_tokens": 832,
+  "completion_tokens": 162,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "RETRY",
+   "rationale": "The most recent decline is a technical one, which may be re-presented under the same notification, and an earlier debit attempt on this account succeeded recently, suggesting funds availability is a matter of when we present rather than whether the customer can pay. Our model scores this window as the best remaining opportunity this cycle, and two of four attempts are still preserved.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1085,
+  "text": "```json\n{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"RETRY\", \"confidence\": 0.72, \"rationale\": \"The most recent decline is a technical one, which may be re-presented under the same notification, and an earlier debit attempt on this account succeeded recently, suggesting funds availability is a matter of when we present rather than whether the customer can pay. Our model scores this window as the best remaining opportunity this cycle, and two of four attempts are still preserved.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|6f0cb1cc58ac3cd7": {
+  "cached_tokens": 832,
+  "completion_tokens": 152,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "Three presentations have already used this cycle and only the final attempt remains, so spending it now on a decline would forfeit all future cycles. Our model scores this window low; a no-cost customer prompt to fund the account preserves the last attempt for a stronger window.",
+   "root_cause": "MANDATE_AT_RISK"
+  },
+  "prompt_tokens": 1137,
+  "text": "```json\n{\n  \"root_cause\": \"MANDATE_AT_RISK\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"Three presentations have already used this cycle and only the final attempt remains, so spending it now on a decline would forfeit all future cycles. Our model scores this window low; a no-cost customer prompt to fund the account preserves the last attempt for a stronger window.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|74a66f87808ded90": {
+  "cached_tokens": 832,
+  "completion_tokens": 187,
+  "parsed": {
+   "confidence": 0.7,
+   "intervention": "NUDGE",
+   "rationale": "Repeated insufficient-funds declines early in the cycle, with a customer-reported shift in their pay date, point to a timing mismatch rather than an inability to pay. A nudge costs no attempt, preserves the remaining two attempts for a better-scored window, and our timing model's confidence is too wide to justify spending an attempt now.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1108,
+  "text": "```json\n{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"NUDGE\", \"confidence\": 0.7, \"rationale\": \"Repeated insufficient-funds declines early in the cycle, with a customer-reported shift in their pay date, point to a timing mismatch rather than an inability to pay. A nudge costs no attempt, preserves the remaining two attempts for a better-scored window, and our timing model's confidence is too wide to justify spending an attempt now.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|7a8a52a5af43ab45": {
+  "cached_tokens": 0,
+  "completion_tokens": 94,
+  "parsed": {
+   "confidence": 0.7,
+   "intervention": "NUDGE",
+   "rationale": "Two insufficient-funds declines early in the cycle, but a separate mandate on this account cleared recently, suggesting funds arrive later in the cycle. A no-cost customer nudge to fund the account avoids burning another attempt; our model scores the coming window narrowly, so conserving attempts is prudent.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1085,
+  "text": "{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"NUDGE\", \"confidence\": 0.7, \"rationale\": \"Two insufficient-funds declines early in the cycle, but a separate mandate on this account cleared recently, suggesting funds arrive later in the cycle. A no-cost customer nudge to fund the account avoids burning another attempt; our model scores the coming window narrowly, so conserving attempts is prudent.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|7bb8e462f20b0bf7": {
+  "cached_tokens": 832,
+  "completion_tokens": 194,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "The most recent decline is a technical one, which the rail explicitly permits re-presenting under the same notification, so one more attempt is justified. Two attempts remain this cycle, preserving a buffer if this presentation also fails.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1090,
+  "text": "```json\n{\n  \"root_cause\": \"TECHNICAL\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": \"medium\",\n  \"rationale\": \"The most recent decline is a technical one, which the rail explicitly permits re-presenting under the same notification, so one more attempt is justified. Two attempts remain this cycle, preserving a buffer if this presentation also fails.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|801e5ffe529d0720": {
+  "cached_tokens": 832,
+  "completion_tokens": 178,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "Three presentations this cycle have all declined on the same rail response, and only one attempt remains before the mandate caps out, so spending it on another blind debit would risk forfeiting all future cycles. A no-cost nudge asks the customer to fund the account while preserving the final attempt for a window our model scores highly.",
+   "root_cause": "MANDATE_AT_RISK"
+  },
+  "prompt_tokens": 1110,
+  "text": "```json\n{\n  \"root_cause\": \"MANDATE_AT_RISK\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"Three presentations this cycle have all declined on the same rail response, and only one attempt remains before the mandate caps out, so spending it on another blind debit would risk forfeiting all future cycles. A no-cost nudge asks the customer to fund the account while preserving the final attempt for a window our model scores highly.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|82622aa5021d8554": {
+  "cached_tokens": 0,
+  "completion_tokens": 112,
+  "parsed": {
+   "confidence": 0.95,
+   "intervention": "STOP",
+   "rationale": "The most recent cycle history begins with an OK response, meaning this mandate has already collected this billing cycle; the subsequent technical declines reflect attempts beyond a settled payment, not an unpaid subscription. No further debit should be attempted.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1087,
+  "text": "```json\n{\n  \"root_cause\": \"UNKNOWN\",\n  \"intervention\": \"STOP\",\n  \"confidence\": 0.95,\n  \"rationale\": \"The most recent cycle history begins with an OK response, meaning this mandate has already collected this billing cycle; the subsequent technical declines reflect attempts beyond a settled payment, not an unpaid subscription. No further debit should be attempted.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|85ded743520429a7": {
+  "cached_tokens": 0,
+  "completion_tokens": 82,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "NUDGE",
+   "rationale": "No attempt has been made yet this cycle, and a recent successful mandate on the same account suggests the payment rail and mandate are healthy; our model scores this window narrowly, so a no-cost customer nudge to fund the account is the safest next step before spending any attempt.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1081,
+  "text": "{\"root_cause\":\"TIMING_MISMATCH\",\"intervention\":\"NUDGE\",\"confidence\":\"medium\",\"rationale\":\"No attempt has been made yet this cycle, and a recent successful mandate on the same account suggests the payment rail and mandate are healthy; our model scores this window narrowly, so a no-cost customer nudge to fund the account is the safest next step before spending any attempt.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|8bc25148cc53e9ad": {
+  "cached_tokens": 0,
+  "completion_tokens": 82,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "The single Z9 decline indicates a routine insufficient-funds failure early in the cycle, with no terminal codes and attempts remaining. Prompting the customer to fund the account preserves debit attempts for when our model scores a window highest.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1080,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": 0.72, \"rationale\": \"The single Z9 decline indicates a routine insufficient-funds failure early in the cycle, with no terminal codes and attempts remaining. Prompting the customer to fund the account preserves debit attempts for when our model scores a window highest.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|90165098f990ca4b": {
+  "cached_tokens": 832,
+  "completion_tokens": 88,
+  "parsed": {
+   "confidence": 0.95,
+   "intervention": "ESCALATE",
+   "rationale": "The most recent response code (VI) indicates a mandate-level failure, which is terminal \u2014 no retry can succeed until the mandate is re-authorised. We have escalated this case to the merchant queue so the mandate can be reviewed and re-authorised with the customer.",
+   "root_cause": "MANDATE_INVALID"
+  },
+  "prompt_tokens": 1080,
+  "text": "{\"root_cause\": \"MANDATE_INVALID\", \"intervention\": \"ESCALATE\", \"confidence\": 0.95, \"rationale\": \"The most recent response code (VI) indicates a mandate-level failure, which is terminal \u2014 no retry can succeed until the mandate is re-authorised. We have escalated this case to the merchant queue so the mandate can be reviewed and re-authorised with the customer.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|914062176ad3246d": {
+  "cached_tokens": 832,
+  "completion_tokens": 97,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "A single Z9 decline early in the cycle with three attempts remaining points to insufficient funds rather than a mandate or rail issue. We recommend prompting the customer to fund the account, since our model scores this window highest and a nudge preserves all remaining attempts.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1082,
+  "text": "```json\n{\n  \"root_cause\": \"INSUFFICIENT_FUNDS\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"A single Z9 decline early in the cycle with three attempts remaining points to insufficient funds rather than a mandate or rail issue. We recommend prompting the customer to fund the account, since our model scores this window highest and a nudge preserves all remaining attempts.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|92c0c30137d96f11": {
+  "cached_tokens": 832,
+  "completion_tokens": 223,
+  "parsed": {
+   "confidence": 0.62,
+   "intervention": "NUDGE",
+   "rationale": "With only one attempt remaining this cycle, our model does not score the current window confidently enough to justify spending it; a customer prompt to fund the account uses no attempt. Recent successful activity on the account suggests presentation timing, not the customer, is the issue.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1084,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.62,\n  \"rationale\": \"With only one attempt remaining this cycle, our model does not score the current window confidently enough to justify spending it; a customer prompt to fund the account uses no attempt. Recent successful activity on the account suggests presentation timing, not the customer, is the issue.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|9581ba1f9b6b607f": {
+  "cached_tokens": 832,
+  "completion_tokens": 93,
+  "parsed": {
+   "confidence": "high",
+   "intervention": "STOP",
+   "rationale": "All 4 permitted attempts this cycle have been used, so no further debit is possible regardless of cause; preserving the mandate and its future cycles is the only action. No retry can be attempted and nothing in this note implies the merchant should re-authorise.",
+   "root_cause": "MANDATE_AT_RISK"
+  },
+  "prompt_tokens": 1093,
+  "text": "```json\n{\n  \"root_cause\": \"MANDATE_AT_RISK\",\n  \"intervention\": \"STOP\",\n  \"confidence\": \"high\",\n  \"rationale\": \"All 4 permitted attempts this cycle have been used, so no further debit is possible regardless of cause; preserving the mandate and its future cycles is the only action. No retry can be attempted and nothing in this note implies the merchant should re-authorise.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|968e2c75c5d3414f": {
+  "cached_tokens": 832,
+  "completion_tokens": 80,
+  "parsed": {
+   "confidence": 0.62,
+   "intervention": "RETRY",
+   "rationale": "All three failures were technical declines on the same presentation, which may be re-presented under the same notification; no funds-related decline appears. One attempt remains, so a single re-attempt is warranted before the cycle closes.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1087,
+  "text": "{\"root_cause\": \"TECHNICAL\", \"intervention\": \"RETRY\", \"confidence\": 0.62, \"rationale\": \"All three failures were technical declines on the same presentation, which may be re-presented under the same notification; no funds-related decline appears. One attempt remains, so a single re-attempt is warranted before the cycle closes.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|974ead38c7603af3": {
+  "cached_tokens": 832,
+  "completion_tokens": 97,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "Two consecutive Z9 declines suggest the debits landed outside the customer's favourable window, and a recent successful mandate on the same account shows the rail is working. A no-cost funding nudge preserves the remaining attempts while our model awaits its highest-scored window.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1084,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"Two consecutive Z9 declines suggest the debits landed outside the customer's favourable window, and a recent successful mandate on the same account shows the rail is working. A no-cost funding nudge preserves the remaining attempts while our model awaits its highest-scored window.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|99e7d7f87bb9f207": {
+  "cached_tokens": 832,
+  "completion_tokens": 74,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "The only confirmed failure in this cycle is an insufficient-funds decline; our timing model shows a wide window, so prompting the customer to fund the account preserves attempts without spending one now.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1087,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": 0.72, \"rationale\": \"The only confirmed failure in this cycle is an insufficient-funds decline; our timing model shows a wide window, so prompting the customer to fund the account preserves attempts without spending one now.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|9e698bb11a9b894c": {
+  "cached_tokens": 0,
+  "completion_tokens": 149,
+  "parsed": {
+   "confidence": 0.82,
+   "intervention": "NUDGE",
+   "rationale": "All three declines this cycle were standard insufficient-funds responses, and only one attempt remains before the mandate is capped. Asking the customer to fund the account costs no attempt and preserves the mandate's future cycles.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1089,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": 0.82, \"rationale\": \"All three declines this cycle were standard insufficient-funds responses, and only one attempt remains before the mandate is capped. Asking the customer to fund the account costs no attempt and preserves the mandate's future cycles.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|a22fb2c7069e66bf": {
+  "cached_tokens": 832,
+  "completion_tokens": 104,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "A single Z9 on the first attempt is the commonest soft failure, and another mandate on this account has cleared recently, so our model scores a later window highest. We recommend a customer nudge to fund the account, preserving the three remaining attempts; no specific debit time is decided here.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1118,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"A single Z9 on the first attempt is the commonest soft failure, and another mandate on this account has cleared recently, so our model scores a later window highest. We recommend a customer nudge to fund the account, preserving the three remaining attempts; no specific debit time is decided here.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|a487253dc92d86e8": {
+  "cached_tokens": 0,
+  "completion_tokens": 182,
+  "parsed": {
+   "confidence": 0.85,
+   "intervention": "STOP",
+   "rationale": "The history shows an OK result, meaning this mandate has already collected this cycle; any further debit risks a duplicate charge. The remaining declines are technical on the rail, not a reason to spend the final attempt.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1090,
+  "text": "```json\n{\"root_cause\": \"TECHNICAL\", \"intervention\": \"STOP\", \"confidence\": 0.85, \"rationale\": \"The history shows an OK result, meaning this mandate has already collected this cycle; any further debit risks a duplicate charge. The remaining declines are technical on the rail, not a reason to spend the final attempt.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|a7d47a22d7e55458": {
+  "cached_tokens": 832,
+  "completion_tokens": 78,
+  "parsed": {
+   "confidence": 0.95,
+   "intervention": "STOP",
+   "rationale": "The account is blocked or frozen (ZX), a terminal status that no retry can ever clear, so spending another attempt cannot collect. Preserving the remaining attempts protects the mandate's future cycles pending account restoration.",
+   "root_cause": "ACCOUNT_UNAVAILABLE"
+  },
+  "prompt_tokens": 1084,
+  "text": "```json\n{\"root_cause\": \"ACCOUNT_UNAVAILABLE\", \"intervention\": \"STOP\", \"confidence\": 0.95, \"rationale\": \"The account is blocked or frozen (ZX), a terminal status that no retry can ever clear, so spending another attempt cannot collect. Preserving the remaining attempts protects the mandate's future cycles pending account restoration.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|a9aeb1c3c02cc371": {
+  "cached_tokens": 832,
+  "completion_tokens": 164,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "RETRY",
+   "rationale": "All three declines were technical, which are explicitly re-presentable under the same notification, and there are no terminal or funds-related codes in the history. One attempt remains this cycle, so we recommend re-presenting now; our timing model scores this window highest.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1085,
+  "text": "```json\n{\"root_cause\": \"TECHNICAL\", \"intervention\": \"RETRY\", \"confidence\": \"medium\", \"rationale\": \"All three declines were technical, which are explicitly re-presentable under the same notification, and there are no terminal or funds-related codes in the history. One attempt remains this cycle, so we recommend re-presenting now; our timing model scores this window highest.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|b1da09d008d16d1d": {
+  "cached_tokens": 832,
+  "completion_tokens": 94,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "The single decline was for insufficient funds, and another mandate on this account has cleared recently, so our model scores this window higher once the account is funded. A no-cost nudge asking the customer to fund the account preserves all three remaining attempts.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1104,
+  "text": "```json\n{\n  \"root_cause\": \"TIMING_MISMATCH\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"The single decline was for insufficient funds, and another mandate on this account has cleared recently, so our model scores this window higher once the account is funded. A no-cost nudge asking the customer to fund the account preserves all three remaining attempts.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|ba95c06812240fb8": {
+  "cached_tokens": 832,
+  "completion_tokens": 131,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "RETRY",
+   "rationale": "The single decline was a technical response, which is explicitly eligible for re-presentation under the same notification, and no funds-related decline appears in the history. Only one of the four permitted attempts has been used, so re-presenting costs little and preserves the mandate's future cycles.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1089,
+  "text": "```json\n{\n  \"root_cause\": \"TECHNICAL\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": 0.72,\n  \"rationale\": \"The single decline was a technical response, which is explicitly eligible for re-presentation under the same notification, and no funds-related decline appears in the history. Only one of the four permitted attempts has been used, so re-presenting costs little and preserves the mandate's future cycles.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|c783a24993a4a360": {
+  "cached_tokens": 0,
+  "completion_tokens": 120,
+  "parsed": {
+   "confidence": 0.82,
+   "intervention": "RETRY",
+   "rationale": "The single decline was a technical code, which may be re-presented under the same notification, and there are no insufficient-funds or terminal codes in this cycle's history. Retrying uses a low-value attempt while three attempts remain, with our model scoring this window highest.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1079,
+  "text": "{\"root_cause\": \"TECHNICAL\", \"intervention\": \"RETRY\", \"confidence\": 0.82, \"rationale\": \"The single decline was a technical code, which may be re-presented under the same notification, and there are no insufficient-funds or terminal codes in this cycle's history. Retrying uses a low-value attempt while three attempts remain, with our model scoring this window highest.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|caf9ef1101b0d020": {
+  "cached_tokens": 832,
+  "completion_tokens": 85,
+  "parsed": {
+   "confidence": 0.6,
+   "intervention": "NUDGE",
+   "rationale": "Two insufficient-funds declines with one attempt left in the cycle; our timing model's window confidence is wide, so a nudge to fund the account preserves the final attempt for a higher-scored window without spending it now.",
+   "root_cause": "TIMING_MISMATCH"
+  },
+  "prompt_tokens": 1084,
+  "text": "```json\n{\"root_cause\": \"TIMING_MISMATCH\", \"intervention\": \"NUDGE\", \"confidence\": 0.6, \"rationale\": \"Two insufficient-funds declines with one attempt left in the cycle; our timing model's window confidence is wide, so a nudge to fund the account preserves the final attempt for a higher-scored window without spending it now.\"}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|d14e7c64ffe2aabd": {
+  "cached_tokens": 832,
+  "completion_tokens": 106,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "RETRY",
+   "rationale": "Every decline in this cycle was technical, with no insufficient-funds responses, so the failures point to a payment-rail glitch rather than the account itself; a technical decline may be re-presented under the same notification. Our model scores this window highest, and one attempt remains before the mandate reaches the cap.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1089,
+  "text": "```json\n{\n  \"root_cause\": \"TECHNICAL\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": 0.72,\n  \"rationale\": \"Every decline in this cycle was technical, with no insufficient-funds responses, so the failures point to a payment-rail glitch rather than the account itself; a technical decline may be re-presented under the same notification. Our model scores this window highest, and one attempt remains before the mandate reaches the cap.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|dab8fbc20be4b661": {
+  "cached_tokens": 832,
+  "completion_tokens": 86,
+  "parsed": {
+   "confidence": 0.55,
+   "intervention": "RETRY",
+   "rationale": "U30 is a catch-all decline that names no cause, so the evidence is genuinely ambiguous. Two attempts remain, no terminal code is present, and our timing model scores this window highest, so one more presentation is warranted.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1083,
+  "text": "```json\n{\n  \"root_cause\": \"UNKNOWN\",\n  \"intervention\": \"RETRY\",\n  \"confidence\": 0.55,\n  \"rationale\": \"U30 is a catch-all decline that names no cause, so the evidence is genuinely ambiguous. Two attempts remain, no terminal code is present, and our timing model scores this window highest, so one more presentation is warranted.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|e082039fa848f6e0": {
+  "cached_tokens": 832,
+  "completion_tokens": 109,
+  "parsed": {
+   "confidence": "medium",
+   "intervention": "NUDGE",
+   "rationale": "The most recent decline is an insufficient-funds response with only one attempt left this cycle, so our model scores the current window too uncertain to spend the final attempt; a customer funding nudge costs nothing and preserves the mandate.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1086,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": \"medium\", \"rationale\": \"The most recent decline is an insufficient-funds response with only one attempt left this cycle, so our model scores the current window too uncertain to spend the final attempt; a customer funding nudge costs nothing and preserves the mandate.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|e8d0ffe0c604d78d": {
+  "cached_tokens": 832,
+  "completion_tokens": 71,
+  "parsed": {
+   "confidence": "0.78",
+   "intervention": "NUDGE",
+   "rationale": "The mandate already collected successfully this cycle, so no further debit is needed; a nudge is a no-cost touch that supports future-cycle funding readiness without spending an attempt.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1081,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": \"0.78\", \"rationale\": \"The mandate already collected successfully this cycle, so no further debit is needed; a nudge is a no-cost touch that supports future-cycle funding readiness without spending an attempt.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|f11864d63bcd8d5c": {
+  "cached_tokens": 832,
+  "completion_tokens": 173,
+  "parsed": {
+   "confidence": 0.55,
+   "intervention": "NUDGE",
+   "rationale": "No response codes are recorded for the two attempts already used, so the evidence does not identify a cause and a retry would spend an attempt on a guess. A no-cost customer nudge is the safest next action while we gather more signal.",
+   "root_cause": "UNKNOWN"
+  },
+  "prompt_tokens": 1080,
+  "text": "{\"root_cause\": \"UNKNOWN\", \"intervention\": \"NUDGE\", \"confidence\": 0.55, \"rationale\": \"No response codes are recorded for the two attempts already used, so the evidence does not identify a cause and a retry would spend an attempt on a guess. A no-cost customer nudge is the safest next action while we gather more signal.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|f1977c547182b7dd": {
+  "cached_tokens": 0,
+  "completion_tokens": 70,
+  "parsed": {
+   "confidence": "high",
+   "intervention": "RETRY",
+   "rationale": "Both declines are technical, which may be re-presented under the same notification, and no insufficient-funds decline has occurred. Retrying is permitted and our model scores this window highest.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1082,
+  "text": "{\"root_cause\": \"TECHNICAL\", \"intervention\": \"RETRY\", \"confidence\": \"high\", \"rationale\": \"Both declines are technical, which may be re-presented under the same notification, and no insufficient-funds decline has occurred. Retrying is permitted and our model scores this window highest.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|f6ee172e996b7c5b": {
+  "cached_tokens": 832,
+  "completion_tokens": 93,
+  "parsed": {
+   "confidence": 0.7,
+   "intervention": "NUDGE",
+   "rationale": "The single failure is a Z9 decline with attempts remaining and a narrow timing window, so the evidence points to a routine insufficient-funds presentation rather than a terminal or technical issue. Requesting the customer fund the account costs no attempt and preserves flexibility for the rest of the cycle.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1082,
+  "text": "{\"root_cause\": \"INSUFFICIENT_FUNDS\", \"intervention\": \"NUDGE\", \"confidence\": 0.7, \"rationale\": \"The single failure is a Z9 decline with attempts remaining and a narrow timing window, so the evidence points to a routine insufficient-funds presentation rather than a terminal or technical issue. Requesting the customer fund the account costs no attempt and preserves flexibility for the rest of the cycle.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|f7bd76312af1ddbd": {
+  "cached_tokens": 0,
+  "completion_tokens": 78,
+  "parsed": {
+   "confidence": "high",
+   "intervention": "RETRY",
+   "rationale": "All three declines were technical, not fund-related, and technical declines may be re-presented under the same notification; one attempt remains within NPCI's cap, so a retry is safe and the only action that can collect.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1083,
+  "text": "{\"root_cause\": \"TECHNICAL\", \"intervention\": \"RETRY\", \"confidence\": \"high\", \"rationale\": \"All three declines were technical, not fund-related, and technical declines may be re-presented under the same notification; one attempt remains within NPCI's cap, so a retry is safe and the only action that can collect.\"}"
+ },
+ "glm-5.3-flash|glm-diag-v3|fbf232d26943144a": {
+  "cached_tokens": 832,
+  "completion_tokens": 105,
+  "parsed": {
+   "confidence": 0.72,
+   "intervention": "NUDGE",
+   "rationale": "Two consecutive Z9 declines point to the account lacking available funds at presentation time, not a mandate or rail issue. With two attempts still in reserve and 18 days left in the cycle, prompting the customer to fund the account preserves our attempts while our model identifies the highest-scoring future window.",
+   "root_cause": "INSUFFICIENT_FUNDS"
+  },
+  "prompt_tokens": 1122,
+  "text": "```json\n{\n  \"root_cause\": \"INSUFFICIENT_FUNDS\",\n  \"intervention\": \"NUDGE\",\n  \"confidence\": 0.72,\n  \"rationale\": \"Two consecutive Z9 declines point to the account lacking available funds at presentation time, not a mandate or rail issue. With two attempts still in reserve and 18 days left in the cycle, prompting the customer to fund the account preserves our attempts while our model identifies the highest-scoring future window.\"\n}\n```"
+ },
+ "glm-5.3-flash|glm-diag-v3|fe84dde7a9dfcfa7": {
+  "cached_tokens": 832,
+  "completion_tokens": 73,
+  "parsed": {
+   "confidence": "0.78",
+   "intervention": "RETRY",
+   "rationale": "Both declines were technical, which may be re-presented under the same notification, and no account- or mandate-level failure is present. Our model scores this remaining window highest, so one retry is the appropriate action this cycle.",
+   "root_cause": "TECHNICAL"
+  },
+  "prompt_tokens": 1081,
+  "text": "{\"root_cause\":\"TECHNICAL\",\"intervention\":\"RETRY\",\"confidence\":\"0.78\",\"rationale\":\"Both declines were technical, which may be re-presented under the same notification, and no account- or mandate-level failure is present. Our model scores this remaining window highest, so one retry is the appropriate action this cycle.\"}"
  }
 }

@@ -33,15 +33,16 @@ Every decision is appended to an audit log, including the decision to wait.
 
 | | agent | fixed schedule | source |
 |---|---|---|---|
-| Billing cycles collected | 94.36% | — | `agent.batch_report` |
-| Recovered across the batch | ₹5,994,430 | — | `agent.batch_report` |
-| Of debits that would fail on their due date, share recovered | 90.55% | 16.35% | `test_recovery_rates` |
-| Mandates alive after 120 days | 97.2% | 32.1% | `test_recovery_rates` |
+| Billing cycles collected | 98.01% | — | `agent.batch_report` |
+| Recovered across the batch | ₹6,203,060 | — | `agent.batch_report` |
+| Of debits that would fail on their due date, share recovered | 90.84% | 16.35% | `test_recovery_rates` |
+| Mandates alive after 120 days | 96.6% | 32.1% | `test_recovery_rates` |
 
-The first two rows are 100 customers × 5 mandates over 4 held-out populations.
-The last two use the same design over 8 populations. Both run 120 days with
-payday known to ±7 days, at `pop_spend=1.05`. The `payday_wait` baseline
-collects 57.70% of cycles, 36.66 points below the agent (2 SE 2.47).
+The first two rows use full agent mode: 100 customers × 5 mandates, population
+seeds 700–703, run seed 7, and 120 days. The last two use degenerate mode over
+population seeds 700–707 with run seed 907. Both use `payday_err=7` and
+`pop_spend=1.05`. In the four-population full-mode batch, the `payday_wait`
+baseline collects 57.70% of cycles, 40.30 points below the agent (2 SE 2.32).
 
 The fixed schedule's survival rate is low because it uses all four attempts
 within four days of the due date and reaches the NPCI cap while the account is
@@ -70,13 +71,15 @@ were not used in calibration.
 |---|---|---|---|
 | Share of debits failing on their due date | 13.68% | 8–15% | hit |
 | Recovery under a fixed-interval retry schedule | 27.85% | 20–40% | hit |
-| Recovery under smart retry timing | 97.38% | 70–85% | miss, too high |
-| Share of recoveries landing inside 10 days | 41.84% | 85–95% | miss, too slow |
+| Recovery under smart retry timing | 96.78% | 70–85% | miss, too high |
+| Share of recoveries landing inside 10 days | 42.94% | 85–95% | miss, too slow |
 
 8 held-out populations at `pop_spend=0.80`, the calibration whose failure rate
 falls inside the published band. Reproduce with
-`python agent/tests/test_recovery_rates.py`. Sources are listed in
-[`docs/01_FACTS.md`](docs/01_FACTS.md).
+`py -3.12 agent/tests/test_recovery_rates.py`. Sources are listed in
+[`docs/01_FACTS.md`](docs/01_FACTS.md). The command prints all measurements and
+exits non-zero because two pre-registered predictions are marked `BROKE`; a
+broken prediction is not reported to automation as a passing test.
 
 The two hits come from different parts of the model: the first is a property of
 the simulated world, the second of a baseline policy running inside it.
@@ -104,24 +107,29 @@ calibration above.
 
 | `pop_spend` | baseline per-attempt approval | agent − baseline |
 |---|---|---|
-| 0.60 | 93.2% | +3.51 ±0.88 |
-| 0.80 | 84.6% | +6.29 ±1.42 |
-| 0.90 | 66.2% | +14.73 ±1.83 |
-| 1.05 | 39.7% | +36.43 ±3.37 |
+| 0.60 | 93.2% | +3.52 ±0.90 |
+| 0.80 | 84.6% | +6.36 ±1.43 |
+| 0.90 | 66.2% | +14.93 ±1.96 |
+| 1.05 | 39.7% | +36.48 ±3.20 |
 
 Due-date failure is 13.68% at `pop_spend=0.80` and 68.71% at 1.05.
 
 At 0.80, where the failure rate matches the published band, the agent is worth
-6.29 points. The published industry benchmark for retry optimisation is a 6–8%
+6.36 points. The published industry benchmark for retry optimisation is a 6–8%
 uplift. No parameter was fitted against either figure. Reproduce with
-`python scripts/spend_sweep.py`.
+`py -3.12 scripts/spend_sweep.py`.
 
 ## Quickstart
 
-```bash
-pip install numpy==2.4.2
-python -m agent.batch_report --pops 4
+Verified Windows commands:
+
+```powershell
+py -3.12 -m pip install numpy==2.4.2
+py -3.12 -m agent.batch_report --pops 4
 ```
+
+On macOS or Linux, use a Python 3.12 interpreter with NumPy 2.4.2 and replace
+`py -3.12` with that interpreter's command.
 
 Roughly 50 seconds. No API key, no network, no model download.
 
@@ -132,36 +140,38 @@ the baseline, then the supporting detail. Stopping rules that fired:
 STOPPING RULES THAT FIRED, grouped by rule
   agent, deterministic
      COLLECTED             6172
-     CYCLE_CLOSED           675
+     CYCLE_CLOSED           630
      ESCALATED               45
      AGENT_STOP               4
      MANDATE_DEAD             3
 ```
 
-Constraint refusals, counted twice — once by the gate that refuses, and once by
-an auditor that rebuilds legality from the log and cannot import the gate:
+The gate counts actions it refused. An auditor that cannot import the gate
+counts illegal actions that nevertheless executed. These are different
+quantities; a clean run has zero in both columns for different reasons:
 
 ```
-                   arm        rule  gate refused  auditor found  agree?
-  agent, deterministic         cap             0              0     yes
-  agent, deterministic        peak             0              0     yes
-  agent, deterministic        lead             0              0     yes
-  agent, deterministic     pending             0              0     yes
-  agent, deterministic   represent             0              0     yes
-                             TOTAL             0              0     yes   over 8954 executed money actions
+                   arm        rule  gate refused  illegal executed
+  agent, deterministic         cap             0                 0
+  agent, deterministic        peak             0                 0
+  agent, deterministic        lead             0                 0
+  agent, deterministic     pending             0                 0
+  agent, deterministic   represent             0                 0
+                             TOTAL             0                 0   over 8954 executed money actions
 ```
 
 Querying the audit trail by `action_id` returns the full chain behind one
-payment:
+payment. The report chooses the first fully logged success, so its generated
+action ID is run-specific. One example chain is:
 
 ```
-  action_id b9798daaff4e2c93   mandate c11m1
+  mandate c11m1
   WHAT THE BELIEF THOUGHT
      p(success) now 0.3114, best later 0.3081, index score +17.60  -> ok
   WHAT THE DIAGNOSER SAID, AND WHY
      root cause   INSUFFICIENT_FUNDS
      intervention RETRY  confidence 0.7
-     source       fallback  prompt det-rules-v1
+     source       fallback  prompt det-rules-v2
      rationale    Proceeding with the attempt our timing model scores highest…
      governance   ok=True
   ALL FIVE CONSTRAINT VERDICTS
@@ -178,7 +188,7 @@ per event, append-only.
 Two further offline commands:
 
 ```bash
-python scripts/prove_stage0_refuses.py
+py -3.12 scripts/prove_stage0_refuses.py
 ```
 
 Runs the constraint layer against the Razorpay client with a transport that
@@ -187,15 +197,25 @@ any request is made. It then injects an action below the gate, which the auditor
 detects from the log.
 
 ```bash
-python agent/eval/run_eval.py --llm --judge --replay
+py -3.12 scripts/prove_workflows.py
+```
+
+Writes a funding reminder (no Payment Link), creates one last-attempt Payment
+Link, GETs it, cancels it, and appends a merchant-queue row. Refuses to run
+if the key is not `rzp_test_`. Does not charge a mandate. Set
+`RECOVERY_NOTIFY_EMAIL` to have Razorpay email the backup link.
+
+```bash
+py -3.12 agent/eval/run_eval.py --llm --judge --replay
 ```
 
 Replays the diagnosis eval from committed response caches. 0.5s, $0.00.
 
 If `import numpy` fails, check the interpreter rather than the dependency list.
-On Windows with msys2 on `PATH`, `python` can resolve to a build with neither
-numpy nor pip. `sim/gate.py` and the git hooks probe for an interpreter that can
-import numpy instead of trusting the name.
+On this Windows machine, `python` resolves to Python 3.14 without NumPy;
+`py -3.12` resolves to the verified Python 3.12 environment with NumPy 2.4.2.
+`sim/gate.py` and the git hooks probe for an interpreter that can import NumPy
+instead of trusting the executable name.
 
 ## How it works
 
@@ -209,7 +229,8 @@ Once a day, for each live mandate:
    negative index score means waiting has higher expected value.
 3. **Diagnose the failure.** A language model assigns a root cause and selects an
    intervention: retry, nudge, escalate or stop. It falls back to a deterministic
-   rule engine on any failure.
+   rule engine on any failure. For a reminder, a last-attempt checkout, and an
+   escalate it also writes the customer or merchant copy.
 4. **Check the action against the mandate rules.** At most four attempts per
    mandate per cycle; no execution during peak hours; at least 24 hours between
    the pre-debit notification and the debit; one pending notification per
@@ -217,6 +238,14 @@ Once a day, for each live mandate:
    notification.
 5. **Execute or refuse.** Refused actions never reach an executor. The executor
    is an interface with two implementations: the simulation and Razorpay's API.
+   A retry is a debit. After the first or second insufficient-funds decline, a
+   reminder is written (and emailed if SMTP is configured). After the third,
+   a Payment Link replaces the fourth mandate debit: that debit is not fired
+   while the link is open, and is not fired if the link expires or is
+   cancelled unpaid, so the mandate survives into the next cycle. Escalate
+   appends a merchant-queue file. It stops further debits only when the
+   mandate itself is broken, the account is frozen, or funds are already
+   claimed by another mandate.
 6. **Record the outcome** in the belief, success or decline.
 7. **Log the decision**, including days when nothing was attempted.
 
@@ -234,10 +263,11 @@ flowchart LR
   A -.-> R["independent recount<br/><i>shares no code with the enforcer</i>"]
 ```
 
-Sharing one belief across a customer's mandates is worth 9.53 points at
-`pop_spend=1.05` and 3.47 points at 0.80. Like the headline, it varies with
-world hardness. This is the case for running the system at an aggregator rather
-than at a single merchant.
+Sharing one belief across a customer's mandates is worth **8.34 points**
+(gate S2a_PD, shipping filter, ±1.36) at `pop_spend=1.05` and 3.38 points
+at 0.80 (agent measurement, not gate-protected). Like the headline, it
+varies with world hardness. This is the case for running the system at an
+aggregator rather than at a single merchant.
 
 Two boundaries are enforced in code, each with a test:
 
@@ -254,40 +284,37 @@ the gate and shows the auditor detecting it.
 
 ### Language model role
 
-The model decides what to do and explains why. The belief filter decides when.
-The constraint layer decides whether the action is permitted.
+Every debit, stop, and escalate decision is deterministic. The model is invoked
+only when `merchant_note` is non-empty — unstructured merchant input the rules
+cannot read — and to write exception-facing copy (escalate briefs, audit
+narrative). Reminder and backup-link text use templates.
 
-| | rule engine | `glm-5.3-flash` |
+| | rule engine | routed LLM (`merchant_note` only) |
 |---|---|---|
-| terminal decline codes, where no retry can succeed | 0/4 | 4/4 |
-| ambiguous cases | 9/21 | 10/21 |
-| unambiguous cases | 19/19 | 13/19 |
+| `merchant_note` cases (4 registered) | 4/4 | 2/4 |
+| injection cases (3) | structural pass | structural pass |
 
-The model performs best on terminal decline codes — a frozen account or a
-revoked mandate — where the correct action is to stop and the timing score has
-no way to represent the situation. It performs worse than the rule engine on
-unambiguous cases. It therefore runs as an overlay: any failure falls back to
-the rule engine, and each audit row records which component answered.
+The full 40-case table remains in the eval harness for history; it is not the
+shipping path. Prompt `glm-diag-v3`, `reasoning_effort=low`. Measured 31 August
+2026: `py -3.12 agent/eval/run_eval.py --llm --judge` ($0.08). Replay:
+`--replay` from committed cache.
 
-These scores are at `reasoning_effort=low`. At `high` and `max` the terminal
-result stays at 4/4. The ambiguous result does not: at `high` the model scores
-7/21 and the rule engine wins. A one-case margin on 21 cases is weak evidence.
-Full sweep in [`docs/02_RESULTS.md`](docs/02_RESULTS.md).
-
-The batch caps live network calls per run and serves cached responses free, so
-the headline does not depend on an API key. The eval replays from committed
-caches in 0.5 seconds for $0.00. The judge is a different model from the
-diagnoser, and the harness refuses to run if the two SKU names match.
+The money headline (`batch_report`) is filter plus rules only. `--demo-llm`
+prints routing stats on one population; sim populations have no `merchant_note`
+by default.
 
 ## Error handling
 
 | Condition | Behaviour |
 |---|---|
-| The language model errors, times out, or returns unparseable output | Falls back to the deterministic rule engine and logs `LLM_FAILURE`. The batch takes this path about 95% of the time by design. |
+| The language model errors, times out, or returns unparseable output | Falls back to the rule engine on routed `merchant_note` ticks and logs `LLM_FAILURE`. |
 | The model returns an instruction containing a time | Rejected by the governance check. `Diagnosis` has no field in which a time could be returned. |
 | An action would breach a mandate rule | Refused before the executor is called, and the refusal is written to the audit trail. Refused actions generate no network traffic. |
 | The payment rail is degraded across many customers | Detected from cross-customer outcomes; the belief update is suppressed, since a technical decline is a property of the rail rather than of one customer's balance. |
-| A debit's outcome is unknown — a timeout or a deemed transaction | Recorded as `pending`, not as a failure. Treating an unknown as a failure would permit a retry, and a retry on an unknown outcome risks a double debit. |
+| A debit's outcome is unknown — a timeout or a deemed transaction | Recorded as pending. The rule engine stops further debits on that cycle. Retrying an unknown outcome is refused. |
+| Reminder (after the 1st or 2nd insufficient-funds decline) | Writes the customer-facing copy to an outbox. Sends email only if SMTP is configured. Does not create a Payment Link and does not skip the remaining mandate attempts. |
+| Last-attempt backup checkout | After a 3rd insufficient-funds decline, creates a Razorpay Payment Link. Email notify is on when `RECOVERY_NOTIFY_EMAIL` is set; SMS is off. The fourth mandate debit is not fired while the link is issued, paid, expired or cancelled. A paid link collects this cycle; an unpaid close holds the last attempt so the mandate is not killed. |
+| Escalate | Appends `agent/runs/merchant_queue.jsonl`. Stops retries only for a broken mandate, a frozen account, or a lien. |
 | An HTTP request is retried after a socket failure | The idempotency key is derived from the `action_id` already written to the audit trail, so the same logical debit produces the same key across a process restart. |
 | Razorpay rejects the request itself — bad credentials, malformed body | Raises `RazorpayError` naming the HTTP status and response. Request-level rejections are not recorded as customer declines, since no payment was created. |
 | A worker process dies during a measurement | The measurement raises. A crashed run is a failed result, not a missing one. |
@@ -300,21 +327,21 @@ Results depend on how accurately payday can be estimated in advance.
 then attempts once a day.
 
 *n=100, 8 held-out populations (seeds 700–707), 120 days, paired 2 SE.
-Reproduce with `python sim/headline.py`.*
+Reproduce with `py -3.12 sim/headline.py`.*
 
 | Payday known to | `payday_wait` | This agent | Difference |
 |---|---|---|---|
-| ±1 day | 99.24% | 95.73% | −3.51 ±0.36 |
-| ±3 days | 94.65% | 95.82% | +1.17 ±1.35, not significant |
-| ±5 days | 72.18% | 95.82% | +23.64 ±2.61 |
-| ±7 days | 59.14% | 95.57% | +36.43 ±3.37 |
-| ±10 days | 48.11% | 95.62% | +47.50 ±3.17 |
-| ±14 days | 40.01% | 93.16% | +53.15 ±2.90 |
+| ±1 day | 99.24% | 96.44% | −2.81 ±0.46 |
+| ±3 days | 94.65% | 96.06% | +1.41 ±1.08 |
+| ±5 days | 72.18% | 95.38% | +23.20 ±2.57 |
+| ±7 days | 59.14% | 95.63% | +36.48 ±3.20 |
+| ±10 days | 48.11% | 94.14% | +46.03 ±3.62 |
+| ±14 days | 40.01% | 91.99% | +51.98 ±2.66 |
 
-The baseline is better when payday is known within about three days. Beyond
-that it degrades sharply while the agent holds between 93% and 96%, because the
-agent recovers the payday from observed outcomes instead of relying on the
-estimate it was given.
+The baseline is better when payday is known to about one day. At ±3 days the
+agent is ahead by 1.41 points (2 SE 1.08). Beyond that the baseline degrades
+sharply while the agent holds between 92% and 96%, because it recovers the
+payday from observed outcomes instead of relying on the estimate it was given.
 
 How accurately payday can be estimated in India is unknown; no measurement of it
 was found. The agent therefore learns it online and reports its own uncertainty.
@@ -368,10 +395,13 @@ shape and payment error surface. Every external claim carries a source tag in
 **Unknown.** Real AutoPay decline frequencies. How accurately payday can be
 predicted in India. Whether an aggregator may lawfully use one merchant's
 outcomes to schedule another's debit for the same customer. Whether Razorpay
-accepts the recurring-charge request body in
-`agent/execution/razorpay_executor.py`: the client authenticates against the
-test API and reads successfully, but charging requires an authorised mandate,
-and the body has never been submitted with one.
+accepts the recurring-charge request body on an authorised mandate: that body
+has never been submitted with one.
+
+**Test-mode API writes.** The client authenticates. A last-attempt Payment Link
+has been created, fetched and cancelled. Funding reminders do not create
+Payment Links. Escalate is a local merchant-queue file. The AutoPay pre-debit
+notification API is recorded locally and is not called.
 
 ## Limitations
 
@@ -389,9 +419,9 @@ and the body has never been submitted with one.
   operationalised by the DPDP Rules notified on 14 November 2025, which points
   at consent-gating rather than prohibition. Pooling is therefore a per-customer
   permission, and the cost of withholding it is measured: running fully
-  non-pooled costs 9.54 points at `pop_spend=1.05` and 3.47 at 0.80; pooling
-  only for consenting customers costs 4.79 and 1.48 at half consent. Reproduce
-  with `python agent/tests/test_pooling_consent.py`.
+  non-pooled costs 8.46 points at `pop_spend=1.05` and 3.38 at 0.80; pooling
+  only for consenting customers costs 3.86 and 1.50 at half consent. Reproduce
+  with `py -3.12 agent/tests/test_pooling_consent.py`.
 - **Two calibration gates fail on monotonicity.** The belief filter models no
   balance floor at zero and approximates hourly spend jitter with a fixed 3-tap
   kernel. Both are structural and no parameter fixes either. Calibration error
@@ -414,28 +444,36 @@ and the body has never been submitted with one.
 | [`NOTES.md`](NOTES.md) | Append-only decision log |
 | `agent/` | Policy, constraints, context, execution, LLM layer, audit trail, eval |
 | `sim/` | The simulated world, the belief filters and the 25-gate suite |
-| `scripts/` | Page data, constraint-layer demonstration, Razorpay connectivity ladder, calibration sweep, git hooks |
+| `scripts/` | Page data, constraint-layer demonstration, Razorpay connectivity ladder, test-mode workflow proof, calibration sweep, git hooks |
 
 ## Running the tests
 
 ```bash
-python sim/gate.py --tier fast
+py -3.12 sim/gate.py --tier fast
 ```
 
 ```bash
-python sim/gate.py --tier full
+py -3.12 sim/gate.py --tier full
 ```
 
 The fast tier (~35s idle) checks that behaviour has not changed. The full tier
 (~100s idle) adds the statistical gates. Both roughly double on a busy machine;
-the suite saturates eight worker processes.
+the suite saturates eight worker processes. The full suite currently reports
+23 pass and 4 known diagnostic failures, of 27 gates. The wrapper exits zero because all
+four are named with reasons in `sim/known_failures.txt`; this is not a green
+27/27 test result.
 
 Individual agent gates:
 
 ```bash
-python agent/tests/test_stage0_enforces.py      # constraint layer, 20 checks
-python agent/tests/test_parity_vs_harness.py    # agent matches simulation bit-exactly
-python agent/tests/test_recovery_metric.py      # recovery metric, 5 mutants
+py -3.12 agent/tests/test_stage0_enforces.py      # constraint layer, 20 checks
+py -3.12 agent/tests/test_parity_vs_harness.py    # agent matches simulation bit-exactly
+py -3.12 agent/tests/test_recovery_metric.py      # recovery metric, 5 mutants
+py -3.12 agent/tests/test_workflows.py            # reminder vs last-attempt link vs queue
+py -3.12 agent/tests/test_batch_ceiling.py        # batch legal ceiling holds when tripped
+py -3.12 agent/tests/test_recovery_rules.py       # when to remind, when to hold the 4th debit
+py -3.12 agent/tests/test_backup_loop.py          # full mode does not fire a 4th debit
+py -3.12 agent/tests/test_fallback_safety.py      # unknown and terminal codes are not retried
 ```
 
 Install the git hooks once per clone with `scripts/install-hooks.sh`. `git
