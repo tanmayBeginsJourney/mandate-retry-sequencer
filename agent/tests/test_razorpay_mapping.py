@@ -35,6 +35,8 @@ from agent.constraints.stage0 import Stage0Gate, action_id  # noqa: E402
 from agent.execution import razorpay_downtime as DT  # noqa: E402
 from agent.execution.razorpay_executor import (MandateBinding,  # noqa: E402
                                                RazorpayExecutor)
+from agent.execution.razorpay_predelivery import (PredeliveryOrder,  # noqa: E402
+                                                  PredeliveryPhase)
 from agent.execution.sim_executor import SimExecutor  # noqa: E402
 from agent import ports as RC  # noqa: E402  -- the vocabulary lives in ports
 from agent.ports import (FAMILY_AMBIGUOUS, FAMILY_INDETERMINATE,  # noqa: E402
@@ -87,8 +89,20 @@ class FakeTransport:
 def _ex(transport, uid="c45m3"):
     return RazorpayExecutor(
         bindings={uid: MandateBinding(rzp_customer_id="cust:45",
-                                      rzp_token_id="tok")},
+                                      rzp_token_id="tok",
+                                      rzp_email="t@example.com",
+                                      rzp_contact="+919876543210",
+                                      charge_amount=550.0)},
         transport=transport)
+
+
+def _seed_predelivery(ex: RazorpayExecutor, ref: MandateRef, target_t: int,
+                      order_id: str = "order_test") -> None:
+    """Sim hour indices are not Unix times; seed decoupled-flow state for gates."""
+    ex._predelivery[(ref.uid, target_t)] = PredeliveryOrder(
+        mandate_uid=ref.uid, target_t=target_t, order_id=order_id,
+        amount_paise=55000, payment_after=target_t,
+        phase=PredeliveryPhase.ORDER_CREATED)
 
 
 REF = MandateRef(45, 3, 17)
@@ -250,6 +264,7 @@ def gate_R4() -> None:
     print("            filter the account was empty because OUR socket broke")
     t = FakeTransport(raises=True)
     ex = _ex(t)
+    _seed_predelivery(ex, REF, 264)
     o = ex.attempt(REF, 550.0, 264, action_id="a1")
 
     ok("R4a  it does not raise", isinstance(o, AttemptOutcome))
@@ -429,6 +444,7 @@ def gate_R9(mutant: str | None = None) -> None:
 
     def outcome_for(payload, status):
         ex = _ex(FakeTransport(payload=payload, status=status))
+        _seed_predelivery(ex, REF, 8)
         if mutant == "blind":
             ex._is_configuration_fault = staticmethod(lambda s, p: False)
         try:
@@ -508,6 +524,7 @@ def gate_R10(tmp: str, mutant: str | None = None) -> None:
                     target_t=target_t, notify_t=target_t - 24,
                     decided_at_t=target_t - 24, kind=InterventionKind.RETRY)
     gate.issue_notification(REF, 0, a.notify_t, a.target_t, a.decided_at_t)
+    _seed_predelivery(ex, REF, target_t)
     gate.submit(a)
 
     want = RazorpayExecutor.idempotency_key(aid, REF, target_t)

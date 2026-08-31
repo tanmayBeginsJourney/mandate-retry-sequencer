@@ -17,6 +17,8 @@ what our parser does with a response we did not write ourselves.
     rung 4   authenticate for real, take a 200                  needs a key
     rung 5   charge success@razorpay / failure@razorpay         needs a key
              and a test mandate
+    rung 5a  POST /v1/orders with notification object          needs test key
+             + explicit RAZORPAY_TEST_TOKEN_ID; NO debit
 
 Rungs 4 and 5 print SKIPPED with exactly what they need. They are not silently
 counted as passes, and nothing in `docs/` may claim them until they run.
@@ -47,6 +49,7 @@ if PKG not in sys.path:
 from agent.execution.razorpay_executor import (API_BASE, MandateBinding,
                                                RazorpayExecutor,
                                                _UrllibTransport)
+from agent.execution.razorpay_predelivery import ORDER_CREATED
 from agent.llm.client import _load_dotenv
 from agent.ports import MandateRef
 
@@ -59,6 +62,7 @@ _load_dotenv()
 HOST = "api.razorpay.com"
 CHARGE_URL = f"{API_BASE}/payments/create/recurring"
 OUT = os.path.join(PKG, "logs", "razorpay_ladder.json")
+PREDELIVERY_OUT = os.path.join(PKG, "logs", "razorpay_predelivery_ladder.json")
 
 #: The body the executor would send. Reproduced here ONLY so the captured
 #: transcript records what was on the wire; the executor builds its own.
@@ -170,9 +174,23 @@ def _executor(transport) -> RazorpayExecutor:
         transport=transport)
 
 
+class _SequenceTransport:
+    """Return scripted POST responses in order."""
+
+    def __init__(self, posts: list[tuple[int, dict]]):
+        self.posts = list(posts)
+
+    def post(self, url, body, idempotency_key):
+        if not self.posts:
+            return 500, {"error": {"code": "TEST", "description": "empty"}}
+        return self.posts.pop(0)
+
+    def get(self, url):
+        return 404, {}
+
+
 def rung3(captured: list[dict]) -> dict:
-    """Put the REAL envelopes through the shipped parser and the shipped
-    `attempt()`. This is the rung that can find a defect."""
+    """Put the REAL envelopes through the shipped parser and attempt guards."""
     print("\nRUNG 3  the shipped parser, on the REAL envelopes captured above")
     rec: dict = {"rung": 3, "cases": []}
     for cap in captured:
@@ -181,47 +199,54 @@ def rung3(captured: list[dict]) -> dict:
             print(f"    {cap['label']}: no response captured, skipping")
             continue
 
-        # (a) the pure parser, in isolation.
         ex = _executor(_ReplayTransport(status, payload))
         out = ex._outcome_from_payment(payload, t=0)
 
-        # (b) the whole money path, exactly as agent/loop.py calls it, with the
-        #     captured response replayed.
-        #
-        #     `attempt` RAISES on a request-level rejection, and that is the
-        #     expected result here: a refused credential is a configuration
-        #     fault, not a decline, so it must not come back as an
-        #     AttemptOutcome the belief filter would learn from. The raise is
-        #     recorded as the outcome of this rung.
         ex2 = _executor(_ReplayTransport(status, payload))
-        raised = None
-        end = None
-        try:
-            end = ex2.attempt(MandateRef(0, 0, 0), 499.0, 0, action_id="probe")
-        except Exception as e:                      # noqa: BLE001
-            raised = type(e).__name__
+        end = ex2.attempt(MandateRef(0, 0, 0), 499.0, 0, action_id="probe")
 
         case = {
             "label": cap["label"],
             "http_status": status,
             "parser": {"code": out.code, "success": out.success,
                        "pending": out.pending, "raw_code": out.raw_code},
-            "attempt": ({"raised": raised} if raised else
-                        {"code": end.code, "success": end.success,
-                         "pending": end.pending, "raw_code": end.raw_code}),
+            "attempt_without_predelivery": {
+                "code": end.code, "success": end.success,
+                "pending": end.pending, "raw_code": end.raw_code},
         }
         rec["cases"].append(case)
         print(f"    {cap['label']}  (HTTP {status})")
         print(f"      _outcome_from_payment -> code={out.code!r} "
               f"success={out.success} pending={out.pending} "
               f"raw_code={out.raw_code!r}")
-        if raised:
-            print(f"      attempt()             -> raised {raised} "
-                  f"(expected: a refused request is not a decline)")
-        else:
-            print(f"      attempt()             -> code={end.code!r} "
-                  f"success={end.success} pending={end.pending} "
-                  f"raw_code={end.raw_code!r}")
+        print(f"      attempt() no order  -> raw_code={end.raw_code!r} "
+              f"(expected: missing_predelivery_order)")
+
+    # Auth rejection on create/recurring after a valid order exists.
+    auth_status, auth_body = captured[0]["http_status"], captured[0]["body"]
+    seq = _SequenceTransport([
+        (200, {"id": "order_ladder_probe", "amount": 49900}),
+        (auth_status, auth_body),
+    ])
+    ex3 = RazorpayExecutor(
+        bindings={"c0m0": MandateBinding(
+            "cust_probe", "token_probe", rzp_email="probe@example.com",
+            rzp_contact="+919000000001", charge_amount=499.0)},
+        transport=seq)
+    future_t = int(time.time()) + 26 * 3600
+    ref = MandateRef(0, 0, 0)
+    notify_out = ex3.notify(ref, 0.0, notify_t=future_t - 24, target_t=future_t)
+    raised = None
+    try:
+        ex3.attempt(ref, 499.0, future_t, action_id="probe")
+    except Exception as e:                          # noqa: BLE001
+        raised = type(e).__name__
+    rec["auth_after_order"] = {
+        "notify_phase": notify_out.get("phase"),
+        "attempt_raised": raised,
+    }
+    print(f"    auth envelope after ORDER_CREATED -> attempt raised {raised!r} "
+          f"(expected: RazorpayError on refused credential)")
     return rec
 
 
@@ -311,6 +336,63 @@ def rung5() -> dict:
             "reason": "no authorised mandate: token_id required"}
 
 
+def rung5a() -> dict:
+    """Create one order-with-notification. Does NOT call create/recurring."""
+    print("\nRUNG 5a  POST /v1/orders with notification (decoupled pre-debit)")
+    kid, sec = _creds()
+    token = os.environ.get("RAZORPAY_TEST_TOKEN_ID", "").strip()
+    if not kid or not sec:
+        print("    SKIPPED -- no RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET.")
+        return {"rung": "5a", "state": "SKIPPED", "reason": "no credentials"}
+    if not kid.startswith("rzp_test_"):
+        print("    REFUSED -- not a rzp_test_ key.")
+        return {"rung": "5a", "state": "REFUSED", "reason": "not test mode"}
+    if not token:
+        print("    SKIPPED -- set RAZORPAY_TEST_TOKEN_ID to an authorised")
+        print("    UPI AutoPay token from test-mode mandate registration.")
+        print("    This rung creates ONE order-with-notification and does NOT")
+        print("    debit. NOT counted as pass until it runs successfully.")
+        return {"rung": "5a", "state": "SKIPPED",
+                "reason": "RAZORPAY_TEST_TOKEN_ID not set"}
+
+    cust = os.environ.get("RAZORPAY_TEST_CUSTOMER_ID", "cust_ladder_predelivery")
+    amount_paise = int(os.environ.get("RAZORPAY_TEST_AMOUNT_PAISE", "49900"))
+    email = os.environ.get("RAZORPAY_DEFAULT_EMAIL", "predelivery@example.com")
+    contact = os.environ.get("RAZORPAY_DEFAULT_CONTACT", "+919000000099")
+    future_t = int(time.time()) + 26 * 3600
+    ref_uid = "c0m0"
+    ex = RazorpayExecutor(
+        bindings={ref_uid: MandateBinding(
+            rzp_customer_id=cust, rzp_token_id=token,
+            rzp_email=email, rzp_contact=contact,
+            charge_amount=amount_paise / 100.0)},
+        key_id=kid, key_secret=sec)
+    ref = MandateRef(0, 0, 0)
+    started = time.time()
+    out = ex.notify(ref, 0.0, notify_t=future_t - 24, target_t=future_t)
+    ms = int((time.time() - started) * 1000)
+    ok = out.get("executed") and out.get("phase") == ORDER_CREATED
+    print(f"    notify phase={out.get('phase')!r} order_id={out.get('order_id')!r}")
+    print(f"    detail: {out.get('detail')}")
+    print(f"    elapsed {ms} ms")
+    print(f"    {'PASS' if ok else 'FAIL'} -- ORDER_CREATED is NOT delivery proof")
+    transcript = {
+        "rung": "5a",
+        "state": "PASS" if ok else "FAIL",
+        "phase": out.get("phase"),
+        "order_id": out.get("order_id"),
+        "http_status": out.get("http_status"),
+        "elapsed_ms": ms,
+        "predelivery_log": ex.predelivery_log,
+        "note": "NOTIFICATION_DELIVERED requires order.notification.delivered webhook",
+    }
+    os.makedirs(os.path.dirname(PREDELIVERY_OUT), exist_ok=True)
+    with open(PREDELIVERY_OUT, "w", encoding="utf-8") as f:
+        json.dump(transcript, f, indent=2, sort_keys=True)
+    print(f"    transcript -> {os.path.relpath(PREDELIVERY_OUT, PKG)}")
+    return transcript
+
+
 def main() -> int:
     line("=")
     print("THE RAZORPAY LADDER")
@@ -335,6 +417,8 @@ def main() -> int:
     results["rungs"].append(rung3([r1, r2]))
     results["rungs"].append(rung4())
     results["rungs"].append(rung5())
+    r5a = rung5a()
+    results["rungs"].append(r5a)
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8") as f:

@@ -424,6 +424,7 @@ over, which is error 4's shape. Side benefit: the parity gate went from 6m08s to
 | `eval/run_eval.py` | **added 29 Aug 2026.** 40 registered cases + 7 taxonomy cases + 3 injection cases; deterministic arms always, `glm-5.3-flash` with a `glm-5.3` judge under `--llm --judge`. **Measured** - section 7 and `02_RESULTS.md`. |
 | `test_detection_benchmark.py` | **added 29 Aug 2026.** Excess loss against a clairvoyant detection oracle, decomposed into delay / missed / dropout / late resumption / false alarms. Three gates, four crippled oracles as **window transforms rather than code branches**, all four caught, none by every gate. **G-1b is deliberately RED** — it found a defect in its own hours-based loss and is kept visible rather than repaired. See `02_RESULTS.md`. |
 | `test_razorpay_mapping.py` | **added 29 Aug 2026.** Eight gates over the SECOND executor backend, all offline and keyless: Razorpay's 110 published `error_reason` values all map to a family (**and no mapped key was invented — that check found one, error 24**), the two dangerous families route the dangerous way, a transport failure returns `pending` rather than a fabricated decline, the idempotency key is deterministic per money action, Stage 0 refuses a peak-hour debit against the real client with **zero network calls**, `SimExecutor` still never sets `pending` (which is what keeps the parity gate honest), and the Payment Downtime feed parses. 44/44. Every gate names a mutant. |
+| `test_smtp_reminder.py` | **added 31 Aug 2026.** Six offline gates on the funding-reminder SMTP path: skipped when unconfigured, honest failure on transport errors, outbox row written regardless, `executed=True` / `channel=email` / `smtp=smtp_sent` only after a successful `smtplib` send. 16/16. Mocked SMTP only — not gate-protected. |
 
 Run them from the repo root with the interpreter named in `CLAUDE.md`. None of
 them is part of `sim/gate.py`'s 25-gate suite, and none of their numbers is
@@ -493,7 +494,8 @@ gates could not.
 | whether an authenticated request succeeds at all | **RUN**, rung 4: HTTP 200 with a `rzp_test_` key |
 | whether test mode returns populated `error_reason` values | **UNTESTED** |
 | whether the Downtime feed is seeded in test mode | **UNTESTED** |
-| the pre-debit notification call | **DESIGNED, WIRED TO NOTHING.** `RazorpayExecutor.notify()` raises `NotImplementedError` on purpose — wiring it needs a change to `Stage0Gate`, and "Stage 0 is unchanged when the backend changes" is the claim the whole file rests on |
+| the pre-debit notification call | **WIRED (decoupled flow).** `RazorpayExecutor.notify()` posts `POST /v1/orders` with the documented `notification` object (`token_id`, `payment_after`). Razorpay handles delivery of the regulatory pre-debit notification. Delivery is only considered proven when the corresponding `order.notification.delivered` event is observed — `ORDER_CREATED` is not delivery proof. **NOT RUN** against a live test token until rung 5a succeeds; delivery webhook **NOT RUN** until observed separately |
+| funding-reminder email via SMTP | **RUN**, `scripts/prove_smtp_reminder.py`: one message through `RazorpayExecutor.remind()` → `agent/execution/smtp_delivery.py` (generic `SMTP_*` env vars, STARTTLS). Transcript `logs/smtp_reminder_proof.json`. Outbox JSONL row still written. **Not gate-protected.** |
 
 **`AttemptOutcome` gained two optional fields** and both default to the old
 behaviour: `pending` (the rail did not tell us whether the debit happened) and
@@ -602,8 +604,9 @@ shipping evidence — those are cases the rules own in production.
 
 **Batch:** deterministic **98.01%** against `payday_wait` **57.70%**,
 **+40.30 pts (2 SE 2.32, SIG)**, ₹6,203,060 recovered, **zero Stage 0 refusals
-with the independent auditor recounting zero over 8,832 executed money
-actions**. No LLM column in the money table; `--demo-llm` is audit-only.
+with the independent auditor recounting zero over 9,428 executed money
+actions**. No LLM column in the money table; `--llm` measures the overlay beside
+the deterministic arm.
 
 **Spend: $0.26** of a $5 budget, audited from the response caches. The per-run
 budget counters sum to ~$0.16 and **under-report**, because each run is a fresh

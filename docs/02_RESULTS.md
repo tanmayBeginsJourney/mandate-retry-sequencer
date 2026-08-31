@@ -1596,26 +1596,24 @@ batch of merchants is that population grouped by merchant.*
 |---|---|---|---|---|
 | **`payday_wait` (rival)** | **57.70%** | — | 60.75% | 1.493 |
 | **agent, deterministic** | **98.01%** | **₹6,203,060** | 99.85% | 1.554 |
-| agent, LLM overlay | 94.33% | ₹5,967,990 | 99.80% | 1.471 |
+| agent, LLM overlay | **98.01%** | **₹6,203,060** | 99.85% | 1.554 |
 
 **+40.30 pts over `payday_wait` (2 SE 2.32, SIG).** The rival row is permanent
 and cannot be switched off — **at `payday_err` of about ±1 day it BEATS us**
-(`06_MODEL_CARD.md` §2). The LLM overlay arm was not re-run after the 31 August
-prior adoption; those three cells are the previous measurement.
+(`06_MODEL_CARD.md` §2). Re-run 31 August 2026 after backup checkout and the
+fitted prior; transcript `logs/batch_llm_overlay_rerun.txt`.
 
-**The deterministic arm is the number.** The LLM arm is a measured overlay
-beside it; a headline that needs an API key is not reproducible.
+**The deterministic arm is the number.** The LLM overlay arm is measured beside
+it for comparison; with shipping routing it is bit-identical in this batch.
 
 ## Stopping rules that fired, grouped by rule
 
 | rule | deterministic | LLM overlay |
 |---|---|---|
-| COLLECTED | 6,422 | 6,156 |
-| CYCLE_CLOSED | 1,351 | 669 |
-| LAST_ATTEMPT_HELD | 55 | — |
-| ESCALATED | — | 39 |
-| AGENT_STOP | — | 19 |
-| MANDATE_DEAD | 3 | 4 |
+| COLLECTED | 6,422 | 6,422 |
+| CYCLE_CLOSED | 1,351 | 1,351 |
+| LAST_ATTEMPT_HELD | 55 | 55 |
+| MANDATE_DEAD | 3 | 3 |
 
 ## Stage 0 — the gate's count, and an independent recount
 
@@ -1636,39 +1634,30 @@ verdict), all five constraint verdicts, the money action with its notification
 time and gate verdict, and the outcome. That is what `WHERE action_id = ?`
 returns from the JSONL trail.
 
-## ⚠️ THE LLM CANNOT BE CALLED AT EVERY DECISION POINT
+## THE LLM OVERLAY — re-run on the shipping path
 
-**119,667 diagnosis requests across four populations.** The loop asks for a
-diagnosis once per live mandate per decision hour. The eval's 50 fixed cases
-gave no hint of that scale and the first batch attempt had to be killed after
-twelve minutes with no output. Error 22 in `03_ERRORS.md`.
+Re-run 31 August 2026. *Transcript: `logs/batch_llm_overlay_rerun.txt`.*
 
-**A bounded call budget is the design, not a workaround.** No production
-recovery agent calls a model sixty thousand times a day either; it calls one on
-the novel cases and lets rules handle the routine ones. Cache hits are free and
-do not count against the cap, so it bites on **novelty**, not volume.
+**The money did not move — 98.01% against 98.01%, bit-identical on every
+population.** The shipping diagnoser routes to the model only when
+`merchant_note` is non-empty (`MerchantNoteRoutedDiagnoser`). This batch has no
+merchant notes, so the overlay arm made **zero network LLM calls** and matched
+the deterministic arm on stopping rules, recovery rate, and Stage 0 counts.
 
-At a cap of 120 live calls per run:
-
-| | |
+| | overlay arm (this run) |
 |---|---|
-| answered by the model | **6,180** |
-| refused by the cap, sent to the rule engine | **113,487** |
-| **fallback rate** | **94.8%** |
+| diagnoses routed to the model | **0** |
+| diagnoses answered by rules only | all |
 
-**And the money did not move — 94.33% against 94.36% on the previous prior.**
-The overlay was not re-run after adoption. Approval by source is
-69.09% (llm, 427 attempts) against 68.97% (fallback, 8,498 attempts).
+**Historical comparison (pre-routed overlay, cap 120 live calls per run, previous
+prior, no backup checkout):** 94.33% against 94.36%, 94.8% fallback, 6,180 model
+answers and 113,487 cap refusals over four populations. That arm called the model
+on every decision tick until the cap; shipping does not.
 
-⚠️ **Which cases fall back is NOT random**, so that split is a description and
-**not a causal comparison**. And **the batch's LLM arm is 95% deterministic —
-it must never be described as "the LLM's number".**
-
-**The honest summary: on this world, at this scale, the diagnosis layer changes
-which action is taken and not how much money comes back.** That is what the
-action ablation already said — the whole channel is mandate-death prevention,
-worth +2.064 pts — and the LLM does not add to it. Where it adds is terminal
-decline codes, and those are switched off in this batch.
+**The honest summary: on this world, at this scale, with shipping routing, the
+LLM overlay does not change collected money.** Where the model is routed — cases
+with a `merchant_note` — is off in the headline batch configuration. Terminal
+decline codes are also off (decline taxonomy at zero).
 
 
 

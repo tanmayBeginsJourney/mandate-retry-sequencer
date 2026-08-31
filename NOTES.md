@@ -7252,3 +7252,21 @@ routing (`agent/llm/routed_diagnoser.py`):
 Routed subset (registered `merchant_note` cases): rules **4/4**, routed LLM
 **2/4** (GC-33, GC-34 diverge — model returns NUDGE where rules STOP/RETRY).
 
+## Item 6 batch re-run + LLM overlay (31 August 2026 evening)
+
+Commands:
+- `py -3.12 -m agent.batch_report --pops 4` → `logs/batch_item6_rerun.txt`
+- `py -3.12 -m agent.batch_report --llm --pops 4` → `logs/batch_llm_overlay_rerun.txt`
+
+Deterministic (full mode, backup checkout, `FITTED_BELIEF`): **98.01%** /
+**+40.30 pts** (2 SE 2.32) / **₹6,203,060** / 99.85% survival / 1.554 att/cycle.
+Stopping: COLLECTED 6422, CYCLE_CLOSED 1351, LAST_ATTEMPT_HELD 55, MANDATE_DEAD 3.
+Stage 0: 0 / 0 over **9428** money actions.
+
+LLM overlay arm on shipping path: **bit-identical** — 0 routed LLM calls (no
+`merchant_note` in batch). Restored `--llm` as a second money arm in
+`batch_report.py` (was collapsed to `--demo-llm` only on 31 August). `02_RESULTS.md`
+batch table and stopping-rule rows updated; historical cap-120 overlay (94.33%)
+kept as comparison text only.
+
+`build_page_data --check`: PASS.

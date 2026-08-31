@@ -42,8 +42,8 @@ stored token and no authorised mandate exists. Specifically unverified:
   * the exact request body Razorpay wants for a recurring UPI charge
   * whether test mode returns populated `error_reason` values on
     `failure@razorpay`, or a single generic one
-  * whether the pre-debit notification API is required before each debit in
-    test mode, and what it returns
+  * whether the decoupled order-with-notification body is accepted in test mode
+    (rung 5a; ORDER_CREATED is not delivery proof)
   * whether `payment.downtime` is populated in test mode at all
 
 The shapes come from Razorpay's public documentation, read 29 August 2026, and
@@ -94,6 +94,18 @@ from dataclasses import dataclass
 # reaching agent.execution at all -- so a table the narrative layer may need
 # could never have lived in this package. See ports.py.
 from agent.audit.jsonl_queue import append_jsonl
+from agent.execution.smtp_delivery import SMTP_SENT, deliver_smtp
+from agent.execution.razorpay_predelivery import (DEBIT_ATTEMPTED, ORDER_CREATED,
+                                                  NOTIFICATION_DELIVERED,
+                                                  NOTIFICATION_FAILED,
+                                                  PredeliveryOrder,
+                                                  PredeliveryPhase,
+                                                  apply_notification_webhook,
+                                                  build_order_body,
+                                                  effective_amount_paise,
+                                                  envelope_record,
+                                                  parse_notification_webhook,
+                                                  parse_order_id)
 from agent.ports import (OK, AttemptOutcome, MandateRef, Rupees, WorkflowResult,
                          bank_of, code_for_reason, is_pending, to_paise)
 
@@ -138,6 +150,11 @@ class MandateBinding:
     """
     rzp_customer_id: str
     rzp_token_id: str
+    #: Contact and email are required by POST /v1/payments/create/recurring.
+    #: Stage 0 passes amount=0.0 to notify(); charge_amount supplies the order.
+    rzp_email: str = ""
+    rzp_contact: str = ""
+    charge_amount: float = 0.0
     #: Bootstrap estimates. IN PRODUCTION THESE ARE THE OPEN PROBLEM: the
     #: belief filter needs a starting salary and payday guess per customer, and
     #: a real integration has no oracle for either. The honest options are a
@@ -215,6 +232,7 @@ class RazorpayExecutor:
         self.n_escalations = 0
         self.n_backup_links = 0
         self.notify_email = os.environ.get("RECOVERY_NOTIFY_EMAIL", "").strip()
+        self._last_smtp = None
         self.outbox_path = os.environ.get(
             "RECOVERY_OUTBOX",
             os.path.join("agent", "runs", "customer_outbox.jsonl"))
@@ -244,6 +262,10 @@ class RazorpayExecutor:
         #: our normalisation; this keeps the vendor's own words so the two can
         #: be reconciled against their dashboard. Bounded by the run.
         self.raw: dict[str, dict] = {}
+        #: Decoupled-flow state: (mandate_uid, target_t) -> PredeliveryOrder.
+        self._predelivery: dict[tuple[str, int], PredeliveryOrder] = {}
+        #: Append-only proof transcript rows (sanitized).
+        self.predelivery_log: list[dict] = []
         if transport is not None:
             self._t = transport
         else:
@@ -280,6 +302,51 @@ class RazorpayExecutor:
         raw = f"{action_id}|{ref.uid}|{t}"
         return "rcv_" + hashlib.sha256(raw.encode()).hexdigest()[:32]
 
+    def _predelivery_key(self, ref: MandateRef, target_t: int) -> tuple[str, int]:
+        return (ref.uid, target_t)
+
+    def predelivery_state(self, ref: MandateRef,
+                          target_t: int) -> PredeliveryOrder | None:
+        return self._predelivery.get(self._predelivery_key(ref, target_t))
+
+    def ingest_notification_webhook(self, payload: dict) -> dict:
+        """Record order.notification.delivered / .failed. Returns summary."""
+        wh = parse_notification_webhook(payload)
+        if wh is None:
+            return {"accepted": False, "reason": "not a notification webhook"}
+        matched = None
+        for key, rec in self._predelivery.items():
+            if rec.order_id and rec.order_id == wh.order_id:
+                apply_notification_webhook(rec, wh)
+                matched = rec
+                break
+        row = envelope_record(
+            phase=(NOTIFICATION_DELIVERED if wh.event.endswith(".delivered")
+                   else NOTIFICATION_FAILED),
+            http_method="WEBHOOK", url="",
+            request_body=None, http_status=200,
+            response_body=payload,
+            extra={"order_id": wh.order_id,
+                   "notification_id": wh.notification_id,
+                   "matched_mandate": matched.mandate_uid if matched else None})
+        self.predelivery_log.append(row)
+        if matched is None:
+            return {"accepted": True, "matched": False,
+                    "order_id": wh.order_id, "event": wh.event}
+        return {"accepted": True, "matched": True,
+                "mandate_uid": matched.mandate_uid,
+                "target_t": matched.target_t,
+                "phase": matched.phase.value,
+                "event": wh.event}
+
+    def _notify_result(self, *, executed: bool, phase: str, detail: str,
+                       order_id: str = "", http_status: int | None = None,
+                       error_code: str = "") -> dict:
+        return {"executed": executed, "phase": phase,
+                "channel": "razorpay_order" if executed else "predelivery_error",
+                "order_id": order_id, "http_status": http_status,
+                "error_code": error_code, "detail": detail}
+
     # ------------------------------------------------------ the money path
     def attempt(self, ref: MandateRef, amount: Rupees, t: int,
                 action_id: str = "") -> AttemptOutcome:
@@ -298,22 +365,58 @@ class RazorpayExecutor:
         documented one.
         """
         b = self._binding(ref)
+        pkey = self._predelivery_key(ref, t)
+        pred = self._predelivery.get(pkey)
+        if pred is None or not pred.order_id:
+            return AttemptOutcome(
+                t=t, code=code_for_reason(None), success=False,
+                pending=False, raw_code="missing_predelivery_order")
+        if pred.phase == PredeliveryPhase.NOTIFICATION_FAILED:
+            return AttemptOutcome(
+                t=t, code=code_for_reason(None), success=False,
+                pending=False, raw_code="notification_failed")
+        if pred.phase not in (PredeliveryPhase.ORDER_CREATED,
+                              PredeliveryPhase.NOTIFICATION_DELIVERED):
+            return AttemptOutcome(
+                t=t, code=code_for_reason(None), success=False,
+                pending=False, raw_code=f"invalid_predelivery_phase:{pred.phase.value}")
+
+        email = (b.rzp_email or os.environ.get("RAZORPAY_DEFAULT_EMAIL", "")
+                 ).strip()
+        contact = (b.rzp_contact or os.environ.get("RAZORPAY_DEFAULT_CONTACT", "")
+                   ).strip()
+        if not email or not contact:
+            raise RazorpayError(
+                f"mandate {ref.uid}: email and contact required for "
+                f"create/recurring; set on MandateBinding or "
+                f"RAZORPAY_DEFAULT_EMAIL / RAZORPAY_DEFAULT_CONTACT")
+
         key = self.idempotency_key(action_id or f"{ref.uid}@{t}", ref, t)
 
-        # UNVERIFIED: shape taken from Razorpay's S2S recurring-payments docs.
-        # An order is created, then charged against the stored token.
         body = {
-            "amount": to_paise(amount),
+            "email": email,
+            "contact": contact,
+            "amount": pred.amount_paise,
             "currency": self.currency,
+            "order_id": pred.order_id,
             "customer_id": b.rzp_customer_id,
             "token": b.rzp_token_id,
-            "recurring": "1",
+            "recurring": True,
             "description": f"mandate {ref.uid}",
             "notes": {"mandate_uid": ref.uid, "action_id": action_id},
         }
 
-        status, payload = self._post_with_retries(f"{API_BASE}/payments/create/recurring",
-                                                  body, key)
+        status, payload = self._post_with_retries(
+            f"{API_BASE}/payments/create/recurring", body, key)
+        pred.phase = PredeliveryPhase.DEBIT_ATTEMPTED
+        self.predelivery_log.append(envelope_record(
+            phase=DEBIT_ATTEMPTED,
+            http_method="POST",
+            url=f"{API_BASE}/payments/create/recurring",
+            request_body=body, http_status=status,
+            response_body=payload,
+            extra={"mandate_uid": ref.uid, "target_t": t,
+                   "order_id": pred.order_id}))
         if action_id:
             self.raw[action_id] = {"http_status": status, "body": payload}
 
@@ -451,31 +554,13 @@ class RazorpayExecutor:
 
     def _try_smtp(self, to_addr: str, subject: str, body: str) -> str:
         """Send if SMTP_HOST is set. Returns a short result, never raises."""
-        host = os.environ.get("SMTP_HOST", "").strip()
-        if not host or not to_addr:
-            return "smtp_skipped"
-        try:
-            import smtplib
-            from email.message import EmailMessage
-            msg = EmailMessage()
-            msg["Subject"] = subject
-            msg["From"] = os.environ.get("SMTP_FROM", "recovery@localhost")
-            msg["To"] = to_addr
-            msg.set_content(body)
-            port = int(os.environ.get("SMTP_PORT", "587"))
-            user = os.environ.get("SMTP_USER", "")
-            password = os.environ.get("SMTP_PASSWORD", "")
-            with smtplib.SMTP(host, port, timeout=20) as s:
-                s.starttls()
-                if user:
-                    s.login(user, password)
-                s.send_message(msg)
-            return "smtp_sent"
-        except Exception as e:
-            return f"smtp_failed:{type(e).__name__}"
+        result = deliver_smtp(to_addr, subject, body)
+        self._last_smtp = result
+        return result.status
 
     def remind(self, ref: MandateRef, amount: Rupees, t: int,
-               message: str = "", action_id: str = "") -> WorkflowResult:
+               message: str = "", action_id: str = "",
+               email_subject: str = "") -> WorkflowResult:
         """Funding reminder. Must not create a Payment Link."""
         if self.n_live_nudges >= self.max_live_nudges:
             append_jsonl(self.outbox_path, {
@@ -491,9 +576,10 @@ class RazorpayExecutor:
             "message": message, "action_id": action_id, "amount": amount,
             "to": to_addr})
         smtp = self._try_smtp(
-            to_addr, "Subscription payment reminder",
+            to_addr,
+            email_subject or "Subscription payment reminder",
             message or "Please add funds so the next automatic debit can succeed.")
-        emailed = smtp == "smtp_sent"
+        emailed = smtp == SMTP_SENT
         if emailed:
             self.n_live_nudges += 1
         self.workflow_log.append({"kind": "REMIND", "mandate_uid": ref.uid,
@@ -503,8 +589,10 @@ class RazorpayExecutor:
             detail=f"{smtp} outbox={path}", status="sent" if emailed else "")
 
     def nudge(self, ref: MandateRef, amount: Rupees, t: int,
-              message: str = "", action_id: str = "") -> WorkflowResult:
-        return self.remind(ref, amount, t, message=message, action_id=action_id)
+              message: str = "", action_id: str = "",
+              email_subject: str = "") -> WorkflowResult:
+        return self.remind(ref, amount, t, message=message, action_id=action_id,
+                           email_subject=email_subject)
 
     def backup_checkout(self, ref: MandateRef, amount: Rupees, t: int,
                         message: str = "", action_id: str = "") -> WorkflowResult:
@@ -652,18 +740,98 @@ class RazorpayExecutor:
 
     def notify(self, ref: MandateRef, amount: Rupees, notify_t: int,
                target_t: int) -> dict:
-        """Pre-debit notice.
+        """Schedule pre-debit via POST /v1/orders (decoupled flow).
 
-        AutoPay's regulatory pre-debit API is not called: that path needs an
-        authorised mandate, which this test account does not have. The notice
-        is recorded on the executor so Stage 0 is no longer talking to a
-        method that raises.
+        Creates a Razorpay order with the documented ``notification`` object.
+        ORDER_CREATED here is NOT proof of customer delivery — only
+        ``order.notification.delivered`` webhooks advance to NOTIFICATION_DELIVERED.
         """
+        b = self._binding(ref)
+        if not (b.rzp_token_id or "").strip():
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail="missing token_id on MandateBinding")
+
+        amount_paise = effective_amount_paise(amount, b.charge_amount)
+        if amount_paise < 100:
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail=f"invalid amount: {amount_paise} paise "
+                       "(need charge_amount on binding when Stage 0 passes 0)")
+
+        import time as _time
+        payment_after = int(target_t)
+        if payment_after <= int(_time.time()):
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail=f"payment_after {payment_after} is not in the future "
+                       "(target_t must be Unix epoch seconds for live Razorpay)")
+
+        receipt = f"rcv_{ref.uid}_{target_t}"[:40]
+        body = build_order_body(
+            amount_paise=amount_paise,
+            currency=self.currency,
+            receipt=receipt,
+            token_id=b.rzp_token_id,
+            payment_after=payment_after,
+        )
+        key = self.idempotency_key(f"notify:{ref.uid}@{target_t}", ref, target_t)
+        url = f"{API_BASE}/orders"
+        status, payload = self._post_with_retries(url, body, key)
+
+        self.predelivery_log.append(envelope_record(
+            phase=ORDER_CREATED,
+            http_method="POST", url=url,
+            request_body=body, http_status=status,
+            response_body=payload,
+            extra={"mandate_uid": ref.uid, "target_t": target_t,
+                   "notify_t": notify_t}))
+
+        if status is None:
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail="transport failure creating order",
+                http_status=None)
+
+        if self._is_configuration_fault(status, payload):
+            err = (payload.get("error") or {})
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail=str(err.get("description") or "configuration fault"),
+                http_status=status,
+                error_code=str(err.get("code") or ""))
+
+        if status >= 400:
+            err = (payload.get("error") or {})
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail=str(err.get("description") or f"HTTP {status}"),
+                http_status=status,
+                error_code=str(err.get("code") or ""))
+
+        order_id = parse_order_id(payload)
+        if not order_id:
+            return self._notify_result(
+                executed=False, phase="ORDER_CREATE_FAILED",
+                detail="response missing order id",
+                http_status=status)
+
+        rec = PredeliveryOrder(
+            mandate_uid=ref.uid, target_t=target_t,
+            order_id=order_id, amount_paise=amount_paise,
+            payment_after=payment_after,
+            phase=PredeliveryPhase.ORDER_CREATED,
+            http_status=status)
+        self._predelivery[self._predelivery_key(ref, target_t)] = rec
         self.workflow_log.append({
             "kind": "NOTIFY", "mandate_uid": ref.uid,
-            "notify_t": notify_t, "target_t": target_t, "amount": amount})
-        return {"executed": False, "channel": "local_ledger",
-                "detail": "AutoPay pre-debit API not called; no authorised mandate"}
+            "notify_t": notify_t, "target_t": target_t,
+            "amount": amount, "order_id": order_id,
+            "phase": ORDER_CREATED})
+        return self._notify_result(
+            executed=True, phase=ORDER_CREATED,
+            detail="razorpay order created; delivery unconfirmed until webhook",
+            order_id=order_id, http_status=status)
 
     # --------------------------------------------------------- introspection
     def estimates(self, customer_id: int) -> tuple[float, int]:

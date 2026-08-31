@@ -1,7 +1,8 @@
 """THE BATCH NUMBER. The track's actual deliverable.
 
     python -m agent.batch_report                  # deterministic arm only
-    python -m agent.batch_report --demo-llm       # one-pop audit: routed LLM stats
+    python -m agent.batch_report --llm            # + the LLM overlay arm
+    python -m agent.batch_report --demo-llm       # one-pop routed-LLM audit
     python -m agent.batch_report --merchants 30
 
 Razorpay Track 3 asks for exactly this, verbatim:
@@ -79,7 +80,7 @@ def main(argv=None) -> int:
     ap.add_argument("--demo-llm", action="store_true",
                     help="one-pop routed-LLM audit (not a second money column)")
     ap.add_argument("--llm", action="store_true",
-                    help=argparse.SUPPRESS)
+                    help="add the LLM overlay arm (needs ZAI_API_KEY or cache)")
     ap.add_argument("--days", type=int, default=DAYS)
     ap.add_argument("--llm-max-calls", type=int, default=150,
                     help="hard cap on NETWORK calls per run. Cache hits are "
@@ -97,10 +98,6 @@ def main(argv=None) -> int:
                          "published configuration -- the headline is measured "
                          "with every rate at zero.")
     a = ap.parse_args(argv)
-    if a.llm:
-        a.demo_llm = True
-    if not hasattr(a, "demo_llm"):
-        a.demo_llm = False
     pops = POPS[:max(1, min(a.pops, len(POPS)))]
 
     base = dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
@@ -114,6 +111,9 @@ def main(argv=None) -> int:
         print("     the `mid` cell of the sweep in test_decline_sweep.py and")
         print("     every one is a [GUESS].")
     arms = {"agent, deterministic": dict(base, mode="full")}
+    if a.llm:
+        arms["agent, LLM overlay"] = dict(base, mode="full", use_llm=True,
+                                          llm_max_calls=a.llm_max_calls)
 
     jobs = []
     for name, kw in arms.items():
@@ -271,6 +271,15 @@ def main(argv=None) -> int:
     print("ONE RECOVERED RUPEE, END TO END -- what `WHERE action_id = ?` returns")
     print("=" * 104)
     _one_chain(a, pops[0])
+
+    # ---------------------------------------------------------- the LLM arm
+    if a.llm:
+        print()
+        print("=" * 104)
+        print("THE LLM OVERLAY -- fallback rate, and whether the source changes "
+              "the outcome")
+        print("=" * 104)
+        _llm_split(res, pops)
 
     # ---------------------------------------------------------- LLM demo audit
     if a.demo_llm:

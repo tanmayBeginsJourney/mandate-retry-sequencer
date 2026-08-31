@@ -1,0 +1,31 @@
+{
+  "elapsed_ms": 4474,
+  "generated_by": "scripts/prove_smtp_reminder.py",
+  "note": "No Razorpay API called. No payment or debit performed.",
+  "smtp": {
+    "detail": "message accepted by SMTP server",
+    "from": "onboarding@resend.dev",
+    "host": "smtp.resend.com",
+    "phases": [
+      "connected",
+      "starttls_ok",
+      "auth_ok",
+      "send_ok"
+    ],
+    "port": 587,
+    "smtp_code": null,
+    "status": "smtp_sent",
+    "subject": "[Recovery Agent] SMTP funding reminder integration test",
+    "to": "tanmaymohan12@gmail.com",
+    "user_set": true
+  },
+  "state": "PASS",
+  "timestamp_unix": 1788182026,
+  "workflow_result": {
+    "channel": "email",
+    "detail": "smtp_sent",
+    "executed": true,
+    "outbox_path": "written",
+    "status": "sent"
+  }
+}

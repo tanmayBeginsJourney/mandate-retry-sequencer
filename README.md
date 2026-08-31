@@ -206,6 +206,15 @@ if the key is not `rzp_test_`. Does not charge a mandate. Set
 `RECOVERY_NOTIFY_EMAIL` to have Razorpay email the backup link.
 
 ```bash
+py -3.12 scripts/prove_smtp_reminder.py
+```
+
+Sends one funding-reminder email through the executor's generic SMTP path
+(`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`,
+`RECOVERY_NOTIFY_EMAIL`). Does not call Razorpay or create a Payment Link.
+Writes `logs/smtp_reminder_proof.json`.
+
+```bash
 py -3.12 agent/eval/run_eval.py --llm --judge --replay
 ```
 
@@ -312,7 +321,7 @@ by default.
 | An action would breach a mandate rule | Refused before the executor is called, and the refusal is written to the audit trail. Refused actions generate no network traffic. |
 | The payment rail is degraded across many customers | Detected from cross-customer outcomes; the belief update is suppressed, since a technical decline is a property of the rail rather than of one customer's balance. |
 | A debit's outcome is unknown — a timeout or a deemed transaction | Recorded as pending. The rule engine stops further debits on that cycle. Retrying an unknown outcome is refused. |
-| Reminder (after the 1st or 2nd insufficient-funds decline) | Writes the customer-facing copy to an outbox. Sends email only if SMTP is configured. Does not create a Payment Link and does not skip the remaining mandate attempts. |
+| Reminder (after the 1st or 2nd insufficient-funds decline) | Writes the customer-facing copy to an outbox JSONL audit row, then sends email through the executor's generic SMTP path when `SMTP_HOST` and `RECOVERY_NOTIFY_EMAIL` are set. `executed=True` only after the SMTP server accepts the message. Does not create a Payment Link and does not skip the remaining mandate attempts. |
 | Last-attempt backup checkout | After a 3rd insufficient-funds decline, creates a Razorpay Payment Link. Email notify is on when `RECOVERY_NOTIFY_EMAIL` is set; SMS is off. The fourth mandate debit is not fired while the link is issued, paid, expired or cancelled. A paid link collects this cycle; an unpaid close holds the last attempt so the mandate is not killed. |
 | Escalate | Appends `agent/runs/merchant_queue.jsonl`. Stops retries only for a broken mandate, a frozen account, or a lien. |
 | An HTTP request is retried after a socket failure | The idempotency key is derived from the `action_id` already written to the audit trail, so the same logical debit produces the same key across a process restart. |
@@ -400,8 +409,16 @@ has never been submitted with one.
 
 **Test-mode API writes.** The client authenticates. A last-attempt Payment Link
 has been created, fetched and cancelled. Funding reminders do not create
-Payment Links. Escalate is a local merchant-queue file. The AutoPay pre-debit
-notification API is recorded locally and is not called.
+Payment Links; when SMTP is configured they are delivered through the
+executor's SMTP path, with the outbox JSONL row retained as an audit backup.
+Live SMTP delivery was proven through the configured test relay
+(`scripts/prove_smtp_reminder.py`, transcript in `logs/smtp_reminder_proof.json`).
+Escalate is a local merchant-queue file. Razorpay UPI AutoPay
+decoupled flow is wired: the executor creates the Razorpay order containing the
+`notification` object, and Razorpay handles delivery of the regulatory pre-debit
+notification. Delivery is only considered proven when the corresponding
+`order.notification.delivered` event is observed. A successful
+`POST /v1/orders` is not proof the customer received the alert.
 
 ## Limitations
 
@@ -470,6 +487,7 @@ py -3.12 agent/tests/test_stage0_enforces.py      # constraint layer, 20 checks
 py -3.12 agent/tests/test_parity_vs_harness.py    # agent matches simulation bit-exactly
 py -3.12 agent/tests/test_recovery_metric.py      # recovery metric, 5 mutants
 py -3.12 agent/tests/test_workflows.py            # reminder vs last-attempt link vs queue
+py -3.12 agent/tests/test_smtp_reminder.py        # SMTP path: sent vs skipped vs failure
 py -3.12 agent/tests/test_batch_ceiling.py        # batch legal ceiling holds when tripped
 py -3.12 agent/tests/test_recovery_rules.py       # when to remind, when to hold the 4th debit
 py -3.12 agent/tests/test_backup_loop.py          # full mode does not fire a 4th debit

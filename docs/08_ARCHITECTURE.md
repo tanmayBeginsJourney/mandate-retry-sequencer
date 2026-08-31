@@ -101,7 +101,8 @@ escalate are the opposite.
    +--------------------------------v---------------------------------+
    |  EXECUTION    ports.Executor   attempt() for debits; remind()     |
    |                                writes a funding notice (not a     |
-   |                                Payment Link); backup_checkout()   |
+   |                                Payment Link) and emails it when   |
+   |                                SMTP is configured; backup_checkout()|
    |                                is the last-attempt Payment Link;  |
    |                                escalate() appends a merchant queue|
    |               sim_executor.py       the simulated world           |
@@ -350,7 +351,11 @@ development. Every one of these is in the shipping path:
   observed.
 - **The Razorpay client authenticates in test mode.** Payment Links and
   Customer records have been created against `rzp_test_` keys
-  (`scripts/prove_workflows.py`). A recurring-charge body has never been
+  (`scripts/prove_workflows.py`). Funding reminders are emitted through the
+  executor's generic SMTP path when `SMTP_HOST` and `RECOVERY_NOTIFY_EMAIL` are
+  set; the outbox JSONL row is retained as an audit backup. Live SMTP delivery
+  was proven through the configured test relay (`scripts/prove_smtp_reminder.py`,
+  transcript in `logs/smtp_reminder_proof.json`). A recurring-charge body has never been
   submitted on an authorised mandate.
 - **Stage 0 mutants still run the unfitted filter.** They test constraint
   counters, not the prior. The moat, the calibration, the k=1 identity, and
@@ -359,9 +364,12 @@ development. Every one of these is in the shipping path:
   reason: two calibration gates that fail on monotonicity for structural
   reasons no parameter fixes, one retired architecture kept red so a rewrite
   stays auditable, and one negative control that turned out not to be neutral.
-- **AutoPay pre-debit notify is a local ledger.** Stage 0 records pendency
-  and calls the executor hook; the Razorpay AutoPay pre-debit API is not
-  invoked.
+- **Razorpay UPI AutoPay decoupled pre-debit flow is wired in code.** Stage 0
+  still records pendency and calls `notify()`; the Razorpay executor posts
+  `POST /v1/orders` with the documented `notification` object. Razorpay handles
+  delivery. `ORDER_CREATED` is not `NOTIFICATION_DELIVERED`; delivery proof
+  requires `order.notification.delivered`. Live order creation and delivery
+  webhook are **not gate-protected** until rung 5a and a real webhook are run.
 
 **Thirty-two errors have been found in this project's own work**, catalogued with
 mechanism and guard in `docs/03_ERRORS.md`. Almost every one made the project
