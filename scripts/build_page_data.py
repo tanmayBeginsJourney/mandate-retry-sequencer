@@ -104,20 +104,33 @@ SWEEP = [
     (14, 86.13, 98.83, +12.71, 1.00, "agent wins"),
 ]
 
-#: docs/02_RESULTS.md, "A bank-shaped outage is 3.5x less detectable".
+#: docs/02_RESULTS.md, "A bank-shaped outage is 3.4x less detectable". Produced
+#: by E-MIX-2 inside `py -3.12 agent/tests/test_decline_sweep.py`.
 #: n=200, severity 0.80, four 6h windows, 8 populations. NOT gate-protected.
+#:
+#: RE-MEASURED on the shipped belief, `logs/w27_decline_sweep_repaired.txt`.
+#: Until 2 September 2026 these carried 0.78 / 0.41 / 0.22 / 0.09 from a
+#: pre-18:08 run that was never captured to a file -- the transcript the page
+#: now cites had ALREADY superseded them and nobody had transcribed it. The
+#: worst single bank also changed identity: `@upi` at 0.09 was `@oksbi` at
+#: 0.06 on the current run.
 POOLING_DETECTION = [
-    ("every bank pooled", 200, 0.78),
-    ("@okaxis -- best single bank", 30, 0.41),
-    ("mean over the eight single banks", 25, 0.22),
-    ("@upi -- worst single bank", 19, 0.09),
+    ("every bank pooled", 200, 0.72),
+    ("@okaxis -- best single bank", 30, 0.38),
+    ("mean over the eight single banks", 25, 0.21),
+    ("@oksbi -- worst single bank", 13, 0.06),
 ]
 
 #: docs/02_RESULTS.md, "The moat's second dividend". Attempts available to a
 #: detector per 24h window. `min_attempts = 8` is the floor below which the
 #: monitor refuses to evaluate at all.
+#:
+#: RE-MEASURED on the shipped belief, `logs/w28_detection_power.txt`. The
+#: superseded row read 11.4 / 22.5 / 44.5 and 0.74 at n=200. The volumes rose
+#: and the verdict did not move: one merchant stays below the floor of 8 at
+#: every n from 5 to 200, which is the claim the page draws.
 POOLING_VOLUME = [
-    (25, 5.6, 0.09), (50, 11.4, 0.19), (100, 22.5, 0.38), (200, 44.5, 0.74),
+    (25, 5.6, 0.09), (50, 11.6, 0.19), (100, 23.1, 0.38), (200, 46.3, 0.77),
 ]
 
 #: docs/02_RESULTS.md, "What outage awareness is WORTH". Paired 2 SE against
@@ -429,13 +442,22 @@ def build() -> dict:
             total_windows=len(outage.windows),
             severity=0.40,
             #: The PUBLISHED false-alarm figure, measured at severity 0 over 48
-            #: runs (docs/02_RESULTS.md). It is not the same measurement as
-            #: `arms[*].false_alarms`, which counts firings outside a window in
-            #: ONE run that DOES contain outages. Both are on the page and the
-            #: page says which is which -- conflating them would let a single
-            #: unlucky run overwrite a 48-run result, or the reverse.
+            #: runs. It is not the same measurement as `arms[*].false_alarms`,
+            #: which counts firings outside a window in ONE run that DOES
+            #: contain outages. Both are on the page and the page says which is
+            #: which -- conflating them would let a single unlucky run overwrite
+            #: a 48-run result, or the reverse.
+            #:
+            #: MEASURED at last, 2 September 2026: until then this family had
+            #: no transcript in logs/ and was carried as an argument. The
+            #: false-alarm figure HELD; the TPR did not. It was published as
+            #: "1.00 at n>=100" and the re-run scores 0.75 at n=100, reaching
+            #: 1.00 only at n=200. `logs/w28_detection_power.txt`, produced by
+            #: `py -3.12 agent/tests/test_outage_detection.py`.
+            published_transcript="logs/w28_detection_power.txt",
             published_false_alarm_runs="0 of 48 at severity 0",
-            published_tpr_at_n100="1.00 at severity 0.40, response OFF",
+            published_tpr_at_n100="0.75 at severity 0.40, response OFF; "
+                                  "1.00 at n=200",
         ),
         batch=BATCH,
     )

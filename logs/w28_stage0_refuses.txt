@@ -1,0 +1,73 @@
+
+==============================================================================
+1.  A LEGAL DEBIT.  Hour 08 -- outside every peak window.
+==============================================================================
+    executor            RazorpayExecutor (real class)
+    target              day 11, hour 08
+    gate verdict        ALLOWED
+    network calls       0
+    outcome             U30  success=False  pending=False  raw='missing_predelivery_order'
+    predelivery order   NOT CREATED
+    LIMITATION          no network call: Stage 0's clock is simulated hours and the
+                        live predelivery order needs future epoch seconds. The
+                        executor refused rather than fabricating a debit.
+
+==============================================================================
+2.  THE SAME DEBIT AT 10:00 -- inside an NPCI peak window.
+==============================================================================
+    notification        REFUSED at issue: peak
+    target              day 11, hour 10   (peak = 10:00-13:00, 17:00-21:30)
+    gate verdict        REFUSED
+    refused on          peak
+    detail              target hour 10:00 is inside an NPCI peak window
+    network calls       0   <- the transport RAISES if reached; it was not reached
+    gate's own tally    {'cap': 0, 'peak': 2, 'lead': 0, 'pending': 1, 'represent': 0}
+
+==============================================================================
+3.  AN INDEPENDENT RECOUNT, FROM THE LOG ALONE.
+==============================================================================
+    auditor.py replays the JSONL and re-derives legality using code
+    that may not import rules.py or stage0.py -- gate I3 enforces it.
+
+    gate REFUSED        {'cap': 0, 'peak': 2, 'lead': 0, 'pending': 1, 'represent': 0}   (3 refusals: peak at issue, peak + pending at dispatch)
+    auditor VIOLATIONS  {'cap': 0, 'peak': 0, 'lead': 0, 'pending': 0, 'represent': 0}   (0)
+
+    THESE ARE NOT THE SAME QUANTITY, and the difference is the
+    point. The gate counts what it STOPPED. The auditor counts what
+    ILLEGALLY HAPPENED. Three refusals and zero violations is the
+    correct pair: the gate refused, so nothing illegal reached the
+    world, so there is nothing for the auditor to find.
+
+    Worth saying plainly, because in a clean batch report both
+    columns read 0 and it is tempting to call that agreement. It is
+    not. They agree at zero because nothing illegal happened. The
+    auditor only bites when the GATE fails -- which is step 4.
+
+==============================================================================
+4.  NOW BREAK IT.  Move money below the gate and see if it is caught.
+==============================================================================
+    A caller that bypassed Stage 0 debited at 10:00 and wrote the
+    same rows the gate writes on success. No counter was touched.
+
+    gate's tally        (this run never saw it)
+    auditor VIOLATIONS  {'cap': 0, 'peak': 1, 'lead': 0, 'pending': 0, 'represent': 0}
+      -> peak: mandate c45m3 executed at hour 10:00 (seq 2)
+
+    Caught, from the log alone, by code that cannot import the
+    enforcer. THAT is the cross-check -- and it is the one that
+    found a real hole once, when the gate said 0 and the auditor
+    said 8, and the auditor was right.
+
+==============================================================================
+WHAT THIS DID NOT NEED
+==============================================================================
+    * no RAZORPAY_KEY_ID, no RAZORPAY_KEY_SECRET
+    * no network -- zero calls in every step; the step 1 transport
+      is a fake that records, the step 2 transport RAISES if reached
+    * no simulation -- SimExecutor was never imported
+
+    Stage 0 adjudicates before the executor exists to it. That is
+    why the constraint layer is backend-independent, and why this
+    is a proof rather than an assertion.
+
+    audit trail: C:\Users\tanma\AppData\Local\Temp\stage0-proof-skl826bd\peak.jsonl

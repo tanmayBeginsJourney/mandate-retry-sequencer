@@ -633,7 +633,7 @@ Do not present either agent number as "money recovered". The money number is
 still the one in section 2, and `payday_wait` is still a permanent row beside it.
 
 **There is a measured batch number, in section 7b:** **99.38% against
-`payday_wait`'s 90.29%, +9.08 pts (2 SE 2.01, SIG)**, Rs 7,511,500, zero Stage 0
+`payday_wait`'s 90.29%, +9.08 pts (2 SE 1.84, SIG)**, Rs 7,511,500, zero Stage 0
 refusals with an independent recount of zero. Run it with
 `py -3.12 -m agent.batch_report --pops 10 --canonical`. *(98.01% / 57.70% /
 +40.30 / Rs 6,203,060 is SUPERSEDED: measured before errors 33-35 were
@@ -676,7 +676,7 @@ The full 40-case eval table is historical. Do not quote 6/21 vs 9/21 as
 shipping evidence — those are cases the rules own in production.
 
 **Batch:** deterministic **99.38%** against `payday_wait` **90.29%**,
-**+9.08 pts (2 SE 2.01, SIG)**, ₹7,511,500 recovered, **zero Stage 0 refusals
+**+9.08 pts (2 SE 1.84, SIG)**, ₹7,511,500 recovered, **zero Stage 0 refusals
 with the independent auditor recounting zero over 8,702 executed money
 actions**. No LLM column in the money table; `--llm` measures the overlay beside
 the deterministic arm.

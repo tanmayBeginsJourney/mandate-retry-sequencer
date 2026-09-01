@@ -1,0 +1,68 @@
+================================================================================================
+OUTAGE DETECTION POWER -- true-positive rate vs population size
+k=5, 60d, payday_err=7, FITTED_BELIEF, 6h outages on days [20, 40], worst-case placement (hour 8)
+================================================================================================
+ severity  n cust  runs  att/day  att/24h win  detected    TPR  false alarms
+     0.00       5     8      1.2          1.2     0/8     0.00      0/8   runs
+     0.00      10     8      2.2          2.2     0/8     0.00      0/8   runs
+     0.00      25     8      5.6          5.6     0/8     0.00      0/8   runs
+     0.00      50     8     11.5         11.5     0/8     0.00      0/8   runs
+     0.00     100     8     23.0         23.0     0/8     0.00      0/8   runs
+     0.00     200     8     46.1         46.1     0/8     0.00      0/8   runs
+
+     0.15       5     8      1.2          1.2     0/8     0.00      0/8   runs
+     0.15      10     8      2.2          2.2     0/8     0.00      0/8   runs
+     0.15      25     8      5.6          5.6     0/8     0.00      0/8   runs
+     0.15      50     8     11.5         11.5     1/8     0.12      0/8   runs
+     0.15     100     8     23.0         23.0     1/8     0.12      0/8   runs
+     0.15     200     8     46.1         46.1     4/8     0.50      0/8   runs
+
+     0.40       5     8      1.2          1.2     1/8     0.12      0/8   runs
+     0.40      10     8      2.2          2.2     1/8     0.12      0/8   runs
+     0.40      25     8      5.6          5.6     1/8     0.12      0/8   runs
+     0.40      50     8     11.6         11.6     7/8     0.88      0/8   runs
+     0.40     100     8     23.1         23.1     6/8     0.75      0/8   runs
+     0.40     200     8     46.3         46.3     8/8     1.00      0/8   runs
+
+================================================================================================
+WHAT FIRED IT -- evidence at each true detection (severity 0.40)
+================================================================================================
+ n cust   pop      t  window n  tech  P(>=k by chance)
+      5   701    973         8     4          2.79e-07
+     10   707    969         8     5          1.80e-09
+     25   700    493         8     5          1.80e-09
+     50   700    968        10     3          5.89e-05
+     50   701    992         8     3          2.78e-05
+     50   703    512         8     3          2.78e-05
+     50   703    973         8     3          2.78e-05
+     50   704    968        27     4          6.20e-05
+     50   705    489        11     3          8.05e-05
+     50   706    992         8     5          1.80e-09
+     50   707    493        10     3          5.89e-05
+     50   707    969         8     6          7.24e-12
+    100   700    968        14     4          3.85e-06
+    100   701    512         8     3          2.78e-05
+
+================================================================================================
+THE MOAT: what ONE MERCHANT would see
+================================================================================================
+Mandates are spread over 60 merchants, so one merchant holds n*k/60 of them.
+ n cust  aggregator att/24h  1 merchant att/24h   merchant reaches min_attempts=8?
+      5                 1.2                0.02        no  -- cannot even evaluate
+     10                 2.2                0.04        no  -- cannot even evaluate
+     25                 5.6                0.09        no  -- cannot even evaluate
+     50                11.6                0.19        no  -- cannot even evaluate
+    100                23.1                0.38        no  -- cannot even evaluate
+    200                46.3                0.77        no  -- cannot even evaluate
+
+================================================================================================
+PRE-REGISTERED CHECKS
+================================================================================================
+  HELD   E-DET-1 false-alarm rate at severity=0 is under 5% of runs   [0.0% of runs raised an alarm with no outage present]
+  HELD   E-DET-2 TPR non-decreasing in n at severity 0.15   [0.00 -> 0.00 -> 0.00 -> 0.12 -> 0.12 -> 0.50]
+  BROKE  E-DET-2 TPR non-decreasing in n at severity 0.4   [0.12 -> 0.12 -> 0.12 -> 0.88 -> 0.75 -> 1.00]
+  HELD   E-DET-3 TPR < 0.5 at n<=10 even at severity 0.40   [max TPR at n in (5,10) = 0.12]
+  BROKE  E-DET-4 TPR >= 0.8 at n=100, severity 0.40   [0.75]
+  HELD   E-DET-5 one merchant never reaches min_attempts at any n   [merchant volume stays below 8 attempts per 24h window]
+
+Pre-registration record for this measurement: 4/6

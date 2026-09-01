@@ -62,28 +62,37 @@ Produced by `sim/harness.py` + `sim/w3.py`. Anything not on this page is stale.
 > filter, which is not what ships. Re-swept on the shipping configuration
 > (`solo_shared_pd` + `w3.FITTED_BELIEF`, `pe=7`, eval populations 700–707):
 >
-> ⚠️ This discount table was measured on the former shipping prior
-> (`prior_w=12`, `prior_floor=0.25`). It was not re-run after the 31 August
-> adoption of `prior_w=9`, `prior_floor=0.5`. Re-run 31 August 2026 on the
-> adopted prior at `pop_spend=1.05`:
+> **RE-RUN 2 September 2026 on the shipped belief** (`prior_w=5`,
+> `prior_floor=0.1`, `cycle_value=0.6`), `logs/w28_discount_sweep.txt`. The
+> discount lives in the same index rule that gained `cycle_value`, so the two
+> earlier columns are kept as the record and neither may be quoted.
 >
-> | discount | unfitted (what A3 measured) | **fitted (what ships)** |
-> |---|---|---|
-> | 0.80 | 79.41% | 92.64% |
-> | 0.90 | — | 95.03% |
-> | **0.92** | **82.16%** | **95.37%** |
-> | 0.94 | — | 95.42% |
-> | 0.96 | 82.15% | 94.99% |
-> | 1.00 | 78.68% | 90.71% |
-> | **full spread** | **3.5 pts** | **4.7 pts** |
+> | discount | unfitted (A3, superseded) | pre-W24 fitted (superseded) | **shipped (2 Sep)** |
+> |---|---|---|---|
+> | 0.80 | 79.41% | 92.64% | 93.46% |
+> | 0.85 | — | 93.05% | 94.77% |
+> | **0.88** | — | 94.23% | **95.16%** |
+> | 0.90 | — | 95.03% | 94.90% |
+> | **0.92** (ships) | **82.16%** | **95.37%** | **94.72%** |
+> | 0.94 | — | 95.42% | 93.95% |
+> | 0.96 | 82.15% | 94.99% | 93.26% |
+> | 0.98 | — | 94.33% | 92.71% |
+> | 1.00 | 78.68% | 90.71% | 91.31% |
+> | **full spread** | 3.5 pts | 4.7 pts *(superseded)* | **3.9 pts** |
 >
-> So the band every number on this page owes is **~5 points on the adopted
-> prior, not ~7**. The 0.90–0.96 plateau survives on the fitted filter
-> (94.99–95.42, ~0.4 pts),
-> which is the claim that matters — the constant is not perched on a spike.
-> But 0.92 is the argmax on the *evaluation* set by ~1 point on this grid,
-> which is the situation `01_FACTS.md` says was deliberately avoided. Treat
-> that as an open flag, not a settled one: 5 grid points, 8 populations.
+> **Three things moved and all three are reported.** The band every number on
+> this page owes is now **~4 points, not ~5 and not the ~7 first published**.
+> The plateau flattened and widened downward: 0.88–0.92 spans 95.16–94.72
+> (0.44 pts) where the old 0.90–0.96 spanned 0.4 — so the constant is still
+> not perched on a spike, which is the claim that matters.
+>
+> **The argmax moved off 0.92, to 0.88.** That partly retires the open flag
+> this table used to carry — 0.92 is no longer the evaluation-set argmax, so
+> it can no longer be the product of having been chosen there. It replaces it
+> with a smaller one: the shipped constant is 0.44 points below the best cell
+> on this grid and was **not** re-selected against it, because re-selecting a
+> constant on an evaluation set is the fit this pass was not allowed to make.
+> 9 grid points, 8 populations.
 
 **Setup.** World calibrated so Razorpay's documented UPI schedule reproduces
 ~30% per-attempt approval (spend=1.05). 120-day horizon, 30-day billing cycles,
@@ -198,6 +207,13 @@ column before quoting anything on this page.**
 | Pooling moat and consent curve (W9) | `logs/w26_w9_pooling_consent_remeasure.txt` | 09-01 23:01 |
 | Action-space ablation | `logs/w27_abl_action_repaired.txt` | 09-01 23:26 |
 | Outage ablation | `logs/w27_abl_outage_repaired.txt` | 09-01 23:33 |
+| Decline sweep, `p_limit`, bank-shaped outage (E-MIX-2) | `logs/w27_decline_sweep_repaired.txt` | 09-02 00:01 |
+| **Detection power — TPR and false alarms** | `logs/w28_detection_power.txt` | **09-02 00:42** |
+| **Detection benchmark, 384 runs** | `logs/w28_detection_benchmark.txt` | **09-02 01:0x** |
+| **Discount-factor sweep** | `logs/w28_discount_sweep.txt` | **09-02 00:44** |
+| Steelman `[1,7]`, crossover ±5 | `logs/w25_steelman_final.txt` | 09-01 21:17 |
+| Held-out confirmation: attempts/cycle, V7 ten-day share | `logs/w24_heldout_confirmation.txt` | 09-01 17:43 |
+| `monotone_drain` re-selection, DP refutation | `logs/w25_dp_monotone_stage_e.txt` | 09-01 21:06 |
 
 ## NOT current — measured before 18:08, quoted with that said
 
@@ -210,10 +226,44 @@ quotes one carries the same warning locally.
 | **Insolvency sweep (W2)** | `logs/w2_rerun.txt` | 08-31 16:38 | Belief-dependent. Its pre-registration record (4/5) and its band comparisons are pre-W24. W2's *justification* is separately retracted as error 35. |
 | **Transient-hold sweep (W7)** | `logs/w7_rerun.txt` | 08-31 16:57 | Belief-dependent, pre-canonical world as well. Quoted for the shape of the V3 curve, not for its levels. |
 | **Population realism (W10)** | `logs/w10_realism_sweep.txt` | 08-31 22:06 | Exploratory at n=40, `pop_spend` pinned rather than derived. |
-| **Discount-factor sweep** | `logs/discount_sweep.txt` | 08-31 16:54 | Belief-dependent. Reported as a range, and the range is what the claim rests on. |
-| **Detection benchmark** | no transcript in `logs/` | pre-18:08 | 384 runs, ~20 min, run ad hoc. Its claim is a **capability** (false-alarm rate, TPR), which is a property of the detector and the rail rather than of the payday prior — but that is an argument, not a measurement, and it is labelled as one. |
 | **`sim/stress_day0.py`** | see below | — | Re-run in this pass where it completed; otherwise pre-18:08. |
 | **`sim/fair_audit.py` ECE** | see below | — | Re-run in this pass; it had never been captured to a file before. |
+
+**Both halves of this register moved on 2 September 2026, and the movement is
+the finding.** Four families crossed from the second table to the first, and
+three of them changed their numbers on the way:
+
+* **Detection.** The register argued that a false-alarm rate and a TPR are
+  properties of the detector and the rail, not of the payday prior. **The
+  false-alarm half held exactly (0 of 48) and the TPR half did not** — 1.00 at
+  n=100 became 0.75, and pre-registered check E-DET-4 broke. The mechanism is
+  in "Detection power" above: the repaired filter wastes fewer attempts on a
+  degraded rail, and wasted attempts are the detector's entire sample. An
+  argument was substituted for a measurement and the measurement disagreed.
+* **Discount sweep.** Range 4.7 → 3.9 points, and the argmax moved off the
+  shipped 0.92 to 0.88.
+* **Bank-shaped outage (E-MIX-2).** The published 0.78 / 0.41 / 0.22 with
+  `@upi` 0.09 is SUPERSEDED by 0.72 / 0.38 / 0.21 with `@oksbi` 0.06.
+  **This one needed no re-run at all**: a
+  current transcript had existed since 00:01 and the constants had simply never
+  been transcribed from it. That is the cheaper and more embarrassing of the
+  two failure modes on this page.
+* **Steelman, held-out confirmation, `monotone_drain`.** These were never
+  stale — their transcripts were real and post-18:08, but they lived in
+  `scratch/`, which is **gitignored**, so no reader cloning this repository
+  could open them. Copied verbatim into `logs/`; the register's earlier
+  citation of `agent/tests/test_steelman_schedule.py` named a script that
+  reproduces the numbers rather than a record of the run that produced them.
+
+**A defect found while doing this, and it is the reason the detection family
+went unmeasured for five days.** `test_detection_benchmark.py` checkpoints to
+`agent/tests/_bench_cache.pkl`, keyed on the job tuple alone. The cache on this
+machine was written **29 August 02:15** and carried no record of the belief it
+was measured under, so every "re-run" since silently replayed the pre-W24
+filter and reported it as a fresh result. The first re-run in this pass did
+exactly that and was caught only by its printed `resuming: 384 run(s) already
+on disk`. The cache is now fingerprinted against `w3.FITTED_BELIEF` and the
+job set, and a cache that does not match is discarded rather than resumed.
 
 **Policy-free by construction, and therefore NOT stale**: `horizon.py`,
 `w11_ceiling_script.py`, `w11_coupling_script.py` (now in `scripts/analysis/`,
@@ -1029,43 +1079,76 @@ Two consequences, and both must be quoted with any outage number:
 2. A detector has roughly 19 attempts per 24h window at n=100 to work with.
    That is the entire statistical budget.
 
-## Detection power
+## Detection power — RE-MEASURED 2 September 2026, and the TPR moved
 
 *k=5, 60d, `payday_err=7`, `FITTED_BELIEF`, two 6h outages on days 20 and 40,
 worst-case placement, 8 populations per cell. Fraction of runs in which the
-monitor raised OUTAGE inside a window.*
+monitor raised OUTAGE inside a window. 144 runs.*
+`py -3.12 agent/tests/test_outage_detection.py`*, transcript*
+`logs/w28_detection_power.txt`.
 
 | severity | n=5 | n=10 | n=25 | n=50 | n=100 | n=200 |
 |---|---|---|---|---|---|---|
-| 0.15 | 0.00 | 0.00 | 0.00 | 0.12 | 0.38 | 0.75 |
-| 0.40 | 0.00 | 0.25 | 0.00 | 0.75 | **1.00** | **1.00** |
+| 0.15 | 0.00 | 0.00 | 0.00 | 0.12 | 0.12 | 0.50 |
+| 0.40 | 0.12 | 0.12 | 0.12 | **0.88** | 0.75 | **1.00** |
 
-**False alarms: 0 of 48 runs at severity 0.** The detector uses an exact
-binomial tail, not a z-score — see error 15 in `03_ERRORS.md` for why that
-distinction is load-bearing.
+**Until this run the family had no transcript in `logs/` at all** — it is the
+row the staleness register named as an argument rather than a measurement. The
+argument was that detection is a property of the detector and the rail rather
+than of the payday prior. **Half of it survived the measurement and half did
+not**, and the half that did not is the headline.
 
-**TPR is not monotone at severity 0.40** (0.25 at n=10, 0.00 at n=25). This was
-a pre-registered prediction and it broke. Cause, from the detector's own
-evidence log: fires at n=10 show `window n = 8, tech = 6`. Technical declines
-auto-represent (`harness.py:318`), cascading further attempts into the window
-until it clears `min_attempts = 8`. So detection at low volume happens *because*
-attempts were already burned, and behaviour near that threshold is lumpy.
-`min_attempts` is a `[GUESS]` constant and is the obvious next sweep.
+**FALSE ALARMS HELD: 0 of 48 runs at severity 0**, unchanged, and E-DET-1 held
+at 0.0%. The detector uses an exact binomial tail, not a z-score — see error 15
+in `03_ERRORS.md` for why that distinction is load-bearing. This is the claim
+the public page carries and it is now a measurement.
+
+⚠️ **TPR AT n=100 FELL FROM 1.00 TO 0.75, and pre-registered check E-DET-4
+(TPR ≥ 0.8 at n=100, severity 0.40) BROKE.** It had held at 1.00 on the
+pre-18:08 filter. **`TPR 1.00 at n≥100` is retracted; 1.00 is reached at n=200
+and not before.** Severity 0.15 also fell across the board (0.38 → 0.12 at
+n=100, 0.75 → 0.50 at n=200). The direction of the whole surface is down.
+
+**Why the belief moves a capability it was argued not to touch.** The filter
+does not run the binomial test, but it decides *when attempts are dispatched*,
+and the test's power is entirely a function of how many attempts land inside a
+6h window. The repaired filter is better at scheduling, so it burns fewer
+attempts into a degraded rail — and the detector is fed by exactly those wasted
+attempts. **Detection is downstream of the timing brain after all**, through
+the sample size rather than through the statistic. The register's argument was
+wrong for a reason worth keeping.
+
+**TPR is still not monotone at severity 0.40, and the break moved** — it is now
+0.88 at n=50 against 0.75 at n=100, where it used to be 0.25 at n=10 against
+0.00 at n=25. E-DET-2 broke at 0.40 on both runs. Cause, from the detector's
+own evidence log: fires at low n show `window n = 8, tech = 5`. Technical
+declines auto-represent (`harness.py:318`), cascading further attempts into the
+window until it clears `min_attempts = 8`. So detection at low volume happens
+*because* attempts were already burned, and behaviour near that threshold is
+lumpy. `min_attempts` is a `[GUESS]` constant and is the obvious next sweep.
+
+**Pre-registration record: 4/6, down from 6/6.** Two checks broke and both
+breaks are recorded above rather than absorbed.
 
 ## The moat's second dividend — what one merchant would see
 
 Mandates are spread over 60 merchants (`w3.make_pop` draws from `range(60)`), so
 one merchant holds `n*k/60` of them.
 
+*Re-measured 2 September 2026, `logs/w28_detection_power.txt`. The superseded
+column read 11.4 / 22.5 / 44.5 and 0.74 at n=200.*
+
 | n customers | aggregator, attempts per 24h | one merchant, attempts per 24h |
 |---|---|---|
 | 25 | 5.6 | 0.09 |
-| 50 | 11.4 | 0.19 |
-| 100 | **22.5** | **0.38** |
-| 200 | 44.5 | 0.74 |
+| 50 | 11.6 | 0.19 |
+| 100 | **23.1** | **0.38** |
+| 200 | 46.3 | 0.77 |
 
 A single merchant never reaches `min_attempts = 8` at any n tested — **it cannot
-evaluate the statistic at all**, at any severity. This is structural
+evaluate the statistic at all**, at any severity. **E-DET-5 held on the re-run**,
+and it is the one claim in this family the belief repair did not move: the
+volumes rose slightly and the floor is eight, so the verdict is not close. This is structural
 unavailability rather than difficulty, and it is the strongest form the moat
 argument takes anywhere in this repo.
 
@@ -1133,9 +1216,17 @@ on. The two mechanisms do not compose.
 ### What IS defensible from this work
 
 Not a recovery number. A **capability claim**: an aggregator can detect a rail
-outage with a measured false-alarm rate of 0/48 and TPR 1.00 at n≥100 and
-severity 0.40, and a single merchant cannot do it at all (0.38 attempts per
-window against a floor of 8). Every money action, every refusal, every pause and
+outage with a measured false-alarm rate of 0/48 at severity 0, and a
+true-positive rate of **0.75 at n=100 and 1.00 at n=200** at severity 0.40,
+while a single merchant cannot do it at all (0.38 attempts per window against a
+floor of 8).
+
+⚠️ **CORRECTED 2 September 2026.** This paragraph read *"TPR 1.00 at n≥100"*
+until the family was measured on the shipped belief for the first time. **It
+BROKE**: 1.00 at n=100 is 0.75, and pre-registered check E-DET-4 broke with it.
+The false-alarm half held exactly. `logs/w28_detection_power.txt`, and the
+mechanism is in "Detection power" above — the detector is fed by wasted
+attempts, and a better filter wastes fewer. Every money action, every refusal, every pause and
 every suppressed belief update is in the audit log with its reason.
 
 ### How this could be biased toward the answer we want
@@ -1157,7 +1248,7 @@ every suppressed belief update is in the audit log with its reason.
 its own three-gate suite. Reproduce with, from the repo root:
 
 ```
-python agent/tests/test_detection_benchmark.py    # ~20 min, 384 runs
+python agent/tests/test_detection_benchmark.py    # ~30 min, 384 runs
 ```
 
 `sim/` is untouched by all of it. Configuration is **identical to the outage
@@ -1165,7 +1256,18 @@ ablation above** — n=100, k=5, 8 held-out populations (700–707), 120d,
 `payday_err=7`, `FITTED_BELIEF`, four 6h outages on days 20/50/80/110 at hour 8,
 severities {0.00, 0.15, 0.40, 0.80} — deliberately, so the two tables can be
 read against each other. Pre-registration: `NOTES.md`, 29 August 2026, two
-commits before the code. **Record: 5/8.**
+commits before the code.
+
+⚠️ **RE-MEASURED FROM COLD 2 September 2026**, transcript
+`logs/w28_detection_benchmark.txt`. **Every figure in this section moved and
+the pre-registration record fell from 5/8 to 3/8.** Until that run this
+benchmark had been replaying a checkpoint written on 29 August, four days and
+one belief repair earlier — `run_chunked` keyed its cache on the job tuple,
+which does not mention the belief. See error 36 in `NOTES.md`, and its blast
+radius, which is this section and nothing else. The cache is now fingerprinted
+against `w3.FITTED_BELIEF` and a mismatch is discarded rather than resumed.
+
+**Record: 3/8**, down from 5/8. E-BEN-1 and E-BEN-5 broke on the re-measure.
 
 ## Why detection replaced recovery as the scoreboard
 
@@ -1173,7 +1275,10 @@ The recovery channel has a ceiling of **+0.051 pts on the canonical world at
 the worst severity swept, not significant** (`logs/w27_abl_outage_repaired.txt`).
 The +0.058 ceiling and the significantly negative −0.529 pause at severity 0.40
 are pre-canonical and superseded; the exactly-zero reading that replaced them
-was the pre-W24 belief and is superseded too. A metric with that
+was the pre-W24 belief and is superseded too. **On the 2 September cold run
+nothing in the recovery table is significant except the oracle at severity
+0.80**, so the argument for moving the scoreboard to detection is stronger than
+when it was made, not weaker. A metric with that
 little headroom
 cannot rank detectors — every detector scores about the same because there is
 almost nothing to score. So the agent is measured against an oracle that knows
@@ -1272,61 +1377,88 @@ land back inside the window at hours 9–13. Detection at low volume happens
 *because attempts were already burned*. That mechanism now explains two
 independently broken predictions.
 
-## The moat's second dividend — reproduced 29 August 2026
+## The moat's second dividend — RE-MEASURED 2 September 2026
 
-Re-run of `python agent/tests/test_outage_detection.py`, unchanged, confirming
-the figures this benchmark is built on:
+`py -3.12 agent/tests/test_outage_detection.py`, transcript
+`logs/w28_detection_power.txt`. This is a **different script and a different
+configuration** from the benchmark above (60d, two windows, n swept 5–200), and
+the two must not be read as one measurement — see the false-alarm note below,
+which is the exact place they are easiest to conflate.
 
-* At n=100 the aggregator sees **22.5** attempts per 24h window; **one merchant
+* At n=100 the aggregator sees **23.1** attempts per 24h window; **one merchant
   sees 0.38**, and never reaches `min_attempts = 8` at any n from 5 to 200. It
   **cannot evaluate the statistic at all** — structural unavailability, not
-  difficulty.
-* **False alarms 0 of 48 runs** at severity 0. This benchmark adds 0 of 24 more
-  across a `min_attempts` sweep, at every severity.
-* **TPR is not monotone in n at severity 0.40** — 0.00 → 0.25 → 0.00 → 0.75 →
-  1.00 → 1.00 across n = 5/10/25/50/100/200. The break is at the
+  difficulty. E-DET-5 held.
+* **False alarms 0 of 48 runs** at severity 0, and that HELD on the re-measure.
+  ⚠️ **This benchmark no longer adds 0 of 24 more: it adds 2 of 24.** `stat
+  ma=4` and `stat ma=8` each raise one false alarm in 8 runs at severity 0 on
+  the 120-day horizon, and **pre-registered check E-BEN-1 broke**. `stat ma=16`
+  stays clean at 0/8. The two figures do not contradict each other — 0/48 is
+  the 60-day horizon at six population sizes, this is the 120-day horizon at
+  n=100, and a longer horizon is more chances to fire — but the sentence that
+  used to claim both were zero is retracted. Only the 0/48 may be quoted as
+  zero.
+* **TPR is not monotone in n at severity 0.40** — 0.12 → 0.12 → 0.12 → 0.88 →
+  0.75 → 1.00 across n = 5/10/25/50/100/200. The break is at the
   `min_attempts=8` cliff and the mechanism is the auto-representation cascade
-  above. Kept, not tidied away.
+  above. Kept, not tidied away. **The published `TPR 1.00 at n≥100` is
+  retracted**: it is 0.75 at n=100 and 1.00 only at n=200.
 
 ## Recovery — SECONDARY, and the ceiling was the detector's, not the problem's
 
 *Response ON (`pause`). Paired 2 SE against the monitor-off arm at the same
-severity. The previously published ceiling for outage awareness is **+0.058 pts**
-(`suppress`, severity 0.80, SIG) and it is stated here beside every row.*
+severity. RE-MEASURED from cold 2 September 2026,*
+`logs/w28_detection_benchmark.txt`.
 
 | severity | monitor off | `min_attempts=8` + pause | **oracle + pause** |
 |---|---|---|---|
-| 0.00 | 95.30 | 95.30 (+0.000) | 95.30 (+0.000) |
-| 0.15 | 95.16 | 94.89 (−0.273, n.s.) | 94.75 (**−0.413, SIG**) |
-| 0.40 | 94.86 | 94.33 (**−0.529, SIG**) | 94.75 (−0.108, n.s.) |
-| 0.80 | 93.83 | 94.03 (+0.199, n.s.) | 94.75 (**+0.916, SIG**) |
+| 0.00 | 97.64 | 97.59 (−0.050, n.s.) | 97.64 (+0.000) |
+| 0.15 | 97.54 | 97.48 (−0.058, n.s.) | 97.27 (−0.272, n.s.) |
+| 0.40 | 97.22 | 96.84 (−0.381, n.s.) | 97.27 (+0.049, n.s.) |
+| 0.80 | 96.25 | 96.56 (+0.304, n.s.) | 97.27 (**+1.014, SIG**) |
 
-The `min_attempts=8` column reproduces the published `pause` row above
-**exactly** (−0.273 / −0.529 / +0.199). That is the cross-check that this table
-and that one measure the same thing.
+⚠️ **SUPERSEDED, and kept as the record because one of these rows was quoted
+across five documents.** The pre-repair table read 95.30 / 95.16 / 94.86 /
+93.83 for monitor-off, with the shipping detector at **−0.529 SIG** at severity
+0.40 and the oracle at **−0.413 SIG** at 0.15. **Neither is significant any
+more, and neither may be quoted.** The whole world got easier — monitor-off
+rises about 2.4 points at every severity, because the repaired filter collects
+more — and every effect except the oracle's at 0.80 shrank inside its interval.
 
-**Perfect detection is worth +0.916 pts at severity 0.80, against the shipping
-detector's −0.198 and the +0.058 `suppress` ceiling.** So recovery does not
-saturate — **the current detector does**. The pre-registered prediction that
-this could not happen (E-BEN-6) broke.
+**Two pre-registered checks broke here.** E-BEN-5 predicted the oracle would be
+*below* monitor-off at severity 0.40; it is **+0.049 above**, so the prediction
+that perfect detection is not simply free is gone. And E-BEN-6 broke wider than
+before: perfect detection is worth **+1.014 pts** at severity 0.80 against the
+shipping detector's +0.304, a gap of **+0.710** against a predicted ceiling of
++0.256.
 
-**Rule 3 applied, because that is a large number in the direction we want:**
+**Perfect detection is worth +1.014 pts at severity 0.80 and the shipping
+detector captures +0.304 of it.** So recovery does not saturate — **the current
+detector does**. That conclusion is unchanged; only its digits moved.
 
-1. The oracle arm's `cycle_rec` is **bitwise identical at severities 0.15, 0.40
-   and 0.80**. A policy that makes the outage genuinely invisible must produce
-   exactly that, and it is not obtainable by accident.
-2. It decomposes with no residual. Outage damage at 0.80 = 95.2955 − 93.8342 =
-   **1.4612**. The unconditional cost of pausing (the oracle pauses 189
-   dispatches whether or not anything is wrong) = 94.7502 − 95.2955 =
-   **−0.5453**. 1.4612 − 0.5453 = **+0.9159** against a measured **+0.9159**.
+**Rule 3 applied, because that is a large number in the direction we want.
+Both checks survive the re-measure on the new digits:**
+
+1. The oracle arm's `cycle_rec` is **identical at severities 0.15, 0.40 and
+   0.80** — 97.27 in all three. A policy that makes the outage genuinely
+   invisible must produce exactly that, and it is not obtainable by accident.
+   It held before the belief repair at 94.75 and holds after it at 97.27, which
+   is the stronger form of the check: the constant moved, the identity did not.
+2. It decomposes with no residual. Outage damage at 0.80 = 97.6404 − 96.2530 =
+   **1.3874**. The unconditional cost of pausing (the oracle pauses 180
+   dispatches whether or not anything is wrong) = 97.2740 − 97.6404 =
+   **−0.3664**. 1.3874 − 0.3664 = **+1.0210** against a measured **+1.014**,
+   inside rounding.
 
 ### What this does NOT license
 
 **Pause-on-outage is still a bad unconditional default, even with an oracle
-behind it.** The oracle is *significantly negative* at severity 0.15 (−0.413)
-and not significantly positive at 0.40. Pausing costs half a point whatever
-happens, and the outage only costs more than that when it is severe. The
-crossover sits between severity 0.40 and 0.80, and severity is a pure `[GUESS]`.
+behind it** — but the case is now made by size rather than by significance.
+Nothing in the table is significant except the oracle at 0.80. Pausing costs
+about a third of a point whatever happens, and the outage only costs more than
+that when it is severe. The crossover sits between severity 0.40 and 0.80, and
+severity is a pure `[GUESS]`. **The earlier reading — that the oracle was
+significantly negative at 0.15 — is retracted; it is −0.272 and n.s.**
 
 **The belief-corruption argument stays retracted.** Nothing here revives it; see
 `01_FACTS.md`, 28 August 2026.
@@ -1946,7 +2078,7 @@ merchants is that population grouped by merchant.*
 | **`payday_wait` (rival)** | **90.29%** | — | 90.52% | 1.272 |
 | **agent, deterministic** | **99.38%** | **₹7,511,500** | 99.84% | 1.450 |
 
-**+9.08 pts over `payday_wait` (2 SE 2.01, SIG).** The rival row is permanent
+**+9.08 pts over `payday_wait` (2 SE 1.84, SIG).** The rival row is permanent
 and cannot be switched off — **at `payday_err` of about ±1 day it BEATS us**
 (`06_MODEL_CARD.md` §2). Transcript `logs/w24_headline_repaired.txt`.
 
@@ -2228,17 +2360,29 @@ failed not at all — and the frozen policy never reads a decline code, so it is
 exactly indifferent. **The entire value of the taxonomy is in the narrative
 layer.** If an LLM cannot use it, the enrichment is worth zero.
 
-## A bank-shaped outage is 3.5× less detectable than a rail-wide one
+## A bank-shaped outage is 3.4× less detectable than a rail-wide one
 
 *n=200, severity 0.80, four 6h windows, 8 populations. Detection = windows
-flagged of 4, same 24h grace as the TPR study.*
+flagged of 4, same 24h grace as the TPR study. E-MIX-2 inside*
+`py -3.12 agent/tests/test_decline_sweep.py`*; re-measured on the shipped
+belief,* `logs/w27_decline_sweep_repaired.txt`*.*
 
 | scope | customers | detection rate |
 |---|---|---|
-| **every bank** | 200 | **0.78** |
-| `@okaxis` — best single | 30 | **0.41** |
-| mean over the eight single banks | ~25 | **0.22** |
-| `@upi` — worst single | 19 | 0.09 |
+| **every bank** | 200 | **0.72** |
+| `@okaxis` — best single | 30 | **0.38** |
+| mean over the eight single banks | ~25 | **0.21** |
+| `@oksbi` — worst single | 13 | 0.06 |
+
+⚠️ **SUPERSEDED figures, kept as the record: 0.78 / 0.41 / 0.22, with `@upi` at
+0.09 as the worst single bank.** Those were published from a pre-18:08 run that
+was never written to a file. The re-measure that replaces them landed in
+`logs/w27_decline_sweep_repaired.txt` on 2 September at 00:01 and superseded
+them silently — the page and this table went on quoting the old numbers for
+two hours because nothing connected the transcript to the constants it moved.
+The ratio the heading quotes fell from 3.5× to 3.4×, and the identity of the
+worst-hit bank changed, which is the sharper correction: a named example was
+wrong, not just a digit.
 
 `RailMonitor` pools technical declines across every customer and therefore
 across every bank. **That pooling is the moat and it is also the blind spot.** At
@@ -2279,10 +2423,17 @@ does not suppress the evidence that produces detection". This is that protocol
 note's consequence, observed. Pausing removes the attempts the binomial tail is
 computed over, so the detector starves itself.
 
-The recovery difference is consistent with the gated-adjacent ablation
-(**−0.529 pts, 2 SE 0.296, SIG** at this severity) but **is not a replication
-of it** — that figure is 8 populations paired; this is one run with no error
-bar. Quote the ablation, not this.
+The recovery difference points the same way as the gated-adjacent ablation
+(**−0.381 pts, 2 SE 0.632, n.s.** at this severity on the 2 September cold run,
+`logs/w28_detection_benchmark.txt`) but **is not a replication of it** — that
+figure is 8 populations paired; this is one run with no error bar. Quote the
+ablation, not this.
+
+⚠️ **SUPERSEDED: this paragraph read "−0.529 pts, 2 SE 0.296, SIG".** That
+figure came through the stale benchmark cache (error 36) and is retracted.
+Nothing in the re-measured recovery table is significant except the oracle at
+severity 0.80, so the word "consistent" is doing less work than it was: the
+one-run difference and the 8-population interval now agree only in sign.
 
 **THERE IS ALSO A FALSE ALARM IN BOTH ARMS**, at day 67, outside every injected
 window: 3 technical declines in 8 attempts, exact binomial tail p = 2.8e-05.

@@ -10980,3 +10980,292 @@ change stays quotable while a live restatement does not.
     sim/fit_belief.py --check           PASS, records selection match=False
     scripts/build_page_data.py --check  PASS, data and index.html agree
     scripts/prove_stage0_refuses.py     PASS (exit 0), and now prints its own limitation
+
+# ============ W28 — THE DETECTION FAMILY IS MEASURED, AND ERROR 36 ============
+# 2 September 2026.
+
+The staleness register's second table named the detection benchmark as
+"no transcript in `logs/`, pre-18:08" and carried an ARGUMENT in the column
+where the other rows carry a reason: that a false-alarm rate and a TPR are
+properties of the detector and the rail rather than of the payday prior. This
+entry is what happened when that argument was replaced by a measurement.
+
+## Error 36 — A CACHE THAT RESUMED ACROSS A BELIEF REPAIR
+
+**The first re-run of `agent/tests/test_detection_benchmark.py` finished in
+three minutes instead of twenty and printed `resuming: 384 run(s) already on
+disk`.** `agent/tests/_bench_cache.pkl` had been written on **29 August at
+02:15** -- four days and one belief repair earlier -- and `run_chunked` keyed
+it on the job tuple alone. The job tuple does not mention the belief, because
+the belief arrives through `w3.FITTED_BELIEF` rather than through the job.
+
+So every "re-run" of this benchmark since 29 August had replayed the pre-W24
+filter and reported it as a current measurement. The transcript that first
+attempt produced was already written to `logs/` before the resume line was
+read; it contained **-0.529 SIG**, a figure `sim/verify_docs.py` has an
+explicit retraction rule for. The doc gate would have caught it in a document.
+It does not scan `logs/`.
+
+**This is error 31's shape exactly** -- "a cache keyed on some inputs that
+change the answer, not all", found on 30 August in the LLM sweep's
+`reasoning_effort` cache. The tally at thirty-two already names the meta-shape
+too: *a principle stated for one instance and not generalised to its twin.*
+Error 31 was fixed where it was found and the same defect two directories away
+was not looked for.
+
+**Why it is worse than a stale number in a document.** A stale document is
+visibly old and this repository has a whole register for them. A cache that
+resumes produces a measurement that LOOKS fresh -- new timestamp, new file,
+same numbers -- and the only thing standing between it and a reader was one
+line of stdout. The register was right that the family was stale; it was right
+for the wrong reason, and nobody had asked why re-running it was cheap.
+
+**The fix.** `_cache_fingerprint` hashes `w3.FITTED_BELIEF` together with the
+grid, the detector family, the world knobs and the job set; a cache whose
+fingerprint does not match is DISCARDED with a printed line rather than
+resumed. Deliberately over-broad: discarding a good cache costs thirty
+minutes, keeping a bad one costs a published number that never happened.
+
+**The fix was exercised, not just written.** Two checks, both against the real
+cache file:
+
+    A  the 29-August-format cache (no fingerprint at all) -> DISCARDED
+       "fingerprint None != f78da6aa4d0d"
+    C  flipping prior_w 5 -> 9 in FITTED_BELIEF
+       f78da6aa4d0db169 -> 01f780552db46618   CHANGED
+
+Check C is error 36's exact trigger: W24 moved `prior_w` and the old key did
+not notice. It notices now. The stale cache was then deleted, so the next run
+on this machine measures from cold whatever it decides about the fingerprint.
+
+## Error 36's BLAST RADIUS — checked, and it is one section of one document
+
+**"Every re-run since 29 August was a replay" is true and it reads far wider
+than it is.** It is a sentence about ONE script. Written out here because the
+sentence alone would invalidate this wave in a reader's head, and it does not.
+
+**What was affected.** `run_chunked` lives in
+`agent/tests/test_detection_benchmark.py` and nowhere else, and it is the only
+caller of the only cache it writes. Everything downstream of it is the
+"THE DETECTION BENCHMARK" section of `docs/02_RESULTS.md` -- the excess-loss
+partition, the latency histogram, the three-gate mutant table and the recovery
+table with `-0.529`. That is the whole affected surface.
+
+**What was NOT affected, verified rather than assumed:**
+
+* **`README.md` and `docs/index.html` quote no benchmark figure at all.**
+  Grepped for `0.529`, `0.256`, `0.058`, `E-BEN`, `detector-hours`,
+  `excess loss`, the mutant names, `ma=4`/`ma=16` and `oracle + pause`: zero
+  hits in either file. Neither file so much as names the script. **The two
+  judge-facing artifacts never touched this cache.**
+* **The detection figures they DO carry come from a different script.** The
+  `0 of 48` false alarms and the TPR are `test_outage_detection.py`, 144 runs,
+  which holds no cache of any kind and re-measures from cold every time. That
+  is why its numbers moved when the benchmark's did not: the benchmark was
+  replaying and the TPR study was not.
+* **`agent/tests/_parallel.py` and `sim/runner.py` never touch disk.** Both
+  `run_jobs` implementations build a plan, fan it out to a process pool and
+  return a dict. No pickle, no checkpoint, no resume path. Every gate, every
+  ablation, every sweep and every W-series measurement in this repository runs
+  through one of those two and therefore re-measures from cold.
+* **On-disk persistence in the whole of `agent/`, `sim/` and `scripts/` is
+  exactly two places.** `_bench_cache.pkl` (this defect) and
+  `sim/ml_artifacts/` (the ML study's trained model and training arrays). The
+  second is a trained artifact rather than a run cache -- it is SUPPOSED to
+  persist -- and its family is already the first row of the register's
+  not-current table, deferred with its reason. Nothing else writes a cache.
+* **`sim/fit_belief.py` was already doing this correctly**, and is the model
+  the fix was written against: `model_fingerprint()` hashes the **AST** of
+  `w3.py` and `harness.py`, so any change to `FITTED_BELIEF` -- which lives in
+  `w3.py` -- invalidates it. **One qualification, stated because it is a real
+  softening**: `LEGACY_CACHE_FINGERPRINTS` allowlists two named old
+  fingerprints on the reasoning that "only comments, the shipping constant, or
+  fitter reporting code changed". That is defensible *there* and only there:
+  the fit cache is keyed per CANDIDATE configuration inside a search, so
+  changing which candidate ships does not invalidate the measurements of the
+  others. It would not be defensible in `run_chunked`, where the belief is not
+  in the key at all. The fit cache also lives in gitignored `sim/ml_artifacts/`
+  and never ships.
+* **The LLM response cache is correctly keyed.** `agent/eval/_cache/*.json` is
+  keyed on `CaseView.case_hash`, a sha256 of the full payload the model is
+  shown -- including `uncertainty.band`, which is the only channel by which the
+  belief reaches the model at all. A changed belief changes the band, changes
+  the key, and misses. It caches "what did the model answer for this exact
+  input", and the input is entirely in the key.
+
+**Blast radius, stated plainly: one script, one document section, zero
+judge-facing claims, and nothing in this wave outside the benchmark tables.**
+The 144-run TPR study, the discount sweep, the decline sweep, the gate suite
+and every W24-W27 transcript were cold runs. **The register was right that the
+detection family was stale. It was right for the wrong reason** -- it recorded
+"no transcript" as a labelling gap when the underlying fact was that the
+script could not produce a current one.
+
+**Why it still matters more than its radius.** A stale document is visibly old
+and this repository has a register for them. A cache that resumes produces a
+result that LOOKS fresh -- new timestamp, new file, same numbers -- and the
+only thing between it and a reader was one line of stdout. The radius is
+small because this project happens to have exactly one checkpointing script.
+That is luck, not design, and the fix is written to be over-broad for that
+reason.
+
+## What the measurement said, now that it is one
+
+| claim | published | measured 2 Sep | verdict |
+|---|---|---|---|
+| false alarms at severity 0 | 0 of 48 | **0 of 48** | HELD |
+| TPR at n=100, severity 0.40 | **1.00** | **0.75** | **BROKE** |
+| TPR at n=200, severity 0.40 | 1.00 | 1.00 | held |
+| TPR at n=100, severity 0.15 | 0.38 | 0.12 | fell |
+| one merchant reaches min_attempts | never | never | HELD |
+
+Pre-registration record **4/6, down from 6/6**. E-DET-4 (TPR >= 0.8 at n=100)
+broke; E-DET-2 broke at severity 0.40 as it did before, but the break moved
+from n=10-vs-25 to n=50-vs-100.
+
+**The argument was half right and the half it got wrong is the headline.** The
+false-alarm rate really is a property of the detector -- it is an exact
+binomial tail against a null with no outages in it, and the prior cannot reach
+it. The TPR is not. The filter decides *when attempts are dispatched*, the
+binomial test's power is entirely a function of how many attempts land inside
+a 6h window, and the repaired filter is better at scheduling -- so it burns
+fewer attempts into a degraded rail. **The detector is fed by wasted attempts.
+Improving the timing brain starves it.** That is a real coupling and it was
+argued away rather than measured, for five days.
+
+## Three families crossed the register on evidence that already existed
+
+* **Bank-shaped outage (E-MIX-2).** Published 0.78 / 0.41 / 0.22 with `@upi`
+  at 0.09 as the worst single bank. `logs/w27_decline_sweep_repaired.txt`,
+  written at 00:01 the same night, says **0.72 / 0.38 / 0.21 with `@oksbi` at
+  0.06**. No re-run was needed and none was done: the constants had simply
+  never been transcribed from a transcript that already superseded them. **The
+  worst-hit bank changed identity**, so a named example was wrong and not just
+  a digit. This is the cheaper failure mode and the more embarrassing one.
+* **Discount sweep.** Re-run: spread 4.7 -> **3.9 points**, and the argmax
+  moved off the shipped 0.92 to **0.88**. That retires the old open flag (0.92
+  is no longer the evaluation-set argmax, so it cannot be the product of
+  having been chosen there) and replaces it with a smaller one: the shipped
+  constant is 0.44 points below the best cell and was NOT re-selected against
+  it, because re-selecting on an evaluation set is a fit and this pass was not
+  allowed to fit.
+* **Steelman, held-out confirmation, `monotone_drain`.** Never stale. Their
+  transcripts were real, post-18:08, and sitting in `scratch/`, **which is
+  gitignored** -- so no reader cloning this repository could open them, and the
+  register cited `agent/tests/test_steelman_schedule.py`, a script that
+  reproduces the numbers rather than a record of the run that produced them.
+  Copied verbatim into `logs/` as `w25_steelman_final.txt`,
+  `w24_heldout_confirmation.txt` and `w25_dp_monotone_stage_e.txt`.
+
+**A rule this pass earned: "reproduce with <script>" is not a citation.** It is
+an instruction to go and generate a number, and it is exactly as strong as the
+assumption that the script still produces the published one. Three of the four
+figures corrected here had a script and no transcript.
+
+## Stale figures found while sweeping the two judge-facing files
+
+None of these needed a run. Every one was contradicted by a transcript already
+in `logs/`, or by the same file's own table a few lines away.
+
+| file | was | now | source |
+|---|---|---|---|
+| `README.md` headline | 2 SE **2.01** | 1.84 | `logs/w24_headline_repaired.txt` |
+| `README.md` Quickstart paste | att/cyc 1.450, 2 SE 2.011, COLLECTED 7535, CYCLE_CLOSED 311 | 1.446 / 1.844 / 7548 / 307 | same |
+| `README.md` naive margin | agent **67.58** pts ahead at +/-1 | 75.58 | `logs/w25_steelman_final.txt` |
+| `README.md` naive margin | "[1,7] takes more at every level up to +/-7" | at +/-1 and +/-3 | same |
+| `docs/index.html` x2 | **8,832** money actions | 8,702 | `logs/w24_headline_repaired.txt` |
+| `docs/index.html` baseline card | payday_wait **99.24%**, "3.5 points above the agent" | 99.80%, level with 99.81% | `logs/w27_page_sweep_repaired.txt` |
+| `docs/index.html` chart `<desc>` | baseline 99% -> 40%, agent 93-96% | 99.8 -> 86.1, 99.8 -> 98.8 | same |
+| `docs/index.html` pausing card | "**reduces collection** at moderate severity" | nothing distinguishable from zero | `logs/w27_abl_outage_repaired.txt` |
+
+**The Quickstart paste is the one worth naming.** It is a verbatim copy of a
+run's stdout presented as what the reader will see, and it had drifted from
+what the command actually prints. A reader following the Quickstart would have
+been the first person to notice.
+
+**The pausing card and the chart's `<desc>` are the same defect in two
+registers.** Both are prose that survived a re-measure because the number
+beside them was hydrated from JSON and the sentence was not. The page's own
+footnote three lines below the pausing card already said the opposite of its
+headline. `sim/verify_docs.py` passed throughout: its rules match figures, and
+neither of these sentences contains one.
+
+## Deliberately NOT re-run, and still labelled
+
+Unchanged from W26/W27, at the maintainer's direction: the Bayes-vs-ML
+six-world table (a straight re-run would compare a current Bayes against a
+hybrid whose GBDT was trained on the old filter's posterior features -- half
+invalid, and retraining is a fit), W2 insolvency, W7 transients (pre-canonical
+as well as pre-18:08; a rebuild, not a re-run), W10 realism. All four stay in
+the register's second table with their reasons.
+
+## What the cold benchmark said, and it is the largest movement in this wave
+
+`logs/w28_detection_benchmark.txt`, 384 runs from an empty cache, 31 minutes.
+**Pre-registration record 5/8 -> 3/8.** Two more checks broke and one of them
+retires a sentence that had been quoted across five documents.
+
+| check | was | now | verdict |
+|---|---|---|---|
+| E-BEN-1 zero false alarms at severity 0 | 0/8 all detectors | ma=4 **1/8**, ma=8 **1/8**, ma=16 0/8 | **BROKE** |
+| E-BEN-2 latency quantised | 26 of 115 in [1,23)h | 30 of 124 | broke (as before) |
+| E-BEN-3 LATE > DELAY at sev 0.80 | 99.0 vs 4.9 | 96.0 vs 3.9 | HELD |
+| E-BEN-4 loss monotone in min_attempts | broke | broke | broke (as before) |
+| E-BEN-5 oracle does NOT maximise recovery | -0.108 (below) | **+0.049 (above)** | **BROKE** |
+| E-BEN-6 perfect detection buys < +0.256 | +0.717 | +0.710 | broke (as before) |
+| E-BEN-7 every mutant caught | 4/4 | 4/4 | HELD |
+| E-BEN-8 G-3 binds both ways | yes | yes | HELD |
+
+**`-0.529 SIG` is gone.** The shipping detector's pause at severity 0.40 is
+**-0.381, 2 SE 0.632, n.s.**, and the oracle's -0.413 SIG at 0.15 is **-0.272,
+n.s.** **Nothing in the recovery table is significant except the oracle at
+severity 0.80 (+1.014).** That figure had a `verify_docs.py` retraction rule
+written against it on 1 September and the rule was right; what nobody knew was
+that the script could not have reproduced it either way.
+
+**The whole world got about 2.4 points easier.** Monitor-off rises 94.86 ->
+97.22 at severity 0.40, because the repaired filter collects more. Every effect
+except the oracle's at 0.80 shrank inside its interval as a result. **The
+conclusion is unchanged and its evidence is weaker**: recovery does not
+saturate, the detector does, and pausing remains off by default -- but the case
+is now made by size rather than by significance, and the section says so.
+
+**The gate suite still PASSES.** All four crippled oracles caught, true oracle
+clean, G-1b still red for the metric defect it always had. **That is the part
+worth noting**: the three-gate mutant suite gave the same verdict on a
+completely different set of numbers, which is what a gate is supposed to do and
+is the only reason the benchmark's structure survived its own re-measure.
+
+**E-BEN-1's break needs one guard against a misreading.** It does NOT
+contradict "0 false alarms in 48 runs". That figure is
+`test_outage_detection.py` -- 60-day horizon, six population sizes, and it HELD
+at 0/48. This benchmark is the 120-day horizon at n=100, twice the exposure per
+run, and it now raises 2 false alarms across 24 detector-runs at severity 0.
+Both are in `02_RESULTS.md` and the page keeps them apart. The published claim
+that "this benchmark adds 0 of 24 more" is the one that is retracted.
+
+## Verification at close, W28
+
+    sim/gate.py --tier full             27 gates, 4 FAIL (all 4 known), 0 VACUOUS
+                                        logs/w28_gate_full_final.txt
+    sim/verify_docs.py                  PASS, 33 rules
+    sim/verify_docs.py --selftest       35/35 across 33 rules
+    sim/verify_brief.py                 07_AGENT_BRIEF matches the code
+    sim/fit_belief.py --check           PASS, records selection match=False
+    scripts/build_page_data.py --check  PASS, data and index.html agree
+    scripts/prove_stage0_refuses.py     PASS (exit 0), logs/w28_stage0_refuses.txt
+    agent/eval/run_eval.py --replay     8/8 pre-registered, logs/w28_llm_eval_replay.txt
+
+**Six retraction rules added**, each with a canary per `verify_docs.py`'s own
+instruction: `detection-tpr-one-at-n100`, `stale-bank-shaped-detection`,
+`discount-seven-points`, `stale-headline-two-se`, `stale-baseline-at-pe1`,
+`pausing-reduces-collection`. They found **five live hits on their first run**,
+including `2 SE 2.01` surviving in four documents after being corrected in a
+fifth -- the exact pattern the gate was built for, six days later, again.
+
+**The gate cannot see prose.** Two of this pass's defects were sentences with
+no figure in them: the page's "pausing **reduces collection**" headline, which
+its own footnote three lines below contradicted, and the chart's `<desc>`
+describing curves from two belief generations ago. `verify_docs.py` passed over
+both throughout. A rule matches a number; nothing in this repository matches a
+claim. That is the next gate somebody should build, and it is not built here.

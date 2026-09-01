@@ -1,0 +1,40 @@
+﻿W25 STAGE E -- DP x monotone_drain, ENLARGED TRAIN 680-709 (30 pops), 960 runs
+  stage E: 960 run(s) to do of 960
+  ... 200/960
+  ... 400/960
+  ... 600/960
+  ... 800/960
+  ... 960/960
+
+       arm     pe=1     pe=3     pe=7    pe=14     MEAN   2 SE   worst    surv   dead  presvd  att/cyc     waits
+     drift    97.61    97.96    94.34    89.53    94.86   0.98   -2.25   99.4%    144     280    1.447    572889
+  drift+DP    89.15    89.84    86.67    79.73    86.35   1.22  -10.71   86.1%   3295     127    1.533   1050684
+drift+DP la30    88.91    89.15    85.35    78.45    85.46   1.17  -10.95   85.7%   3395      66    1.531   1376594
+      mono    98.19    98.16    94.01    88.03    94.60   1.03   -1.67   98.4%    389     386    1.430    493178
+   mono+DP    94.40    94.62    90.86    86.30    91.54   1.05   -5.47   88.4%   2759     422    1.553    476527
+mono+DP la30    92.55    92.34    88.56    84.26    89.43   1.03   -7.31   88.2%   2804     268    1.519   1014396
+ mono la30    97.88    98.03    93.30    87.05    94.06   1.09   -1.98   99.2%    201     272    1.376   1122226
+     [1,7]    99.86    98.37    90.75    59.32    87.08   3.24   +0.00  100.0%      0       0    1.232         0
+
+PRE-REGISTERED CHECKS (PREREG_DP.md)
+==============================================================================
+  S-1  DP+mono survival >= 99.5% and recovery within 1 pt of the drifting filter
+       survival 88.38% (need >= 99.50), recovery 91.54 vs 94.86 (delta -3.31)   -> BROKE
+  S-2  DP makes the monotone arm attempt LESS and wait MORE
+       att/cyc 1.430 -> 1.553, waits 493178 -> 476527   -> BROKE
+  S-3a DP moves survival by < 0.3 pts on BOTH filters (the null)
+       mono 98.36 -> 88.38 (-9.98), drift 99.39 -> 86.13 (-13.26)   -> BROKE
+  S-4  DP must CLOSE the survival gap, not lift both equally
+       gap drift-mono +1.03 -> with DP -2.25   -> DP is specific
+
+THE RE-SELECTION on 30 train populations, declared rule (max mean, ties on worst margin)
+==============================================================================
+      drift  mean  94.86  worst   -2.25  survival 99.39%  deaths  144
+   drift+DP  mean  86.35  worst  -10.71  survival 86.13%  deaths 3295
+  drift+DP la30  mean  85.46  worst  -10.95  survival 85.71%  deaths 3395
+       mono  mean  94.60  worst   -1.67  survival 98.36%  deaths  389
+    mono+DP  mean  91.54  worst   -5.47  survival 88.38%  deaths 2759
+  mono+DP la30  mean  89.43  worst   -7.31  survival 88.18%  deaths 2804
+  mono la30  mean  94.06  worst   -1.98  survival 99.15%  deaths  201
+  -> winner by the rule: drift
+  -> mono - drift, paired over 120 population-cells: -0.26 pts, paired 2 SE 0.65

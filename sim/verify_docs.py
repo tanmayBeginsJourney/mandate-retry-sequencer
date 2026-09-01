@@ -455,6 +455,97 @@ RETRACTIONS = [
             "attribution and w3.BeliefPD(monotone_drain=True) is the repair.",
         retracted_on="2026-09-01",
     ),
+    Retraction(
+        id="detection-tpr-one-at-n100",
+        # "1.00 at n>=100" in its several spellings, and the severity-0.15 row
+        # that fell with it. The bare 0.38 is NOT matched: it is still the
+        # correct one-merchant attempts-per-window figure three lines away.
+        pattern=r"true-positive rate of 1\.00"
+                r"|TPR 1\.00 at n"
+                r"|1\.00 at n\s*(>=|\u2265)\s*100"
+                r"|1\.00 at severity 0\.40, response OFF",
+        why="MEASURED at last on 2 September 2026 and it BROKE. TPR at n=100, "
+            "severity 0.40 is 0.75, not 1.00; 1.00 is reached at n=200 and "
+            "not before. Pre-registered check E-DET-4 (TPR >= 0.8 at n=100) "
+            "broke with it and the record fell 6/6 -> 4/6. The FALSE-ALARM "
+            "half held exactly (0 of 48 at severity 0) and may still be "
+            "quoted. Mechanism: the repaired filter wastes fewer attempts on "
+            "a degraded rail and wasted attempts are the detector's whole "
+            "sample. logs/w28_detection_power.txt.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="stale-bank-shaped-detection",
+        # Guarded so a longer number containing them cannot trip the rule,
+        # following `stale-pooling-moat`'s convention. 0.22 is deliberately
+        # NOT matched -- it collides with unrelated live figures -- so this
+        # rule covers the pooled rate, the best single bank, the 3.5x ratio
+        # and the wrong bank identity.
+        pattern=r"(?<![0-9.])0[.]78(?![0-9])"
+                r"|(?<![0-9.])0[.]41(?![0-9])\s*(\||$|<)"
+                r"|3\.5(x|\u00d7) less detectable"
+                r"|@upi.{0,30}worst single",
+        why="RE-MEASURED on the shipped belief. The bank-shaped outage table "
+            "is 0.72 pooled / 0.38 best single / 0.21 mean single, and the "
+            "WORST single bank is @oksbi at 0.06, not @upi at 0.09 -- a named "
+            "example was wrong, not just a digit. The ratio in the heading is "
+            "3.4x. logs/w27_decline_sweep_repaired.txt, which had already "
+            "superseded the published figures two hours before anyone "
+            "transcribed it.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="discount-seven-points",
+        pattern=r"discount.{0,80}roughly 7 points"
+                r"|moves the headline by roughly 7"
+                r"|full spread.{0,20}4\.7 pts",
+        why="RE-RUN on the shipped belief 2 September 2026. The discount "
+            "sweep spans 3.9 points (91.31% at 1.00 to 95.16% at 0.88), not "
+            "4.7 and not the ~7 first published. The argmax also moved off "
+            "the shipped 0.92 to 0.88, which retires the old "
+            "chosen-on-the-evaluation-set flag and replaces it with a "
+            "smaller one. logs/w28_discount_sweep.txt.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="stale-headline-two-se",
+        pattern=r"2 SE 2\.01(?![0-9])"
+                r"|\(2 SE 2\.01, SIG\)"
+                r"|(?<![0-9.])8,832(?![0-9])"
+                r"|COLLECTED\s+7535",
+        why="Stale copies of the headline batch's own transcript. "
+            "logs/w24_headline_repaired.txt: 2 SE is 1.84 (att/cyc 1.446), "
+            "the batch executes 8,702 money actions, and COLLECTED is 7548 "
+            "with CYCLE_CLOSED 307. The README's Quickstart block is a "
+            "verbatim paste of that run's stdout and had drifted from what "
+            "the command prints.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="stale-baseline-at-pe1",
+        pattern=r"99\.24%.{0,40}3\.5 points above the agent"
+                r"|3\.5 points above the agent"
+                r"|67\.58 points ahead",
+        why="Two pre-repair figures. On the current page sweep "
+            "(logs/w27_page_sweep_repaired.txt) payday_wait collects 99.80% "
+            "at payday_err=1 against the agent's 99.81% -- a tie, not 3.5 "
+            "points ahead. And the agent is 75.58 points ahead of `naive` at "
+            "+/-1, not 67.58 (logs/w25_steelman_final.txt); 67.58 was a "
+            "transcription slip, never a measurement.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="pausing-reduces-collection",
+        pattern=r"[Pp]ausing dispatch during a detected outage <b>reduces collection</b>"
+                r"|pausing .{0,30}reduces collection at\s*\n?\s*moderate severity",
+        why="The re-measure on the shipped belief found NOTHING significant "
+            "at any severity: 0.000 / 0.000 / +0.017 / +0.051, every one "
+            "inside its own error bar (logs/w27_abl_outage_repaired.txt). "
+            "The page's own footnote three lines below this sentence already "
+            "said so; the headline had survived the re-measure because the "
+            "number beside it is hydrated from JSON and the sentence is not.",
+        retracted_on="2026-09-02",
+    ),
 ]
 
 
@@ -553,6 +644,24 @@ def selftest() -> int:
         "no-balance-floor":
             "The remaining break is structural: the filter models no balance "
             "floor at zero.",
+        "detection-tpr-one-at-n100":
+            "The agent detects a degraded UPI rail with a true-positive rate "
+            "of 1.00 at n>=100.",
+        "stale-bank-shaped-detection":
+            "A bank-shaped outage is 3.5x less detectable: every bank pooled "
+            "0.78, @okaxis 0.41, and @upi is the worst single bank.",
+        "discount-seven-points":
+            "Sweeping the discount across a plausible range moves the "
+            "headline by roughly 7 points.",
+        "stale-headline-two-se":
+            "The agent is +9.08 points, 2 SE 2.01, over 8,832 money actions, "
+            "with COLLECTED 7535 stopping rows.",
+        "stale-baseline-at-pe1":
+            "At +/-1 day of error payday_wait collects 99.24%, 3.5 points "
+            "above the agent, and the agent is 67.58 points ahead of naive.",
+        "pausing-reduces-collection":
+            "Pausing dispatch during a detected outage <b>reduces collection</b> "
+            "at moderate severity, measured across 8 populations.",
     }
     print("SELFTEST -- every rule must fire on a sentence it is meant to catch")
     print("=" * 74)

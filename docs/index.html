@@ -454,7 +454,7 @@ footer{padding:56px 0 90px}
         <div class="rk">Recovered in simulation</div>
         <div id="b-rupees" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">₹7,511,500</div>
         <p class="tiny" style="margin:6px 0 0">zero constraint refusals, and an independent
-          recount of zero over 8,832 money actions</p>
+          recount of zero over 8,702 money actions</p>
       </div>
     </div>
 
@@ -470,8 +470,8 @@ footer{padding:56px 0 90px}
         <svg class="chart wide" id="sweep" viewBox="0 0 920 330" role="img"
              aria-labelledby="sw-t sw-d">
           <title id="sw-t">Collection rate as payday uncertainty grows</title>
-          <desc id="sw-d">The baseline falls from 99% at ±1 day to 40% at ±14 days. The agent
-            stays between 93% and 96% across the same range.</desc>
+          <desc id="sw-d">The baseline falls from 99.8% at ±1 day to 86.1% at ±14 days. The
+            agent stays between 99.8% and 98.8% across the same range.</desc>
         </svg>
       </div>
       <div class="figure-foot">
@@ -489,8 +489,10 @@ footer{padding:56px 0 90px}
         </div>
         <p class="tiny" style="margin-top:14px">
           100 customers × about 2 mandates each, 10 held-out populations (seeds 710–719),
-          120 days, <code>pop_spend=0.93</code>, paired 2 SE. Reproduce the ±7 row with
-          <code>py -3.12 -m agent.batch_report --pops 10 --canonical</code>.
+          120 days, <code>pop_spend=0.93</code>, paired 2 SE. Transcript
+          <code>logs/w27_page_sweep_repaired.txt</code>; reproduce the ±7 row with
+          <code>py -3.12 -m agent.batch_report --pops 10 --canonical</code>, transcript
+          <code>logs/w24_headline_repaired.txt</code>.
           <span class="tag">not gate-protected</span>
         </p>
       </div>
@@ -501,7 +503,7 @@ footer{padding:56px 0 90px}
         <h3>The baseline</h3>
         <p class="small" style="margin-bottom:0"><code>payday_wait</code> estimates the
         customer's payday, waits until that date, then attempts once a day. At ±1 day of error
-        it collects <b>99.24%</b>, 3.5 points above the agent.</p>
+        it collects <b>99.80%</b>, level with the agent's 99.81%.</p>
       </div>
       <div class="card">
         <h3>Payday predictability</h3>
@@ -573,7 +575,7 @@ footer{padding:56px 0 90px}
         <p class="small" style="margin-bottom:0"><b>The constraint layer refuses; a separate
         auditor recounts.</b> One component blocks illegal actions. A second rebuilds what was
         legal from the audit log, using code that cannot import the first. Both counts are
-        printed side by side. Over 8,832 money actions in the headline batch, both are
+        printed side by side. Over 8,702 money actions in the headline batch, both are
         zero.</p>
       </div>
     </div>
@@ -691,17 +693,20 @@ footer{padding:56px 0 90px}
         AutoPay debits fail during a UPI incident, so that severity is swept across three values
         rather than chosen. In a separate study containing no outages, the detector raised a
         false alarm in <b>0 of 48 runs</b>. The day-67 alarm above comes from a single run of a
-        horizon that does contain outages; the two are different measurements.</p>
+        horizon that does contain outages; the two are different measurements. Where an
+        outage is present, the detector catches it in <b>0.75 of runs at 100 customers</b> and
+        all of them at 200. Transcript <code>logs/w28_detection_power.txt</code>.</p>
       </div>
     </div>
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
         <h3>Pausing during a detected outage</h3>
-        <p class="small">Pausing dispatch during a detected outage <b>reduces collection</b> at
-        moderate severity, measured across 8 populations. It costs a scheduling day whether or
-        not the rail is actually degraded, and most of the day's attempts have already been sent
-        by the time enough evidence accumulates.</p>
+        <p class="small">Pausing dispatch during a detected outage is <b>worth nothing this
+        experiment can distinguish from zero</b> at any severity, measured across 8
+        populations. It costs a scheduling day whether or not the rail is actually degraded,
+        and most of the day's attempts have already been sent by the time enough evidence
+        accumulates.</p>
         <div class="tablewrap" style="margin-top:14px">
           <table id="ablation-table">
             <thead><tr><th>Outage severity</th><th class="n">Pausing is worth</th><th class="n">2 SE</th><th></th></tr></thead>
@@ -712,7 +717,8 @@ footer{padding:56px 0 90px}
         behaviour is detection plus a change to how declines are folded into the balance
         estimate. Measured on the current simulation, pausing is worth nothing the
         experiment can distinguish from zero: 0.000 points at the two lowest severities,
-        +0.017 and +0.051 at the two highest, every one of them inside its own error bar.</p>
+        +0.017 and +0.051 at the two highest, every one of them inside its own error bar.
+        Transcript <code>logs/w27_abl_outage_repaired.txt</code>.</p>
       </div>
       <div class="card">
         <h3>Effect of pausing on detection</h3>
@@ -758,7 +764,8 @@ footer{padding:56px 0 90px}
       <div class="figure-foot" style="border-top:0">
         <div class="bars" id="vol-bars"></div>
         <p class="tiny" style="margin:14px 0 0">The vertical mark on each bar is the
-        eight-attempt floor. Below it the agent does not evaluate the outage test.</p>
+        eight-attempt floor. Below it the agent does not evaluate the outage test.
+        Transcript <code>logs/w28_detection_power.txt</code>.</p>
         <div class="rv" id="p-read" style="margin-top:16px"></div>
       </div>
     </div>
@@ -775,7 +782,9 @@ footer{padding:56px 0 90px}
         outcomes across merchants is unsettled, so pooling is a <b>per-customer permission</b>.
         Pooling only for consenting customers costs 2.77 points at half consent at
         <code>pop_spend=1.05</code>, and 0.57 at 0.80. Re-measured 1 September 2026 after the
-        payday prior was re-selected, which cut every one of these figures.</p>
+        payday prior was re-selected, which cut every one of these figures. Transcripts
+        <code>logs/w26_gate_full_moat_remeasure.txt</code> and
+        <code>logs/w26_w9_pooling_consent_remeasure.txt</code>.</p>
       </div>
       <div class="card">
         <h3>Bank-level outages</h3>
@@ -784,7 +793,8 @@ footer{padding:56px 0 90px}
         detection threshold. Pooling hides outages confined to a single bank.</p>
         <div class="bars" id="bank-bars" style="margin-top:14px"></div>
         <p class="tiny" style="margin-top:14px">200 customers, four windows, 8 populations. Share
-        of outage windows detected.</p>
+        of outage windows detected. Transcript
+        <code>logs/w27_decline_sweep_repaired.txt</code>.</p>
       </div>
     </div>
 
@@ -908,10 +918,12 @@ footer{padding:56px 0 90px}
           rate matches the published record. The four rows do not share a sample size. Rows
           one and two are properties of the world and of a policy this project did not write,
           measured on 100 populations with
-          <code>py -3.12 agent/tests/test_v3_power.py</code>; the second clears its band's
-          floor by 2.15 points against a 2 SE of 1.95. Rows three and four measure the agent,
-          on 20 populations, with
-          <code>py -3.12 agent/tests/test_canonical_world.py --confirm</code>.
+          <code>py -3.12 agent/tests/test_v3_power.py</code> (transcript
+          <code>logs/w24_v3_power.txt</code>); the second clears its band's floor by 2.15
+          points against a 2 SE of 1.95. Rows three and four measure the agent, on 20
+          populations, with
+          <code>py -3.12 agent/tests/test_canonical_world.py --confirm</code> (transcript
+          <code>logs/w24_canonical_repaired.txt</code>).
           <span class="tag">not gate-protected</span>
         </p>
       </div>
@@ -953,6 +965,11 @@ footer{padding:56px 0 90px}
       targets at once; at that cell the two targets it had not been tuned against both moved
       outside their bands. Fourteen alternative calibrations have been swept and none scores
       better against the four figures than the one reported here.</p>
+      <p class="tiny" style="margin:8px 0 0">Transcripts <code>logs/w7_rerun.txt</code>
+      (transient holds) and <code>logs/w2_rerun.txt</code> (insolvency). Both were measured
+      before the belief was repaired on 1 September 2026 and neither has been re-run, so they
+      are quoted here for the direction of the sweep and not for its levels. The staleness
+      register in <a href="02_RESULTS.md">the full results</a> names them.</p>
     </div>
 
     <p class="tiny" style="margin-top:22px">
@@ -1028,7 +1045,8 @@ footer{padding:56px 0 90px}
         ahead by 1.15 at ±5, 3.55 at ±7, 23.83 at ±10 and 34.41 at ±14. It reaches that tie
         while spending about a quarter more attempts per cycle, 1.44 against 1.10, and
         recovering more slowly: 46.6% of at-risk cycles inside ten days against the fixed
-        schedule's 49.9%. How accurately payday can be estimated in India is unmeasured, and
+        schedule's 49.9%. Transcripts <code>logs/w25_steelman_final.txt</code> and
+        <code>logs/w24_heldout_confirmation.txt</code>. How accurately payday can be estimated in India is unmeasured, and
         Indian payroll practice &mdash; statutory payment by the 7th or 10th, most firms on the
         last working day, government salaries on a fixed date &mdash; points at the predictable
         end, where the fixed schedule is the simpler choice. The agent's advantage is
@@ -1040,9 +1058,11 @@ footer{padding:56px 0 90px}
         refused by a transaction or mandate limit is not published anywhere. Sweeping it over
         0.00 / 0.05 / 0.15 costs 0.00 / −2.29 / −9.22 points. The curve is non-linear, so the
         midpoint of the range is not the midpoint of the cost.</li>
-      <li><b>The timing score contains a hand-chosen discount factor.</b> Sweeping it across
-        a plausible range moves the headline by roughly 7 points.</li>
-      <li><b>Four of the simulation's twenty-five checks fail on a clean checkout.</b> Each
+      <li><b>The timing score contains a hand-chosen discount factor.</b> Sweeping it from
+        0.80 to 1.00 on the shipping filter moves recovery by 3.9 points, from 91.3% to 95.2%.
+        The shipped 0.92 is not the best cell on that grid &mdash; 0.88 scores 0.44 points
+        higher &mdash; and the constant was not re-selected against it.</li>
+      <li><b>Four of the simulation's twenty-seven checks fail on a clean checkout.</b> Each
         has a written reason recorded rather than a loosened threshold. Two are calibration
         gates that no parameter fixes; two are controls left failing so that a rewrite of the
         surrounding tests remains auditable.</li>

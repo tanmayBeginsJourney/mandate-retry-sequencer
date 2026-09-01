@@ -43,18 +43,20 @@ Both tables run the same world: 100 customers, mandates per customer drawn from
 burn-in cycles discarded before measurement.
 
 **Cycles collected.** *Full agent mode, 10 held-out populations (seeds
-710–719), run seed 7.* `py -3.12 -m agent.batch_report --pops 10 --canonical`
+710–719), run seed 7.* `py -3.12 -m agent.batch_report --pops 10 --canonical`,
+*transcript* `logs/w24_headline_repaired.txt`.
 
 | | agent | `payday_wait` |
 |---|---|---|
 | Billing cycles collected | 99.38% | 90.29% |
 | Recovered across the batch | ₹7,511,500 | — |
 
-**+9.08 points, 2 SE 2.01.**
+**+9.08 points, 2 SE 1.84.** Transcript: `logs/w24_headline_repaired.txt`.
 
 **Recovery of debits that would fail on their due date.** *Degenerate mode, 20
 populations (seeds 700–719), run seed 907.*
-`py -3.12 agent/tests/test_canonical_world.py --confirm`
+`py -3.12 agent/tests/test_canonical_world.py --confirm`, *transcript*
+`logs/w24_canonical_repaired.txt`.
 
 | | agent | fixed schedule |
 |---|---|---|
@@ -103,9 +105,10 @@ the failure rate falls inside the published band. Sources are listed in
 
 **The four rows do not share a sample size.** Rows one and two are properties of
 the world and of a policy this project did not write, so they are measured on
-100 populations: `py -3.12 agent/tests/test_v3_power.py`. Rows three and four
-measure the agent and are measured on 20:
-`py -3.12 agent/tests/test_canonical_world.py --confirm`.
+100 populations: `py -3.12 agent/tests/test_v3_power.py`, transcript
+`logs/w24_v3_power.txt`. Rows three and four measure the agent and are measured
+on 20: `py -3.12 agent/tests/test_canonical_world.py --confirm`, transcript
+`logs/w24_canonical_repaired.txt`.
 
 **Why the third row is above its band.** The second and third rows are measured
 in the same world, at the same calibration, with the same run seed. The second
@@ -147,12 +150,17 @@ The two misses have separate causes:
 
 Temporary account holds were expected to account for the second miss. Swept
 across 14 alternative worlds, they moved it by under one point.
+`logs/w7_rerun.txt`, with `logs/w2_rerun.txt` for the insolvency arm.
+⚠️ **Both predate the 1 September belief repair** and are quoted here for
+direction only, never for their levels — see the staleness register in
+[`docs/02_RESULTS.md`](docs/02_RESULTS.md). Neither has been re-run.
 
 Income paid in several instalments a month is the only mechanism found that
 lifts the ten-day ceiling. Swept over irregular-income fractions of 0.20 to
 0.60 and 4 to 12 credits a month, the ceiling reaches 87.57% at the top corner
-and stays at 71.8–81.2% in the middle. It is left off. No source gives a
-payment-frequency mix for UPI AutoPay holders specifically, and at the agent's
+and stays at 71.8–81.2% in the middle (`logs/w12_irregular_ceiling.txt`; this
+one is a property of the world, measured policy-free, so the belief repair
+cannot move it). It is left off. No source gives a payment-frequency mix for UPI AutoPay holders specifically, and at the agent's
 measured capture ratio of 83.4% even the top corner puts the fourth row at
 about 73%, still below its band.
 
@@ -173,8 +181,9 @@ that range is declared.
 | 0.93 | 90.29% | 99.38% | +9.08 ±1.84 | 557 |
 
 Cycles collected, 10 held-out populations of 100 customers, 120 days,
-`payday_err=7`, run seed 7. Due-date failure is 3.49% at `pop_spend=0.88` and
-10.58% at 0.93.
+`payday_err=7`, run seed 7. Transcript `logs/w24_conditional_repaired.txt`.
+Due-date failure is 3.49% at `pop_spend=0.88` and 10.58% at 0.93
+(`logs/w24_canonical_repaired.txt`).
 
 The last column is the number of billing cycles a debit on the due date would
 not have covered. Both arms collect every cycle that was never at risk, so the
@@ -210,9 +219,9 @@ THE BATCH -- 100 customers x ~2 mandates (1 + Poisson(1), capped at 8) over 10 h
 
                    arm  cycles collected    Rs recovered  survival  att/cycle    2 SE
    payday_wait (rival)            90.29%              --    90.52%      1.272
-  agent, deterministic            99.38%    Rs 7,511,500    99.84%      1.450   2.011
+  agent, deterministic            99.38%    Rs 7,511,500    99.84%      1.446   1.844
 
-  agent, deterministic vs payday_wait: +9.08 pts (2 SE 2.01, SIG)
+  agent, deterministic vs payday_wait: +9.08 pts (2 SE 1.84, SIG)
 ```
 
 Stopping rules that fired:
@@ -220,8 +229,8 @@ Stopping rules that fired:
 ```
 STOPPING RULES THAT FIRED, grouped by rule
   agent, deterministic
-     COLLECTED             7535
-     CYCLE_CLOSED           311
+     COLLECTED             7548
+     CYCLE_CLOSED           307
      LAST_ATTEMPT_HELD       28
      MANDATE_DEAD             3
 ```
@@ -245,9 +254,9 @@ payment. The report chooses the first fully logged success, so its generated
 action ID is run-specific. One example chain is:
 
 ```
-  mandate c16m0
+  mandate c18m1
   WHAT THE BELIEF THOUGHT
-     p(success) now 0.8931, best later 0.9657, index score +2.42  -> ok
+     p(success) now 0.5753, best later 0.6150, index score +11.83  -> ok
   WHAT THE DIAGNOSER SAID, AND WHY
      root cause   INSUFFICIENT_FUNDS
      intervention RETRY  confidence 0.7
@@ -257,13 +266,14 @@ action ID is run-specific. One example chain is:
   ALL FIVE CONSTRAINT VERDICTS
      cap PASS   peak PASS   lead PASS   pending PASS   represent PASS
   THE MONEY ACTION
-     Rs 520.00 at t=344 (day 14, hour 08), notified t=320, gate=ALLOWED
+     Rs 1,250.00 at t=152 (day 6, hour 08), notified t=128, gate=ALLOWED
   THE OUTCOME
-     OK  success=True  recovered Rs 520.00
+     OK  success=True  recovered Rs 1,250.00
 ```
 
-That run writes 31,225 events to `agent/runs/batch_report_chain.jsonl`, one row
-per event, append-only.
+That run writes 30,538 events to `agent/runs/batch_report_chain.jsonl`, one row
+per event, append-only (`logs/w24_headline_repaired.txt`; the pre-repair batch
+wrote 31,225).
 
 Two further offline commands:
 
@@ -274,7 +284,8 @@ py -3.12 scripts/prove_stage0_refuses.py
 Runs the constraint layer against the Razorpay client with a transport that
 raises if it is ever called, showing that an illegal action is refused before
 any request is made. It then injects an action below the gate, which the auditor
-detects from the log.
+detects from the log. No key, no network, no simulation. Transcript
+`logs/w28_stage0_refuses.txt`.
 
 ```bash
 py -3.12 scripts/prove_workflows.py
@@ -393,7 +404,10 @@ narrative). Reminder and backup-link text use templates.
 The full 40-case table remains in the eval harness for history; it is not the
 shipping path. Prompt `glm-diag-v3`, `reasoning_effort=low`. Measured 31 August
 2026: `py -3.12 agent/eval/run_eval.py --llm --judge` ($0.08). Replay:
-`--replay` from committed cache.
+`py -3.12 agent/eval/run_eval.py --llm --judge --replay`, from the committed
+response cache, 0.5s and $0.00; transcript `logs/w28_llm_eval_replay.txt`.
+Pre-registration 8/8 on that replay. This family reads no belief on any path
+that affects its claim, so the 1 September repair does not reach it.
 
 The money headline (`batch_report`) is filter plus rules only. `--demo-llm`
 prints routing stats on one population; sim populations have no `merchant_note`
@@ -429,7 +443,8 @@ given; the offsets were chosen once on training populations and then frozen.
 120 days, `pop_spend=0.93`, paired 2 SE. `payday_wait` runs through the
 harness, which computes no at-risk denominator, so it appears in the cycle
 column only. Reproduce with
-`py -3.12 agent/tests/test_steelman_schedule.py`.*
+`py -3.12 agent/tests/test_steelman_schedule.py`; transcript
+`logs/w25_steelman_final.txt`.*
 
 | Payday known to | `naive` | `[1,7]` | This agent | agent − `[1,7]` |
 |---|---|---|---|---|
@@ -449,8 +464,9 @@ it cannot. `naive` is unaffected by the estimate because it never uses one.
 Where the two are level, `[1,7]` is the cheaper policy: it collects the same
 share on about a quarter fewer attempts per cycle (1.10 against 1.44) and
 recovers faster (49.9% of at-risk cycles inside ten days at ±1 day, against
-46.6%). The agent's value at that end of the range is not higher collection. It
-is that its collection does not depend on the payday estimate being good.
+46.6%; `logs/w24_heldout_confirmation.txt`). The agent's value at that end of
+the range is not higher collection. It is that its collection does not depend
+on the payday estimate being good.
 
 How accurately payday can be estimated in India is unmeasured. The Code on
 Wages requires payment by the 7th or 10th of the month, most firms pay on the
@@ -458,9 +474,9 @@ last working day, and government salaries land on a fixed date — which points
 at the low end of this table, where the frozen schedule wins.
 
 A large margin over `naive` is not evidence for the belief filter. At ±1 day
-the agent is 67.58 points ahead of `naive` and `[1,7]` is 76.75 points ahead.
-Two fixed offsets take more of that margin than the agent does at every level
-up to ±7.
+the agent is 75.58 points ahead of `naive` and `[1,7]` is 76.75 points ahead.
+Two fixed offsets take more of that margin than the agent does at ±1 and ±3;
+from ±5 upward the agent takes more. `logs/w25_steelman_final.txt`.
 
 Two further results:
 
@@ -471,13 +487,18 @@ Two further results:
   0.217) at `p=0.50`. `ESCALATE` and `STOP` never fire and are worth 0.000
   each. Re-measured on the shipped belief; `logs/w27_abl_action_repaired.txt`.
 - Outage detection works, but acting on it does not help. Pooling outcomes
-  across merchants, the agent detects a degraded UPI rail with 0 false alarms in
-  48 runs and a true-positive rate of 1.00 at n≥100. A single merchant sees 0.38
-  attempts per 24-hour window against a floor of 8 and cannot evaluate the
-  statistic. Pausing dispatch during a detected outage measured 0.000 points at
-  severity 0.00 and 0.15, +0.017 at 0.40 and +0.051 at 0.80 — **none of them
-  significant**, every one inside its own error bar. It is off by default.
-  `logs/w27_abl_outage_repaired.txt`.
+  across merchants, the agent detects a degraded UPI rail with **0 false alarms
+  in 48 runs** at severity 0, and a true-positive rate of **0.75 at n=100 and
+  1.00 at n=200** at severity 0.40. A single merchant sees 0.38 attempts per
+  24-hour window against a floor of 8 and cannot evaluate the statistic.
+  Re-measured on the shipped belief 2 September 2026;
+  `logs/w28_detection_power.txt`. **The TPR fell from 1.00 to 0.75 at n=100 on
+  that re-measure and a pre-registered check broke with it** — the repaired
+  filter wastes fewer attempts on a degraded rail, and wasted attempts are what
+  the detector counts. Pausing dispatch during a detected outage measured 0.000
+  points at severity 0.00 and 0.15, +0.017 at 0.40 and +0.051 at 0.80 — **none
+  of them significant**, every one inside its own error bar. It is off by
+  default. `logs/w27_abl_outage_repaired.txt`.
 
 Experimental design and bias analysis for all of the above:
 [`docs/02_RESULTS.md`](docs/02_RESULTS.md).
@@ -566,9 +587,10 @@ notification. Delivery is only considered proven when the corresponding
   support is non-negative — and it is **off by default**, because it is
   indistinguishable on recovery (−0.26 points, 2 SE 0.65, over 120
   population-cells) and kills more mandates at the shipping horizon (389
-  against 144). Calibration error is inside its bound (ECE 0.025); the ordering
-  of the reliability curve is what fails, and the repair is not expected to fix
-  that half.
+  against 144); `logs/w25_dp_monotone_stage_e.txt`. Calibration error is inside
+  its bound (ECE 0.025, gate S1_PD in
+  `logs/w26_gate_full_moat_remeasure.txt`); the ordering of the reliability
+  curve is what fails, and the repair is not expected to fix that half.
 - **Stage 0 and the live Razorpay executor keep two different clocks.** Stage 0
   reads `target_t` as simulated hours (the peak-hour rule is `target_t % 24`);
   `RazorpayExecutor.notify` reads the same field as a future Unix epoch second
@@ -593,7 +615,7 @@ notification. Delivery is only considered proven when the corresponding
 | [`docs/07_AGENT_BRIEF.md`](docs/07_AGENT_BRIEF.md) | Interface between the agent and the simulation |
 | [`NOTES.md`](NOTES.md) | Append-only decision log |
 | `agent/` | Policy, constraints, context, execution, LLM layer, audit trail, eval |
-| `sim/` | The simulated world, the belief filters and the 25-gate suite |
+| `sim/` | The simulated world, the belief filters and the 27-gate suite |
 | `scripts/` | Page data, constraint-layer demonstration, Razorpay connectivity ladder, test-mode workflow proof, calibration sweep, git hooks |
 
 ## Running the tests

@@ -253,7 +253,7 @@ reproduce with the command above.*
 | `payday_wait` (rival) | 90.29% | — | 90.52% | 1.272 |
 | agent, deterministic | **99.38%** | ₹7,511,500 | **99.84%** | 1.450 |
 
-**+9.08 pts, 2 SE 2.01.** Stage 0 refusals: **0**, with an independent recount
+**+9.08 pts, 2 SE 1.84.** Stage 0 refusals: **0**, with an independent recount
 of **0** over **8,702 executed money actions**.
 
 **Survival is the more interesting row.** The fixed schedule spends its four

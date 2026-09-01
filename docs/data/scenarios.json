@@ -1925,7 +1925,8 @@
    }
   },
   "published_false_alarm_runs": "0 of 48 at severity 0",
-  "published_tpr_at_n100": "1.00 at severity 0.40, response OFF",
+  "published_tpr_at_n100": "0.75 at severity 0.40, response OFF; 1.00 at n=200",
+  "published_transcript": "logs/w28_detection_power.txt",
   "severity": 0.4,
   "total_windows": 4,
   "windows": [
@@ -1956,22 +1957,22 @@
    {
     "customers": 200,
     "label": "every bank pooled",
-    "rate": 0.78
+    "rate": 0.72
    },
    {
     "customers": 30,
     "label": "@okaxis -- best single bank",
-    "rate": 0.41
+    "rate": 0.38
    },
    {
     "customers": 25,
     "label": "mean over the eight single banks",
-    "rate": 0.22
+    "rate": 0.21
    },
    {
-    "customers": 19,
-    "label": "@upi -- worst single bank",
-    "rate": 0.09
+    "customers": 13,
+    "label": "@oksbi -- worst single bank",
+    "rate": 0.06
    }
   ],
   "min_attempts": 8,
@@ -1983,18 +1984,18 @@
    },
    {
     "n": 50,
-    "pooled": 11.4,
+    "pooled": 11.6,
     "single": 0.19
    },
    {
     "n": 100,
-    "pooled": 22.5,
+    "pooled": 23.1,
     "single": 0.38
    },
    {
     "n": 200,
-    "pooled": 44.5,
-    "single": 0.74
+    "pooled": 46.3,
+    "single": 0.77
    }
   ]
  },

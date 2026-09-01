@@ -33,7 +33,7 @@ credentials, no model download. Only `--llm` needs a key.
 > **THE BATCH.** 100 customers × about 2 mandates each, 10 held-out
 > populations (seeds 710–719), 120 days, `payday_err=7`, `pop_spend=0.93`,
 > 12 burn-in cycles: **99.38% of billing cycles collected against
-> `payday_wait`'s 90.29%**, +9.08 pts (2 SE 2.01), ₹7,511,500, **zero Stage 0
+> `payday_wait`'s 90.29%**, +9.08 pts (2 SE 1.84), ₹7,511,500, **zero Stage 0
 > refusals with an independent recount of zero over 8,702 money actions.**
 > Reproduce with `py -3.12 -m agent.batch_report --pops 10 --canonical`.
 >

@@ -40,7 +40,7 @@ the RBI household saving rate, scored across the region **[0.80, 0.93]** with no
 point declared, and the uplift over `payday_wait` runs **+0.93 -> +9.08** across
 it. Below 0.90 the world carries too few at-risk cycles to measure a difference
 at all -- two of them at 0.80, across a thousand customers. The batch headline
-is **99.38% / 90.29% / +9.08 pts (2 SE 2.01) / Rs 7,511,500**.
+is **99.38% / 90.29% / +9.08 pts (2 SE 1.84) / Rs 7,511,500**.
 `grep -rn "40.30\|36.48\|98.01" README.md docs/` finds any survivor, and
 `py -3.12 sim/verify_docs.py` fails on one that is not marked as withdrawn.
 
@@ -307,7 +307,7 @@ docs/
 sim/
   w3.py                world + belief filters + FITTED_BELIEF
   harness.py           policies, Stage 0 violation counters, run()
-  tests.py             the 25-gate suite. Tripwired: see "Before you commit".
+  tests.py             the 27-gate suite. Tripwired: see "Before you commit".
   gate.py              runs tests.py, decides if a commit is allowed
   runner.py            parallel driver (spawn-safe). Read its docstring first.
   t9_reference.py      captures/checks sim/t9_reference.json (gate T9)
@@ -431,7 +431,7 @@ Install the hooks once per clone, then just commit — the gate runs itself:
 scripts/install-hooks.sh
 ```
 
-The hook runs `sim/gate.py`, which runs the 25-gate suite and blocks the commit
+The hook runs `sim/gate.py`, which runs the 27-gate suite and blocks the commit
 on any `FAIL` or `VACUOUS` gate that is not listed in `sim/known_failures.txt`.
 To run it by hand: `python sim/gate.py --tier full`.
 

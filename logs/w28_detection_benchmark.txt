@@ -1,0 +1,138 @@
+384 runs, one process each (max_tasks_per_child=1 -- 06_MODEL_CARD.md 6a)
+  48/384 new runs complete
+  96/384 new runs complete
+  144/384 new runs complete
+  192/384 new runs complete
+  240/384 new runs complete
+  288/384 new runs complete
+  336/384 new runs complete
+  384/384 new runs complete
+  worker deaths absorbed by re-running the identical deterministic job: 0
+
+============================================================================================================
+THE ORACLE'S TARGET, AND THAT THE WORLD AGREES WITH IT
+============================================================================================================
+  severity 0.00: ground truth W = 0 window(s) []
+  severity 0.15: ground truth W = 4 window(s) [(488, 494), (1208, 1214)] ...
+  severity 0.40: ground truth W = 4 window(s) [(488, 494), (1208, 1214)] ...
+  severity 0.80: ground truth W = 4 window(s) [(488, 494), (1208, 1214)] ...
+  The oracle is handed `outage.windows` by the composition root, not by this file, so it cannot be graded against a target the world does not share. G-3's witness is the EXECUTOR's counter, which is independent of both.
+
+============================================================================================================
+DETECTION -- excess loss in detector-hours vs the analytic oracle, per run, response OFF
+n=100, k=5, 120d, payday_err=7, FITTED_BELIEF, 4x6h outages on days [20, 50, 80, 110], worst-case placement (hour 8), 8 populations
+============================================================================================================
+  LOSS.. are detector-HOURS (the metric G-1b found broken; kept visible). DP.. are DECISION-POINTS: one per day, at hour 8.
+  sev     detector  det/win  latency h    LOSS   DELAY  MISSED   DROP    LATE   FALSE  FA runs |  DP LOSS  DPmiss  DPfalse
+ 0.00 ORACLE (analytic)       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00    stat ma=4       --         --     3.0     0.0     0.0    0.0     0.0     3.0     1/8   |     0.12    0.00     0.12
+ 0.00    stat ma=8       --         --     3.0     0.0     0.0    0.0     0.0     3.0     1/8   |     0.12    0.00     0.12
+ 0.00   stat ma=16       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00       ORACLE       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00      M-BLIND       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00       M-LATE       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00      M-LATCH       --         --     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.00    M-PHANTOM       --         --    48.0     0.0     0.0    0.0     0.0    48.0     8/8   |     2.00    0.00     2.00
+
+ 0.15 ORACLE (analytic)     1.00        0.0     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.15    stat ma=4     0.12        3.0    46.5     1.5    21.0    0.0    21.0     3.0     1/8   |     4.50    3.88     0.62
+ 0.15    stat ma=8     0.12        3.0    46.5     1.5    21.0    0.0    21.0     3.0     1/8   |     4.50    3.88     0.62
+ 0.15   stat ma=16     0.12        9.0    42.0     2.2    21.0    0.0    18.8     0.0     0/8   |     4.50    4.00     0.50
+ 0.15       ORACLE     1.00        0.0    69.8     0.0     0.0    0.0    69.8     0.0     0/8   |     0.00    0.00     0.00
+
+ 0.40 ORACLE (analytic)     1.00        0.0     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.40    stat ma=4     0.59        1.1   114.2     1.8     9.8    0.0    99.8     3.0     1/8   |     4.75    2.25     2.50
+ 0.40    stat ma=8     0.59        1.3   114.4     1.9     9.8    0.0    99.8     3.0     1/8   |     4.75    2.25     2.50
+ 0.40   stat ma=16     0.56       12.6    94.8     5.5    10.5    0.0    78.8     0.0     0/8   |     5.12    2.88     2.25
+ 0.40       ORACLE     1.00        0.0    49.5     0.0     0.0    0.0    49.5     0.0     0/8   |     0.00    0.00     0.00
+ 0.40      M-BLIND     0.00         --    24.0     0.0    24.0    0.0     0.0     0.0     0/8   |     4.00    4.00     0.00
+ 0.40       M-LATE     0.31        6.0    46.5     7.5    16.5    0.0    22.5     0.0     0/8   |     4.00    4.00     0.00
+ 0.40      M-LATCH     1.00        0.0  2368.0     0.0     0.0    0.0  2368.0     0.0     0/8   |    96.00    0.00    96.00
+ 0.40    M-PHANTOM     1.00        0.0    97.5     0.0     0.0    0.0    49.5    48.0     8/8   |     2.00    0.00     2.00
+
+ 0.80 ORACLE (analytic)     1.00        0.0     0.0     0.0     0.0    0.0     0.0     0.0     0/8   |     0.00    0.00     0.00
+ 0.80    stat ma=4     0.62        1.3   116.4     1.6     9.0    0.0   102.8     3.0     1/8   |     4.62    2.00     2.62
+ 0.80    stat ma=8     0.62        4.3   111.9     3.9     9.0    0.0    96.0     3.0     1/8   |     4.88    2.25     2.62
+ 0.80   stat ma=16     0.50       12.5    87.5     7.2    12.0    0.0    68.2     0.0     0/8   |     5.38    3.38     2.00
+ 0.80       ORACLE     1.00        0.0    29.2     0.0     0.0    0.0    29.2     0.0     0/8   |     0.00    0.00     0.00
+ 0.80      M-BLIND     0.00         --    24.0     0.0    24.0    0.0     0.0     0.0     0/8   |     4.00    4.00     0.00
+ 0.80       M-LATE     0.59        6.0    66.8    14.2     9.8    0.0    42.8     0.0     0/8   |     4.00    4.00     0.00
+ 0.80      M-LATCH     1.00        0.0  2368.0     0.0     0.0    0.0  2368.0     0.0     0/8   |    96.00    0.00    96.00
+ 0.80    M-PHANTOM     1.00        0.0    77.2     0.0     0.0    0.0    29.2    48.0     8/8   |     2.00    0.00     2.00
+
+============================================================================================================
+LATENCY, EVERY DETECTED WINDOW -- is it quantised? (E-BEN-2)
+============================================================================================================
+    detector  n windows     [0,1)h     [1,6)h    [6,12)h   [12,23)h   [23,25)h [25,1000000)h
+   stat ma=4         43         31          9          2          0          1          0
+   stat ma=8         43         29          6          4          0          4          0
+  stat ma=16         38         14          8          1          0         15          0
+      ORACLE         96         96          0          0          0          0          0
+
+============================================================================================================
+RECOVERY -- SECONDARY. Response ON (pause). The ceiling is +0.256 pts (suppress, sev 0.80).
+============================================================================================================
+  sev          arm  cycle_rec  vs monitor off    2SE   sig  att in outage   paused
+ 0.00  monitor off      97.64          +0.000  0.000  n.s.              0        0
+ 0.00    stat ma=8      97.59          -0.050  0.099  n.s.              0       81
+ 0.00       ORACLE      97.64          +0.000  0.000  n.s.              0        0
+
+ 0.15  monitor off      97.54          +0.000  0.000  n.s.            300        0
+ 0.15    stat ma=8      97.48          -0.058  0.140  n.s.            288      108
+ 0.15       ORACLE      97.27          -0.272  0.311  n.s.              0      180
+
+ 0.40  monitor off      97.22          +0.000  0.000  n.s.            395        0
+ 0.40    stat ma=8      96.84          -0.381  0.632  n.s.            194      261
+ 0.40       ORACLE      97.27          +0.049  0.247  n.s.              0      180
+
+ 0.80  monitor off      96.25          +0.000  0.000  n.s.            332        0
+ 0.80    stat ma=8      96.56          +0.304  0.742  n.s.            115      191
+ 0.80       ORACLE      97.27          +1.014  0.503   SIG              0      180
+
+  the four crippled oracles, pausing on, severities [0.0, 0.4]
+               arm  cycle_rec                               att in outage   paused
+           M-BLIND      97.22                                         395        0
+            M-LATE      97.31                                         395       11
+           M-LATCH       4.33                                           0       75
+         M-PHANTOM      97.19                                           0      258
+
+============================================================================================================
+THE GATES, AND WHETHER A CRIPPLED ORACLE CAN BE TOLD FROM A REAL ONE
+============================================================================================================
+candidate oracle  G-1b hours  G-1c decis  G-2 sev0  G-3 zero att  verdict
+          ORACLE          NO         yes       yes           yes  passes every gate
+         M-BLIND         yes         yes       yes            NO  CAUGHT by G-3
+          M-LATE         yes         yes       yes            NO  CAUGHT by G-3
+         M-LATCH          NO          NO       yes           yes  CAUGHT by G-1c
+       M-PHANTOM          NO          NO        NO           yes  CAUGHT by G-1c, G-2
+
+  G-1a: the ANALYTIC oracle's loss is 0.0 at every severity -- zero BY CONSTRUCTION. Printed, never counted. This is error 5's guard-gate shape and it carries no information.
+
+  G-1b IS RED AND STAYS RED. The oracle does not dominate on unweighted detector-hours: at severity 0.15 it scores worse than every statistical detector, and the blind mutant scores best of all. Diagnosis, not repair -- MISSED is capped at the 6h window length while LATE runs to the ~18h gap before the next hour-8 consultation, so silence is cheaper than correctness. The gate found a defect in ITS OWN METRIC's time base and is kept visible for the same reason S1, S2b and S2_LEGACY are.
+  G-1c is the same statement on decision-points -- one per day, at hour 8, which is where 99.22% of attempts and every scheduling decision land. That is the gate the suite verdict reads.
+
+  GATE SUITE: PASS -- all 4 crippled oracles caught, true oracle clean.
+
+============================================================================================================
+PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before any run)
+============================================================================================================
+  BROKE  E-BEN-1 zero false-alarm episodes at severity 0, all detectors
+           [stat ma=4:1/8, stat ma=8:1/8, stat ma=16:0/8]
+  BROKE  E-BEN-2 latency is quantised: no mass in [1h, 23h)
+           [30 of 124 detected windows have latency in [1,23)h]
+  HELD   E-BEN-3 LATE > DELAY for the shipping detector at sev 0.80
+           [LATE 96.0 vs DELAY 3.9   (oracle's LATE floor 29.2)]
+  BROKE  E-BEN-4 loss is monotone in min_attempts at sev 0.80
+           [stat ma=4:116.4 <= stat ma=8:111.9 <= stat ma=16:87.5   [post-hoc, NOT scored: decision-points stat ma=4:4.62, stat ma=8:4.88, stat ma=16:5.38]]
+  BROKE  E-BEN-5 the oracle does NOT maximise recovery: it is below monitor-off at sev 0.40
+           [oracle vs monitor-off at sev 0.40 = +0.049 pts]
+  BROKE  E-BEN-6 perfect detection buys < +0.256 pts over the shipping detector, at every severity
+           [largest oracle - stat ma=8 = +0.710 pts]
+  HELD   E-BEN-7 every crippled oracle is caught by at least one gate
+           [M-BLIND->G-3; M-LATE->G-3; M-LATCH->G-1c; M-PHANTOM->G-1c,G-2]
+  HELD   E-BEN-8 G-3 binds both ways: oracle 0 attempts in window, shipping detector > 0
+           [oracle [0, 0, 0], stat ma=8 [288, 194, 115]]
+
+Pre-registration record for this measurement: 3/8
+Gate suite: PASS
+Worker deaths re-run: 0  (see run_chunked -- the machine fault, contained not fixed)

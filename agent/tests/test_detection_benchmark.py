@@ -376,6 +376,43 @@ CHUNK = 48
 MAX_RETRIES = 4
 
 
+def _cache_fingerprint(jobs):
+    """What this cache is a cache OF: the belief, the world, and the job set.
+
+    WHY THIS EXISTS. On 2 September 2026 this benchmark was re-run to give the
+    detection claims a transcript. It finished in three minutes instead of
+    twenty and printed `resuming: 384 run(s) already on disk`. The cache had
+    been written on **29 August**, four days and one belief repair earlier
+    (W24 moved `prior_w` 9 -> 5, `prior_floor` 0.5 -> 0.1 and `cycle_value`
+    0 -> 0.6), and the key was the job tuple alone -- which does not mention
+    the belief, because the belief arrives through `w3.FITTED_BELIEF` rather
+    than through the job. So every re-run since 29 August had replayed the old
+    filter and reported it as a current measurement.
+
+    That is worse than a stale number in a document. A stale document is
+    visibly old; a cache that resumes is a measurement that LOOKS fresh, and
+    the only thing standing between it and the reader was one line of stdout
+    nobody was reading. `NOTES.md`, error 36, records it.
+
+    The fingerprint is deliberately over-broad: any change to the belief, the
+    grid, the detector family or the world knobs invalidates everything. A
+    cache is a wall-clock convenience, and the cost of discarding one wrongly
+    is twenty minutes. The cost of keeping one wrongly is a published number
+    that never happened.
+    """
+    import hashlib
+    payload = repr([
+        sorted(dict(w3.FITTED_BELIEF).items()),
+        N, K, DAYS, SPEND, PE, RUN_SEED, POPS,
+        SEVERITIES, MUTANT_SEVERITIES, G3_SEVERITIES,
+        OUTAGE_DAYS, DURATION_H, START_HOUR, GRACE_H,
+        sorted((k, sorted(v.items())) for k, v in DETECTORS.items()),
+        sorted(MUTANTS), SHIPPING,
+        sorted(j[0] for j in jobs),
+    ])
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
 def run_chunked(jobs, cache_path=CACHE):
     """Run `jobs` in chunks, checkpointing to disk, retrying a crashed chunk.
 
@@ -400,10 +437,19 @@ def run_chunked(jobs, cache_path=CACHE):
     """
     import pickle
     done = {}
+    want = _cache_fingerprint(jobs)
     if os.path.exists(cache_path):
         with open(cache_path, "rb") as fh:
-            done = pickle.load(fh)
-        print(f"  resuming: {len(done)} run(s) already on disk")
+            blob = pickle.load(fh)
+        got = blob.get("fingerprint") if isinstance(blob, dict) else None
+        if got == want:
+            done = blob["runs"]
+            print(f"  resuming: {len(done)} run(s) already on disk "
+                  f"(fingerprint {want[:12]})")
+        else:
+            print(f"  DISCARDING the cache at {os.path.basename(cache_path)}: "
+                  f"fingerprint {str(got)[:12]} != {want[:12]}. "
+                  f"Re-measuring all {len(jobs)} runs.")
     todo = [j for j in jobs if j[0] not in done]
     retries = 0
     for i in range(0, len(todo), CHUNK):
@@ -423,7 +469,7 @@ def run_chunked(jobs, cache_path=CACHE):
                       f"chunk {i // CHUNK} in fresh interpreters "
                       f"(retry {attempt + 1}/{MAX_RETRIES})")
         with open(cache_path, "wb") as fh:
-            pickle.dump(done, fh)
+            pickle.dump({"fingerprint": want, "runs": done}, fh)
         print(f"  {min(i + CHUNK, len(todo))}/{len(todo)} new runs complete")
     return {j[0]: done[j[0]] for j in jobs}, retries
 
