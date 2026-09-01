@@ -1,0 +1,14 @@
+B-1 AT MATCHED BUDGET, pop_spend=0.93, decision-hour rule.
+  schedule SELECTED on populations 700-709 (685 cycles),
+  SCORED on held-out 710-719 (584 cycles).
+  Agent: 88.40% recovery using 1.53 attempts per at-risk cycle.
+
+  cap   B-1 train   B-1 TEST                  schedule
+    1      65.99%     65.75%                       [7]
+    2      93.72%     94.18%                   [7, 28]
+    3     100.00%     99.49%                [2, 7, 27]
+    4     100.00%    100.00%             [0, 2, 7, 25]
+
+  Compare the agent's 88.40% against the TEST column at cap 1-2,
+  which is the budget it actually spends. The cap-4 row is what the
+  first B-1 reported and it was a 2.6x budget advantage.

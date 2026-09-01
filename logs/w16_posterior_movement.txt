@@ -1,0 +1,13 @@
+PAYDAY POSTERIOR MOVEMENT PER observe() CALL
+  circular shift of the payday argmax, in days, 30 hypotheses
+
+   observation       n  mean shift  median  moved 0d  moved >2d
+       FAILURE     740        0.53       0     81.2%       7.0%
+       success    4544        0.14       0     96.3%       1.6%
+
+  payday-posterior entropy on FAILURE: 1.513 -> 1.264  (change -0.2488 nats)
+  top-hypothesis weight after a failure: mean 0.566
+  uniform-over-30 entropy would be 3.401 nats
+
+  A failure that leaves the argmax where it was cannot tell the
+  scheduler to try the other side of the estimate error.

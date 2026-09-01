@@ -1,0 +1,81 @@
+TIER=full   planned runs=200   workers=auto
+prefetch done in 97.9s
+
+--- Tier 1: mutation tests (do the gates actually fire?) ---
+[  ok  ] M1    attempt past the cap                           pe=7: clean=0 -> mutant=277
+[  ok  ] M2    dispatch inside a peak hour                    pe=1: clean=0 -> mutant=1119
+[  ok  ] M3    <24h notification lead                         pe=1: clean=0 -> mutant=1080
+[  ok  ] M4    second pending notification                    pe=1: clean=0 -> mutant=5
+[  ok  ] M5    Z9 re-presented under old notice               pe=1: clean=0 -> mutant=304
+[  ok  ] M6    true-balance leak changes the result           clean=96.9% leaked=88.0%
+[  ok  ] M8    crippled oracle is detectably worse            fixed=100.0% crippled=46.3%
+[  ok  ] M4B   no mutant writes the counter it is graded on   all 5 Stage-0 mutants create state only
+
+--- Tier 2: correctness invariants ---
+[  ok  ] T1    oracle weakly dominates every policy           pe1=100.0% pe7=100.0%, margin=0.4pts, mutant caught
+[  ok  ] T2    forecast is bit-identical with future poisoned 
+[  ok  ] T3    belief has no back-channel to true balance     clean identical; leaky mutant caught
+[  ok  ] T4    same seed -> identical output                  
+[  ok  ] T5    raising the attempt cap does not reduce recovery pe=7: cap2=43.3% cap4=49.3%
+[  ok  ] T6    k=1: pooled == own (nothing to pool)           100.000% vs 100.000%
+[  ok  ] T6_PD k=1: pooled == own on the shipping filter      100.000% vs 100.000%
+[  ok  ] T7    bounds hold; no mandate exceeds the cap        pe=7: 18 policies clean, poison caught (2 clauses)
+[  ok  ] T8    compliant policies clean; documented baseline is not dirty=[], baseline_doc represent-violations=974
+[  ok  ] T9    output identical to the pre-optimisation reference 34 configs exact (26 float-level hashes); shared-RNG mutant caught (220 fields)
+
+--- Tier 3: statistical validity ---
+       reliability, w3.Belief via portfolio (POINT-ESTIMATE payday -- NOT the shipping filter) (n=6555):
+         P in [0.0,0.1)  n=    28  predicted=0.011  actual=0.500  underconfident by 0.489
+         P in [0.1,0.2)  n=    39  predicted=0.143  actual=0.231  underconfident by 0.088
+         P in [0.2,0.3)  n=    64  predicted=0.239  actual=0.734  underconfident by 0.495
+         P in [0.3,0.4)  n=    75  predicted=0.350  actual=0.840  underconfident by 0.490
+         P in [0.4,0.5)  n=    38  predicted=0.436  actual=0.500  underconfident by 0.064
+         P in [0.5,0.6)  n=   256  predicted=0.556  actual=0.496  overconfident by 0.060
+         P in [0.8,0.9)  n=   166  predicted=0.811  actual=0.982  underconfident by 0.170
+         P in [0.9,1.0)  n=  5873  predicted=0.998  actual=0.919  overconfident by 0.079
+[ FAIL ] S1    belief calibration: ECE<0.10 and monotone      ECE=0.091, monotone=False
+       reliability, BeliefPD, fitted config (the shipping filter) (n=8433)  <-- S1_PD:
+         P in [0.0,0.1)  n=  1837  predicted=0.006  actual=0.046  underconfident by 0.040
+         P in [0.1,0.2)  n=   216  predicted=0.151  actual=0.116  overconfident by 0.036
+         P in [0.2,0.3)  n=   132  predicted=0.251  actual=0.364  underconfident by 0.112
+         P in [0.3,0.4)  n=   189  predicted=0.353  actual=0.328  overconfident by 0.025
+         P in [0.4,0.5)  n=   218  predicted=0.451  actual=0.505  underconfident by 0.054
+         P in [0.5,0.6)  n=   404  predicted=0.551  actual=0.446  overconfident by 0.106
+         P in [0.6,0.7)  n=   401  predicted=0.643  actual=0.626  overconfident by 0.017
+         P in [0.7,0.8)  n=   353  predicted=0.757  actual=0.824  underconfident by 0.067
+         P in [0.8,0.9)  n=   493  predicted=0.852  actual=0.880  underconfident by 0.029
+         P in [0.9,1.0)  n=  4190  predicted=0.987  actual=0.984  overconfident by 0.003
+[ FAIL ] S1_PD SHIPPING belief calibration: ECE<0.10 and monotone ECE=0.025, monotone=False
+       pe=7, n=100, 8 populations, payday-posterior policies
+         own      solo_pop_pd       72.97%
+         real     solo_shared_pd    82.50%
+         placebo  solo_placebo_pd   58.87%
+[  ok  ] S2a   moat: shared_pd beats own_pd (>2SE)            +9.53 pts (+/-1.81)
+[ FAIL ] S2b   confound: placebo_pd is neutral vs own_pd      -14.09 pts (+/-2.09)  <-- NOT neutral
+[  ok  ] S2c   headline: shared_pd beats placebo_pd (>2SE)    +23.62 pts (+/-2.14)
+       pe=7, n=100, 8 pops, FITTED_BELIEF
+         own      solo_pop_pd       87.13%
+         real     solo_shared_pd    94.45%
+[  ok  ] S2a_PD moat on shipping filter: shared_pd beats own_pd (>2SE) +7.32 pts (+/-2.02)
+       LEGACY (point-estimate payday, pe=1): real vs own -0.96, placebo vs own -0.59
+[ FAIL ] S2_LEGACY retired: point-estimate pooling vs placebo     -0.38 pts (+/-0.22)
+       shipped belief    82.50%
+       fitted  belief    94.45%   {'stride': 1, 'prior_w': 5, 'prior_day0': 8.0, 'prior_floor': 0.1, 'spend_beta': 0.0}
+[  ok  ] S4    fitted belief beats the shipped one (>2SE)     +11.96 pts (+/-1.86); mutant collapses to +0.00
+       headline  solo_shared_pd - payday_wait : +25.63 pts (+/-2.86)  SIG
+       pos ctrl  oracle - baseline_doc        : +76.13 pts (+/-1.61)
+       null ctrl payday_wait - itself, reseed : -2.60 pts (+/-6.00)
+[  ok  ] S3    significance machinery (>=8 populations)       n=8; headline +25.63+/-2.86 SIG
+
+==============================================================================
+SUITE: 27 gates, 4 FAIL, 0 VACUOUS, 23 pass   [tier=full]
+wall time: 129.7s
+==============================================================================
+
+Known failures still present (tolerated, documented in sim/known_failures.txt):
+    S1    FAIL     belief calibration: ECE<0.10 and monotone      ECE=0.091, monotone=False
+    S1_PD FAIL     SHIPPING belief calibration: ECE<0.10 and monotone ECE=0.025, monotone=False
+    S2_LEGACY FAIL     retired: point-estimate pooling vs placebo     -0.38 pts (+/-0.22)
+    S2b   FAIL     confound: placebo_pd is neutral vs own_pd      -14.09 pts (+/-2.09)  <-- NOT neutral
+
+GATE PASS [tier=full]: 27 gates, 4 bad, all 4 known. Commit allowed.

@@ -83,8 +83,10 @@ if PKG not in sys.path:
 
 import numpy as np
 
-POPS = [700, 701, 702, 703, 704, 705, 706, 707]
-N, K, DAYS, SPEND, PE = 100, 5, 120, 1.05, 7
+from agent.tests import _canonical as _CAN
+
+POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
+N, K, DAYS, SPEND, PE = 100, 5, 120, _CAN.spend(1.05), 7
 RUN_SEED = 7
 
 # (arm label, kwargs to run_once)
@@ -117,14 +119,17 @@ def _job(args):
     from agent.batch import make_pop, run_once
     from agent.constraints.auditor import replay
 
-    pop = make_pop(N, K, pop_seed, spend=SPEND, days=DAYS)
+    from agent.tests import _canonical as _C
+    pop = make_pop(N, K, pop_seed, spend=SPEND, days=DAYS,
+                   **_C.pop_kwargs(pop_seed))
     # ignore_cleanup_errors: a Windows rmtree failure inside __exit__ REPLACES
     # whatever exception actually happened in the block, which cost a debugging
     # cycle once already. The masking is the bug, not the leftover file.
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         r = run_once(pop, RUN_SEED, payday_err=PE, pop_spend=SPEND,
                      bcfg=w3.FITTED_BELIEF,
-                     log_path=os.path.join(tmp, "a.jsonl"), **kw)
+                     log_path=os.path.join(tmp, "a.jsonl"),
+                     **_C.run_kwargs(), **kw)
         a = replay(read_rows(r["log_path"]))
         r["audit_violations"] = a.total()
         r["audit_recovered_paise"] = a.recovered_paise
@@ -137,9 +142,12 @@ def _baseline(pop_seed):
     import agent  # noqa: F401
     import harness
     from agent.batch import make_pop
-    pop = make_pop(N, K, pop_seed, spend=SPEND, days=DAYS)
+    from agent.tests import _canonical as _C
+    pop = make_pop(N, K, pop_seed, spend=SPEND, days=DAYS,
+                   **_C.pop_kwargs(pop_seed))
     return pop_seed, harness.run("payday_wait", pop, RUN_SEED,
-                                 payday_err=PE, pop_spend=SPEND)
+                                 payday_err=PE, pop_spend=SPEND,
+                                 **_C.run_kwargs())
 
 
 def main() -> int:

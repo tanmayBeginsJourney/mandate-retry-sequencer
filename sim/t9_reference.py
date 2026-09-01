@@ -107,17 +107,55 @@ def fingerprint(res):
     return out
 
 
-def capture():
-    pop = build_pop()
+def capture(serial=False):
+    """Fingerprint every locked case.
+
+    ONE PROCESS PER RUN, via `sim/runner.run_jobs`. The serial version --
+    34 `harness.run` calls in one long-lived interpreter -- is exactly the
+    pattern that raises 0xC0000005 on this machine, and it did: two
+    consecutive `--recapture` attempts died partway through the pe=1 block on
+    1 September 2026. `agent/tests/_parallel.py` documents the same crash and
+    the same mitigation, and `sim/gate.py`'s own T9 already drives its mutant
+    arm through this runner.
+
+    THE TWO PATHS PRODUCE THE SAME BYTES, and that is not an assumption. The
+    reference in the repository was captured SERIALLY, and `gate_t9` has been
+    comparing it against runs prefetched through this same parallel runner
+    ever since -- passing. `runner.run_jobs` also carries `serial=True` for
+    exactly this reason, and gate T4 asserts `harness.run` is deterministic in
+    its arguments. `--serial` re-runs the old path so the equivalence stays
+    demonstrable rather than merely argued.
+    """
+    if serial:
+        pop = build_pop()
+        runs = {}
+        for key, pol, kw in cases():
+            t0 = time.perf_counter()
+            res = harness.run(pol, pop, RUN_SEED, pop_spend=POP_SPEND,
+                              collect_calib=True, **kw)
+            dt = time.perf_counter() - t0
+            runs[key] = fingerprint(res)
+            print(f"  {key:<28} rec={res['cycle_rec']*100:6.2f}%  "
+                  f"calib_n={runs[key]['calib_n']:>6}  {dt:6.2f}s", flush=True)
+        return runs
+
+    import runner
+    spec = (POP_SPEC["n"], POP_SPEC["k"], POP_SPEC["seed"],
+            POP_SPEC["spend"], POP_SPEC["days"])
+    jobs = [(key, pol, spec, RUN_SEED,
+             dict(kw, pop_spend=POP_SPEND, collect_calib=True))
+            for key, pol, kw in cases()]
+    res = runner.run_jobs(jobs)
     runs = {}
-    for key, pol, kw in cases():
-        t0 = time.perf_counter()
-        res = harness.run(pol, pop, RUN_SEED, pop_spend=POP_SPEND,
-                          collect_calib=True, **kw)
-        dt = time.perf_counter() - t0
-        runs[key] = fingerprint(res)
-        print(f"  {key:<28} rec={res['cycle_rec']*100:6.2f}%  "
-              f"calib_n={runs[key]['calib_n']:>6}  {dt:6.2f}s", flush=True)
+    for key, _pol, _kw in cases():
+        if key not in res:
+            raise RuntimeError(
+                f"{key} did not return. A crashed worker is a FAILED capture, "
+                f"not a missing one -- writing a reference with a hole in it "
+                f"would make T9 unable to fail on that case.")
+        runs[key] = fingerprint(res[key])
+        print(f"  {key:<28} rec={res[key]['cycle_rec']*100:6.2f}%  "
+              f"calib_n={runs[key]['calib_n']:>6}", flush=True)
     return runs
 
 
@@ -166,7 +204,7 @@ def main():
     check = "--check" in sys.argv
     recapture = "--recapture" in sys.argv
     t0 = time.perf_counter()
-    runs = capture()
+    runs = capture(serial="--serial" in sys.argv)
     print(f"\ntotal capture time: {time.perf_counter()-t0:.1f}s")
 
     if recapture:

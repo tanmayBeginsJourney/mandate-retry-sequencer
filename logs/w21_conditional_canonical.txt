@@ -1,0 +1,15 @@
+THE CONDITIONAL HEADLINE ON THE CANONICAL WORLD.
+100 runs: 5 pop_spend levels x 10 held-out populations x 2 arms, n=100, 120d, payday_err=+/-7, run seed 7, mode=full.
+pop_spend = 1 - the RBI household saving rate. The region is [0.80, 0.93]; no point in it is declared.
+
+========================================================================================
+ pop_spend  payday_wait     agent    uplift    2 SE   at risk  agent surv  rival surv
+      0.80       99.07%   100.00%     +0.93    0.60         2      100.0%       98.9%
+      0.85       97.36%    99.75%     +2.39    0.89        83      100.0%       97.4%
+      0.88       95.99%    99.54%     +3.56    0.85       197      100.0%       96.0%
+      0.90       94.24%    99.46%     +5.22    0.91       299       99.9%       94.4%
+      0.93       90.29%    99.37%     +9.08    2.01       557       99.8%       90.5%
+========================================================================================
+  A cell with a small at-risk count cannot carry an uplift claim: the two arms
+  agree on every cycle that was never at risk, so the difference is measured on
+  the at-risk column alone.

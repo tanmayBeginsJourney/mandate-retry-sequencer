@@ -1,0 +1,19 @@
+120 runs: 3 worlds x 2 priors x 20 pops, n=40
+
+         world     prior   V5 recovery    2 SE  cycle_rec      V7
+         today    fitted        96.79%   +1.34     99.53%   40.8%
+         today  unfitted        96.20%   +1.41     99.58%   32.1%
+                   DELTA        +0.59 pts  (fitted minus unfitted)
+------------------------------------------------------------
+    canon 0.88    fitted        92.24%   +2.84     98.69%   37.1%
+    canon 0.88  unfitted        90.96%   +2.95     98.56%   37.1%
+                   DELTA        +1.28 pts  (fitted minus unfitted)
+------------------------------------------------------------
+   R1R2R3 0.88    fitted        80.16%   +6.57     97.46%   43.3%
+   R1R2R3 0.88  unfitted        81.75%   +7.96     97.69%   35.4%
+                   DELTA        -1.60 pts  (fitted minus unfitted)
+------------------------------------------------------------
+
+  A LARGE POSITIVE delta means the shipping prior still earns its
+  keep in that world. A delta near zero or NEGATIVE means the prior
+  is mismatched and adoption needs a refit (Bill B).

@@ -1,0 +1,31 @@
+AGENT-PHASE SUITE. 120 runs, canonical world, pop_spend=0.93, n=100, HELD-OUT pops 710-719.
+
+ payday_err             arm   recovery    2 SE   cycles   <=10d    surv  att/cyc
+          1           agent     90.58%   +5.69   98.63%   43.5%   98.5%         
+          1           naive     23.00%   +5.92   87.01%  100.0%   85.9%         
+          1  payday_offsets     65.01%   +8.30   93.87%   16.7%  100.0%         
+--------------------------------------------------------------------------------
+          3           agent     90.68%   +5.89   98.64%   42.8%   98.6%         
+          3           naive     23.00%   +5.92   87.01%  100.0%   85.9%         
+          3  payday_offsets     88.40%   +4.94   97.21%   31.8%  100.0%         
+--------------------------------------------------------------------------------
+          7           agent     89.54%   +5.41   98.53%   43.6%   98.5%         
+          7           naive     23.00%   +5.92   87.01%  100.0%   85.9%         
+          7  payday_offsets     96.40%   +2.62   98.58%   38.9%  100.0%         
+--------------------------------------------------------------------------------
+         14           agent     86.14%   +6.27   98.01%   40.5%   98.1%         
+         14           naive     23.00%   +5.92   87.01%  100.0%   85.9%         
+         14  payday_offsets     63.20%   +9.42   92.72%   34.8%  100.0%         
+--------------------------------------------------------------------------------
+
+DOES THE BELIEF FILTER EARN ITS COMPLEXITY?
+ payday_err     agent   steelman     naive  agent-steel               verdict
+          1    90.58%     65.01%    23.00%       +25.57           agent ahead
+          3    90.68%     88.40%    23.00%        +2.27           agent ahead
+          7    89.54%     96.40%    23.00%        -6.86        steelman ahead
+         14    86.14%     63.20%    23.00%       +22.94           agent ahead
+
+  The steelman is TWO FIXED OFFSETS from the same noisy estimate.
+  It holds no belief and adapts to nothing. If the agent's margin
+  over it does not GROW as payday_err rises, the payday posterior
+  is not buying what it is claimed to buy.

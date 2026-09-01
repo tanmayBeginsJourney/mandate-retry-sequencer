@@ -1,0 +1,28 @@
+W12 -- multi-credit income. R1R2R3 + coupling, pop_spend=0.93, burn 12, policy-free.
+  DECLARED HONEST RANGE for irregular_frac: [0.20, 0.60].
+  0.85 and 1.00 are shown OUTSIDE it, to show the shape, not to pick from.
+
+ irr_frac  n_cred      V1  at-risk  V5 ceil  V7 CEILING  irr share of at-risk
+*    0.00       4  10.51%      146   100.0%      47.95%               0.0% (pop 0%)
+*    0.00       8  10.51%      146   100.0%      47.95%               0.0% (pop 0%)
+*    0.00      12  10.51%      146   100.0%      47.95%               0.0% (pop 0%)
+     0.20       4  10.09%      140   100.0%      66.43%              32.9% (pop 20%)
+     0.20       8  11.98%      166   100.0%      69.28%              30.7% (pop 20%)
+     0.20      12  10.58%      147   100.0%      60.54%              34.7% (pop 21%)
+     0.35       4  11.72%      163   100.0%      74.85%              62.6% (pop 40%)
+     0.35       8   9.58%      133   100.0%      81.20%              57.9% (pop 35%)
+     0.35      12  12.99%      181   100.0%      71.82%              47.0% (pop 33%)
+     0.60       4  15.68%      217   100.0%      81.11%              75.1% (pop 60%)
+     0.60       8  13.35%      185   100.0%      87.57%              75.1% (pop 58%) <-- >=85
+     0.60      12  14.18%      197   100.0%      76.14%              73.1% (pop 65%)
+*    0.85       4  15.84%      219   100.0%      76.26%              92.7% (pop 85%)
+*    0.85       8  14.00%      195   100.0%      89.23%              90.3% (pop 88%) <-- >=85
+*    0.85      12  17.24%      239   100.0%      88.70%              87.9% (pop 88%) <-- >=85
+*    1.00       4  24.05%      334    99.1%      84.59%             100.0% (pop 100%)
+*    1.00       8  14.92%      207    98.6%      98.04%             100.0% (pop 100%) <-- >=85
+*    1.00      12  16.87%      234   100.0%      94.87%             100.0% (pop 100%) <-- >=85
+
+  * = outside the externally anchored range.
+  V7's published band is 85-95%. The stopping rule in NOTES.md says:
+  if no irregular_frac inside [0.20, 0.60] reaches 85%, STOP and
+  accept 2/4 with the measured structural reason.

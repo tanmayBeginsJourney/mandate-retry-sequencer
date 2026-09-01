@@ -1,0 +1,48 @@
+THE CANONICAL WORLD -- scored as a REGION, not at a point.
+200 runs: 5 spend levels x 20 populations x 2 arms, n=40 120d payday_err=+/-7
+  region scan n=40; burn 12, mandate outflow ON, irregular_frac 0.00 (tested, immaterial)
+  pop_spend = 1 - household savings rate. 0.80 total / 0.88 gross financial / 0.93 net financial.
+
+============================================================================================================
+  spend             arm       V1   recovery    2 SE   <=10d    surv  cyc_rec  at risk
+   0.80           agent    0.04%      5.00%  +10.00    0.0%   99.9%   99.93%        2
+   0.80  fixed schedule    0.04%      0.00%   +0.00    0.0%   99.5%   99.68%        2
+------------------------------------------------------------------------------------------------------------
+   0.85           agent    1.19%     72.00%  +19.98   22.1%   99.7%   99.66%       57
+   0.85  fixed schedule    1.19%     10.00%  +13.76   10.0%   97.5%   97.85%       57
+------------------------------------------------------------------------------------------------------------
+   0.88           agent    2.93%     91.15%  +10.75   38.3%   99.5%   99.54%      138
+   0.88  fixed schedule    2.93%     11.75%  +11.22   25.0%   94.1%   94.56%      138
+------------------------------------------------------------------------------------------------------------
+   0.90           agent    5.32%     94.02%   +4.54   45.3%   99.0%   99.14%      250
+   0.90  fixed schedule    5.32%     19.69%  +12.23   50.0%   91.4%   92.13%      250
+------------------------------------------------------------------------------------------------------------
+   0.93           agent    9.49%     90.65%   +5.44   44.3%   98.4%   98.43%      445
+   0.93  fixed schedule    9.49%     21.39%   +9.87   75.0%   85.6%   86.69%      445
+------------------------------------------------------------------------------------------------------------
+
+THE REGION. Which targets hold in which sub-range.
+============================================================================================================
+  spend              V1              V3              V5              V7   V7 ceiling   capture
+   0.80     0.04% miss     0.00% miss     5.00% miss     0.00% miss         0.0%      0.0%
+   0.85     1.19% miss    10.00% miss    72.00% HIT     22.08% miss        36.8%     59.9%
+   0.88     2.93% miss    11.75% miss    91.15% miss    38.34% miss        44.9%     85.3%
+   0.90     5.32% miss    19.69% miss    94.02% miss    45.31% miss        49.6%     91.3%
+   0.93     9.49% HIT     21.39% HIT     90.65% miss    44.29% miss        47.0%     94.3%
+
+  V5 CEILING is 100.0% at every cell (constrained oracle, clairvoyant),
+  so V5 measures AGENT BEHAVIOUR and is not world validation.
+  V7 CEILING is the best a LEGAL schedule could reach inside 10 days.
+  CAPTURE is measured V7 as a share of that ceiling -- the honest
+  headline for this rail, because the 85-95% band is card dunning,
+  where the customer fixes the instrument on demand. UPI AutoPay
+  recovery waits on a roughly monthly salary credit. The published
+  band contains no UPI data, which is the point and not a caveat.
+
+  Best in region: 2/4 at pop_spend=0.93.
+  No point in the region is declared as THE calibration.
+
+  BIAS. Bands are [REPORTED], vendor-sourced, aggregating
+  non-comparable customer bases. V5's 70-85% is the source's TOP
+  PERFORMERS; its stated median is 47.6%. The world and the agent
+  share an author, so none of this is independent evidence.

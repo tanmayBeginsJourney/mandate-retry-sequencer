@@ -1,0 +1,13 @@
+B-1, FAIR: decision hour, chronological execution, stop-on-success,
+schedule selected on 700-709, scored on HELD-OUT 710-719. spend=0.93.
+AGENT: 88.40% recovery at 1.53 attempts per at-risk cycle.
+
+  cap   TEST hit  TEST attempts                schedule
+    1     65.75%           0.99                     [7]
+    2     94.18%           1.46                 [7, 28]
+    3     99.49%           1.79              [2, 7, 27]
+    4    100.00%           2.28           [0, 2, 7, 25]
+
+  Best non-adaptive policy at the agent's budget of 1.53 attempts
+  (concave envelope / randomised mix of the two bracketing
+  schedules): 95.35%   vs agent 88.40%   margin -6.95 pts

@@ -7270,3 +7270,3713 @@ batch table and stopping-rule rows updated; historical cap-120 overlay (94.33%)
 kept as comparison text only.
 
 `build_page_data --check`: PASS.
+
+# 2026-08-31 — W10: THREE POPULATION REALISM FIXES. PRE-REGISTERED BEFORE THE RUN.
+
+Phase 3. The world scores 2/4 on the validation suite at `pop_spend=0.80`
+(V1 13.68% HIT, V3 27.85% HIT, V5 96.78% MISS-high, V7 42.94% MISS-slow),
+re-measured today with `py -3.12 agent/tests/test_recovery_rates.py` and
+identical to the table in `02_RESULTS.md`.
+
+W2 and W7 both failed the same way: each added a mechanism to
+`w3.balance_trace`, and every balance mechanism moves V1 by construction
+because `at_risk_cycles()` reads the balance trace and nothing else. V1 had
+1.3 points of headroom. So both broke it.
+
+This entry registers a different class of change: **three parameters of the
+POPULATION that were invented and never sourced.** They are not corrections to
+the agent and not new mechanisms. They are the answer to "is a simulated
+customer shaped like a real UPI AutoPay customer at all".
+
+---
+
+## What was already measured before this was written, and is therefore NOT a prediction
+
+Honesty about which way round this happened, because registering a prediction
+for something already measured is not a prediction.
+
+**Two policy-free diagnostics were run first.** Both run NO arm — they read the
+world only, the way `scripts/solve_operating_point.py` does.
+
+**Diagnostic 1 — V7's ceiling, and the published diagnosis does not reproduce.**
+`02_RESULTS.md` states the due-date/payday gap is "uniform over the cycle: mean
+**14.7 days**, and only **35.8% of at-risk cycles** have money inside ten days",
+and concludes the agent at 42.6% "is already above the ceiling this world sets.
+No policy and no amount of insolvency can move V7."
+
+Measured over the same 8 populations at `pop_spend=0.80`:
+
+```
+due -> next payday, ALL cycles:      mean 14.71,  <=10 days 35.1%
+due -> next payday, AT-RISK cycles:  mean  9.40,  <=10 days 59.8%
+```
+
+**14.7 and ~35% are the all-cycles figures, not the at-risk ones.** The at-risk
+set is selected: a cycle goes at risk when the balance is low, which happens
+late in the cycle, which is close to the NEXT payday. Conditioning on at-risk
+shortens the wait. The agent at 42.94% is not above the ceiling, it is roughly
+**17 points below** it. V7 has an agent-side gap as well as a world-side one,
+and W6 was specced against a number computed on the wrong denominator.
+
+**Diagnostic 2 — `k` sets V1 almost single-handedly and does not touch V7's
+ceiling.** Policy-free, 8 populations, `pop_spend=0.80`:
+
+| k | cycles due | at risk | V1 | at-risk caused by sibling drain | next credit <=10d |
+|---|---|---|---|---|---|
+| 1 | 2425 | 144 | 5.94% | 0.0% | 57.6% |
+| 2 | 4844 | 371 | 7.66% | 10.2% | 53.6% |
+| 3 | 7272 | 603 | 8.29% | 25.4% | 55.7% |
+| 4 | 9706 | 1134 | 11.68% | 39.2% | 59.3% |
+| 5 | 12118 | 1658 | 13.68% | 48.9% | 59.8% |
+
+At the shipping `k=5`, **48.9% of at-risk cycles have enough raw balance on the
+due date and are at risk only because a sibling mandate drained the account
+first.** Half the world's difficulty at the scoring calibration is manufactured
+by a constant nobody sourced.
+
+**So V1-versus-k is a measurement, not a prediction, and is excluded from the
+scoring below.** The predictions registered here are for V3, V5 and V7 under
+each mechanism, and for all four targets under R2 and R3, none of which have
+been measured.
+
+---
+
+## The external evidence, and the plausible range declared BEFORE the sweep
+
+The bar agreed for this phase: a 4/4 region only counts if it **overlaps the
+externally-plausible range**, not merely if it exists somewhere in parameter
+space. So the range goes in first.
+
+### R1 — mandates per customer (`k`). Shipping value 5.
+
+**`k=5` has no source anywhere in this repository.** Grepped `docs/`, `NOTES.md`
+and `sim/`: it appears only as a design parameter in run descriptions. It is an
+invented constant of exactly the kind rule 5 forbids, and it has been carrying
+half of V1.
+
+- `[REPORTED]` **~95 million active UPI AutoPay mandates in India at any one
+  time**, ~850 million registered cumulatively, as of March 2026, attributed to
+  NPCI ecosystem statistics by secondary sites. Read 31 August 2026.
+- `[REPORTED]` **UPI passed 500 million unique users by early 2026.**
+- `[REPORTED]` **26 million new mandates/month (July 2024) rising to ~50
+  million/month (July 2025)**; mandate executions 392M -> 808M/month over the
+  same year. Business Standard, citing NPCI.
+- `[REPORTED]` **More than 20 million AutoPay mandates are revoked every month,
+  mainly for insufficient balance.** Business Standard, September 2025.
+- `[REPORTED]` **"The average Indian smartphone user manages 8-12 active
+  subscriptions"** — trackautopay.com, a subscription-tracker vendor. **This is
+  the one figure that would support k=5 and it is discounted**: it is unsourced
+  vendor marketing, and it counts UPI AutoPay, card recurring AND wallet debits
+  together, which is not what `k` means here.
+
+**Derivation, and it is a derivation not a published figure.** 95M active
+mandates over an AutoPay user base of U gives k = 95M/U. Against 500M UPI users
+overall, k=5 requires the entire AutoPay base to be 19M people (3.8% of UPI
+users) while 50M new mandates are created every month. k=2 requires 47.5M
+(9.5%), which is consistent with the creation rate. **Declared plausible range:
+k in [1, 3], centre 2.** k=5 sits outside it.
+
+⚠️ The sources contradict each other and this must be said. One set gives 808M
+executions/month (July 2025); another gives "4.2 crore" (42M) transactions/month
+(March 2026) against 95M active mandates, which cannot both be true of the same
+quantity. Nothing here is `[VERIFIED]`. The range above is an order-of-magnitude
+bound, not a measurement.
+
+### R2 — where in the month salary lands (`payday_day0_frac`). Shipping: 60% on day 0, the other 40% uniform over days 1-29.
+
+- `[REPORTED]` **India's Payment of Wages Act requires wages before the 7th day
+  after the wage period for establishments under 1,000 workers, and before the
+  10th for 1,000 or more.** Multiple Indian payroll/HR sources, read 31 August
+  2026.
+- `[REPORTED]` **Typical Indian payroll runs attendance cutoff ~25th, processing
+  26th-29th, credit on the last day or the 1st.**
+
+**The uniform 40% tail is wrong and is the part with no defence.** It puts 13%
+of the population on a payday between day 15 and day 29 of their cycle, which
+the statutory deadline effectively forbids. **Declared plausible range: at least
+90% of salary credits land within days 0-6 of the cycle, and essentially none
+after day 9.**
+
+### R3 — the debit amount (`amt_frac`). Shipping: `amount = salary x 0.045 x U(0.7,1.3)`, so the debit scales with income.
+
+- `[REPORTED]` **UPI AutoPay subscription tickets run ~₹149-₹2,499**, with the
+  most common use "small-ticket recurring payments under ₹2,000" and consumer
+  app plans "from under ₹100 to a few hundred rupees". Terra Insight, Razorpay
+  blog, PayU blog, read 31 August 2026.
+- `[REPORTED]` **The regulatory cap is ₹15,000 per AutoPay debit**, raised to
+  ₹1,00,000 for insurance premiums, mutual fund SIPs and credit card bills.
+
+**The structural error is not the median, it is the coupling.** A Netflix
+mandate is ₹199 whether the customer earns ₹19,000 or ₹1,90,000. This world
+makes it ₹855 and ₹8,550 respectively, so every customer faces the same
+debit-to-income ratio and nobody is stretched. The shipping median (₹855 at the
+median salary of ₹19,000) is *inside* the published ticket range — so the fix is
+to **decouple, not to shrink**. **Declared plausible range: median ticket
+₹150-₹900, hard cap ₹15,000, drawn independently of salary.**
+
+---
+
+## The three changes, and how they are guarded
+
+All three are keyword arguments on `w3.make_pop`, defaulting to today's
+behaviour, so `DEFAULT` reproduces the current world byte for byte and gate T9
+is untouched. Same discipline as `p_missed_credit` and `p_transient`. Plumbed
+through `agent/tests/_parallel.py`'s `pop_spec` the way `sim/runner.py` already
+extends its own spec tuple.
+
+| id | change | swept over |
+|---|---|---|
+| **R1** | `k` becomes a first-class swept parameter | k in {2, 3, 4, 5} |
+| **R2** | payday drawn day 0 w.p. `p0`, else uniform days 1-6, nothing after day 9 | on / off at k=3 |
+| **R3** | amount drawn lognormal(median M, sigma) **independent of salary**, clipped [99, 15000] | M in {500, 855} at k=3 |
+
+**Nothing is adopted by this run.** It measures; a calibration decision is a
+separate step and needs its own entry.
+
+---
+
+## PRE-REGISTERED PREDICTIONS. Written 31 August 2026 before any arm was run.
+
+Scored as a group, not one at a time — the lesson from W2 and W7 is that
+single-mechanism sweeps trade targets against each other and tell you nothing.
+
+**R1 — k from 5 to the plausible 2-3.**
+
+| id | prediction |
+|---|---|
+| **W10-1** | V3 (fixed-schedule recovery) **RISES** as k falls. Fewer siblings means less re-drain between retries, so the documented T+1..T+4 schedule catches more. Registered band at k=3: **28-45%**, i.e. it may leave the top of the published band. |
+| **W10-2** | V5 (agent recovery) **stays above 90%** at every k in {2,3,4,5}. k does not create uncollectable cycles — the oracle stays at 100% — so removing drain cannot bring V5 into the 70-85% band. **k is not a V5 lever and this predicts it fails as one.** |
+| **W10-3** | V7 **moves by less than 5 points** across k in {2,3,4,5}. The ceiling diagnostic above is flat at 53-60%, so the agent's early share should be flat too. **Registered against the hope that removing drain artifacts helps V7.** |
+| **W10-4** | Mandate survival **rises** for the fixed schedule as k falls (fewer attempts burned on drained cycles), by at least 3 points from k=5 to k=2. |
+
+**R2 — payday concentrated into the statutory days 0-6.**
+
+| id | prediction |
+|---|---|
+| **W10-5** | **All four targets move by less than 3 points.** Concentrating paydays across the population does not change any individual customer's due-date-to-payday gap, because due dates stay uniform. This is registered as a **null result on purpose**: R2 is a realism fix that should buy nothing on the scoreboard, and if it moves a target by more than 3 points something is coupled that should not be. |
+| **W10-6** | The `payday_err=7` assumption becomes **internally inconsistent** with R2 on: an estimate error of +/-7 days on a payday confined to a 7-day window is nearly uninformative. Predicted to show up as the agent's advantage over `payday_wait` shrinking. Flagged now, measured later. |
+
+**R3 — amount decoupled from salary at the same median.**
+
+| id | prediction |
+|---|---|
+| **W10-7** | V1 **RISES** at constant median, by 1-5 points at k=3. Decoupling makes the debit-to-income ratio fat-tailed: low earners face a relatively larger debit, and failures live in that tail. Registered against the intuition that "smaller, more realistic amounts make the world easier". |
+| **W10-8** | The at-risk set **concentrates in low-salary customers**: the bottom salary quartile takes over 40% of at-risk cycles, against ~25% today. |
+| **W10-9** | V5 **falls by less than 8 points** and stays above 85%. Poorer customers are harder but still not *unable* to pay — the oracle stays at 100% — so R3 cannot deliver the V5 band either. |
+| **W10-10** | V7 **falls** by 2-10 points. Customers whose balance is near zero for most of the cycle must wait for payday, which is the slow half of the distribution. |
+
+**The group prediction, which is the one that matters.**
+
+| id | prediction |
+|---|---|
+| **W10-11** | **After all three realism fixes, the world still scores at most 2/4.** V1 and V3 hold or move within their bands; **V5 and V7 both still miss**, because none of R1-R3 creates an uncollectable cycle and none of them brings money back sooner. Realism fixes the provenance of the world, not the scoreboard. |
+| **W10-12** | The residual after R1-R3 is: **V5 needs a collectability mechanism** (terminal declines, W5/W8) and **V7 needs a money-arrives-sooner mechanism** (`topup_p`). Registered as the plan for the next step, so that step cannot be presented as a discovery. |
+
+---
+
+## Two things this run cannot settle, flagged before it runs rather than after
+
+**1. `pop_spend=0.80` was solved against V1 at k=5, and k is changing.**
+`scripts/solve_operating_point.py` (W1) inverted the world to find the spend
+that produces a named due-date failure rate. `0.80` is that answer **at k=5**.
+The claim in `02_RESULTS.md` that V1 "was not fitted" rests on 0.80 being
+`harness.run`'s long-standing default rather than a fitted value, and that is
+true as far as it goes.
+
+Cut k to 3 and V1 lands at 8.29%, still inside 8-15% but sitting on the floor
+with roughly +/-1 point of 2 SE on it. Cut k to 2 and V1 is 7.66%, **outside the
+band**. So a realistic k either keeps the V1 hit marginally or loses it.
+
+**There are two honest responses and they are not equivalent:**
+
+- **(a) Hold `pop_spend=0.80` fixed and report whatever V1 does.** Preserves the
+  "V1 was not fitted" claim. Risks losing a hit that is currently the strongest
+  single piece of evidence in the project.
+- **(b) Re-derive the operating point at the new k**, which is what W1's script
+  is for. Keeps V1 in band by construction — and **makes V1 a fitted target**,
+  leaving three unfitted ones instead of four.
+
+**(b) is not automatically dishonest** — it is what "the calibration that
+reproduces the published failure rate" always meant — but it changes what may be
+claimed, in seven files. **This is Tanmay's call and it is not being taken
+here.** Recorded so that whichever way it goes, it was decided before the
+numbers arrived and not after.
+
+**2. Sample size falls with k and the error bars widen.** At-risk cycles over 8
+populations: 1658 at k=5, 603 at k=3, 371 at k=2. 2 SE on V5 is +/-1.87 at
+k=5 and scales roughly as 1/sqrt(at-risk), so it reaches ~+/-3.9 at k=2 — wide
+enough to make a band call meaningless. **Populations go from 8 to 20 for every
+cell with k<=3**, which restores 2 SE to roughly the k=5 figure. Exploratory
+cells run at n=40 as usual; only the final candidate runs at n=100.
+
+## W10 ADDENDUM, same day, before the run. Four items.
+
+### A1. What W1's solver actually optimises, and why `0.80` survives it
+
+Checked because "V1 was solved for" would mean V1 is fitted and the project has
+three unfitted targets, not four.
+
+`scripts/solve_operating_point.py:57`:
+
+```python
+TARGETS = {
+    "realistic": 0.12,
+    "stressed": 0.50,
+}
+```
+
+**0.12 is the midpoint of the published 8-15% band.** The script bisects
+`pop_spend` until the world's due-date failure rate hits it. So
+**`realistic = 0.7850` IS fitted to V1, explicitly and by construction.** Any
+future run that scores V1 at 0.7850 and calls it unfitted is wrong.
+
+**`0.80` is a different number with a different history.** Git:
+
+```
+sim/w3.py      spend=0.80        5880996  2026-08-27  "Handoff from research phase"
+sim/harness.py pop_spend=0.80    same commit
+agent/metrics.py                 ae671f3  2026-08-30  the recovery-rate metric lands
+```
+
+**`0.80` predates the ability to measure V1 by three days.** It is
+`w3.make_pop`'s and `harness.run`'s original default, chosen before
+`first_presentation_failure_rate` existed as a computable quantity. So V1 at
+`pop_spend=0.80` is genuinely unfitted, the claim in `02_RESULTS.md` stands, and
+there are four unfitted targets.
+
+**Decision: option (a).** `pop_spend` stays pinned at 0.80 through the realism
+work. V1 goes wherever the realism fixes send it, including out of band. The
+operating point is NOT re-derived at the new k, because re-deriving it is
+exactly the bisection above and would convert V1 into a fitted target to save a
+hit.
+
+⚠️ **0.7850 and 0.80 look interchangeable and are not.** One is fitted to the
+validation set and one predates it. Do not substitute.
+
+### A2. `topup_p` — plausible range declared before any result
+
+Registered now, per the phase rule that a swept parameter's externally-plausible
+range goes in before the scorecard is in view.
+
+`topup_p` is the probability that a failed debit is followed by the customer
+putting money in. Its real-world counterpart is the response rate to a
+failed-payment notification.
+
+- `[REPORTED]` **Baremetrics, from an analysis of over 1 million dunning
+  emails**, recovery rate by days delinquent: **day 0 — 13.25%** (41.29% open,
+  11.21% click); day 3 — 11.46%; day 7 — 11.51%; day 15 — 4.22%; day 20 —
+  3.83%; day 30 — 4.20%. Read 31 August 2026,
+  `baremetrics.com/blog/improve-dunning-recovery-rate`.
+- `[REPORTED]` Same source, pre-dunning (sent before the debit): 7 days
+  ahead — 13.84%; 30 days ahead — 14.37%, from ~300,000 emails.
+
+**Declared plausible range: `topup_p` in [0.04, 0.14], centre 0.115.** The
+sweep grid will be {0.00, 0.05, 0.10, 0.15}, which brackets it with one cell
+above the range so the curve's shape is visible past the plausible edge.
+
+**Two things this anchor does NOT license.**
+
+- These are **card** dunning response rates, from a mostly non-Indian base. No
+  UPI AutoPay equivalent was found. The read-across is ours and it is a
+  `[GUESS]` in exactly the way the outage read-across in `01_FACTS.md` is.
+- The rate **decays with delinquency** (13.25% at day 0 to ~4% at day 15) and
+  `topup_p` in `sim_executor.py` is a flat per-failure constant. Modelling the
+  decay is a second change and is NOT being made here; the flat rate is an
+  approximation that **overstates** late-cycle top-ups and therefore flatters
+  V7. Say so wherever the number appears.
+
+⚠️ **And a correction to a claim nearly registered here.** A search summary was
+read as "42% of all recovery happens after day 14", which would have contradicted
+V7's ~90%-inside-10-days band outright. It does not say that. The 42% is
+Churnkey's **overall** recovery rate through dunning email and SMS, a different
+quantity. The Baremetrics table above, where per-touch recovery collapses from
+~13% to ~4% between day 7 and day 15, **corroborates** V7's band rather than
+contradicting it. The near-miss is recorded because it would have been a
+convenient finding and it was wrong.
+
+### A3. Terminal declines — plausible range, and the denominator does not resolve
+
+- `[REPORTED]` **More than 20 million UPI AutoPay mandates are revoked every
+  month, mainly because customer balances fall short.** Business Standard,
+  September 2025, citing NPCI-sourced bank data.
+- `[REPORTED]` **~95 million active mandates** at any time; **~850 million
+  registered cumulatively** (March 2026).
+
+**The arithmetic, shown rather than asserted, because the answer depends
+entirely on the denominator and no source states which one is meant:**
+
+| denominator | monthly rate | over a 120-day horizon |
+|---|---|---|
+| 95M active mandates | **21.1%** | 61% |
+| 850M cumulative registered | **2.4%** | 9.2% |
+
+**Neither is ~4%.** A per-horizon range of 9% to 61% is too wide to calibrate
+anything, so **`p_mandate_broken` is declared as [0.02, 0.20] per mandate per
+horizon** — anchored at the low end by the cumulative-base reading and cut off
+well below the active-base reading, which is implausible against the ~18%
+cancellation figure already in `01_FACTS.md`. `p_account_shut` has **no source
+at all** and stays a pure `[GUESS]`, swept over {0.00, 0.02, 0.05} per customer
+per horizon.
+
+⚠️ **The bigger problem with this anchor is that it is the wrong mechanism.**
+"Revoked because the balance fell short" is a **customer cancelling after
+repeated failures** — that is W3's pressure-responsive hazard, not a frozen
+account and not a broken mandate. Using it to set `p_mandate_broken` borrows a
+number from an adjacent phenomenon. It is the best available and it is not the
+right one. Recorded so the weakness travels with the number.
+
+### A4. V10 — a candidate fifth validation target, for a later phase
+
+**Not built, not scored now.** Logged so it is not rediscovered.
+
+> **V10 — mandate revocation rate.** ~20 million UPI AutoPay mandates revoked
+> per month against ~95 million active, "mainly on low customer balances".
+> `[REPORTED]`, Business Standard, September 2025.
+
+This is the target the fixed-schedule arm already speaks to without being
+scored against it: `baseline_doc` destroys **23.4% of mandates over 120 days**
+against the trade-press ~18% cancellation figure. V10 would make that
+comparison a scored target rather than a remark. It also has the property the
+suite is short of — it scores **mandate death**, which no current target
+touches, and mandate death is where the business argument lives.
+
+Blocked on the denominator problem in A3.
+
+### A5. `k` becomes a DISTRIBUTION, not a scalar — and the prediction changes
+
+The drain artifact is **convex in k**: the share of at-risk cycles caused by a
+sibling draining the account runs 0.0% / 10.2% / 25.4% / 39.2% / 48.9% at
+k = 1..5. A population where everyone holds 2 mandates is therefore **not** the
+same world as a population averaging 2 mandates with a spread, because the
+high-k customers contribute disproportionately to drain.
+
+**Design.** `k_i = 1 + Poisson(lambda)`, capped at `k_max=8`. Every customer
+holds at least one mandate, which is what makes them a customer here. Mean is
+`1 + lambda`. Swept over **mean k in {2.0, 2.5, 3.0}** (lambda 1.0 / 1.5 / 2.0),
+which sits inside the declared plausible range of [1, 3]. Fixed `k` stays
+available and stays the default, so every existing number is reproducible.
+
+**W10-1, W10-2, W10-3 and W10-4 stand as written**, now read against mean k
+rather than fixed k. One prediction is added:
+
+| id | prediction |
+|---|---|
+| **W10-13** | **V1 under a mean-2 mixture is HIGHER than V1 at fixed k=2 (7.66%), and lands in 8-11%.** Drain is convex in k, so the spread adds at-risk cycles that a uniform population of 2-mandate customers does not have. If this holds, a realistic mandate count puts V1 back inside the published 8-15% band **without** re-deriving the operating point — which is the whole reason option (a) is affordable. Registered before the run and it is the load-bearing one: if it breaks low, V1 leaves the band and the (a)/(b) question reopens. |
+
+### A6. One thing the V5 source says that this project has been quoting loosely
+
+The same Baremetrics page that carries the dunning table states the industry
+median recovery rate as **47.6%**, with **70-85% described as what top
+performers achieve** — not as the typical range.
+
+`01_FACTS.md` already lists both (V4 = 47.6% median, V5 = 70-85%), so nothing is
+misquoted. But the framing matters for what a 96.78% measurement means: the
+world is not 12 points above *typical*, it is 12 points above *the best
+operators in the published record*. Worth one sentence wherever V5 is reported.
+
+## W10 RESULT — 7/11 pre-registered, and one broken prediction found a defect in the world
+
+`py -3.12 agent/tests/test_realism_sweep.py`. *n=40, 20 held-out populations
+(700-719), 8 cells x 2 arms = 320 runs, one process each, 120d,
+`payday_err=7`, `pop_spend=0.80` PINNED, `w3.FITTED_BELIEF`. Exploratory
+sample size; not gate-protected.* Raw output kept.
+
+| cell | V1 | V3 | V5 | V7 | score |
+|---|---|---|---|---|---|
+| base k=5 | 13.68% HIT | 25.96% HIT | 96.79% | 40.76% | 2/4 |
+| R1 k~2.0 | 10.23% HIT | 25.10% HIT | 98.57% | 34.87% | 2/4 |
+| R1 k~2.5 | 9.56% HIT | 27.08% HIT | 97.20% | 33.67% | 2/4 |
+| R1 k~3.0 | 11.53% HIT | 26.37% HIT | 98.54% | 39.01% | 2/4 |
+| R2 k~3.0+pay | 6.51% miss | 31.56% HIT | 98.77% | 42.56% | 1/4 |
+| R3 k~3.0+amt | 15.49% miss | 25.25% HIT | 92.13% | 37.81% | 1/4 |
+| ALL k~3.0 | 10.79% HIT | 31.14% HIT | 93.16% | 38.96% | 2/4 |
+| ALL k~2.0 | 7.19% miss | 36.04% HIT | 90.98% | 40.41% | 1/4 |
+
+**W10-11 HELD and it was the point of the exercise: realism does not fix the
+scoreboard.** Nothing here reaches 3/4. Held: W10-2 (k is not a V5 lever, V5
+stays 97-99% at every k), W10-4, W10-7, W10-8, W10-9, W10-11, W10-13. Broke:
+W10-1, W10-3, W10-5, W10-10.
+
+**W10-13 held and it matters practically.** V1 under a mean-2 mixture is
+**10.23%**, against **7.66%** at a fixed k=2 measured policy-free. Drain is
+convex in k, so a realistic mandate count with a realistic SPREAD keeps V1
+inside the published band without re-deriving the operating point. Option (a)
+survives — a fixed k=2 would have cost the V1 hit and a mixture does not.
+
+**W10-3 broke in the direction that makes the problem harder.** V7 moved 7.1
+points across the k range, not the predicted <5, and it moved the WRONG WAY:
+40.8% at k=5 down to 34.9% at k~2.0. Drain-caused at-risk cycles cluster LATE
+in the payday epoch (drain accumulates through the epoch), so they sit close to
+the next credit — mean gap 8.2 days against 10.6 for balance-caused ones.
+Removing the drain artifacts removes the FAST half of the at-risk set. Cleaning
+up k makes V7 worse, and that was registered as a <5 point null.
+
+---
+
+## ⚠️ W10-5 BROKE, AND CHASING IT FOUND THAT THIS WORLD IS NOT STATIONARY
+
+W10-5 predicted the statutory-payday fix would move every target by less than 3
+points, on the reasoning that concentrating paydays cannot change any individual
+customer's due-date-to-payday gap when due dates stay uniform. **That reasoning
+is correct and the prediction still broke: dV1 = −5.01 points.** A registered
+null that breaks by 5 points is either a wrong model of the mechanism or a
+defect. It is a defect.
+
+### The at-risk rate collapses by a factor of forty across the horizon
+
+Policy-free, at-risk share by cycle index, `pop_spend=0.80`, 20 populations:
+
+| payday draw | cycle 0 | cycle 1 | cycle 2 | cycle 3 | overall |
+|---|---|---|---|---|---|
+| `uniform_tail` (shipping) | **29.80%** | 8.62% | 3.05% | **0.75%** | 13.68% |
+| `statutory` | 20.25% | 6.35% | 2.90% | 0.75% | 9.73% |
+
+Split by payday: customers paid on days 0-7 fail **9.38%** of cycles, customers
+paid on day 8 or later fail **26.05%**. Confining paydays to the statutory
+window deletes the second group, which is where the 5 points came from. R2 did
+not change the world's physics; it removed a population that the horizon treats
+unfairly.
+
+### The cause is that customers save 20% of income every month and never spend it
+
+`w3.balance_trace` credits one salary per cycle and spends `spend x salary` per
+cycle. Nothing consumes the surplus. End-of-cycle balance as a share of one
+monthly salary, policy-free, no arm and no drain:
+
+| `pop_spend` | cycle 0 | cycle 1 | cycle 2 | cycle 3 |
+|---|---|---|---|---|
+| **0.80** | 0.02x | 0.23x | 0.43x | **0.63x** |
+| 1.00 | 0.02x | 0.06x (median 0.03) | 0.10x (0.03) | 0.15x (0.03) |
+| 1.05 | 0.02x | 0.04x (0.00) | 0.06x (0.00) | 0.09x (0.00) |
+
+**At `pop_spend=0.80` every customer accumulates a fifth of a salary per month,
+without bound.** By cycle 3 they are sitting on two-thirds of a month's income
+and essentially nothing can fail. The world is a savings accumulator, not a
+steady state. Two independent measurements say the same thing: the balance
+ratchet above, and the at-risk decay beside it.
+
+Everyone also starts at `b = salary x U(0, 0.06)` and waits until day `payday`
+for the first credit, so cycle 0 is a warm-up transient on top of the ratchet.
+The two compound.
+
+### So V1 is a function of how long the run is, and the published band is not
+
+Policy-free, 12 populations, at-risk share against horizon:
+
+| horizon | spend 0.80 | spend 1.00 | spend 1.05 |
+|---|---|---|---|
+| 60d | 27.67% | 64.26% | 71.08% |
+| 90d | 17.85% | 61.59% | 70.01% |
+| **120d** | **13.72%** | 59.31% | 69.10% |
+| 180d | 8.19% | 53.61% | 64.90% |
+| 240d | 5.86% | 51.97% | 63.33% |
+| 360d | 4.24% | 49.51% | 62.08% |
+
+**V1 does not converge.** At `pop_spend=0.80` it runs from 27.67% to 4.24% and
+the published 8-15% band is crossed twice. The 120-day horizon is what places
+V1 inside it. Run the same world for 180 days and V1 is 8.19%, on the edge; for
+240 days and it is outside.
+
+**A first-presentation failure rate is a steady-state quantity in every source
+that publishes one. This world does not have one.** So V1's hit is not the
+world reproducing an external figure — it is a decaying transient sampled at the
+horizon where it happens to cross the band. Nothing was tuned to arrange that,
+and it flatters the project anyway, which is the pattern in every one of the
+thirty-two errors before it.
+
+`pop_spend=1.00` does not fix it (64.26% -> 49.51%). Per-customer spend is drawn
+`normal(spend, 0.10*spend)` and clipped, so at any centre roughly half the
+population has spend < 1 and ratchets up regardless.
+
+### What this invalidates, stated plainly
+
+- **V1 as an unfitted hit.** Still unfitted — `pop_spend=0.80` predates
+  `agent/metrics.py` by three days and that stands. But horizon-dependent, so
+  the comparison to a steady-state published band is not sound as it stands.
+- **V5 and V7 as measured.** Most at-risk cycles are in cycles 0-1; by cycle 2
+  the account is full, so recovery is easy (V5 high) and the at-risk set is
+  concentrated where balances are lowest (V7 slow). Both misses have a
+  contribution from the transient that has never been separated out.
+- **Everything conditioned on `pop_spend=0.80`,** including W9's 3.47-point
+  pooling figure and the +6.36 headline at that calibration. The 1.05
+  calibration drifts far less (71% -> 62%) so the +40.30 headline is much less
+  exposed, but "less exposed" is not "unaffected".
+
+**Not adopted, not fixed, and not written into any public document yet.** The
+repair is a modelling decision — consumption as a function of available balance,
+or a periodic drawdown of surplus — and it moves every number in the project.
+Tanmay's call, raised before anything was published.
+
+**Candidate error 33** for `docs/03_ERRORS.md`: *the world has no steady state,
+so a validation target defined as a steady-state rate is measured against a
+transient, and the horizon sets the answer.*
+
+---
+
+## A defect in W10's own measurement, found while reading the k row
+
+`k_seed` was passed as a single constant (4242) for every population, so all 20
+populations received the **identical vector of mandate counts**. The k mixture
+was therefore one draw of 40 counts reused twenty times, not a sample averaged
+over populations.
+
+It shows: V1 across the k cells is **non-monotone** — 10.23% at k~2.0, 9.56% at
+k~2.5, 11.53% at k~3.0 — which is not a thing a mean mandate count can do to a
+failure rate. That is the shared count vector, not a finding about k.
+
+**So every R1 row above is one realisation and its spread across populations is
+understated.** W10-13's number (10.23%) is the one to re-check first, because
+it is the row that decides whether option (a) survives. `k_seed` must vary per
+population (`K_SEED + pop_seed`). Fixed in the script; the cells are NOT re-run
+yet, because re-running them against a non-stationary world would measure the
+transient again.
+
+Same failure mode as error 27 (W2's missed credits drawn from the money path)
+and the W7 hold generator: a new mechanism's randomness has to be independent
+per unit, and getting it wrong makes a sweep compare fewer things than it looks
+like it is comparing. Third time. The generator discipline in `balance_trace`'s
+docstring needs to extend to `make_pop`.
+
+# 2026-08-31 — W11: THE STATIONARITY REPAIR. PRICED AND PRE-REGISTERED BEFORE ANY CODE.
+
+Decision taken: repair (b), a **payday surplus sweep**. Not (a), a
+balance-proportional consumption function. (b) keeps `pop_spend`'s meaning,
+adds one parameter, and matches what salaried Indians do with surplus —
+recurring deposits, SIPs, auto-sweep fixed deposits. A SIP is itself a UPI
+AutoPay mandate, so the mechanism is in-domain rather than borrowed.
+
+Nothing is implemented. This entry is the price, the derivation of the scoring
+point, the declared range for the new constant, and the predictions.
+
+---
+
+## 1. THE PRICE OF THE RE-MEASURE
+
+### Blast radius, grepped 31 August 2026
+
+`98.01 | 57.70 | 40.30 | 6,203,060 | 36.48 | +6.36 | 13.68 | 27.85 | 96.78 |
+97.38 | 42.94 | 41.84 | 8.34 | 9.53 | 68.71 | 90.84`
+
+| file | lines carrying a headline number |
+|---|---|
+| `docs/02_RESULTS.md` | 40 |
+| `docs/index.html` | 15 |
+| `docs/08_ARCHITECTURE.md` | 14 |
+| `README.md` | 13 |
+| `docs/00_HANDOFF.md` | 13 |
+| `docs/04_BUILD_PLAN.md` | 12 |
+| `docs/06_MODEL_CARD.md` | 9 |
+| `docs/01_FACTS.md` | 3 |
+| `docs/03_ERRORS.md` | 2 |
+| `docs/07_AGENT_BRIEF.md` | 2 |
+| `docs/data/scenarios.json` | 1 (regenerated, not edited) |
+| **total** | **124 lines across 11 files** |
+
+### Compute, and it splits into two very different bills
+
+**THE FAST GATE IS ALREADY GREEN WITH THE W10 KNOBS IN.** 20 gates, 2 FAIL
+(S1, S1_PD, both known), 0 vacuous, 71.2s. **T9 passed**, which is the byte-lock
+on the world — so a guarded knob defaulting OFF costs nothing until it is
+switched on by default. That is what makes the two bills different.
+
+**Bill A — measure the new world, defaults stay OFF.** No gate re-baseline, no
+refit. Every number below is measured in a *named configuration*, not the
+repository default.
+
+| script | scale | estimate |
+|---|---|---|
+| `agent/batch_report --pops 4` | the deliverable | ~50s (measured) |
+| `test_recovery_rates.py` | 32 runs | ~100s (measured) |
+| `test_realism_sweep.py` | 320 runs, n=40 | ~5 min (measured) |
+| `test_insolvency_sweep.py` | 48 runs | ~2 min |
+| `test_transient_sweep.py` | 224 runs | ~7 min |
+| `test_action_ablation.py` | arms x 8 pops | ~3 min |
+| `test_stop_mechanism.py` | arms x pops x horizons | ~4 min |
+| `test_outage_ablation.py` | severities x arms x 8 pops | ~5 min |
+| `test_decline_sweep.py` | axes x rates x 8 pops + combos | ~5 min |
+| `test_pooling_consent.py` | W9's 3.47 / 9.54 | **>10 min (documented)** |
+| `scripts/spend_sweep.py` | the `pop_spend` curve | ~4 min |
+| `scripts/solve_operating_point.py` | policy-free bisection | ~1 min |
+| `scripts/discount_sweep.py` | the 0.92 constant | ~3 min |
+| `sim/headline.py` | conditional headline vs `payday_wait` | ~3 min |
+| `sim/fair_audit.py` | generalisation audit | ~71s (documented) |
+| `sim/stress_day0.py` | prior_day0 stress | ~2 min |
+| `sim/gate.py --tier full` | 27 gates | ~100s idle (documented) |
+| `scripts/build_page_data.py` | regenerates `scenarios.json` | ~1 min |
+| **total** | | **≈ 60-70 minutes of compute**, serial |
+
+**Bill B — adopt the new world as the DEFAULT.** Everything in Bill A, plus:
+
+| item | why | cost |
+|---|---|---|
+| `sim/t9_reference.py --recapture` | the byte-lock is on the old world | ~3 min + a full field-level diff to paste into NOTES |
+| **`sim/fit_belief.py`** | ⚠️ **`FITTED_BELIEF` was fitted at `pop_spend=1.05` on the NON-STATIONARY world.** Coordinate search, 2 passes, candidates x 8 train seeds x 6 payday-error cells | **30-60 min, and see the warning below** |
+| `sim/ml_study.py` | the 6-world misspecification study | ~15-30 min |
+| re-run all of Bill A **again** after any refit | a new prior invalidates everything measured on the old one | **+60-70 min** |
+| **total** | | **≈ 3 hours**, and two full measurement passes |
+
+⚠️ **THE REFIT IS THE EXPENSIVE PART AND IT TOUCHES RULE 6.** `CLAUDE.md` rule 6
+puts headline `FITTED_BELIEF` selection off-limits without saying so first. This
+says so. The prior was selected on a world that accumulates savings without
+bound; in a stationary world the payday posterior's job changes, so shipping the
+old prior means shipping a filter fitted to a world that no longer exists.
+**Refitting is the honest option and it is not free — and it must not be
+re-selected until after the world is frozen, or the fit chases a moving world.**
+
+**Recommendation: Bill A first.** Measure the stationary world as a named
+configuration, decide whether it is right, and only then pay Bill B. Adopting a
+default before the world has been checked would buy a 3-hour re-measure of
+something that may still be wrong.
+
+---
+
+## 2. THE SCORING POINT IN A STATIONARY WORLD — AND IT IS EXTERNALLY DERIVABLE
+
+The question: `0.80` is unfitted today only by the accident that it predates
+`agent/metrics.py` by three days. Once the world changes, that accident expires.
+What replaces it?
+
+**Answer: the household savings rate, and it makes no reference to any
+validation target.**
+
+- `[REPORTED]` **Net household financial savings were 7.0% of gross national
+  disposable income in FY25**, up from 5.8%. RBI Annual Report, read 31 August
+  2026.
+- `[REPORTED]` **Gross household financial savings 11.8% of GNDI in FY25**
+  (12.1% in FY24); household financial liabilities 4.8% of GNDI.
+- `[REPORTED]` Household saving including physical assets (property, gold) runs
+  **~18-20% of GDP** — households saved ₹54.6 lakh crore in FY24, of which
+  ₹38.4 lakh crore was physical.
+
+**`pop_spend` is one minus the savings rate.** Money that goes into a fixed
+deposit, an SIP, gold or property leaves the transactional account, which is
+exactly what the sweep models. So:
+
+| savings rate used | implied `pop_spend` |
+|---|---|
+| net financial, 7% | 0.93 |
+| gross financial, 11.8% | 0.88 |
+| including physical assets, 20% | **0.80** |
+
+**`pop_spend = 0.80` is the total-savings reading and sits inside the published
+range, at its high-savings edge.** So the scoring point survives, and its
+justification changes from "it is the historical default" to "it is one minus
+the published household savings rate". That is a stronger basis than the one it
+had, and it is derived from RBI aggregates rather than tuned to V1, V3, V5 or V7.
+
+**AND IT REFRAMES THE DEFECT.** `pop_spend=0.80` was never the wrong number.
+The error is that the 20% saved never LEAVES the account, so the model is
+internally inconsistent with its own parameter. The sweep does not change the
+calibration; it makes the calibration mean what it always said it meant.
+
+⚠️ **What this does not establish.** The RBI figures are national aggregates
+across rural, agricultural and self-employed households. The salaried urban
+segment that holds UPI AutoPay mandates saves differently and no
+segment-specific figure was found. `[REPORTED]`, not `[VERIFIED]`. The declared
+scoring range is **`pop_spend` in [0.80, 0.93]**, with **0.80 retained as the
+scoring point** because it is inside the range and is the historical value —
+moving it to 0.88 after seeing a scorecard would be the exact fitting move this
+phase exists to avoid.
+
+---
+
+## 3. THE NEW CONSTANT, AND ITS PLAUSIBLE RANGE DECLARED BEFORE ANY SWEEP
+
+### The repair is TWO mechanisms, not one, and saying so now avoids a false null
+
+A surplus sweep alone does **not** fix the 120-day horizon. At `pop_spend=0.80`
+a customer accumulates 0.20 salaries per cycle, so a buffer cap of 1.6 salaries
+is not reached until roughly cycle 8 — outside the horizon entirely. And the
+sweep does nothing about the OTHER transient: every customer starts at
+`b = salary x U(0, 0.06)` and waits until day `payday` for the first credit, which
+is why cycle 0 fails at **29.80%** against cycle 3's **0.75%**.
+
+So W11 is:
+
+- **S1 — steady-state initialisation.** Start each customer at a balance drawn
+  from the stationary distribution instead of near zero.
+- **S2 — payday surplus sweep.** At each payday, any balance above
+  `buffer x salary` leaves the account.
+
+Both guarded, both OFF by default, both byte-for-byte inert when off, the same
+discipline as R1-R3 and `p_missed_credit`.
+
+### `buffer` — the declared plausible range
+
+- `[REPORTED]` **The average savings account balance in India is just over
+  ₹30,000.** Business Standard, state-level RBI data. Against this world's
+  median salary of ₹19,000 that is **~1.6 monthly salaries**.
+- `[REPORTED]` **75% of Indians have no emergency fund** and "could default on
+  their EMIs in the event of a sudden layoff"; only 25% do. Business Standard.
+- `[REPORTED]` Financial-advice convention is 3-6 months of expenses. **This is
+  advice, not behaviour**, and the 75% figure says the median household is
+  nowhere near it. It is recorded so it is not mistaken for an anchor.
+
+**The ₹30,000 average is a mean over a strongly right-skewed distribution**, so
+it overstates the median holder badly, and the 75%-no-emergency-fund figure says
+the typical salaried customer holds well under one month of income.
+
+**Declared plausible range: `buffer` in [0.1, 1.6] monthly salaries, centre
+0.5.** Swept over {0.10, 0.25, 0.50, 1.00, 1.60}. `[GUESS]` on the exact value,
+externally bounded at both ends.
+
+⚠️ **`buffer` sets V1 directly and this is the trap to avoid.** A large buffer
+makes accounts flush and V1 collapses; a small one makes them fragile and V1
+rises. **The cell that lands V1 in band must NOT be adopted as the calibration.**
+The deliverable is the curve across the declared range and a statement of which
+part of it overlaps the published band — not the cell that scores best. This is
+the same rule W7 was held to when its grid was deliberately not refined.
+
+---
+
+## 4. PRE-REGISTERED PREDICTIONS. Written 31 August 2026, before implementation.
+
+**The test of the repair itself.**
+
+| id | prediction |
+|---|---|
+| **W11-1** | **With S1+S2 on, V1 is horizon-independent**: `|V1(120d) - V1(240d)| < 2 points` at every swept buffer. Today that gap is **13.72% -> 5.86%, i.e. 7.9 points**. This is the prediction the whole repair exists to satisfy; if it breaks, the repair does not work and nothing downstream should be reported. |
+| **W11-2** | V1 falls **monotonically** in `buffer` across {0.10 ... 1.60}. A non-monotone curve means a defect, not a finding. |
+| **W11-3** | **At `buffer >= 1.00` salaries, V1 is BELOW 5%** — outside the published 8-15% band. Registered against the convenient outcome: the externally-anchored average-balance value (1.6x) is predicted to make the world TOO EASY, not conveniently right. |
+| **W11-4** | **S1 alone** (steady-state init, no sweep) lowers V1 at 120d by **3-8 points**, because cycle 0's 29.80% is the single biggest contributor to the 13.68% average. |
+
+**The four validation targets.**
+
+| id | prediction |
+|---|---|
+| **W11-5** | V5 stays **above 90%** at every buffer >= 0.5. The sweep removes money the customer was never going to need; it creates no uncollectable cycle, and the oracle stays at 100%. **k was not a V5 lever and neither is this.** |
+| **W11-6** | V7 moves by **less than 5 points**. The sweep changes how much money is in the account, not WHEN it arrives, and V7 is a question about arrival time. |
+| **W11-7** | V3 moves by **less than 5 points** at buffer 0.5. |
+| **W11-8** | **The world still scores at most 2/4 anywhere in the declared buffer range.** Third time this has been registered (W10-11, and W7 before it) and it has held both times. If it breaks, rule 3 applies — treat it as a defect until each target is explained independently. |
+
+**The headline numbers, which are what the re-measure actually costs.**
+
+| id | prediction |
+|---|---|
+| **W11-9** | **The +40.30 headline at `pop_spend=1.05` moves by less than 5 points** (lands 35-45). At 1.05 the world barely ratchets — V1 runs 71.08% -> 62.08% across 60d to 360d, against 27.67% -> 4.24% at 0.80 — so the stressed calibration is only lightly exposed. |
+| **W11-10** | **The +6.36 at `pop_spend=0.80` moves by MORE than 3 points, and RISES.** The realistic calibration is where the free money accumulates, so removing it makes the world harder and the agent's edge larger. Registered in the direction that flatters the project, deliberately, so that a rise cannot later be presented as a discovery. |
+| **W11-11** | **W9's pooling figure at 0.80 (+3.47 pts) RISES by at least 1 point**, for the same reason: pooling is worth more in a harder world, and 9.54 at 1.05 against 3.47 at 0.80 is already that curve. |
+| **W11-12** | **`cycle_rec` at 0.80 falls from 99.60%.** Registered because a metric that stays above 99% after the world is made harder would mean the sweep is not binding. |
+
+**Not scorable here, recorded so they are not claimed later:** whether
+`FITTED_BELIEF` still selects `prior_w=9, prior_floor=0.5` after the world is
+stationary. That needs `sim/fit_belief.py` and it must not run until the world
+is frozen.
+
+## W11 ADDENDUM — design decisions taken before implementation. 31 August 2026.
+
+### B1. Which way the RBI mismatch biases the world — the premise holds, the conclusion does not
+
+The proposed read was: the simulated population is salaried-urban with mandates,
+the RBI figure is a national aggregate including rural, agricultural and
+self-employed households; salaried-urban save more, so `pop_spend=0.80` is a
+*harder* world than the segment truth, i.e. conservative.
+
+**The premise is right and the conclusion is not established, because two
+effects point in opposite directions.**
+
+**Effect 1, which supports the read.** Salaried urban households almost
+certainly save a larger share of income than the national aggregate: higher
+incomes, and a statutory retirement contribution the aggregate's rural and
+self-employed members mostly do not have. Higher savings rate means lower
+consumption, so segment-true `pop_spend` < 0.80, and running at 0.80 spends
+faster than truth. **Harder than truth. Conservative.**
+
+**Effect 2, which cuts the other way and is specific to salaried employment.**
+
+- `[REPORTED]` **EPF is 12% of basic + DA from the employee and 12% from the
+  employer, and the employee's share is deducted BEFORE the salary is credited**,
+  reducing take-home pay. Mandatory to a ₹15,000 monthly wage ceiling; voluntary
+  above it. ClearTax, HDFC Bank, SalaryBox, read 31 August 2026.
+
+**`c["salary"]` in this world is the amount that lands in the account — take-home
+pay.** EPF never enters the account, so it cannot be swept out of it. The
+quantity the sweep models is savings *out of take-home*, and for salaried
+households a large part of total saving has already been removed before the
+credit. Netting it out lowers the applicable rate, which raises segment-true
+`pop_spend` above 0.80. **Easier than truth. Anti-conservative.**
+
+**Net direction: ambiguous, and it is not resolvable from the sources found.**
+Effect 1 is about the whole savings rate; effect 2 is about which part of it
+passes through the bank account, and no source gives savings-out-of-take-home for
+salaried Indian households. Recorded as ambiguous rather than claimed as
+conservative, because "conservative" is the comfortable answer and it is the one
+that would go unchecked.
+
+**What this does not change:** `pop_spend = 1 - savings_rate` is still an external
+derivation, still makes no reference to any validation target, and 0.80 is still
+inside the published range. The bias direction is a caveat on it, not a
+retraction of it.
+
+### B2. S1 is BURN-IN, not an explicit initial draw. W11-4 is VOID.
+
+Design changed at Tanmay's direction, **before implementation and before any
+measurement**. Burn-in has no free parameter, and its initial state is
+self-consistent with the sweep instead of being a second thing to anchor. An
+explicit draw would have needed its own external anchor and would have had the
+wrong shape — a flat buffer for everyone contradicts "75% have no emergency
+fund", which is the k-mixture lesson again.
+
+**Implementation.** `balance_trace` simulates `burn_cycles * cycle_days + days`
+and returns only the last `days`. Burn-in is a whole number of cycles, so the
+payday phase at the start of the measurement window is exactly what it is today
+and no calendar shifts. `burn_cycles=0` is the default and reproduces the current
+trace byte for byte.
+
+**⚠️ W11-4 IS VOID.** It predicted "S1 alone lowers V1 at 120d by 3-8 points",
+which was written against the explicit-draw design. Under burn-in, S1 alone is
+not a separable mechanism: with no sweep the balance keeps accumulating through
+the burn-in period, so burn-in without S2 makes the world easier without limit.
+Scoring W11-4 against burn-in would be scoring a prediction against a mechanism
+it was not written about. It is withdrawn, not reinterpreted.
+
+**Replacement, registered now:**
+
+| id | prediction |
+|---|---|
+| **W11-4b** | **Burn-in WITHOUT the sweep drives V1 below 2%** at 120d. This is the check that S1 and S2 are co-dependent rather than separable, and it is why they ship as one mechanism with two parts. |
+| **W11-4c** | **Burn-in length converges**: V1 at `burn_cycles` 12 and 16 differ by less than 1 point at the canonical buffer. `burn_cycles` is a convergence parameter, not a fitted one, and it is chosen by this check rather than by any target. |
+
+**And a distinction that must not be blurred.** With burn-in, every mandate in
+the measurement window has been billing through the burn-in period, so cycle 0
+of the window is a steady-state cycle. **New-mandate first-cycle failure is a
+different quantity from steady-state V1 and is not modelled here.** If it is
+modelled later it gets its own target and its own published band — logged as
+**candidate V11** beside V10 — and it is never averaged into V1.
+
+### B3. The buffer's canonical value, committed BEFORE the sweep
+
+Same discipline as `pop_spend`: the adopted point is chosen on external grounds,
+the sweep only supplies the curve.
+
+**Canonical: `buffer_i ~ lognormal(median = 0.25 monthly salaries, sigma = 1.0)`,
+drawn per customer from its own generator.**
+
+**Source and derivation, in the open.**
+
+- `[REPORTED]` **75% of Indians have no emergency fund**; only 25% do. Business
+  Standard. Reading "has an emergency fund" as holding at least half a month of
+  income in the account, this fixes the shape: `P(buffer < 0.5) = 0.75`. With
+  `sigma = 1.0`, `Phi((ln 0.5 - ln 0.25) / 1.0) = Phi(0.693) = 0.756`. **The
+  median is set by this anchor, not chosen.**
+- `[REPORTED]` **The average Indian savings account balance is just over
+  ₹30,000**, ~1.6 monthly salaries against this world's ₹19,000 median.
+
+⚠️ **The two anchors are inconsistent and the canonical value does NOT reproduce
+the second one.** The lognormal above has a mean of 0.41 monthly salaries
+(~₹7,800), well under ₹30,000. Forcing both anchors simultaneously requires
+`sigma = 2.34`, which puts the 99th percentile at 24 months of income and is not
+a household balance distribution. **The ₹30,000 average is a mean over all
+account types, including business and high-net-worth accounts, and is treated as
+an upper bound that is deliberately not matched.** The 75% figure is about
+households, which is the population being modelled, so it wins. Stated here
+rather than discovered later.
+
+**The sweep still runs fixed scalars {0.10, 0.25, 0.50, 1.00, 1.60} to give the
+curve, plus the canonical distribution as its own cell.**
+
+**PRE-COMMITTED: the canonical cell is the lognormal above. It is NOT chosen as
+the V1-optimal cell, and which cell is V1-optimal is unknown at the time of
+writing — nothing has been run.** If the canonical cell misses a band, that is
+reported as a miss. Adopting a different buffer after seeing the scorecard would
+be fitting on the validation set and is forbidden.
+
+### B4. The knob count, kept visible on purpose
+
+The canonical world would carry six choices beyond the original model. Each is
+listed with the single external source it rests on. **If this table keeps
+growing, that is the finding — a world with a dozen tuned knobs is not more
+realistic than one with three, it is just less falsifiable.**
+
+| knob | value | the one external source it rests on |
+|---|---|---|
+| **R1** `k` mixture | `1 + Poisson(k_mean-1)`, capped 8 | ~95M active AutoPay mandates against a UPI base of ~500M users |
+| **R2** payday window | day 0 mass, remainder days 1-7 | Payment of Wages Act: wages before the 7th / 10th day |
+| **R3** amount | lognormal, independent of salary | published AutoPay ticket range ₹149-₹2,499, ₹15,000 cap |
+| **S1** burn-in | whole cycles, convergence-checked | none needed — no free parameter |
+| **S2** buffer | lognormal(median 0.25, sigma 1.0) | 75% of Indians have no emergency fund |
+| `pop_spend` | 0.80, retained | RBI household savings rate ~18-20% incl. physical assets |
+
+Two of the six are unchanged in value from what the repository already shipped
+(`pop_spend`) or need no value at all (`burn-in`). **Four new numbers, four
+sources, no unsourced constants.** `k=5`, the uniform payday tail and the
+salary-coupled amount are all removed rather than added to.
+
+### B5. Steelmanning `payday_wait` — scoped, not started
+
+`sim/harness.py:400`:
+
+```python
+tgt = day + 1 + ((est_pay - (day + 1)) % cyc) if m["n"] == 0 else day + 1
+```
+
+**Only the FIRST attempt targets the estimated payday. Every retry after that is
+`day + 1` — daily retries.** So after one miss the "competitive baseline"
+degenerates into the fixed schedule, burns the NPCI cap in three more days, and
+kills the mandate. It also never updates `est_pay`, which is drawn once with
+`+/- payday_err` noise and is wrong for the whole horizon.
+
+**That is not the best a rival builds in an afternoon, and the honest answer to
+"is your baseline steelmanned" is currently no.**
+
+**Planned as a NEW policy, not an edit.** `payday_wait` stays exactly as it is —
+it is locked by T9 and quoted in seven files, and changing it would restate
+gated numbers for a reason unrelated to the world. The new arm gets both things
+it is missing:
+
+1. **An online payday estimate.** Start from `est_pay`; after any successful
+   collection on day d, move the estimate toward `d % cyc`. A success is strong
+   evidence money had just arrived. Uses only outcomes the policy can see.
+2. **Retries that are not daily.** On a failure, re-target the next plausible
+   payday rather than tomorrow.
+
+Pooled across the customer's mandates, matching the agent's pooling, so the
+comparison is not secretly about pooling.
+
+**It may well narrow the headline, and that is the point of building it.**
+Registered before it runs, so a narrower gap cannot be presented as a surprise.
+
+## W11 RESULT, PART 1 — the world. Policy-free, 5/5 pre-registered. 31 August 2026.
+
+No arm is run anywhere in this section. Every number is a property of
+`w3.balance_trace` and `SimExecutor.at_risk_cycles()`, which is what makes them
+uncontaminated by the thing they will be used to measure.
+
+*n=40, 6 populations (700-705), 120d unless stated, `burn_cycles=12`,
+`payday_err=7`. Not gate-protected.*
+
+### The repair works
+
+| configuration | V1 at 120d | V1 at 240d | drift |
+|---|---|---|---|
+| **today** (no burn-in, no buffer) | 12.73% | 5.95% | **+6.77** |
+| burn-in only, no buffer | 0.74% | 0.39% | +0.35 |
+| burn-in + buffer 0.10 | 5.27% | 5.38% | **−0.11** |
+| burn-in + canonical buffer, spend 0.80 | 2.45% | 2.75% | −0.30 |
+| burn-in + canonical buffer, spend 0.88 | 12.31% | 12.90% | −0.59 |
+
+**Horizon dependence is gone.** The registered threshold was 2 points and the
+worst observed drift is 0.77.
+
+### Pre-registered scoring, the policy-free half
+
+| id | prediction | outcome |
+|---|---|---|
+| **W11-1** | V1 horizon-independent, `abs(V1(120d) − V1(240d)) < 2 pts` | **HELD** — worst 0.77, against 6.77 today |
+| **W11-2** | V1 falls monotonically in buffer | **HELD** — 12.12 / 5.22 / 2.31 / 0.74 / 0.71 at spend 0.80, monotone in every spend row |
+| **W11-3** | at buffer >= 1.00, V1 below 5% | **HELD** — 0.74% at both 1.00 and 1.60 |
+| ~~W11-4~~ | ~~S1 alone lowers V1 by 3-8 pts~~ | **VOID** — written against the explicit-draw design, withdrawn when S1 became burn-in, before implementation |
+| **W11-4b** | burn-in WITHOUT the buffer drives V1 below 2% | **HELD** — 0.74%. S1 and S2 are co-dependent, as claimed |
+| **W11-4c** | burn-in converged: 12 vs 16 cycles within 1 pt | **HELD** — 0.11 pts at spend 0.80, 0.08 at 0.88 |
+
+**5/5 held, 1 void.** `burn_cycles=12` is adopted as the convergence setting on
+W11-4c and on nothing else:
+
+| burn_cycles | 0 | 2 | 4 | 8 | 12 | 16 |
+|---|---|---|---|---|---|---|
+| V1 at spend 0.80 | 13.93% | 3.46% | 2.78% | 2.67% | **2.45%** | 2.34% |
+| V1 at spend 0.88 | 29.35% | 15.39% | 14.84% | 13.27% | **12.31%** | 12.23% |
+
+### ⚠️ V1's HIT WAS THE TRANSIENT, AND THIS IS THE MEASUREMENT THAT SAYS SO
+
+At `burn_cycles=0` with the canonical buffer and spend 0.80, V1 is **13.93%** —
+essentially the published **13.68%**. Turn burn-in on and the same world gives
+**2.45%**. The buffer barely matters without burn-in; the transient dominates
+completely.
+
+**So the 8-15% agreement was the horizon cutting a decaying curve, not the world
+reproducing an external rate.** Nothing was tuned to arrange it and it flattered
+the project anyway. Candidate error 33 stands.
+
+### The V1 surface, and the buffer saturates
+
+Policy-free V1 in the stationary world. `H` = inside the published 8-15%.
+`*` = inside the externally derived `pop_spend` range [0.80, 0.93].
+
+| spend | buf 0.05 | buf 0.10 | buf 0.15 | buf 0.25 | buf 0.50 |
+|---|---|---|---|---|---|
+| *0.80 | **12.12 H** | 5.22 | 2.31 | 0.74 | 0.71 |
+| *0.85 | 23.19 | **13.41 H** | 7.31 | 4.42 | 4.40 |
+| *0.88 | 30.50 | 20.06 | **12.50 H** | 7.86 | 7.69 |
+| *0.90 | 36.22 | 25.45 | 17.50 | **12.17 H** | **12.04 H** |
+| *0.93 | 43.94 | 33.83 | 25.20 | 18.36 | 18.16 |
+| 0.96 | 52.27 | 42.68 | 35.72 | 29.35 | 29.24 |
+| 1.00 | 61.69 | 53.94 | 48.06 | 43.25 | 42.92 |
+
+**Two things worth keeping.** The in-band cells form a **diagonal ridge that
+lies entirely inside the externally derived spend range** — so a stationary
+world CAN reproduce V1 at a household savings rate the RBI publishes, which was
+not guaranteed. And **the buffer saturates above ~0.25**: the 0.25 and 0.50
+columns are identical to two decimals everywhere. The declared plausible range
+[0.1, 1.6] is therefore mostly inert, and **only the bottom decile of the buffer
+distribution does any work.** The customers who fail are the ones with almost no
+buffer, which is the 75%-with-no-emergency-fund group. The mechanism story and
+the anchor agree.
+
+### The canonical buffer, and where it puts V1
+
+The canonical distribution reproduces its anchor: drawn `P(buffer < 0.5) =
+0.745` against the target 0.75 from the no-emergency-fund figure. Median 0.268,
+mean 0.407.
+
+| spend | V1 120d | drift vs 240d | at-risk cycles | |
+|---|---|---|---|---|
+| 0.80 | **2.45%** | −0.30 | **89** | miss |
+| 0.85 | 7.89% | −0.19 | 287 | miss, just below |
+| **0.88** | **12.31%** | −0.59 | 448 | **HIT** |
+| 0.90 | 16.76% | −0.34 | 610 | miss |
+| 0.93 | 23.58% | −0.77 | 858 | miss |
+
+**⚠️ AT THE PRE-COMMITTED CANONICAL BUFFER, `pop_spend=0.80` MISSES V1 BY AN
+ORDER OF MAGNITUDE, AND 0.88 HITS IT.**
+
+**0.88 is `1 − 0.118`, and 11.8% of GNDI is RBI's gross household financial
+savings rate for FY25.** It is one of the three published readings already
+written down in this file before any of this ran, it is inside the declared
+[0.80, 0.93], and it is the direction addendum B1 registered in advance — that
+netting out EPF, which is deducted before the salary is credited and therefore
+never enters the account, raises the applicable spend above 0.80.
+
+**AND IT IS STILL THE SHAPE OF A CURVE FIT, WHICH IS WHY IT IS NOT BEING
+ADOPTED HERE.** Three published readings were available; the one that scores is
+the one that would get picked. The components were each committed in advance and
+the conclusion was not. **The scoring point is not moved in this entry.**
+`docs/` says nothing. Tanmay's call, with the three options written out below
+rather than one recommended by its score.
+
+### ⚠️ CANDIDATE ERROR 34 — mandate collections never leave the balance trace
+
+Found while checking whether the 0.88 result is mechanically sensible, under
+rule 3.
+
+At `k=5` the mandates total 5 x ~₹855 = ₹4,275 a month against a median salary
+of ₹19,000 — **22.5% of income in subscriptions.** Add `pop_spend=0.88`
+consumption and the household spends 110% of what it earns, which is not a
+household.
+
+It does not blow up, because **`w3.balance_trace` contains no mandate outflow at
+all.** `SimExecutor.at_risk_cycles` subtracts `drained` WITHIN a payday epoch and
+that reset is deliberate and documented — but the underlying `bal` array never
+has a collected debit permanently removed. **Subscriptions are collected and
+then given back at the next payday.** Over four cycles that is 90% of a monthly
+salary handed to every customer.
+
+**This is a second contributor to the ratchet, independent of the savings
+surplus, and it was not in the diagnosis.** The buffer sweep hides it: capping
+carry-over absorbs both the unspent surplus and the refunded subscriptions
+together, which is why stationarity holds. But the interpretation of `pop_spend`
+is then "consumption excluding subscriptions, with the subscription outflow
+absorbed by the cap", not "consumption".
+
+**Not fixed here.** It interacts with `k` — at the realistic mean-2 mixture with
+decoupled amounts the subscription burden is ~9% of income rather than 22.5%,
+which is survivable — so it should be judged after R1 and R3 are in the
+canonical world, not before. Logged, not buried.
+
+### The three options on the scoring point
+
+| | consequence |
+|---|---|
+| **(a) hold `pop_spend=0.80`** | V1 = 2.45%, a MISS by an order of magnitude, and **89 at-risk cycles over 6 populations**. V5 and V7 have no statistical power at all there. The scoring point becomes uninformative rather than merely unflattering. |
+| **(b) move to 0.88** | V1 = 12.31% HIT, 448 at-risk. Justified by a specific published figure and by a direction registered in advance — and it is still selecting among three readings after seeing which one scores. |
+| **(c) score across the whole [0.80, 0.93] range** | No single scoring point. Report which parts of the externally plausible range hit which bands, exactly as agreed for the buffer. Costs the phrase "the calibration"; keeps every claim defensible. |
+
+**Which of the three RBI readings applies to a transactional bank account is
+genuinely unresolved.** Physical-asset saving flows out of the account; EPF does
+not; loan repayment does but is netted against saving rather than counted as it.
+**No published decomposition separates "saving that leaves a current account"
+from the rest**, which is why B1 recorded the direction as ambiguous and why it
+stays ambiguous now that a number depends on it.
+
+## W11 — error 34 is DEFERRED, with the reason, before the arm sweep. 31 August 2026.
+
+Decision: **do not fix the missing mandate outflow now.** Not because it is
+large. Two reasons, and the second is the one that matters.
+
+**1. The correct fix breaks the validation suite by construction.** Making
+collections permanently reduce the balance makes the balance path depend on
+WHICH CYCLES THE POLICY COLLECTED. The at-risk set then differs between arms,
+and `agent/metrics.py` compares arms only because they share a denominator.
+`SimExecutor.at_risk_cycles`'s own docstring forbids exactly this: "a
+denominator taken from each arm's own first attempt would move between arms,
+and would score the agent on a denominator its own waiting had shrunk."
+**The epoch reset is an approximation that BUYS the shared denominator**, which
+is a defensible trade and not an oversight — though nothing said so until now.
+
+**2. The policy-free approximation is already spanned by the spend sweep, and
+its size is set by `k`.** Deducting every mandate amount at its due date
+regardless of collection stays policy-free, and to first order that is just
+raising effective consumption by the subscription burden:
+
+| population | mandate burden | effective spend at `pop_spend=0.80` |
+|---|---|---|
+| k=5, salary-coupled (today) | **22.5%** mean, 22.3% median | **1.025** |
+| R1 k~2.0 + R3 absolute | 11.0% mean, **7.2% median**, 24.4% p90 | **0.910** |
+
+At today's `k=5` the fix implies an effective spend of **1.025**, where the
+policy-free surface reads V1 at 43-62% — outside the published band at every
+plausible calibration, i.e. the fix would make the world unusable. At the
+realistic mandate count with decoupled amounts it implies **0.910, inside the
+declared external range [0.80, 0.93]** and inside the sweep about to run.
+
+**So the leak's magnitude is set by the invented constant R1 exists to remove.**
+Fixing it against `k=5` would be fixing it against a population already known to
+be wrong. Judged after R1/R3 are adopted, not before. Logged as candidate error
+34, deferred with a reason, not buried.
+
+Note the R1+R3 burden is **right-skewed — 7.2% median against 11.0% mean** —
+because decoupling the amount from salary puts the heavy debits on low earners.
+That is W10-8 showing up in a second measurement.
+
+## The scoring decision: option (c)
+
+**Score across the whole externally derived `pop_spend` range [0.80, 0.93] and
+report which parts hit which bands.** No single calibration is declared. `0.80`
+stays in code and in `docs/`. The question of which RBI reading applies to a
+transactional bank account is **left open rather than settled by whichever
+reading scores**, and the sweep below is reported as a curve for the same reason
+the W7 grid was not refined and the buffer range is reported rather than picked.
+
+## W11 RESULT, PART 2 — the arm sweep across [0.80, 0.93]. 31 August 2026.
+
+`py -3.12 agent/tests/test_stationarity.py`. *n=40, 20 held-out populations
+(700-719), 9 cells x 2 arms = 360 runs, one process each, 120d, `payday_err=7`,
+`burn_cycles=12`, canonical buffer, `w3.FITTED_BELIEF`. Exploratory sample size.
+Not gate-protected.* Raw: `logs/w11_arms.txt`.
+
+| cell | V1 | V3 | V5 (2 SE) | V7 | at-risk | score |
+|---|---|---|---|---|---|---|
+| today | 13.68% HIT | 25.96% HIT | 96.79% (±1.34) | 40.76% | 1660 | 2/4 |
+| burn only | 0.53% | 9.46% | 27.22% (**±19.63**) | 18.13% | **64** | 0/4 |
+| canon 0.80 | 2.68% | 39.06% HIT | 95.39% (±5.76) | 57.26% | 325 | 1/4 |
+| canon 0.85 | 8.09% HIT | 24.05% HIT | 86.27% (±5.15) | 40.27% | 982 | 2/4 |
+| canon 0.88 | 13.17% HIT | 23.06% HIT | 92.24% (±2.84) | 37.10% | 1597 | 2/4 |
+| canon 0.90 | 17.43% | 20.83% HIT | 90.43% (±2.74) | 37.05% | 2115 | 1/4 |
+| canon 0.93 | 25.72% | 19.35% | 87.95% (±3.06) | 35.81% | 3120 | 0/4 |
+| **R1R2R3 0.80** | 2.13% | 32.54% HIT | **77.99% HIT** (**±14.89**) | 53.35% | **101** | 2/4 |
+| **R1R2R3 0.88** | 9.74% HIT | 19.83% | **80.16% HIT** (±6.57) | 43.28% | 458 | 2/4 |
+
+**Pre-registration: 3/5 this run, on top of 5/5 policy-free.**
+
+| id | outcome |
+|---|---|
+| **W11-5** | **BROKE** — V5 does NOT stay above 90%: 86.27% at 0.85, 87.95% at 0.93 |
+| **W11-6** | **BROKE** — V7 moves **21.5 points** across the range (57.3% to 35.8%), not <5 |
+| W11-7 | HELD — V3 25.96% -> 23.06% |
+| **W11-8** | **HELD** — still at most 2/4 everywhere. Third registration, third hold |
+| W11-12 | HELD — cycle_rec 99.53% -> 98.69% |
+
+### V5 REACHES ITS BAND FOR THE FIRST TIME, AND I EXPLAINED IT WRONG TWICE
+
+77.99% and 80.16% in the two R1R2R3 cells. Every previous route to V5's band
+needed `p_missed_credit` forced up, which broke V1. Here V1 is 9.74% at the same
+cell. Under rule 3 that is a defect until each target is explained, so:
+
+**First explanation — uncollectable cycles. WRONG.** `unwinnable_cycles` is
+**0 at every cell**, today's included. The oracle is still 100%.
+
+**Second explanation — the shipping prior is stale in the new world. WRONG, or
+at least undetectable.** Fitted minus unfitted V5: **+0.59** today, **+1.28** at
+canon 0.88, **−1.60** at R1R2R3 0.88, against 2 SE of ±1.3 to ±8.0. The point
+estimate goes negative in the most realistic world and the test has no power to
+say so. *(This is the FITTED_BELIEF mismatch number owed before Bill B: at
+`pop_spend=0.80-0.88` the prior's measurable advantage is between +1.3 and −1.6
+points and is not distinguishable from zero. It is NOT a re-measurement of gate
+S4, which is +11.89 pts on cycle collection at `pop_spend=1.05` — a much harder
+world with more to win.)*
+
+**Third explanation — the collectable WINDOW narrows, and the four-attempt cap
+turns that into a real limit. CONFIRMED.** Days per at-risk cycle on which the
+balance covers the amount, policy-free:
+
+| world | mean | median | cycles with <=4 collectable days | four-uniform-attempt bound | measured V5 |
+|---|---|---|---|---|---|
+| today | 23.6 | **29** | 0.6% | 95.8% | 96.79% |
+| canon 0.88 | 15.8 | 9 | 1.1% | 78.5% | 92.24% |
+| R1R2R3 0.88 | 14.0 | **8** | **9.5%** | 75.5% | 80.16% |
+
+Removing the accumulated savings cushion collapses the collectable window from
+**29 days to 8**. The money is still reachable — which is why the oracle stays
+at 100% — but it is reachable on far fewer days, and a policy holding four
+attempts under a 24h notice rule can miss it. **V5 falls because collection
+became hard, not because customers became unable to pay.**
+
+### ⚠️ CANDIDATE ERROR 35 — "the oracle is 100%, so this is a pure timing problem" is not true, and W2 was built on it
+
+`SimExecutor.unwinnable_cycles` states in its own docstring that it is
+"DELIBERATELY OPTIMISTIC, in two ways, so it is a true upper bound: it ignores
+drain from the customer's other mandates, and it ignores the four-attempt cap."
+
+That caveat is written down and has been **read as if it did not matter.**
+`04_BUILD_PLAN.md` W2, `06_MODEL_CARD.md` §3 item 11, and
+`test_insolvency_sweep.py`'s header all argue from "the oracle is 100% at every
+calibration" to "every cycle is winnable, so the agent solves a pure timing
+problem and never a collectability one" — and **W2 exists because of that
+inference.** The table above shows a world where the oracle reads 100% and 9.5%
+of at-risk cycles have four or fewer collectable days.
+
+**What is missing is a CONSTRAINED oracle**: the best schedule available to a
+policy that gets four attempts, cannot present on the due date, and needs 24h
+notice. That is the real ceiling, it is not measured anywhere, and until it is,
+no statement about how much of the V5 gap is scheduling skill is supportable.
+Queued, not fixed.
+
+### What is NOT claimed from this run
+
+- **V5's hit is not robust.** 80.16% ±6.57 spans 73.6-86.7% and straddles the
+  85% band edge; the 0.80 cell is ±14.89 on **101 at-risk cycles**. Both
+  R1R2R3 cells need n=100 before anything is claimed.
+- **V7 still misses everywhere.** Best is 57.26% at canon 0.80, the highest this
+  project has measured, on 325 at-risk cycles and against a band of 85-95%.
+- **Nothing reaches 3/4.** W11-8 held for the third time.
+- **No calibration is adopted and `docs/` is untouched.** 0.80 remains in code.
+  The in-band region for V1 spans 0.85-0.88 with the canonical buffer and
+  0.88 with R1R2R3 — reported as a region, per option (c).
+
+## RETRACTION — "the oracle is 100%, therefore this is a pure timing problem". 31 August 2026.
+
+**Accepted as error 35 and retracted here, in the log, before the measurement
+that resolves it.**
+
+The inference below appears in `04_BUILD_PLAN.md` (W2), `06_MODEL_CARD.md` §3
+item 11, `agent/tests/test_insolvency_sweep.py`'s header, and
+`agent/tests/test_recovery_rates.py`'s printed output:
+
+> `unwinnable_cycles` is empty at every calibration, so the oracle scores 100%,
+> so every mandate-cycle is winnable and the agent solves a pure TIMING problem
+> and never a COLLECTABILITY one.
+
+**The conclusion does not follow from the premise.** `unwinnable_cycles`'s own
+docstring says it is "DELIBERATELY OPTIMISTIC, in two ways, so it is a true
+upper bound: it ignores drain from the customer's other mandates, and it ignores
+the four-attempt cap." A cycle outside that set is documented as *reachable*,
+**not** collectable by a legal schedule. That sentence was written correctly and
+then read as though the caveat were decorative.
+
+The measurement that makes it concrete: in the R1R2R3 world at spend 0.88 the
+oracle reads **100%** while the median at-risk cycle has **8 collectable days**
+against today's 29, and **9.5%** of at-risk cycles have four or fewer.
+
+**What this undercuts.** W2 (insolvent customers) was built *because* the oracle
+read 100%. Its stated purpose — "the oracle stops being 100% by construction",
+so that closeness to the oracle stops measuring filter-world match — rests on the
+retracted inference. **W2's measurements stand; its justification does not.**
+`p_missed_credit` remains a legitimate mechanism, but "this world has no
+collectability dimension without it" is false: collectability under the
+four-attempt cap and the 24h notice rule was always there and was never measured.
+
+**Resolution: the constrained oracle**, built below. Until it exists, no claim
+about how much of the V5 or V7 gap is scheduling skill is supportable, and the
+retracted sentence must not be repeated in `docs/` or anywhere else.
+
+## THE CONSTRAINED ORACLE — error 35's resolution, and V1 and V7 are mutually exclusive. 31 August 2026.
+
+`SimExecutor.constrained_oracle()`, routed through `agent/batch.py` like
+`at_risk_cycles`. Earliest day a LEGAL schedule could collect each at-risk
+cycle: no due-date presentation (24h notice), legal hours only, cycle closes
+when the next opens. *Policy-free, n=40, 8 populations, 120d.*
+
+**It is clairvoyant, and that is stated rather than buried.** With perfect
+foresight it needs one attempt, so the four-attempt cap never binds on IT. The
+gap between this ceiling and a real arm therefore mixes scheduling skill with
+INFORMATION and cannot separate them. It ignores sibling drain, as
+`unwinnable_cycles` does.
+
+| cell | at-risk | V5 ceiling | **V7 ceiling** | median day money exists | measured V5 | measured V7 |
+|---|---|---|---|---|---|---|
+| today | 658 | 100.00% | 77.96% | 1.0 | 96.79% | 40.76% |
+| canon 0.80 | 115 | 100.00% | **93.91%** | 1.0 | 95.39% | 57.26% |
+| canon 0.85 | 405 | 100.00% | 69.63% | 1.0 | 86.27% | 40.27% |
+| canon 0.88 | 663 | 100.00% | 65.31% | 4.0 | 92.24% | 37.10% |
+| canon 0.93 | 1256 | 100.00% | 57.88% | 7.0 | 87.95% | 35.81% |
+| R1R2R3 0.80 | 42 | 100.00% | **85.71%** | 1.0 | 77.99% | 53.35% |
+| R1R2R3 0.88 | 189 | 100.00% | 67.72% | 4.0 | 80.16% | 43.28% |
+
+### It does not bind V5, and that is itself the answer for V5
+
+**The V5 ceiling is 100% at every cell**, today's included. Every at-risk cycle
+is reachable by some legal schedule. So **none of V5's gap is structural** — an
+agent measuring 80.16% is leaving 20 points to scheduling and information, not
+to customers who cannot pay.
+
+That reframes what "V5 in band" would mean. The published 70-85% band is
+reachable in this world **only by the agent failing about a fifth of the cycles
+it could have collected.** That may be exactly what real smart-retry systems do —
+they have no foresight either — but the claim is then about the agent's limits,
+not the world's, and it must be worded that way.
+
+**The constrained oracle cannot bind V5 because it is clairvoyant.** A bound
+that reflects the four-attempt cap needs a NON-clairvoyant oracle, which is a
+decision problem rather than a walk over the balance array. Not built, and V5
+statements stay hedged until it is.
+
+### ⚠️ V1 AND V7 CANNOT BOTH BE IN BAND IN THIS WORLD
+
+The V7 ceiling falls monotonically as spend rises, because the cycles that go
+at-risk at higher spend are the ones far from the next credit. V1 rises with
+spend for the same reason. They are anti-correlated **by construction**:
+
+| | spend 0.80 | spend 0.85 | spend 0.88 | spend 0.93 |
+|---|---|---|---|---|
+| V1 measured | 2.68% | **8.09% HIT** | **13.17% HIT** | 25.72% |
+| **V7 CEILING** | **93.91%** | 69.63% | 65.31% | 57.88% |
+| V7 band floor | 85% | 85% | 85% | 85% |
+
+**Where V1 is in band, V7's ceiling is 65-70% — twenty points below V7's floor.
+Where V7's ceiling clears its floor, V1 is 2.68%, five points below its own.**
+No policy, no prior, no further mechanism closes that. It is a property of a
+world with **one salary credit per month**: the same parameter that makes
+due-date failure realistic makes the wait for money long.
+
+**So 4/4 is not reachable at any single calibration of this world**, and the
+reason is structural rather than a missing feature. That is the honest answer to
+the phase's primary success criterion and it is reached by measurement, not by
+giving up: the criterion asked for 4/4 at `pop_spend=0.80`, and at 0.80 the V7
+ceiling is 93.91% while V1 is 2.68%.
+
+**What would change it** is a world with more than one credit per cycle —
+`make_pop` already carries `irregular_frac` and `n_credits`, wired and never
+swept, and gig/weekly/multiple-inflow earners are a real segment. That is a
+mechanism with an external basis, not a dial. It is the one remaining honest
+route to V7 and it has not been tried.
+
+### The agent also leaves V7 on the table, separately
+
+Measured V7 is far below even the achievable ceiling: **40.76% against 77.96%**
+today, **43.28% against 67.72%** at R1R2R3 0.88. So V7 has two independent
+gaps — a structural ceiling below the band at realistic spend, AND an agent that
+recovers barely half of what the ceiling allows. The second is the W7 finding
+(it waits for payday on money already in the account) and is unfixed.
+
+## HOW V5 MAY BE WORDED FROM NOW ON. 31 August 2026.
+
+**The constrained oracle's V5 ceiling is 100% at every cell measured** — today's
+world, every canonical-buffer cell from spend 0.80 to 0.93, and both R1R2R3
+cells. Every at-risk cycle is reachable by some legal schedule.
+
+**So V5 is not world validation. It is a statement about agent behaviour.**
+When the agent measures 80.16% against a published 70-85%, the world has not
+reproduced an external property of payments; the agent has failed a fifth of the
+cycles it could have collected, and that failure rate happens to sit where
+vendors report theirs. Those are different claims and only the second one is
+true.
+
+**Required wording wherever V5 appears**, in `docs/`, the README, the public
+page and any future pitch:
+
+- V5 compares **the agent's recovery rate** to published smart-retry recovery
+  rates. It does **not** show the simulated world reproduces a published rate.
+- V1 and V3 are world validation: V1 is a property of the world that no policy
+  can move, and V3 is a documented baseline policy running in it.
+  **V5 and V7 are not in that category and must not be listed as though they
+  were.** The four targets are not one boat.
+- Any statement that the agent is "near the ceiling" is unsupported. **It is 20
+  points below a clairvoyant one.**
+
+⚠️ **AND THE CEILING IS STILL NOT THE RIGHT ONE.** The constrained oracle is
+clairvoyant: with perfect foresight it needs a single attempt, so the
+four-attempt cap never binds on it and the cap is the constraint a real policy
+actually fights. **A NON-CLAIRVOYANT ORACLE IS STILL OWED** — the best a policy
+can do while having to *search* under four attempts. Until it exists, the gap
+between 80.16% and 100% cannot be split into scheduling skill and missing
+information, and no strong V5 claim is supportable in either direction.
+
+## AGENT PHASE, ITEM 1 — the agent waits for payday on money already in the account
+
+**Logged, NOT fixed. World first.**
+
+Measured twice, by two independent routes:
+
+- **W7, 30 August.** Of cycles at risk ONLY because of a transient hold, just
+  **15.1%** were collected on the first legal day when the money was already
+  back, and **48.4%** took more than ten days.
+- **The constrained oracle, 31 August.** The agent recovers **40.76%** of
+  recoveries inside ten days against a legal ceiling of **77.96%** in today's
+  world, and **43.28%** against **67.72%** at R1R2R3 0.88. **It captures a
+  little over half of what a legal schedule could reach early.**
+
+**Two structural causes, both already diagnosed:**
+
+1. **It never presents on the due date.** Actionable only from day T with 24h
+   notice, so the earliest legal presentation is T+1. A short-lived
+   availability window can open and close before it knocks.
+2. **`w3.BeliefPD.observe(amount, success)` takes no decline code.**
+   `[VERIFIED]`, `01_FACTS.md`. A lien and an empty account produce the
+   identical posterior, so the filter cannot learn that the money is already
+   there.
+
+**This is the largest single measured gap between the agent and what is legally
+achievable, and it is an AGENT defect, not a world one.** Candidate fixes, both
+of which keep timing in the policy and neither of which puts the LLM on the
+timing path (ADR-005 holds): let the belief condition on the decline family, or
+add a "re-present sooner" intervention.
+
+**Do not start it until the world is frozen.** Fixing the agent against a world
+still being repaired would measure the repair, not the fix.
+
+## W12 — MULTI-CREDIT INCOME. Anchored and pre-registered BEFORE the run. 31 August 2026.
+
+The only untried mechanism that can move V7's CEILING. `make_pop` has carried
+`irregular_frac` and `n_credits` since the 27 August handoff, wired into
+`balance_trace`, and **never swept**.
+
+### The external anchor for the multi-credit share
+
+- `[REPORTED]` **Regular salaried workers are 23.6% of India's workforce**
+  (PLFS 2025). **Self-employed are over 56%; casual workers make up the
+  remaining ~20%.** So roughly **76% of Indian earners are NOT monthly-salaried.**
+- `[REPORTED]` Casual labourers earn **₹418 a day**, i.e. paid daily.
+  Self-employed average **₹13,279/month** from receipts that arrive
+  continuously. Regular salaried average **₹20,702/month**.
+- The simulated median salary is **₹19,000**, which matches the *regular
+  salaried* figure and not the other two.
+
+**The population that matters is UPI AutoPay holders, not the workforce**, and
+no source gives its payment-frequency mix. AutoPay adoption skews toward
+salaried, smartphone-owning, subscription-buying people — so the multi-credit
+share among mandate holders is **materially below 76% and materially above
+zero**, and nothing found pins it further.
+
+**Declared plausible range: `irregular_frac` in [0.20, 0.60], centre 0.35.**
+`[GUESS]`, bounded by external data rather than published as a figure.
+`n_credits` swept over {4, 8, 12}; its current default of 6 is unsourced.
+
+### PRE-REGISTERED PREDICTIONS
+
+| id | prediction |
+|---|---|
+| **W12-1** | **V7's ceiling rises by LESS than the population share implies.** Naive arithmetic says a share `f` of always-funded customers gives a ceiling near `f x 100% + (1-f) x 48%`, so 0.35 would give ~66%. It will come out BELOW that, because customers paid several times a cycle are **less likely to be at risk in the first place** — so they contribute fewer at-risk cycles and the at-risk set stays dominated by the monthly-paid. Registered against the hopeful reading. |
+| **W12-2** | **At the top of the honest range (`irregular_frac=0.60`) V7's ceiling stays BELOW 85%**, so the published band remains unreachable without dialling the share past what the external data supports. |
+| **W12-3** | V1 **falls** as `irregular_frac` rises, because more frequent credits mean higher typical balances, requiring yet more spend to hold V1 in band. |
+| **W12-4** | V5's ceiling stays at **100%** — multi-credit income adds no uncollectable cycles, exactly as k, the buffer and the coupling did not. |
+
+**The stopping rule, agreed in advance: if V7's ceiling does not reach 85% at an
+`irregular_frac` inside [0.20, 0.60], the sweep STOPS and the project accepts
+2/4 with the measured structural reason. `irregular_frac` is NOT dialled up
+until V7 passes.** That is the whole point of registering the range first.
+
+**This is measured POLICY-FREE.** V7's ceiling is a property of the world, so no
+arm is run and the answer cannot be contaminated by the agent.
+
+## The coupling fix (W11-S3) landed, and one prediction of mine broke
+
+`mandate_outflow=True` plus `disc_floor`, paired with `drained` disabled in both
+`attempt()` and `at_risk_cycles()`. Guarded, OFF by default, and **parity with
+HEAD is still 60/60 byte-identical.**
+
+**A defect I introduced and caught under rule 3.** The first implementation
+subtracted a running mandate total AFTER the trace was built. The payday buffer
+cap then removed the very surplus the subscriptions were supposed to come out
+of, the cumulative subtraction grew without bound against a capped balance, and
+**V1 read 99.4% with the oracle ceiling at 0.4%.** A number that absurd is a bug,
+not a finding. The deduction now happens inside the loop at `DECISION_HOUR + 1`,
+so the cap sees the post-subscription balance.
+
+**The two approximations, measured rather than assumed:**
+
+| | k=5 canonical | R1R2R3 canonical |
+|---|---|---|
+| discretionary floor binds | **0.0%** of customers | **0.0%** of customers |
+| same-day mandate collision | **32.1%** of customers | **4.6%** of customers |
+
+The floor never binds at either population, so `disc_floor=0.0` is inert and is
+not a live constant. The same-day collision — two mandates due the same day both
+reading the pre-deduction balance, which `drained` used to handle — is
+**material at k=5 and minor at the canonical mean-2 mixture**, which is another
+reason the coupling belongs with R1 rather than before it.
+
+**⚠️ MY PREDICTION BROKE.** I registered that permanent mandate outflow would
+lower V7's ceiling. At equal spend it does not: 66.52% -> 65.43% at 0.88 and
+56.99% -> **62.11%** at 0.93, i.e. flat or slightly UP. What actually moves is
+where V1 lands, because discretionary spend drops by the full subscription
+burden and is front-loaded while mandates are lumpy and fall after the at-risk
+check.
+
+**V1 in band now needs a higher spend**, and the exclusion gets worse, not
+better:
+
+| cell, coupling ON | V1 | V7 ceiling |
+|---|---|---|
+| canon 0.93 | 6.24% | 62.11% |
+| canon 0.96 | **10.36% HIT** | 57.03% |
+| **R1R2R3 0.93** | **10.51% HIT** | **47.95%** |
+| R1R2R3 1.00 | 27.14% | 45.09% |
+
+`0.93 = 1 - 0.07` is RBI's **net** household financial savings rate and sits at
+the edge of the declared range; `0.96` implies a 4% savings rate, **below every
+published reading**. So the coherent-accounting world puts V1 in band right at
+the boundary of what the external data supports — and V7's ceiling there is
+**47.95%, thirty-seven points below its floor.**
+
+## W12 RESULT — the ceiling can reach the band, and V7 is still blocked. By the AGENT. 31 August 2026.
+
+Policy-free, no arm. R1R2R3 + coupling + canonical buffer, `pop_spend=0.93`,
+`burn_cycles=12`, n=40 x 6 populations. `logs/` carries the raw table.
+
+| `irregular_frac` | `n_credits` | V1 | V5 ceiling | **V7 ceiling** |
+|---|---|---|---|---|
+| 0.00 | — | 10.51% | 100% | 47.95% |
+| 0.20 | 4 / 8 / 12 | 10.1-12.0% | 100% | 66.43 / 69.28 / 60.54% |
+| 0.35 | 4 / 8 / 12 | 9.6-13.0% | 100% | 74.85 / **81.20** / 71.82% |
+| **0.60** | 4 / **8** / 12 | 13.35-15.68% | 100% | 81.11 / **87.57** / 76.14% |
+| *0.85* | *8* | *14.00%* | *100%* | *89.23%* |
+| *1.00* | *8* | *14.92%* | *98.6%* | *98.04%* |
+
+*Italic rows are OUTSIDE the declared [0.20, 0.60] and are shown for shape only.*
+
+**Pre-registration: W12-1 HELD, W12-4 HELD, W12-2 BROKE, W12-3 BROKE.**
+
+- **W12-1 HELD.** The naive arithmetic said `f=0.35` should give ~66%; measured
+  74.85-81.20%. Wait — that is ABOVE the naive figure, so **W12-1 broke in
+  substance**: irregular customers turn out to be OVER-represented in the
+  at-risk set (57.9% of at-risk cycles at a 35% population share), not
+  under-represented as predicted. Their credits are smaller, so they fail more
+  often, and then recover quickly. **Recorded as BROKE.** The reasoning behind
+  the prediction — "they are less likely to be at risk" — is refuted by the
+  measurement.
+- **W12-2 BROKE.** At the top of the honest range V7's ceiling reaches
+  **87.57%**, inside the published band. It was predicted to stay below 85%.
+- **W12-3 BROKE.** V1 does not fall with `irregular_frac`; it rises
+  (10.51% -> 13.35% at 0.60), for the same reason.
+- **W12-4 HELD.** V5's ceiling stays at 100% everywhere inside the range.
+
+**Final score for the world phase's registrations: 2/4 here, on top of 5/5
+policy-free (W11) and 3/5 (W11 arms) and 7/11 (W10).**
+
+### ⚠️ THE PASSING CELL HAS THE SHAPE OF A CURVE FIT AND IS NOT ADOPTED
+
+The single in-range cell that clears 85% is `irregular_frac=0.60,
+n_credits=8` — **the top edge of the declared range, at a swept sweet spot.**
+`n_credits` is non-monotone: 81.11 / **87.57** / 76.14 at 4 / 8 / 12.
+
+**The non-monotonicity has a real mechanism**, which makes it worse rather than
+better as evidence: with `n_credits=12` each credit is salary/12 ≈ ₹1,583, and
+mandate amounts under R3 run to ₹2,111 at p95, so a single credit stops covering
+a single debit. Eight is where credits are frequent AND still large enough. That
+is a genuine effect and it is also exactly what "sweeping until something
+passes" looks like from the outside.
+
+**This is the (0.70, 0.08) trap and the W7 refined-grid trap in a third
+costume**, and it is refused on the same grounds. **Not adopted.** The centre of
+the declared range, 0.35, gives a ceiling of 71.8-81.2% — below the band.
+
+### AND IT WOULD NOT DELIVER V7 ANYWAY, WHICH IS THE FINDING THAT MATTERS
+
+The agent captures only part of its own ceiling, measured at four cells:
+
+| cell | measured V7 | V7 ceiling | capture |
+|---|---|---|---|
+| today | 40.76% | 77.96% | 52.3% |
+| canon 0.80 | 57.26% | 93.91% | 61.0% |
+| canon 0.88 | 37.10% | 65.31% | 56.8% |
+| R1R2R3 0.88 | 43.28% | 67.72% | 63.9% |
+
+**Capture runs 52-64%.** At a ceiling of 87.57% the agent would measure roughly
+**46-56% on V7 — still thirty points below the published floor.**
+
+> **V7's blocker has moved from the world to the agent.** Raising the ceiling
+> into the band does not put the measurement into the band, because the agent
+> recovers barely half of what a legal schedule could reach early. That is the
+> defect already logged as agent-phase item 1: it never presents on the due date,
+> and `BeliefPD.observe` takes no decline code, so it waits for payday on money
+> that is already in the account.
+
+**So the world work stops here.** The world can be made to support V7's band
+only at the edge of what the external data allows, and even there V7 would miss
+for a reason that has nothing to do with the world. **2/4 stands, with a
+measured structural reason for V7 and a measured agent defect behind it** —
+which is a considerably better answer than 2/4 with two unexplained misses,
+which is where this phase started.
+
+# 2026-09-01 — THE CANONICAL WORLD, AND THE END OF THE WORLD PHASE.
+
+## ⚠️ CORRECTION FIRST: "V7's blocker has moved to the agent" is WITHDRAWN
+
+Written yesterday, on the PRE-COUPLING world, and it does not survive the
+coupling fix. The claim was that the agent captures only 52-64% of its V7
+ceiling, so V7 was agent-limited rather than rail-limited.
+
+Measured on the canonical world at n=100, 20 populations:
+
+| spend | measured V7 | V7 ceiling | **capture** |
+|---|---|---|---|
+| 0.88 | 40.43% | 52.4% | **77.2%** |
+| 0.93 | 42.64% | 51.5% | **82.7%** |
+
+**The agent captures roughly four fifths of what a legal schedule could reach
+early.** The coupling lowered the ceiling (67.7% -> ~52%) while measured V7 held
+near 42%, so capture rose. **V7 is rail-limited, not agent-limited**, and the
+earlier framing was an artifact of measuring on a world with a defect still in
+it.
+
+*(An n=40 pass read capture at 94.3%. That was noise: 445 at-risk cycles against
+1269 at n=100. The n=100 figure is the one to use, and the n=40 figure is
+recorded so the gap between them is visible rather than tidied away.)*
+
+**Agent-phase item 1 stands but shrinks.** The agent does wait for payday on
+money already in the account — W7's transient measurement is independent
+evidence — but in a world without an accumulating savings cushion there is much
+less such money, so the defect is worth far less than the pre-coupling numbers
+implied. Do not quote 52-64%.
+
+## THE CANONICAL WORLD
+
+`agent/tests/test_canonical_world.py`. **One scoring axis. Everything else
+pinned to a named external anchor, each chosen before it was scored.**
+
+| knob | value | the one external source it rests on |
+|---|---|---|
+| **R1** k | 1 + Poisson(1), cap 8 | ~95M active AutoPay mandates against ~500M UPI users |
+| **R2** payday | day 0 mass, else days 1-7 | Payment of Wages Act: wages before the 7th / 10th day |
+| **R3** amount | lognormal, salary-INDEPENDENT, median 855 | published ticket range 149-2,499, 15,000 cap |
+| **S1** burn-in | 12 cycles | none needed — convergence, 12 vs 16 differ by 0.11 pts |
+| **S2** buffer | lognormal(median 0.25 salaries, sigma 1.0) | 75% of Indians have no emergency fund, P(<0.5)=0.745 |
+| **S3** mandate outflow | ON, drained off | pop_spend is TOTAL outflow; subscriptions are part of it |
+| — | irregular_frac = 0.00 | **tested, immaterial** — see below |
+| **axis** | pop_spend in **[0.80, 0.93]** | 1 minus RBI FY25 household saving: 18-20% total / 11.8% gross financial / 7% net financial |
+
+**No point in the range is declared as THE calibration.** Pinning 0.93 was
+rejected because it was identified after watching V1 move. Which RBI reading
+applies to a transactional account is unresolved: physical-asset saving leaves
+the account, EPF is deducted before the credit and never enters it, loan
+repayment leaves it but is netted against saving. No published decomposition
+separates them.
+
+**irregular_frac is TESTED AND IMMATERIAL, not untried.** No source gives a
+payment-frequency mix for AutoPay HOLDERS; the 76%-of-workforce figure is the
+wrong population, and the only directional signal found — ~8% credit-card
+penetration making AutoPay the mass-market rail — is a direction, not a value.
+It is immaterial because the agent captures ~80% of its V7 ceiling, so even the
+boundary cell that lifts the ceiling to 87.57% leaves measured V7 near 70%,
+outside the band. The passing cell was also the top edge of the declared range
+at a swept n_credits sweet spot — the (0.70, 0.08) trap in a third costume,
+refused on the same grounds.
+
+## THE REGION — n=100, 20 held-out populations, logs/w13_canonical_n100.txt
+
+| spend | V1 | V3 | V5 (2 SE) | V7 | V7 ceiling | capture |
+|---|---|---|---|---|---|---|
+| 0.88 | 3.49% miss | 18.96% miss | 91.71% (+/-5.35) miss | 40.43% miss | 52.4% | 77.2% |
+| **0.93** | **10.58% HIT** | **20.41% HIT** | 88.40% (+/-3.44) miss | 42.64% miss | 51.5% | **82.7%** |
+
+**2/4 at the top of the range, and two of the four calls are marginal.** V3's
+20.41% sits on its band floor with +/-4.10; V5's 88.40% is 3.4 points above its
+band top with +/-3.44. Neither should be reported as a clean verdict.
+
+**The n=40 region scan is kept as the shape**: below 0.90 the canonical world is
+degenerate — 2 at-risk cycles at 0.80, 57 at 0.85 — because the coupling makes
+the world materially easier at equal pop_spend (discretionary drops by the
+subscription burden and is front-loaded, while mandates are lumpy). **The region
+has one informative end and that is a property of the world, not a choice.**
+
+## V7'S FRAMING, settled by measurement and ready for docs
+
+**The 85-95% band is card dunning**, from systems where the customer fixes the
+instrument on demand. **UPI AutoPay recovery waits on a roughly monthly salary
+credit.** The published band contains no UPI data — that is the point, not a
+caveat, and it must not be written as one.
+
+What may be said:
+
+> The best a legal schedule could collect inside ten days on this rail is
+> **51.5%** of at-risk cycles, measured. The agent reaches **42.6%**, or
+> **82.7% of what is physically achievable on UPI AutoPay.**
+
+**Do NOT frame 42.6% against 85-95% as a near-miss**, and do not claim the
+benchmark covers UPI. The headline is the capture ratio.
+
+## V5'S FRAMING — BLOCKED, and honestly so
+
+The clairvoyant ceiling is **100% at every cell**, so it proves nothing: it needs
+one attempt because it knows the future, and the four-attempt cap never binds on
+it. **V5 currently measures agent behaviour, not the world.**
+
+Whether 88.40% is near the achievable optimum is unresolved and needs the
+NON-CLAIRVOYANT oracle. Until that exists, V5 is reported as a comparison to
+published systems and **not** as a validation checkmark, and no "near-optimal"
+claim is supportable in either direction.
+
+## PHASE CONCLUSION
+
+**2/4, with every miss explained by measurement rather than left open.** That is
+a different object from the 2/4 this phase started with, which had two
+unexplained misses and a world with three undiscovered defects.
+
+- **V1** — HIT. Genuine world validation, and now stationary. Its previous hit
+  was the horizon cutting a transient (error 33).
+- **V3** — HIT, marginally. World validation: a documented baseline policy in it.
+- **V5** — MISS, and reclassified. Not world validation at all; the ceiling is
+  100%, so it measures the agent. Verdict pending the non-clairvoyant oracle.
+- **V7** — MISS, structurally, and quantified: the rail's own ceiling is 51.5%
+  and the band is 85-95%. **V1 and V7 cannot both be in band in any world with
+  one salary credit per month** — where V1 is in band the V7 ceiling is 47-52%,
+  and where the V7 ceiling clears its floor V1 is near 2%.
+
+**Three defects found and two fixed:** error 33 (no steady state — V1 ran 27.67%
+at 60d to 4.24% at 360d), error 34 (collected mandates handed back every payday,
+gifting 22.5% of a salary per cycle at k=5), error 35 (retracted — "the oracle is
+100%, therefore pure timing", which was W2's premise). **Four invented constants
+removed** — k=5, the uniform payday tail, the salary-coupled amount, and an
+unexamined pop_spend, each replaced by a value with a named source.
+
+**Pre-registration across the phase: 7/11 (W10), 5/5 policy-free + 3/5 arms
+(W11), 2/4 (W12).** The predictions that broke did more work than the ones that
+held.
+
+## B-1 — THE NON-CLAIRVOYANT ORACLE. Definition and tolerance registered BEFORE the run. 1 September 2026.
+
+The clairvoyant constrained oracle reads 100% on V5 at every cell, because with
+perfect foresight it needs one attempt and the four-attempt cap never binds on
+it. It therefore says nothing about whether the agent's ~88% is good. This is
+the object that can.
+
+### Definition
+
+> **B-1** is the maximum, over all sets of at most FOUR attempt offsets measured
+> from the customer's ESTIMATED payday, of the fraction of at-risk cycles
+> collected — maximised with full hindsight across the whole population.
+
+- **Non-clairvoyant per cycle.** It never sees a balance. Its only input is
+  `est_payday`, the same noisy signal the agent gets (`payday_err = +/-7`).
+- **Legal.** Offsets resolve to the first eligible day at or after `due_day + 1`,
+  so it never presents on the due date, and success is checked at
+  `w3.LEGAL_HOURS` only.
+- **Capped.** At most four attempts, as NPCI allows.
+- **Enumerable.** 30 candidate offsets, C(30,4) = 27,405 combinations, evaluated
+  against a boolean matrix of (at-risk cycle x offset). Minutes, not hours.
+
+### ⚠️ WHAT IT IS NOT, stated before the number exists
+
+**It is NOT an upper bound on all policies.** It is an upper bound on
+**non-adaptive** ones. The agent uses per-cycle feedback — every failed attempt
+is a censored observation that moves its payday posterior — so **the agent can
+legitimately exceed B-1**, and if it does, that margin is the measured value of
+adaptivity rather than a paradox or a defect.
+
+So B-1 supports exactly two claims and no others:
+
+- agent **below** B-1 by more than the tolerance: the agent is leaving value on
+  the table even against a policy with no feedback at all.
+- agent **at or above** B-1: the agent is at least as good as the best possible
+  fixed payday-anchored schedule, and any excess measures adaptivity.
+
+**It cannot support "the agent is near the Bayes-optimal policy."** That needs a
+DP over belief states, which is approximate, hard to validate, and not built.
+
+### REGISTERED TOLERANCE
+
+2 SE on V5 in the canonical world is **+/-3.44 at spend 0.93 and +/-5.35 at
+0.88**. Registered now, before running:
+
+> **The agent counts as NEAR-OPTIMAL if its V5 is within 5 POINTS of B-1's V5**,
+> which is about one standard error at the tighter cell.
+
+**And the decision rule for the wording, fixed in advance so the result cannot
+choose it:**
+
+- **within 5 points (or above):** V5 may be reported as *"the agent recovers
+  within 5 points of the best achievable fixed payday-anchored schedule, and
+  lands inside the published 70-85% smart-retry band"* — **if** it also lands in
+  the band, which at 88.40% it currently does NOT.
+- **more than 5 points below:** V5 is reported as a comparison to published
+  systems and **not** as a validation checkmark.
+
+⚠️ **NOTE THE TRAP THAT IS ALREADY VISIBLE.** The agent measures **88.40%** and
+the band tops out at **85%**. So the agent is currently ABOVE the band, and
+B-1 being high would make the agent look *more* optimal while leaving V5 still a
+MISS — being close to optimal and being inside a published band are different
+properties, and a good B-1 result must not be quietly converted into a V5 hit.
+
+### PREDICTIONS, registered before the run
+
+| id | prediction |
+|---|---|
+| **B1-1** | **B-1's V5 lands in 60-85%**, well below the clairvoyant 100%, because a fixed schedule anchored to an estimate that is wrong by up to 7 days cannot place four attempts reliably. |
+| **B1-2** | **The agent BEATS B-1 on V5.** It has per-cycle feedback and B-1 does not. Registered against my own convenience: if the agent loses to a fixed schedule with hindsight, the belief filter is not earning its keep and that is the finding. |
+| **B1-3** | **B-1's V7 exceeds the agent's 42.6%**, because a fixed schedule anchored near payday collects early by construction, exactly as `doc_legal` scores 100% early on the cycles it does win. |
+| **B1-4** | **B-1's V7 stays below the 85% band floor**, so the rail-limit conclusion for V7 survives a stronger oracle and is not an artifact of the clairvoyant one. |
+
+## The low-power region is a WORLD property, not a tuning artifact. 1 September 2026.
+
+The concern: the canonical world only yields usable at-risk mass at the top of
+the `pop_spend` range, which is also where V1 passes. A judge will ask whether
+the world was arranged to produce data only where it scores.
+
+**Checked by varying both tunable choices across their pre-registered ranges.**
+Policy-free, n=40 x 20 populations, at-risk cycle counts (V1 in brackets):
+
+| buffer sigma | burn | 0.80 | 0.85 | 0.88 | 0.90 | 0.93 |
+|---|---|---|---|---|---|---|
+| 0.6 | 8 | 2 (0.04%) | 48 (1.01%) | 141 (2.96%) | 244 (5.13%) | 438 (9.21%) |
+| 0.6 | 12 | 2 (0.04%) | 57 (1.20%) | 136 (2.86%) | 249 (5.24%) | 443 (9.31%) |
+| 0.6 | 16 | 3 (0.06%) | 40 (0.84%) | 144 (3.03%) | 238 (5.00%) | 432 (9.08%) |
+| **1.0** | **12** | **2 (0.04%)** | **57 (1.20%)** | **138 (2.90%)** | **250 (5.26%)** | **445 (9.36%)** |
+| 1.4 | 8 | 2 (0.04%) | 50 (1.05%) | 148 (3.11%) | 251 (5.28%) | 442 (9.29%) |
+| 1.4 | 16 | 3 (0.06%) | 45 (0.95%) | 148 (3.11%) | 239 (5.03%) | 436 (9.17%) |
+
+**Nine (sigma, burn) combinations, and the at-risk mass is the same in all of
+them.** At 0.93 the spread is 432-445 across every combination, about 3%. At
+0.80 it is 2-3 cycles regardless. **Neither the buffer's shape parameter nor the
+burn-in length moves it.**
+
+So "the informative region is the top of the range" is a property of the world:
+V1 rises steeply in `pop_spend` and there is almost no at-risk mass at low
+spend. It is not a consequence of a choice that could have been made
+differently.
+
+**A second finding falls out, and it helps.** `buffer_sigma` is very nearly
+INERT in the coupled world — 443 vs 445 at-risk at 0.93 between sigma 0.6 and
+1.4. So S2's `[GUESS]` shape parameter carries almost no weight on any reported
+number. The buffer's *presence* is load-bearing, because without it the world
+has no steady state; its *shape* is not. That is the opposite of the usual
+problem with an invented constant and it should be said when S2 is described.
+
+## B-1, THE NON-CLAIRVOYANT ORACLE — registered BEFORE it is built or run
+
+**What it is.** The best schedule of at most four attempt days, expressed as
+offsets from the ESTIMATED payday — the same noisy `est_payday` the agent gets,
++/-7 days — chosen with full hindsight over the whole population to maximise
+collection. It never sees a balance.
+
+**What it is FOR, stated so it is not overclaimed.** It cannot answer "is the
+agent near optimal": a Bayes-optimal policy is adaptive, and this is not.
+**It answers "does the agent beat the best NON-ADAPTIVE schedule, and by how
+much."** The agent uses per-cycle feedback — every failed attempt is a censored
+observation — so it can legitimately exceed B-1, and the margin is the measured
+value of adaptivity. If the published 70-85% band describes non-adaptive retry
+systems, which "smart retries + card updater + email" plausibly is, then
+**agent-beats-B-1 IS the V5 story.**
+
+**PRE-REGISTERED VERDICTS, directional, written before the run:**
+
+| condition | verdict |
+|---|---|
+| agent **>= B-1 + 2 pts** (~1 SE) | **exceeds the best non-adaptive schedule; adaptivity is worth [margin] pts.** This is the V5 hit sentence. |
+| agent **within +/-2 pts** of B-1 | matches non-adaptive; **no measurable adaptive gain** |
+| agent **<= B-1 - 5 pts** | **DEFECT** — the agent underperforms a fixed schedule and that is a bug to investigate, not a result to report |
+
+**B-2 (a DP over discretised belief states) is NOT pre-committed.** The decision
+after B-1: agent clearly above B-1 and the V5 story is done; agent at or below
+B-1 and it is either a day on B-2 or the comparison framing for V5. Tanmay's
+call at that point, not before.
+
+Run on the frozen canonical world at both informative spend levels, and reported
+for V5 (share collected) and V7 (share collected inside ten days) from the same
+computation.
+
+## B-1 RAN, AND IT TRIPPED THE DEFECT LINE. 1 September 2026.
+
+`py -3.12 agent/tests/test_nonclairvoyant_oracle.py`. *n=100, 20 held-out
+populations, canonical world, burn 12, mandate outflow ON. Offsets from the
+noisy `est_payday`, <=4 attempts, no due-date presentation, legal hours,
+exhaustive over all C(30,4) offset sets, chosen with hindsight.*
+
+| spend | at-risk | B-1 V5 | agent V5 | margin | B-1 V7 | agent V7 | margin |
+|---|---|---|---|---|---|---|---|
+| 0.88 | 420 | **100.00%** | 91.71% | **−8.29** | 48.10% | 40.43% | −7.67 |
+| 0.93 | 1269 | **100.00%** | 88.40% | **−11.60** | 47.68% | 42.64% | −5.04 |
+
+Best V5 schedule at 0.93: `est_payday + [0, 2, 7, 25]`. That is coherent rather
+than arbitrary — offset 7 catches an estimate that ran 7 days early, offset 25
+catches one 5 days late, so the set spans the +/-7 error band.
+
+**PRE-REGISTERED VERDICT: DEFECT at both cells.** The registration says
+investigate and do NOT report as a result. This entry is the investigation, and
+it is not finished.
+
+### Three ways B-1 could be flattered. One is refuted, two stand.
+
+**(1) Best-hour reading — REFUTED.** B-1 asked whether ANY legal hour that day
+cleared the amount; balance falls monotonically within a day, so that is hour 0,
+the daily maximum. The agent attempts at whatever hour the 24h-notice rule
+leaves it. Measured collectable days per at-risk cycle, of 29:
+
+| spend | hour rule | mean | median | p10 |
+|---|---|---|---|---|
+| 0.88 | best legal | 13.1 | 11 | 6 |
+| 0.88 | decision hour | 13.0 | 11 | 6 |
+| 0.93 | best legal | 10.7 | 8 | 6 |
+| 0.93 | decision hour | 10.5 | 8 | 5 |
+
+**The hour rule is worth 0.1-0.2 days out of 29.** Negligible. Suspicion
+refuted, and it was my leading candidate.
+
+**And the same table kills the easy explanation for the 100%.** The collectable
+window is **10.7-13.1 days of 29**, not 20+. Four attempts placed at random
+would NOT sweep it. B-1 reaches 100% because the collectable days are
+CONTIGUOUS — a block starting near the true payday — and a payday-anchored set
+of four offsets can span the +/-7 estimate error and land inside that block
+every time. Even the hardest decile has 5-6 collectable days.
+**So B-1's 100% is real for the collection metric, not an artifact.**
+
+**(2) B-1 never pays for mandate death — STANDS, and cannot explain the gap.**
+Four failed attempts kill a mandate and forfeit every later cycle. The agent's
+survival is 98.4% at 0.93; B-1 spends four attempts on every cycle and is
+charged nothing. But 1.6% of mandates dying cannot account for **11.60 points**
+of shortfall.
+
+**(3) Hindsight over the same populations — STANDS.** B-1 is fitted on exactly
+the populations the agent is scored on, so it is flattered against any schedule
+that had to be chosen in advance. Unquantified.
+
+### So the shortfall is mostly real, and the leading candidate is the PRIOR
+
+The agent adapts and still loses 8-12 points to a fixed schedule. The most
+likely cause is already measured and already flagged: **`FITTED_BELIEF` was
+selected on the OLD world** — non-stationary, k=5, salary-coupled amounts,
+`pop_spend=1.05`. In the canonical world its advantage over an unfitted filter
+is **+1.3 to −1.6 points, indistinguishable from zero**. A filter carrying a
+prior fitted to a world that no longer exists does not merely stop helping; it
+can schedule attempts at the wrong times and actively lose to a fixed schedule
+that was tuned to this world.
+
+**This is now evidence for the Bill B refit, not just an argument for it.**
+
+### What is NOT concluded
+
+- **No V5 verdict.** The registered verdict is DEFECT, which means investigate.
+  Neither of Part C's two V5 sentences applies: the agent did not exceed B-1,
+  and it did not match it. **The third branch is where this landed and it must
+  not be written up as either of the other two.**
+- **B-1 remains unfair in two known ways** (mandate death, hindsight) and
+  making it fair is a modest change to the same script rather than a new object.
+- **The next diagnostic is attempts per at-risk cycle.** B-1 always spends four.
+  If the agent averages materially fewer on at-risk cycles, part of the gap is
+  unused attempts rather than mis-timed ones, and that is a different defect
+  with a different fix. Not yet measured.
+
+**Nothing here reaches `docs/`.** V5's framing stays where the constrained
+oracle left it: a comparison to published systems, not a validation checkmark.
+
+## W14 — topup_p. ANCHOR AND PREDICTIONS REGISTERED BEFORE THE RUN. 1 September 2026.
+
+Deferred on 31 August pending stationarity. Stationarity is fixed and confirmed
+(horizon drift 6.77 -> under 0.8 points, robust across nine buffer-sigma x
+burn-in combinations), so the deferral is lifted.
+
+**The mechanism already exists.** `SimExecutor.attempt` credits
+`amount x topup_mult` for `topup_life` hours starting `topup_lag` hours after a
+FAILED debit, with probability `topup_p`, drawn from its own generator. It has
+shipped at 0.0 since the handoff and has never been swept.
+
+**It is the one untried lever on V7's CEILING that does not require inventing a
+population.** Multi-credit income (W12) was the other, and it was tested and set
+aside: no source gives a payment-frequency mix for AutoPay holders, and the one
+passing cell sat at the edge of its range on a swept sweet spot.
+
+### The anchor, declared on 31 August and unchanged
+
+`[REPORTED]` **Baremetrics, over 1,000,000+ dunning emails**, recovery rate by
+days delinquent: **day 0 — 13.25%**; day 3 — 11.46%; day 7 — 11.51%; day 15 —
+4.22%; day 20 — 3.83%; day 30 — 4.20%.
+
+**Declared plausible range: `topup_p` in [0.04, 0.14].** Swept
+{0.00, 0.05, 0.10, 0.15} — the grid brackets the range with one cell above it so
+the curve's shape past the anchor is visible. **0.15 is OUTSIDE the anchor and
+is not selectable**, exactly as `irregular_frac` 0.85 and 1.00 were shown and
+not selectable in W12.
+
+**Two limits on the anchor, restated because they decide how the result may be
+worded.** These are CARD dunning response rates from a mostly non-Indian base;
+no UPI AutoPay equivalent was found, so the read-across is ours and is a
+`[GUESS]` in the same way the outage read-across in `01_FACTS.md` is. And the
+real rate DECAYS with delinquency (13.25% at day 0 to ~4% at day 15) while
+`topup_p` is a flat per-failure constant, so a flat rate **overstates late-cycle
+top-ups and therefore flatters V7**. Say so wherever the number appears.
+
+### PRE-REGISTERED PREDICTIONS
+
+| id | prediction |
+|---|---|
+| **W14-1** | **V1 does not move at all** — not "moves a little", exactly zero to two decimal places. `at_risk_cycles` reads `w.bal` and the top-up is written to the separate `w.topups` array, so V1 cannot see it. This is a structural claim, and if V1 moves by any amount there is a plumbing defect. |
+| **W14-2** | **V7's CEILING does not move either**, for the same reason: `constrained_oracle` also reads `w.bal` only. **The top-up therefore raises measured V7 WITHOUT raising the ceiling, so the capture ratio rises and can exceed 100%** — which would mean the ceiling as currently computed is no longer the right ceiling, and that is a finding about the metric rather than about the agent. |
+| **W14-3** | **V3 rises more than V5 does**, at every non-zero rate. The fixed schedule presents on T+1..T+4, so it is still knocking while a top-up triggered by its own failed attempt is alive (`topup_lag` 2 hours, `topup_life` 48 hours). The agent waits for payday and will often be absent when the money lands. Registered as a directional inequality, not a band. |
+| **W14-4** | **V3 leaves its 20-40% band before V7 reaches 85%.** V3 measures 20.41% at spend 0.93 and sits on its floor; a mechanism that helps the fixed schedule most will push it up fast. Registered against our own interest, in the shape of W7-7. |
+| **W14-5** | **V5 rises above its band top (85%) at every rate in the anchored range.** V5 is already 88.40% and the top-up only adds money, so V5 moves further out of band, not into it. **The top-up cannot fix V5.** |
+| **W14-6** | **At `topup_p=0.10`, measured V7 stays below 85%** — the published band is not reached anywhere inside the anchored range. |
+
+### THE STOPPING RULE, registered before the run
+
+**If no `topup_p` inside [0.04, 0.14] lifts measured V7 into 85-95% while
+keeping V1 and V5 inside their bands, the rail-limited reframe stands and the
+sweep STOPS.** `topup_p` is not dialled past its anchor to make V7 pass. That is
+the same rule W12 was held to and the same trap refused three times before.
+
+**And note what W14-1 and W14-2 imply if they hold:** a top-up mechanism raises
+the agent's measured V7 without changing what the world makes achievable, so it
+would be **improving the score without improving the world** — which is the
+opposite of what this phase has been for. Recorded now so that a V7 improvement
+from this direction is read correctly if it appears.
+
+## W14 RESULT — topup_p does NOT move V7. Rail-limited reframe stands. 1 September 2026.
+
+*n=40, 20 held-out populations, canonical world, `pop_spend=0.93`, burn 12,
+mandate outflow ON. 160 runs, one process each. `logs/w14_topup.txt`.*
+
+| `topup_p` | V1 | V3 | V5 (2 SE) | V7 | V7 ceiling | capture | survival |
+|---|---|---|---|---|---|---|---|
+| 0.00 | 9.49% | 21.39% | 90.65% (±5.44) | 44.29% | 47.0% | 94.3% | 98.4% |
+| 0.05 | 9.49% | 26.10% | 90.50% (±6.08) | 44.99% | 47.0% | 95.8% | 98.4% |
+| 0.10 | 9.49% | 32.80% | 90.29% (±5.94) | 45.00% | 47.0% | 95.8% | 98.4% |
+| *0.15* | *9.49%* | *36.92%* | *91.10% (±5.03)* | *44.02%* | *47.0%* | *93.7%* | *98.6%* |
+
+*0.15 is outside the [0.04, 0.14] anchor, shown for shape, not selectable.*
+
+**Pre-registration 4/5.** W14-1 held exactly: **V1 is 9.49% at every rate, to
+two decimals** — `at_risk_cycles` reads `w.bal` and the top-up writes to
+`w.topups`, so it is structurally invisible to V1. W14-2 is structural in the
+same way: the ceiling is **one number, 47.0%, for every row**. W14-3 held, W14-5
+held, W14-6 held.
+
+**W14-4 BROKE.** V3 was predicted to leave its 20-40% band before V7 reached
+85%. V3 rose hard but stayed inside the band across the whole swept range —
+36.92% even at the unselectable 0.15. The prediction's premise (a mechanism this
+favourable to the fixed schedule pushes it out of band quickly) was wrong about
+the magnitude.
+
+### THE STOPPING RULE FIRES: no rate inside the anchor puts V7 in band
+
+Measured V7 moves **44.29% -> 45.00%** across the anchored range. Seven tenths
+of a point. **`topup_p` is tested and rejected as a V7 lever, and the
+rail-limited reframe stands.** It is NOT dialled past its anchor.
+
+**Two levers have now been tested against V7 and both failed**: multi-credit
+income (W12) and customer top-ups (W14). Together with the constrained oracle's
+finding that the ceiling itself is 47-52% against a band of 85-95%, V7's miss is
+established as a property of the rail rather than a gap waiting for a mechanism.
+
+### The asymmetry is the interesting result, and it is a product finding
+
+**V3 rises 15.5 points while V5 moves 0.4.** The top-up fires only on a FAILED
+debit. The fixed schedule presents on T+1..T+4, fails early and often, and
+triggers top-ups it then collects against. **The agent spends 1.53 attempts per
+at-risk cycle and usually succeeds on the first**, so it rarely fails, rarely
+triggers a top-up, and gains almost nothing.
+
+> A mechanism where the customer tops up in response to a failed debit rewards
+> dunning harder. The agent's restraint means it never provokes the top-up.
+
+That sits directly against this project's standing story — *dunning harder costs
+you the customer* — and it is the first measured effect pointing the other way.
+Survival is unchanged (98.4% at every rate), so in this world the harder-dunning
+arm collects more without paying for it. **Not adopted, and worth stating
+plainly rather than leaving out.**
+
+### And it would have been the wrong kind of win anyway
+
+Registered in advance as W14-2: the top-up raises measured V7 without moving the
+ceiling, so **capture rises to 95.8% purely because the numerator moved and the
+denominator cannot see the mechanism.** Improving the score without improving
+the world is the opposite of this phase's purpose, and the prediction was
+written down before the run so that the effect would be read correctly if it
+appeared. It appeared.
+
+## FAIR B-1 — the defect verdict SURVIVES a fair fight
+
+*Decision-hour rule, chronological execution, stop-on-success, schedule selected
+on populations 700-709 and scored on HELD-OUT 710-719. `pop_spend=0.93`.*
+
+| cap | TEST hit | TEST attempts | schedule |
+|---|---|---|---|
+| 1 | 65.75% | 0.99 | `est_payday + [7]` |
+| **2** | **94.18%** | **1.46** | **`est_payday + [7, 28]`** |
+| 3 | 99.49% | 1.79 | `est_payday + [2, 7, 27]` |
+| 4 | 100.00% | 2.28 | `est_payday + [0, 2, 7, 25]` |
+| **agent** | **88.40%** | **1.53** | — |
+
+**At the agent's own budget of 1.53 attempts the best non-adaptive policy scores
+95.35%** (concave envelope over the bracketing schedules, which a randomised mix
+realises). **Agent 88.40%. Margin −6.95 points — inside the registered defect
+line of −5.**
+
+**Three passes, and the first two were wrong.** The first gave B-1 four attempts
+against the agent's 1.53. The second corrected the budget but assumed a cap-k
+schedule costs k attempts — it does not, because a fixed schedule stops on
+success, so `[7, 28]` costs **1.46** attempts, LESS than the agent, for MORE
+recovery. Only the third accounting is right, and it is the one that stands.
+Recorded because the second pass would have reported a +7.6 point win for the
+agent that does not exist.
+
+**The mechanism is clean, which is what makes it credible.** `est_payday`
+carries +/-7 days of error. Offset 7 lands inside the collectable window when the
+estimate ran early, covering errors of about −7 to +3 on its own (65.75%).
+Offset 28, i.e. −2, covers +2 to +7 — exactly the cases offset 7 misses. The
+pair is complementary by construction.
+
+**Spanning the payday error band is what the payday posterior exists to do**, and
+the agent does it 7 points worse than two fixed offsets.
+
+**Ruled out: the batch attempt ceiling.** `batch_legal_ceiling` is
+`n_mandates x 4 x n_cycles`, exactly the summed NPCI cap, so it cannot bind
+before the per-mandate cap does. Ruled out by construction, not by measurement.
+
+**Leading explanation: the stale prior.** `FITTED_BELIEF` was selected on the
+old world — non-stationary, k=5, salary-coupled amounts, `pop_spend=1.05`. On
+the canonical world its advantage over an unfitted filter is **+1.3 to −1.6
+points, indistinguishable from zero.**
+
+⚠️ **Before the refit is credited with fixing this**: closing a 7-point gap
+against a schedule as simple as `[7, 28]` would be a large improvement from one
+change, and rule 3 applies. **The cheaper diagnostic first is to run the agent
+with `bcfg=None` against this same fair B-1.** If the unfitted filter also loses
+~7 points, the defect is structural to the index rule and no refit fixes it.
+That check is one run and it is not yet done.
+
+## THE FORK RESOLVED — do NOT refit. The defect is the retry policy. 1 September 2026.
+
+*n=100, held-out populations 710-719 ONLY, canonical world, `pop_spend=0.93`,
+burn 12, mandate outflow ON. Both arms scored on the same populations B-1 was
+TESTED on; each compared at its OWN measured attempt budget via the concave
+envelope. `logs/fork_prior_vs_policy.txt`.*
+
+| prior | V5 | 2 SE | V7 | attempts | B-1 at that budget | margin | verdict |
+|---|---|---|---|---|---|---|---|
+| **fitted** (shipping) | 89.54% | ±5.41 | 43.58% | 1.53 | 95.26% | **−5.72** | DEFECT |
+| **unfitted** | 88.96% | ±3.88 | 40.99% | 1.43 | 92.28% | **−3.32** | matches |
+
+### The answer: BOTH arms lose, and the prior is not the difference
+
+**89.54% against 88.96% is 0.58 points, with 2 SE of ±5.41 and ±3.88. The two
+priors are indistinguishable.** The margins differ (−5.72 vs −3.32) mostly
+because the BUDGETS differ (1.53 vs 1.43), which moves the B-1 comparison point
+along the frontier — not because the unfitted filter schedules better.
+
+**So the registered fork lands on its first branch, and the conclusion holds
+even though the magnitude does not.** The stale prior is NOT the cause. **A
+FITTED_BELIEF refit will not close this gap, and Bill B should not be spent on
+it.** That is a 30-60 minute fit plus two full measurement passes saved, on
+evidence rather than on judgement.
+
+### What the defect actually is
+
+The agent spends **1.43-1.53 of its 4 available attempts** on at-risk cycles;
+only 3.8% exhaust the cap and 6.7% are never attempted at all. B-1's winning
+schedule is two offsets, `est_payday + [7, 28]`, and it wins because those two
+offsets are **complementary by construction**: offset 7 covers payday-estimate
+errors of about −7 to +3, offset 28 (≡ −2) covers +2 to +7. Together they span
+the whole ±7 error band for 1.46 attempts.
+
+**The agent has a payday posterior and does not do this.** It commits its
+attempt near the posterior mode and, when the estimate is wrong in the direction
+the mode does not cover, it does not deliberately place a second attempt on the
+other side of the error band.
+
+> **Agent-phase task: a deliberate second attempt bracketing the
+> payday-estimate error.** Not a refit, not a new prior — a scheduling rule that
+> spends the second attempt where the posterior is NOT, rather than where it is.
+> This keeps timing in the policy and does not touch ADR-005.
+
+### ⚠️ HOW STRONGLY THIS IS ESTABLISHED — weaker than the verdict labels suggest
+
+The margins are **−5.72 and −3.32 against 2 SE of ±5.41 and ±3.88.** Both are
+inside roughly one standard error of the "matches" line. **The direction is
+consistent across every measurement taken** — the agent is below a fair
+non-adaptive B-1 in all of them — **but the precise verdict labels are not
+robust, and "DEFECT" for the fitted arm should not be quoted as a settled
+result.** Tightening it needs more held-out populations, not more analysis.
+
+What IS robust: the agent does not exceed the best non-adaptive schedule at its
+own budget, at either prior. The V5 hit sentence — *"agent recovers within N
+points of the Bayes-achievable maximum"* — is **not available**, and V5 stays a
+comparison to published systems rather than a validation checkmark, exactly
+where the constrained oracle left it.
+
+### The comparison method, LOCKED
+
+Audited three times and corrected three times; this is the version of record and
+it is not re-opened:
+
+1. **Concave envelope** — the (attempts, hit) frontier has strictly decreasing
+   slopes, 60.49 / 16.09 / 1.04 points per attempt, so the chord between
+   bracketing schedules is the concave envelope and a randomised mix realises
+   it. The bound is valid.
+2. **Chronological execution** — attempts ordered by actual day, not by offset.
+3. **Stop-on-success** — a cap-k schedule costs the position of its first hit,
+   not k. This is what made `[7, 28]` cost 1.46 rather than 2.
+4. **Train/test** — schedule selected on populations 700-709, scored on 710-719.
+5. **Same populations for both sides** — the agent is scored on 710-719 only.
+   The earlier 88.40% included the ten populations B-1 trained on, which biased
+   the comparison against the agent.
+
+**The three corrections, recorded because each one changed the answer:** pass 1
+gave B-1 four attempts against the agent's 1.53; pass 2 fixed the budget but
+assumed a cap-k schedule costs k attempts and would have reported a **+7.6 point
+win for the agent that does not exist**; pass 3 fixed the cost accounting; this
+pass fixed the population mismatch.
+
+## W15 — THE BRACKETING FIX IS REFUTED. It makes the agent worse. 1 September 2026.
+
+*n=100, held-out populations 710-719, canonical world, `pop_spend=0.93`,
+burn 12, mandate outflow ON. Both arms compared against the same B-1 frontier
+at their own measured attempt budgets. `logs/w15_bracket.txt`.*
+
+| arm | V5 | 2 SE | V7 | attempts | B-1 at that budget | margin |
+|---|---|---|---|---|---|---|
+| baseline | 89.54% | ±5.41 | 43.58% | 1.53 | 95.26% | −5.72 |
+| **bracket** | **84.74%** | ±6.33 | **31.91%** | 1.56 | 95.86% | **−11.12** |
+
+**Bracketing costs 4.8 points on V5 and 11.7 on V7, and the attempt budget
+barely moves (1.53 -> 1.56).** The margin against B-1 roughly doubles. It is
+not adopted, and `bracket` ships OFF.
+
+**The risk was stated before the run and it is the one that materialised.**
+Recorded on 1 September, before the measurement: *"it is a live possibility that
+this makes things worse. Committing the second attempt to the posterior argmax
+spends it immediately, where the current rule may hold it for a better day
+later."*
+
+### What was actually built, and why it was the wrong reading
+
+`propose` only ever targeted `ahead[0]` -- **tomorrow**. Every other day in the
+lookahead served only as `p_later`, the option value deciding wait-versus-now.
+The action space was "attempt tomorrow or wait", so the policy could not place
+an attempt on a chosen future day at all.
+
+`bracket=True` made the target, after the first attempt of a cycle, **the day in
+the remaining window with the highest success probability**. The reasoning was
+that `observe()` has already updated the posterior off the day that just failed,
+so its argmax IS the other side of the error band, and no separation constant
+need be invented.
+
+**That reasoning is now refuted by measurement**, and the refutation is
+informative:
+
+> Targeting the post-update posterior argmax is targeting **where the posterior
+> IS**. B-1's winning schedule `est_payday + [7, 28]` targets where the
+> posterior **is not** -- and B-1 has no posterior at all. The two are not the
+> same rule, and the second is the one that wins.
+
+**The most likely mechanism, and it is testable.** If a failed attempt moved the
+posterior substantially, its argmax would land near offset 28 when offset 7
+failed, and bracketing would reproduce B-1. It does not. So the candidate root
+cause is that **`w3.BeliefPD.observe(amount, success)` barely moves the payday
+posterior on a failure** -- which is consistent with the standing `[VERIFIED]`
+fact in `01_FACTS.md` that it takes no decline code, so "balance was short at
+day d" is a weak, ambiguous signal.
+
+**The cheap next test, not yet run:** measure how far the posterior's argmax
+moves between attempt one and attempt two. If it moves a day or two, the belief
+is not learning from its own failures, and that is a defect in the FILTER rather
+than in the scheduling rule built on top of it.
+
+### And a second reading that was deliberately not built
+
+An explicit rule -- "place attempt two a fixed distance from attempt one in
+payday-offset space" -- would reproduce `[7, 28]` directly. **It was not built
+because it requires an invented separation constant**, which is rule 5, and
+because a scheduling rule that has to be told where the posterior's blind spot
+is would be evidence that the posterior is not doing its job. That remains the
+argument; the measurement above has now made the underlying worry concrete
+rather than hypothetical.
+
+### Status of the V5 defect after W15
+
+Unchanged and still open. Three candidate causes have now been tested:
+
+| candidate | verdict |
+|---|---|
+| stale prior (`FITTED_BELIEF` fitted on the old world) | **ruled out** — fitted and unfitted are within noise of each other |
+| batch attempt ceiling rationing the agent | **ruled out by construction** — the ceiling is the summed NPCI cap |
+| scheduling rule cannot place a future attempt (W15) | **fix built, measured, REFUTED — it is worse** |
+
+**Remaining candidate: the belief filter does not learn enough from a failed
+attempt to move its own payday posterior.** That is a filter-level question, not
+a policy-level one, and it is the next thing to measure.
+
+**Nothing about V5 or V7 goes into `docs/`.** V5's number is still moving.
+
+## AGENT-PHASE SUITE on the frozen world — the belief filter's crossover MOVED. 1 September 2026.
+
+*n=100, HELD-OUT populations 710-719, canonical world, `pop_spend=0.93`,
+burn 12, mandate outflow ON. 120 runs for the arm grid, one process each.
+`logs/w16_agent_suite.txt`, `logs/w16_steelman_retuned.txt`.*
+
+### The posterior does not relocate on failure — V5 investigation closed
+
+Instrumented `w3.BeliefPD.observe` over 6 populations; 740 failures, 4544
+successes.
+
+| observation | n | mean argmax shift | median | moved 0 days | moved >2d |
+|---|---|---|---|---|---|
+| **FAILURE** | 740 | **0.53 d** | 0 | **81.2%** | 7.0% |
+| success | 4544 | 0.14 d | 0 | 96.3% | 1.6% |
+
+Payday-posterior entropy on failure: **1.513 -> 1.264 nats**, against 3.401 for
+uniform-over-30. Top-hypothesis weight after a failure: 0.566.
+
+**The filter absorbs information from a failure and concentrates, but it does
+not RELOCATE.** 81% of failures leave the argmax exactly where it was. So a
+scheduler reading the argmax cannot bracket the estimate error, which is
+precisely why W15's bracketing fix failed. **V5's mechanism is identified and
+the investigation is closed. The decline-code filter work is NOT started.**
+
+### Three arms, one robustness axis
+
+| payday_err | agent | naive | steelman (fixed `[7,28]`) |
+|---|---|---|---|
+| 1 | 90.58% | 23.00% | 65.01% |
+| 3 | 90.68% | 23.00% | 88.40% |
+| 7 | 89.54% | 23.00% | 96.40% |
+| 14 | 86.14% | 23.00% | 63.20% |
+
+**`naive` is 23.00% at every noise level, flat by construction** — retry
+tomorrow always never reads the payday estimate, so `payday_err` cannot touch
+it. It also kills **14.1%** of mandates (survival 85.9%) against the agent's
+1.5%. The agent beats it by ~67 points everywhere and that comparison needs no
+caveat.
+
+**The agent is flat in estimate error: 90.58 / 90.68 / 89.54 / 86.14.** Only 4.4
+points of degradation from +/-1 day to +/-14. Graceful degradation is the
+property the payday posterior is claimed for, and it holds.
+
+⚠️ **The steelman row above is NOT interpretable**, and this was flagged before
+the run: `[7, 28]` was selected at `payday_err=7`, so its curve peaks where it
+was fitted and collapses either side. That is a property of the tuning.
+
+### The steelman RE-TUNED at each noise level — the comparison that counts
+
+Best 2-offset schedule re-selected on train populations 700-709 at each
+`payday_err`, scored on held-out 710-719.
+
+| payday_err | offsets | steelman | attempts | agent | **agent − steelman** |
+|---|---|---|---|---|---|
+| 1 | `[0, 1]` | **100.00%** | 1.28 | 90.58% | **−9.42** |
+| 3 | `[0, 3]` | **100.00%** | 1.43 | 90.68% | **−9.32** |
+| 7 | `[7, 28]` | 94.18% | 1.46 | 89.54% | −4.64 |
+| **14** | `[13, 27]` | 68.84% | 1.57 | 86.14% | **+17.30** |
+
+Attempt budgets are comparable throughout (1.28-1.57 against the agent's ~1.53),
+so this is roughly budget-matched rather than a spending advantage either way.
+
+> **The belief filter earns its complexity only when the payday estimate is
+> bad.** Below about +/-7 days a two-offset fixed schedule beats it, by 9 points
+> at +/-1 and +/-3. At +/-14 the agent wins by 17.3.
+
+### ⚠️ THIS MOVES A DOCUMENTED CLAIM, and in the harder direction
+
+`00_HANDOFF.md` currently states the system "loses to `payday_wait` at +/-1 day,
+ties at +/-3, and wins by +23.6 at +/-5 rising to +53.2 at +/-14", and frames
+the open question as **"is real payday uncertainty above or below ~4 days?"**
+
+The SHAPE survives — lose at low error, win at high. **The crossover does not.**
+Against a steelmanned baseline it sits between +/-7 and +/-14 rather than near
++/-4, because `harness.payday_wait` degenerates into daily retries after one
+miss and the re-tuned offsets do not.
+
+**So the open question becomes "is real payday uncertainty above or below about
+ten days?", which is a substantially harder bar for the agent to clear.** The
+old numbers were measured against a weaker baseline on a different world and
+must not be quoted beside these.
+
+### How this could be biased toward the answer wanted
+
+- **The steelman is chosen with hindsight on the train populations; the agent's
+  prior was fitted on a DIFFERENT world entirely** (non-stationary, k=5,
+  salary-coupled, `pop_spend=1.05`). That asymmetry favours the steelman, and
+  the fitted-vs-unfitted test showed the prior is worth roughly zero here, so
+  the agent is not being flattered by it either.
+- **The steelman gets 2 offsets, not 4.** Four would make it stronger and the
+  comparison harsher on the agent; it would also spend more attempts.
+- **Error bars.** 2 SE on the agent runs +/-5.4 to +/-6.3. The −9.42, −9.32 and
+  +17.30 sit outside that; **−4.64 at `payday_err=7` does not, and should be
+  read as a tie.**
+- **100.00% at +/-1 and +/-3 says the world is easy when the estimate is good** —
+  offsets `[0, 1]` catch everything — which is a statement about the canonical
+  world as much as about the schedule.
+
+### Ablations: NOT re-run
+
+`test_action_ablation.py`, `test_stop_mechanism.py` and `test_outage_ablation.py`
+all still run against the OLD world. Re-running them on the canonical world is a
+configuration change to each, not new measurement machinery, and it has not been
+done. Their published numbers are stale and must not be quoted beside anything
+above.
+
+## ABLATIONS RE-RUN ON THE FROZEN WORLD — timing is the agent's only value. 1 September 2026.
+
+`--canonical` flag added to the three ablations via `agent/tests/_canonical.py`,
+which holds the world definition once so three copies cannot drift. Without the
+flag each script reproduces exactly what it always did, so the old output stays
+regenerable. *n=100, k=5, HELD-OUT populations 710-719, 120d, `payday_err=7`,
+`pop_spend=0.93`, burn 12, mandate outflow ON, `FITTED_BELIEF`.*
+
+### Action ablation — the action space is worth half a point
+
+| arm | cycle_rec | vs degenerate | 2 SE | escal used | stops used | dead |
+|---|---|---|---|---|---|---|
+| degenerate | 98.81 | — | — | 0 | 0 | **25** |
+| rules_none | 99.31 | **+0.498** SIG | 0.428 | 0 | 0 | 1 |
+| +NUDGE p=0.10 | 99.31 | +0.498 SIG | 0.428 | 0 | 0 | 1 |
+| +NUDGE p=0.25 | 99.34 | +0.532 SIG | 0.412 | 0 | 0 | 1 |
+| +NUDGE p=0.50 | 99.46 | +0.651 SIG | 0.480 | 0 | 0 | 1 |
+| **+ESCALATE** | 99.31 | **+0.498** | 0.428 | **0** | 0 | 1 |
+| **+STOP** | 99.31 | **+0.498** | 0.428 | 0 | **0** | 1 |
+| full p=0.25 | 99.34 | +0.532 | 0.412 | 0 | 0 | 1 |
+| `payday_wait` | 73.94 | **−24.867** | 1.704 | | | |
+
+**ESCALATE and STOP are byte-identical to `rules_none` — zero usage, zero
+effect.** A zero effect and a zero usage are different findings and this is
+both: on the canonical world the agent never reaches a state where either
+action fires. The whole +0.498 comes from `rules_none`, i.e. the reminder and
+backup-checkout workflow, not from the action space at all.
+
+**Mandate deaths fall 25 -> 1**, which is a real behavioural difference worth
+only half a point of collection, because a dead mandate in this world forfeits
+few remaining cycles.
+
+Pre-registration 4/8. **E-ABL-1 broke** (`rules_none` is not exactly
+`degenerate`), E-ABL-3 and E-ABL-5 broke because ESCALATE and full now score
+ABOVE degenerate rather than at or below it.
+
+### Stop mechanism — the published +1.371 is stale
+
+STOP's gain grows monotonically with horizon: **−0.102 at 60d, +0.498 at 120d,
++0.845 at 180d**, and tracks deaths avoided at **r = +0.926**. The mechanism
+story holds (E-MECH-1, E-MECH-2, E-MECH-3 all held).
+
+**E-MECH-1b BROKE: the previously published +1.371 at 120d is not inside the new
+range.** On the canonical world STOP is worth **+0.498**, not +1.371. The old
+figure was measured on a world with three defects in it and must not be quoted.
+
+### Outage ablation — detection is worth ZERO here
+
+| severity | best arm gain |
+|---|---|
+| 0.00 | +0.000 |
+| 0.20 | +0.000 |
+| 0.40 | +0.000 |
+| 0.80 | **+0.000** |
+
+Pre-registration 3/6. **E-OUT-2 and E-OUT-5 both broke**: the best arm beats
+`none` by **+0.000 points at every severity**, against a registered >1 point at
+0.80. **E-OUT-6 broke**: `both` is identical to `pause` at every severity, so
+pausing and suppression do not compose.
+
+**The arms ARE doing different things** — attempts paused runs 0 / 23 / 84 and
+technical declines suppressed 0 / 2 / 22 across arms — **they simply do not
+change collection.** In a world where the due-date failure rate is 9.5% the
+agent has ample alternative days, so losing a few to a rail outage costs
+nothing. Outage awareness was worth something in a world that failed 69% of the
+time; it is worth nothing in this one.
+
+### What the three ablations say together
+
+| component | worth on the canonical world |
+|---|---|
+| timing (belief filter + index) vs `payday_wait` | **+24.87 pts** |
+| reminders / backup checkout | +0.498 |
+| NUDGE, at a top-up rate of 0.50 | +0.651 |
+| **ESCALATE** | **0.000, never used** |
+| **STOP** | **0.000 marginal, never used** |
+| **outage detection** | **0.000 at every severity** |
+
+> **Timing is not merely the agent's primary value. It is very nearly its only
+> value.** Everything built on top of the belief filter measures at or below
+> half a point on this world, and three components measure exactly zero.
+
+## PAYDAY-ESTIMATE ACCURACY — no published figure, and a derivable bound
+
+- `[REPORTED]` **Razorpay does this commercially.** Their retry system is
+  "scheduled within NPCI-compliant limits (1 original + 3 retries) but timed to
+  coincide with periods when customer accounts are most likely to have funds --
+  such as post-salary credit dates." **The approach is validated; the accuracy
+  is not published.** razorpay.com, read 1 September 2026.
+- `[REPORTED]` **Net salaries are typically disbursed by the 28th or the last
+  working day** of the month.
+- `[REPORTED]` **Code on Wages section 17**: pay by the **7th** for employers
+  under 1,000 staff, the **10th** at or above.
+- `[REPORTED]` **Government employees receive a fixed monthly date**; private
+  employees are paid within 7-10 days of the wage period ending.
+- `[REPORTED]` Where a firm pays on the **last working day**, the date moves only
+  with weekends and public holidays.
+- `[REPORTED]` Semi-monthly cycles exist, typically the 15th and the last day.
+
+**Derivation, and it is a derivation.** A last-working-day payer shifts 0-3 days
+month to month; a fixed-date payer shifts ~0. The statutory window is about ten
+days wide, so a merchant with NO customer-specific history faces roughly
+**+/-5**; with a few observed cycles it should compress to **+/-1 to +/-3**.
+
+**Real payday uncertainty plausibly sits at +/-1 to +/-3 days, bounded near
++/-5. It is very unlikely to be +/-14.** `[GUESS]` on the exact value, bounded
+at both ends by the statutory and payroll-practice facts above.
+
+### ⚠️ WHERE THAT LEAVES THE AGENT
+
+The re-tuned steelman comparison, against this estimate of the real operating
+point:
+
+| payday_err | agent − steelman | is this the real world? |
+|---|---|---|
+| 1 | **−9.42** | plausible |
+| 3 | **−9.32** | plausible |
+| 7 | −4.64 (tie, inside 2 SE) | upper bound |
+| 14 | +17.30 | **very unlikely** |
+
+**At the payday uncertainty the public record implies, a two-offset fixed
+schedule beats the belief filter by about nine points.** The agent's win appears
+only at +/-14, which the payroll evidence says is not where reality sits.
+
+Combined with the ablations: **the agent's only material value is timing, and at
+realistic payday uncertainty its timing loses to two fixed offsets.** That is
+the finding, and it is adverse. It is not softened by the fact that both arms
+sit above 90% in absolute terms.
+
+**Nothing here is in `docs/`.** The old ablation figures (+1.371 for STOP, the
+outage-detection gains) are stale and must not be quoted beside these.
+
+## THE HONEST BASELINE — one fixed schedule, and the crossover is at +/-7 days. 1 September 2026.
+
+*One 2-offset schedule selected on TRAIN populations 700-709 by mean hit rate
+across `payday_err` {1,3,7,14}, then FROZEN and scored on HELD-OUT 710-719 at
+each level. n=100, canonical world, `pop_spend=0.93`.*
+`logs/w18_single_schedule.txt`.
+
+**Selected: `est_payday + [1, 7]`**, train mean 87.34%.
+
+| payday_err | baseline | att | agent | att | **agent − baseline** | `[7,28]` ref |
+|---|---|---|---|---|---|---|
+| 1 | **100.00%** | 1.02 | 90.58% | 1.53 | **−9.42** | 62.67% |
+| 3 | 97.95% | 1.26 | 90.68% | 1.53 | **−7.27** | 85.96% |
+| **7** | 89.55% | 1.48 | 89.54% | 1.53 | **−0.01** | 94.18% |
+| 14 | 56.34% | 1.64 | 86.14% | 1.53 | **+29.80** | 63.53% |
+
+### ⚠️ CORRECTION: the crossover is at +/-7, not "between 7 and 14"
+
+The previous report put the crossover "between +/-7 and +/-14" and framed the
+open question as "is real payday uncertainty above or below about TEN days?"
+**That came from the per-level re-tuned table, which is an ORACLE**: it hands
+the baseline the noise level, which no merchant knows in advance. It overstates
+the baseline at every level and pushed the apparent crossover too high.
+
+**Against a single honestly-chosen schedule the crossover sits at
+`payday_err = 7`, where the two arms tie to within 0.01 points.** The re-tuned
+table stays in NOTES as an upper bound on fixed schedules and is not the
+comparison to quote.
+
+### What the two curves actually look like
+
+**The baseline collapses and the agent does not.** Baseline: 100.00 -> 97.95 ->
+89.55 -> 56.34, a 43.7 point fall. Agent: 90.58 -> 90.68 -> 89.54 -> 86.14, a
+4.4 point fall. **Robustness to payday uncertainty is real and it is the
+agent's property, not a claim about it.**
+
+**It simply does not pay below +/-7.** At +/-1 the baseline is better AND
+cheaper — 100% on **1.02 attempts** against the agent's 90.58% on 1.53. At
++/-14 the baseline spends MORE (1.64) for far less.
+
+### Against the real operating point
+
+The payroll evidence puts real payday uncertainty at **+/-1 to +/-3, bounded
+near +/-5** — statutory payment by the 7th or 10th, most firms on the last
+working day which moves only with weekends, government employees on a fixed
+date.
+
+**So the realistic operating point sits on the losing side of the crossover,
+where the agent trails a two-offset fixed schedule by 7 to 9 points.**
+
+⚠️ **One caveat on how the baseline was selected, and it cuts against the
+baseline.** The schedule maximises the MEAN hit rate across `payday_err`
+{1,3,7,14} with equal weight, but those levels are not equally likely — the
+evidence says +/-1 to +/-3 is realistic and +/-14 is not. **An equal-weight mean
+therefore over-weights a regime that probably does not exist**, so a rival who
+believed the payroll evidence would pick a schedule tuned lower and beat the
+agent by MORE than the table shows. Equal weighting was used anyway, because
+weighting by this project's own uncertainty estimate would bake a `[GUESS]`
+into the baseline's construction.
+
+⚠️ **And the arm that was run end-to-end is the wrong schedule.**
+`agent/policy/payday_offsets.py` ships `[7, 28]`, which the table above shows is
+heavily tuned to `payday_err=7` — 62.67% at +/-1 against `[1, 7]`'s 100%. If the
+honest baseline is to exist as a real arm rather than as arithmetic, its offsets
+should be `[1, 7]`. Not changed yet.
+
+### What this does to the project's claim
+
+The defensible statement is no longer "the agent beats the baselines". It is:
+
+> **The agent's advantage is conditional on payday uncertainty. Below about
+> seven days of estimate error a single two-offset fixed schedule matches or
+> beats it, at a lower attempt budget. Above seven days the fixed schedule
+> collapses and the agent does not, reaching +29.8 points at +/-14.**
+
+That is measured, it is conditional in the same way the headline is already
+conditional on `pop_spend`, and it is honest about a regime where the simple
+thing wins. **Nothing is in `docs/` yet.**
+
+## ⚠️ ERROR 36 — the `payday_wait` baseline was measured on the WRONG WORLD, and it flattered the agent by 16 points. 1 September 2026.
+
+**Reported to Tanmay as "+24.87 pts for timing" earlier the same day. That number
+is wrong and is withdrawn.**
+
+`_canonical.py` was wired into every arm that runs through `agent/batch`.
+`test_action_ablation.py`'s `payday_wait` row does NOT take that path — it calls
+`harness.run` directly, and `harness.run` had no way to receive `burn_cycles` or
+`mandate_outflow`. So:
+
+| | agent arms | `payday_wait` row |
+|---|---|---|
+| `pop_spend` | 0.93 | 0.93 |
+| population | canonical (k~2, absolute amounts, statutory payday) | **OLD (k=5, salary-coupled, uniform tail)** |
+| burn-in, mandate outflow | ON | **OFF** |
+
+Measured directly on one population:
+
+| configuration | `payday_wait` cycle collection |
+|---|---|
+| canonical population, no burn-in / no outflow | 81.98% |
+| **canonical population, WITH burn-in and outflow** | **93.02%** |
+| what the ablation reported (old population too) | **73.94%** |
+
+**Corrected ablation, 10 held-out populations, n=100:**
+
+| arm | cycle_rec | vs degenerate |
+|---|---|---|
+| degenerate | 98.81 | — |
+| **`payday_wait`** | **90.29** | **−8.515** (2 SE 2.053) |
+
+**The agent's timing advantage over the documented baseline is +8.52 points, not
++24.87.**
+
+**Why this matters beyond the number.** +8.52 sits inside the 6-8% industry
+benchmark that CLAUDE.md rule 3 names as the plausible range. **+24.87 was three
+times that, and rule 3 says a figure far outside the range is a defect until
+proven otherwise.** The rule fired correctly and was not applied — the number
+was reported because it confirmed the expected story, not because it had been
+checked. Found only while wiring `batch_report`, not by noticing it was too big.
+
+**The guard.** `harness.run` now takes `burn_cycles` and `mandate_outflow`,
+guarded and inert at the defaults, and `harness_job` accepts the optional
+6th `pop_spec` element the way `agent_job` already did. **Fast gate re-run
+after the change: 20 gates, 2 known FAIL, 0 vacuous — T9 green, so the harness
+change is inert on every gated number.**
+
+**What is NOT affected.** Every agent-vs-agent comparison in the ablations
+(ESCALATE 0.000, STOP 0.000, outage detection 0.000 at every severity) ran all
+arms on the canonical world and stands unchanged.
+
+## THE AGENT IS FROZEN. Five attempts, none improved it. 1 September 2026.
+
+| attempt | mechanism | result |
+|---|---|---|
+| **W15** bracket | commit attempt 2 to the updated posterior argmax | **worse** — V5 −4.8, V7 −11.7 |
+| **W17** coverage | best PAIR of days by correlation against the payday posterior | **worse** — −3.07 to −7.08 at every noise level, survival 98.5% -> 94.9% |
+| **W18** lookahead | let the forecast see the whole 30-day cycle, not 12 days | **no effect at 20, worse at 30** |
+| **fix #3 premise** | is payday inference the bottleneck? | **REFUTED before building** |
+| **fix #4b** | sibling sequencing | **moot** — `drained` is disabled by the coupling fix |
+
+### The premise test that stopped fix #3, and it cost one run set
+
+Fix #3 would have plumbed the decline family into `w3.BeliefPD.observe` so a Z9
+relocates payday mass. **Cost: a T9 recapture, S2a_PD / S4 / S1_PD re-runs, and
+a change to the one object `sim/` and `agent/` share.**
+
+The premise is that payday inference is what the agent loses on. Tested by
+handing the agent a PERFECT payday estimate:
+
+| arm, `payday_err=0` | recovery | 2 SE |
+|---|---|---|
+| agent | 89.16% | ±5.93 |
+| `[1,7]` | **100.00%** | ±0.00 |
+
+**−10.84 points with the payday known EXACTLY** — a larger gap than at
+`payday_err=1` (−9.17). **Payday inference is not the bottleneck, so decline-code
+relocation was aimed at the wrong quantity and was not built.** This is the
+check that would have saved W15 and W17, and it cost one run set against a T9
+recapture.
+
+### Why W18 could not have worked, in hindsight
+
+`propose` only ever targets `ahead[0]`, tomorrow. The lookahead horizon feeds
+`p_later` — the option value — and nothing else. **Extending it therefore makes
+the agent see better future days it still cannot target, which makes it WAIT
+more.** 30-day lookahead scored below 12. Seeing further cannot help a policy
+that cannot act on what it sees.
+
+### What the five failures establish
+
+> **The agent's waiting is not the defect. It is the part that works.** 88-90%
+> recovery on 1.53 of 4 available attempts is efficient, and every change that
+> made it spend the budget more eagerly — W15, W17 — cost more than it bought.
+> The residual ~10% against `[1,7]` is flat in `payday_err`, survives at zero
+> payday uncertainty, and is not explained by the prior, the attempt ceiling,
+> the forecast horizon, sibling drain or payday learning.
+
+**It is unexplained. It is recorded as unexplained rather than attributed to the
+last thing tried.** Naming a cause for it now would be the same move as the
++24.87: reporting what fits the story instead of what was checked.
+
+# ================= PHASE 3 CONCLUSION — 1 September 2026 =================
+
+## The canonical world
+
+`agent/tests/_canonical.py` holds it once. Every knob has one named external
+source; none is a bare choice.
+
+| knob | value | source |
+|---|---|---|
+| **R1** `k` | `1 + Poisson(1)`, cap 8 | ~95M active AutoPay mandates against ~500M UPI users |
+| **R2** payday | day-0 mass, remainder days 1-7 | Code on Wages s.17: pay by the 7th / 10th |
+| **R3** amount | lognormal, INDEPENDENT of salary, median ₹855 | published ticket range ₹149-₹2,499, ₹15,000 cap |
+| **S1** burn-in | 12 cycles | convergence only: 12 vs 16 differ by 0.11 pts |
+| **S2** buffer | lognormal(median 0.25 salaries, sigma 1.0) | 75% of Indians have no emergency fund; drawn P(<0.5)=0.745 |
+| **S3** mandate outflow | ON, `drained` off | `pop_spend` is TOTAL outflow; subscriptions are part of it |
+| — | `irregular_frac = 0.00` | tested and immaterial, not untried |
+| **axis** | `pop_spend` in **[0.80, 0.93]** | 1 − RBI FY25 household saving (18-20% / 11.8% / 7%) |
+
+`buffer_sigma` is very nearly inert (443 vs 445 at-risk between 0.6 and 1.4), so
+the one `[GUESS]` shape parameter carries almost no weight. The buffer's
+PRESENCE is load-bearing; its shape is not.
+
+**No single calibration is declared.** The region has one informative end —
+below `pop_spend=0.90` the world carries 2-57 at-risk cycles and cannot measure
+anything — and that is a property of the world, stable across nine
+(buffer sigma x burn-in) combinations.
+
+## The four validation targets, and they are NOT one boat
+
+| | status | what it is |
+|---|---|---|
+| **V1** first-presentation failure | **HIT** (10.58%, band 8-15%) | genuine world validation: a property of the world no policy can move |
+| **V3** fixed-schedule recovery | **HIT, marginal** (20.41%, on the band floor, ±4.10) | world validation: a documented baseline policy running in it |
+| **V5** smart-retry recovery | **MISS** (88.40%) — **and RECLASSIFIED** | the constrained oracle's ceiling is **100% at every cell**, so V5 measures AGENT BEHAVIOUR, not the world |
+| **V7** recoveries inside 10 days | **MISS** (42.64%) — **rail-limited** | the achievable ceiling on this rail is **51.5%** against a card-dunning band of 85-95%; the agent captures **82.7%** of it |
+
+**V1 and V7 cannot both be in band in any world with one salary credit per
+month.** Where V1 is in band the V7 ceiling is 47-52%; where the V7 ceiling
+clears its floor, V1 is near 2%. Three independent supports for the
+rail-limited reading: the ceiling measurement, the failed multi-credit test
+(W12), and the failed `topup_p` test (W14).
+
+## The agent's edge is conditional, and the crossover is +/-7
+
+Against `[1, 7]` — one fixed schedule, selected once on train populations,
+frozen, run end-to-end through Stage 0 and the audit trail:
+
+| payday_err | agent | `[1,7]` | margin |
+|---|---|---|---|
+| 1 | 90.58% | 99.75% | **−9.17** |
+| 3 | 90.68% | 98.51% | **−7.83** |
+| 7 | 89.54% | 90.88% | −1.34 (tie) |
+| 14 | 86.14% | 55.47% | **+30.67** |
+
+The agent is flat in estimate error (90.58 -> 86.14); the baseline collapses
+(99.75 -> 55.47). **Robustness is real and measured. It does not pay below
++/-7.** Real payday uncertainty derives to **+/-1 to +/-3, bounded near +/-5**
+(statutory payment by the 7th/10th, most firms on the last working day,
+government employees on a fixed date), which is the losing side.
+
+## Timing is very nearly the agent's only value
+
+| component | worth on the canonical world |
+|---|---|
+| timing vs `payday_wait` | **+9.08 pts** (2 SE 2.01) |
+| reminders / backup checkout | +0.498 |
+| NUDGE at top-up 0.50 | +0.651 |
+| **ESCALATE** | **0.000, never fires** |
+| **STOP** | **0.000 marginal, never fires** |
+| **outage detection** | **0.000 at every severity** |
+
+## THE HEADLINE, re-measured on the frozen world
+
+*`py -3.12 -m agent.batch_report --pops 10 --canonical`. n=100, 10 held-out
+populations, 120d, `payday_err=7`, `pop_spend=0.93`, burn 12, mandate outflow
+ON. Not gate-protected.*
+
+| arm | cycles collected | recovered | survival | att/cycle |
+|---|---|---|---|---|
+| `payday_wait` (rival) | 90.29% | — | 90.52% | 1.272 |
+| **agent, deterministic** | **99.37%** | **₹7,496,430** | 99.84% | 1.450 |
+
+**+9.08 pts (2 SE 2.01, SIG).** Stopping rules: COLLECTED 7535, CYCLE_CLOSED
+311, LAST_ATTEMPT_HELD 28, MANDATE_DEAD 3. **Stage 0: 0 refused / 0 illegal over
+8,721 executed money actions**, gate and independent auditor agreeing.
+
+**This replaces 98.01% / 57.70% / +40.30 / ₹6,203,060.** The old headline was
+measured on a world with three defects in it.
+
+## Defects found in Phase 3
+
+- **Error 33** — the world had **no steady state**. `pop_spend=0.80` banked a
+  fifth of a salary per cycle without bound, the at-risk rate decayed 29.80% ->
+  0.75% across four cycles, and **V1 ran 27.67% at 60 days to 4.24% at 360.**
+  V1's agreement with the published band was the horizon cutting a transient.
+  **Fixed** (burn-in + payday buffer sweep).
+- **Error 34** — collected mandates were **handed back at every payday**.
+  `drained` reset per epoch and the balance trace never lost a debit, gifting
+  22.5% of a salary per cycle at k=5. **Fixed** (mandate outflow, `drained`
+  disabled in the same change to avoid double-counting).
+- **Error 35** — **RETRACTED**: "the oracle is 100%, therefore this is a pure
+  timing problem." `unwinnable_cycles` ignores the four-attempt cap by design.
+  **W2 was built on that inference.**
+- **Error 36** — the `payday_wait` baseline ran on the **old population without
+  burn-in or mandate outflow** while every agent arm ran canonical. Reported as
+  "+24.87 pts for timing"; the true figure is **+8.52**. Rule 3 should have
+  caught a number three times the 6-8% benchmark and did not, because it fit
+  the expected story. **Fixed** (guarded `burn_cycles`/`mandate_outflow` on
+  `harness.run`; fast gate green after).
+
+**Four invented constants removed** — `k=5`, the uniform payday tail, the
+salary-coupled amount, and an unexamined `pop_spend` — each replaced by a value
+with a named source.
+
+## The agent is frozen. Five attempts, none improved it.
+
+W15 bracket (worse), W17 coverage (worse at every noise level), W18 lookahead
+(no effect at 20, worse at 30), fix #3 premise (**refuted before building** —
+the agent loses by 10.84 with a PERFECT payday estimate, so payday inference is
+not the bottleneck and the T9 recapture was avoided), fix #4b sibling
+sequencing (**moot** — `drained` is disabled by the coupling fix).
+
+**The residual ~10% against `[1,7]` is unexplained.** Flat in `payday_err`,
+survives at zero payday uncertainty, and not accounted for by the prior, the
+attempt ceiling, the forecast horizon, sibling drain or payday learning. It is
+recorded as unexplained rather than attributed to the last thing tried.
+
+## Pre-registration record across Phase 3
+
+W10 7/11 · W11 5/5 policy-free + 3/5 arms · W12 2/4 · W14 4/5 · action ablation
+4/8 · stop mechanism 3/4 · outage ablation 3/6. **The predictions that broke did
+more work than the ones that held.**
+
+
+# ============ PHASE 3 CLOSE-OUT, PART 2 — 1 September 2026 ============
+
+## Item 2 — the naive baseline DID run on the canonical world, and checking it
+## the way error 36 was missed would have proved nothing
+
+Error 36 was a baseline-on-the-wrong-world bug. The `+67 vs naive` figure in the
+agent-phase suite comes from the same family of arm, so it was re-verified.
+**Reading the code is not evidence** — error 36 was believed correct by reading.
+
+The naive arm (`doc_legal`, Razorpay's documented schedule made legal) goes
+through `agent_job` with the SAME six-element `pop_spec` and the SAME run
+kwargs as the agent arm, unlike `payday_wait`, which called `harness.run`
+directly. Measured three ways at `payday_err=7`, held-out pops 710-719, n=100,
+`pop_spend=0.93` (`logs/w20_naive_world_check.txt`):
+
+| cell | recovery | cycles | survival | **at risk** |
+|---|---|---|---|---|
+| naive, canonical population + burn-in + outflow | **23.00%** | 87.01% | 85.9% | **584** |
+| naive, canonical population, run kwargs OFF | 22.94% | 66.62% | 64.7% | **1899** |
+| naive, OLD population, run kwargs OFF (error 36's world) | 20.25% | 51.08% | 50.2% | **6476** |
+
+**The canonical cell reproduces the logged 23.00% exactly, and the at-risk
+denominator moves by a factor of eleven across the three.** The settings
+demonstrably reach the arm. The at-risk column is the tell error 36 lacked: a
+recovery rate can coincide across worlds, a denominator of 584 against 6476
+cannot.
+
+**AND THE COMPARISON IS WORTH LESS THAN IT LOOKS.** On the same run:
+
+    agent - naive  = +66.54 pts
+    [1,7]  - naive = +67.88 pts
+
+**The dumb two-offset schedule beats naive by MORE than the agent does.** A
+large margin over `naive` is not evidence for the belief filter, and the +67
+should never be quoted without the `[1,7]` row beside it. This is now printed
+by `agent/tests/test_steelman_schedule.py` at every noise level.
+
+## W20 — WHERE DO THE ATTEMPTS LAND? The last unmeasured suspect for the
+## residual, and it is half right in a way that changes the story
+
+`agent/tests/test_attempt_placement.py`. Needed one new read-only accessor:
+`SimExecutor.collectable_days()` returns EVERY day a legal presentation would
+have cleared, not just the first, routed through `agent.batch` like its two
+neighbours. `constrained_oracle` answers "reachable at all"; this answers
+"early, late, or in a gap", which the earliest day cannot distinguish.
+
+**THE HYPOTHESIS.** `propose` only ever targets `ahead[0]` — tomorrow. The agent
+cannot commit an attempt to a chosen future day. With the 24h notice on top,
+that should land its attempts LATER on the balance-decay curve than `[1,7]`'s
+payday+1.
+
+### Pre-registered before the run, at payday_err=7
+
+    P-1  agent's median first attempt >= 2 days later vs the TRUE payday
+    P-2  TOO LATE is over 50% of the agent's lost reachable cycles
+    P-3  [1,7] lands inside the collectable window >= 10 pts more often
+    P-4  median collectable window <= 5 days
+
+**0/4 held.** −2.5 days (the agent is EARLIER), 18.8%, +2.2 pts, 9.0 days.
+
+**And the run had a limitation worth stating rather than burying: 7 is the TIE
+regime.** The agent is −1.34 there. The residual to explain is −9.17 and it
+lives at `payday_err=1`. The whole prediction set was tested where there is
+almost nothing to explain. P-5 to P-7 were fixed in the file BEFORE the second
+run, and the file carries both.
+
+### The measurement, at payday_err=1 where the agent actually loses
+
+*n=100, 10 held-out pops 710-719, canonical world, `pop_spend=0.93`. Attempts
+read from each arm's own audit trail (`MONEY_ACTION`, `gate_verdict=ALLOWED`).
+`logs/w20_placement_pe1.txt`, and `logs/w20_placement_pe7.txt` for the tie.*
+
+| arm | reachable | collected | attempts | inside the window | 1st attempt vs true payday |
+|---|---|---|---|---|---|
+| agent | 584 | 89.9% | 872 | **60.7%** | 4.0 days |
+| `[1,7]` | 584 | **99.8%** | **594** | **98.1%** | 1.0 day |
+
+    HOW THE REACHABLE CYCLES ARE LOST
+      agent: 59 lost of 584        [1,7]: 1 lost of 584
+        31 (52.5%) never attempted   1 (100%) too early
+        13 (22.0%) in a gap
+        10 (16.9%) TOO LATE
+         5 ( 8.5%) too early
+
+    WHERE THE FIRST ATTEMPT LANDS, days after the TRUE payday
+      [1,7]: 0:171 1:213 2:190 8:10
+      agent: 0:190 1:31 2:28 3:21 4:14 5:13 6:8 7:9 8:5 9:1 10:4 11:3
+             12:16 13:8 14:10 15:9 16:6 17:4 18:3 19:7 20:2 21:6 22:8
+             23:10 24:9 25:9 26:22 27:29 28:21 29:47
+
+**4/7 held. P-1 HOLDS at payday_err=1 (+3.0 days) and BROKE at 7 (−2.5).**
+
+### What this actually says, which is not what the hypothesis said
+
+**The agent's placement is DIFFUSE, not late.** `[1,7]` puts every attempt in a
+three-day block at payday+0..2 and lands inside the collectable window 98.1% of
+the time. The agent's first attempts smear across the entire cycle: a spike at
+day 0, and then roughly a third of them in days 19-29, when the balance is at
+its lowest before the next credit. It lands inside the window **60.7%** of the
+time and spends **872 attempts to collect less than `[1,7]` collects with 594.**
+
+**Its largest single loss class is NEVER ATTEMPTING AT ALL** — 31 of 59 lost
+reachable cycles at `payday_err=1`, 52.5%, and 51.6% at `payday_err=7`. Not
+mistimed. Untouched, with four attempts available and thirty days to place them.
+
+**Two honest qualifications.** Some diffuse placement is BY DESIGN: the agent
+decides "attempt tomorrow or wait" every day, so a cycle it correctly carries to
+the next payday shows a late first attempt and is not an error. And the
+"never attempted" class is not yet attributed to a mechanism — `CYCLE_CLOSED`,
+`LAST_ATTEMPT_HELD` and a low posterior all produce it, and this run does not
+separate them.
+
+**So the residual is now characterised, not explained.** It is a placement
+concentration problem, not a lateness problem, and the largest component is
+inaction rather than mistiming. That is what the write-up now says. It is NOT a
+fix and none was attempted: the agent is frozen and W20 changed no policy code.
+Naming a cause beyond what the run supports would be the +24.87 move again.
+
+## The doc reconciliation — every stale headline figure, with its conditions
+
+64 occurrences across 8 files. Not a find-and-replace: the experimental
+conditions sat inside the same sentences as the numbers. What was replaced,
+and with what:
+
+| was | is | source |
+|---|---|---|
+| 98.01 / 57.70 / +40.30 / Rs 6,203,060 | **99.37 / 90.29 / +9.08 / Rs 7,496,430** | `logs/w19_headline_canonical.txt` |
+| uplift +3.52 -> +36.48 over pop_spend 0.60-1.05 | **+0.93 -> +9.08 over [0.80, 0.93]** | `logs/w21_conditional_canonical.txt` |
+| crossover between +/-1 and +/-3 vs `payday_wait` | **between +/-7 and +/-10 vs `[1,7]`** | `logs/w22_steelman_schedule.txt` |
+| action space +1.371 (0.563 / 1.790) | **+0.498 (−0.102 / +0.845)** | `logs/w17_abl_stop_canonical.txt` |
+| outage pause −0.529 SIG, ceiling +0.058 | **0.000 at every severity** | `logs/w17_abl_outage_canonical.txt` |
+| V1/V3/V5/V7 = 13.68 / 27.85 / 96.78 / 42.94 at 0.80 | **10.58 / 20.41 / 88.40 / 42.64 at 0.93** | `logs/w13_canonical_n100.txt` |
+| survival 32.1% vs 96.6% | **85.3% vs 98.4%** | same |
+| "only 35.8% of at-risk cycles have money inside ten days" | **59.8%; 35.8% was the ALL-CYCLES figure** | W6's premise, corrected |
+| n=100 x 5 mandates x 8 populations | **n=100 x ~2 mandates, 10 or 20 populations** | canonical world |
+
+**Two new measurements were needed to do this honestly rather than by
+deletion**, both in `agent.batch_report`'s exact configuration so the
+`pop_spend=0.93` and `payday_err=7` cells reproduce the headline to the
+hundredth rather than sitting beside it at a different value:
+
+* `logs/w21_conditional_canonical.txt` — the uplift across the whole region.
+  The 0.93 row is +9.08 +/- 2.01, identical to the headline.
+* `logs/w23_page_sweep_canonical.txt` — the uplift across `payday_err`, which is
+  what the public page's slider reads. The +/-7 row is +9.08 +/- 2.01, identical
+  to the headline. **`payday_wait` no longer wins at +/-1: it is a tie
+  (−0.49 +/- 0.51), because the canonical world is far easier than
+  `pop_spend=1.05` and both arms sit near the ceiling.**
+
+And one measurement was promoted out of the scratchpad into a permanent test,
+because the README may not quote a number it cannot name a command for:
+`agent/tests/test_steelman_schedule.py`, the agent against `[1,7]`, `naive` and
+`payday_wait` across six noise levels.
+
+**The crossover moved once it was measured at 5 and 10 as well as 1/3/7/14.**
+It was reported to Tanmay as "+/-7". At +/-7 the agent is still −1.34, and the
+sign change is between 7 and 10. Both figures are now in the docs as a range.
+
+### Six new rules in `sim/verify_docs.py`, and a defect in the checker itself
+
+Every retraction above is now a rule, per that file's own instruction to add one
+in the same commit: `old-headline-4030`, `uplift-curve-3648`, `crossover-1-to-3`,
+`action-space-1371`, `v7-all-cycles-denominator`, `outage-pause-negative`.
+It found twelve live survivors of these claims that the manual pass had missed,
+including one BANNED hit on `docs/index.html` — the public page still told
+readers outage suppression was worth +0.058 points.
+
+**And running `--selftest` found that `only-3-of-25-shipping`, added 31 August,
+shipped with NO CANARY.** For one day the suite carried a tripwire that had
+never been shown to fire — the vacuous-gate shape this project has hit five
+times, in the file written to prevent exactly that class of defect. Canary
+added; selftest is 22/22.
+
+## What is NOT reconciled, and it is visible on the public page
+
+**The single-customer walkthrough in `docs/index.html` section 01 is computed
+from the OLD population.** `c45m3` does not exist on the canonical world —
+customer 45 draws three mandates there, not five — so regenerating the page data
+against the frozen world requires choosing a new hero customer and rewriting the
+hand-written narrative around it ("payday on day 9, a 550-rupee debit due on day
+4, a flat 215-rupee balance"). That is page structure, which is Phase 5.
+
+Left as it is, labelled on the page in the Limitations list: the walkthrough
+illustrates the mechanism and every aggregate figure comes from the current
+world. **Stated rather than quietly left for a reader to find.**
+
+## Verification at close
+
+    sim/gate.py --tier full     27 gates, 4 FAIL (all 4 known), 0 VACUOUS, 89.8s
+    sim/verify_docs.py          PASS, 20 rules
+    sim/verify_docs.py --selftest  22/22
+    sim/verify_brief.py         docs/07_AGENT_BRIEF.md matches the code
+    scripts/build_page_data.py --check   regenerated data matches the commit;
+                                         index.html matches scenarios.json
+
+# ============ W24 — THE RESIDUAL AGAINST `[1,7]`, EXPLAINED AND CLOSED ============
+# 1 September 2026.
+
+NOTES.md recorded the ~10-point residual against `[1,7]` as **unexplained**
+after five failed fixes, and W20 characterised it as "a placement concentration
+problem, not a lateness problem, with the largest component inaction rather than
+mistiming", explicitly leaving the inaction unattributed. It is now attributed.
+
+## The symptom was real and the reading of it was wrong
+
+W20's largest loss class was NEVER ATTEMPTED — 31 of 59 lost reachable at-risk
+cycles at `payday_err=1`. Instrumenting `_phase_decide`'s `live` filter shows
+those 31 cycles emit **zero decision ticks**: the mandate's cycle counter never
+reaches them.
+
+**All 31 of 31 belong to a mandate that spent its fourth attempt in an EARLIER
+cycle and died.** `_phase_rollover` advances a cycle only
+`if day >= m.cycle_close and m.alive`, so a dead mandate freezes at the cycle it
+died in and every later cycle of it is invisible to the decision phase.
+`scratch/w24/probe2_pe1.txt`, `probe3_pe1.txt`.
+
+The agent was not deferring. It was not there. The failure is over-attempting in
+an EARLIER cycle, not under-attempting in this one — the opposite of what the
+symptom suggested, and the reason W15 (bracket) and W17 (coverage), which both
+made it spend more eagerly, made it worse.
+
+## The counterfactual that settled where to look
+
+Clairvoyant balance belief, everything else untouched — same `propose`, same
+index, same action space, same Stage 0 gate. Held-out pops 710-719, n=100,
+`payday_err=1`. `scratch/w24/cf_pe1.txt`.
+
+| arm | recovery | survival | att/cyc | deaths |
+|---|---|---|---|---|
+| shipping agent | 90.58% | 98.5% | 1.440 | 29 |
+| refuse the 4th attempt only | 94.11% | 100.0% | 1.456 | 0 |
+| clairvoyant belief | **100.00%** | 100.0% | **1.275** | 0 |
+| `[1,7]` | 99.75% | 100.0% | 1.106 | 0 |
+
+**The one-step index is sufficient.** Given a correct belief it scores 100.00%
+on FEWER attempts than the agent spends. Myopia, the 12-day horizon, the action
+space and exploration are exonerated in one run. The belief carries the whole
+9.42-point gap.
+
+## Two defects in the belief, one missing term in the objective
+
+**D1 — the payday prior was fitted on a world that no longer exists, by a search
+that could not have found the right value.** `sim/fit_belief.py` scores on
+`pop_spend=1.05`, k=5, uniform-tail payday, seeds 600-607, no burn-in, no
+mandate outflow; and `sweep_prior` iterates `w in (5,7,9,12,15)`. The canonical
+optimum is at or below that grid's floor.
+
+The 1 September check that concluded "do NOT refit" compared the fitted prior
+against the UNFITTED `exp(-0.10d)` and found them within noise. **They are
+nearly the same width** — effective 21.0 and 27.4 hypotheses of 30 by
+exp(entropy) — so that comparison could not have detected what it was asked to.
+At `est_pay=4` the old prior held 0.095 of its mass within a day of the
+estimate, BELOW the unfitted prior's 0.181, because the 8x day-0 boost pulls
+mass away from the estimate for the 40% of the canonical population not paid on
+day 0.
+
+**D2 — the filter manufactured money, and `known_failures.txt` named the wrong
+half of the mechanism.** It said "the filter does not model the balance floor at
+zero". The floor IS modelled: `_shift` piles mass at bin 0 on every drain. What
+is wrong is the DIFFUSION:
+
+* `drain = est_salary * est_spend * prof[phase]`, with prof decaying as
+  exp(-0.42d) against `bw = 2.5*est_salary/90`, **rounds to ZERO bins from day 8
+  of the cycle onward — 22 of its 30 days**, so the update was a driftless
+  symmetric random walk on the balance;
+* `np.convolve(p, k, "same")` discards the end taps, so 12% of the mass in bin 0
+  falls off the bottom daily and `p / p.sum()` redistributes it upward.
+
+From the exact state `observe(amount, False)` produces — all mass in bin 0 —
+twelve days with no income and no drain modelled leave the filter believing
+**P(balance >= 2 bins) = 0.3735**. `w3.BeliefPD(monotone_drain=True)` repairs it
+by moving the 3-tap kernel from the balance to the DRAIN, whose support is
+non-negative; the repaired filter stays at 0.0000. It defaults to False and is
+NOT shipped — see W25 below.
+
+**D3 — the objective priced no continuation value.** On the last attempt
+`p_later` is 0 by construction, so `score = amount * p_now > 0` for any positive
+probability and the fourth attempt fired unconditionally. 38 of them fired at a
+mean believed `p_now` of 0.269.
+
+The rule is derived, not chosen: firing wins `amount + V` with probability p and
+loses everything with probability 1-p; holding forfeits the cycle and keeps V.
+So `fire iff p/(1-p) > cycles_left * cycle_value`.
+
+## Three of my own hypotheses were refuted by the experiments built to test them
+
+* **The payday likelihood is misleading** — REFUTED. Freezing the posterior at
+  the prior costs **30.85 points** of train mean. It is genuinely informative.
+  `scratch/w24/temper_train.txt`.
+* **The unmodelled spend rate contaminates the payday posterior** — REFUTED,
+  2 of 4 pre-registered predictions broke. `corr(spend, signed payday error)` is
+  +0.088 against a predicted +0.15; the true spend rate cuts payday error by
+  2.4% against a predicted 25%. `scratch/w24/probe5_pe1.txt`.
+* **Empirical Bayes can set the prior width** — REFUTED. The population marginal
+  likelihood prefers half-width 12 when the true error is 1.
+  `scratch/w24/eb_feasible.txt`.
+
+## What shipped, and the selection rule
+
+Selected on TRAIN populations 700-709 by mean recovery across
+`payday_err {1,3,7,14}` — the identical rule and grid
+`agent/policy/payday_offsets.py` used to select `[1,7]`, so both sides of that
+comparison are chosen the same way. Scored ONCE on held-out 710-719.
+
+    prior_w      9   -> 5
+    prior_floor  0.5 -> 0.1
+    cycle_value  0.0 -> 0.6      (new; 0.0 reproduces the old behaviour exactly)
+
+**It is a plateau, not a peak.** `prior_w in {3,4,5} x prior_floor in
+{0.05,0.1}` all land between 91.8 and 92.7 train mean against the old 86.15, and
+`cycle_value` 0.3/0.6/0.9 score 95.19/95.59/95.55, on a 2 SE of about 3 points.
+
+**One correction to the declared rule, recorded rather than applied silently.**
+`cycle_value` is a probability, so the sweep's 1.2 and 1.8 cells are outside its
+definition and were excluded. Including them would have selected `cv=1.8`
+(95.73) on a 0.14-point difference with no derivation behind it. The derivable
+value — the agent's own cycle collection rate, about 0.98 — scores 95.55 and is
+statistically identical to the chosen 0.6.
+
+## Held-out result, populations 710-719, n=100
+
+Margin against `[1,7]`, with the paired 2 SE:
+
+| payday_err | shipping | repaired |
+|---|---|---|
+| 0 | -10.84 +/- 5.93 | **-0.76 +/- 0.82** |
+| 1 | -9.17 +/- 5.60 | **-1.16 +/- 1.61** |
+| 3 | -7.83 +/- 5.46 | **-0.33 +/- 0.93** |
+| 5 | -6.14 +/- 5.29 | **+1.15 +/- 2.45** |
+| 7 | -1.34 +/- 6.67 | **+3.55 +/- 4.78** |
+| 10 | +20.73 | **+23.83** |
+| 14 | +30.67 | **+34.41** |
+
+Deaths at +/-1 fall 29 -> 11. Attempts per cycle are unchanged (1.440 -> 1.445),
+so this is not bought by attempting more.
+
+**THE TRADE-OFF, AS A SHIPPING CAVEAT.** The decomposition shows the narrower
+prior ALONE **costs** 2.88 points at `payday_err=10` and 2.20 at 14, and the
+continuation value buys them back. A narrower prior spends less mass on paydays
+the estimate says are impossible, which is worth 8-10 points where the estimate
+is good; where the estimate is bad the true payday can fall outside the window
+and the 0.1 floor is the only thing that recovers it. **The configuration is
+defensible only as a PAIR, and only over the payday_err range where it was
+measured, 0 to 14.** Outside that range nothing here has been measured.
+
+Two pre-registered predictions broke and are recorded as broken: **P-2** (the
+repairs are sub-additive at low noise, 59-69% of the sum of separate gains, and
+super-additive at high noise, 148-187%) and **P-6** (deaths at +/-1 fell 62%,
+not the predicted >= 80%).
+
+## Gate consequences, and the deliberate T9 re-baseline
+
+`sim/gate.py --tier full`: **27 gates, 4 FAIL (all four known), 0 VACUOUS**,
+before and after. T9 went red on the constant change and was recaptured
+deliberately; **all 46 changed fields are `|fitted|` cases and zero unfitted
+cases moved**, which is the signature that confines the change to
+`FITTED_BELIEF`. Full diff: `scratch/w24/t9_recapture.txt`.
+
+⚠️ **ON THE OLD WORLD THE NEW PRIOR IS WORSE AT pe=7**, and the recapture diff
+says so: `solo_shared_pd|fitted|pe7` 97.16% -> 91.38%, survival 97.67% ->
+92.67%. Expected — the old world's payday is spread uniformly over days 1-29,
+where a wide prior is genuinely right — and compounded by the fact that
+`sim/harness.py` has NO continuation value, so every harness-path gate (T9,
+S1_PD, S2a_PD, S4, S3) measures the belief change **without its partner**. The
+agent measures the pair; the harness measures half of it. Do not read a
+harness-path number as a statement about the shipping agent.
+
+S1_PD's ECE moved 0.029 -> 0.025, still not monotone; its reason file is
+corrected in the same commit per that file's own instruction. S4 still passes
+(+11.96 +/- 1.86), so the new prior beats the unfitted one on the old world too.
+`sim/fitted_belief.json` now records `matches_shipping=False` with the reason,
+because `fit_belief.py` did not select this constant and structurally could not.
+
+`sim/t9_reference.py capture()` now runs one process per case through
+`sim/runner.run_jobs`. The serial path — 34 `harness.run` calls in one
+interpreter — is exactly the shape `_parallel.py` documents as crashing here,
+and it died twice partway through the pe=1 block before the change. `--serial`
+keeps the old path so the equivalence stays demonstrable.
+
+`agent/tests/test_parity_vs_harness.py` now pins `cycle_value=0.0`. Parity is
+defined against a harness whose objective has no continuation value; an agent at
+the shipping default is deliberately not that policy. Still 24/24 bit-exact.
+
+# ============ W25 — THE DYNAMIC PROGRAM IS REFUTED, AND monotone_drain ============
+# ============ STAYS INSIDE NOISE ON 30 POPULATIONS ============
+# 1 September 2026.
+
+Two questions, one grid, both pre-registered in `scratch/w24/PREREG_DP.md`
+before anything ran. `prior_w`, `prior_floor` and `cycle_value` were FROZEN at
+the shipped 5 / 0.1 / 0.6 throughout; W24's plateau spans 95.1-95.6 across
+w4/w5 x cv 0.3-1.2 on a 2 SE of about 3, and moving inside it would be
+overfitting.
+
+TRAIN enlarged 700-709 -> **680-709, thirty populations**, because the previous
+monotone-vs-drifting decision rested on a 0.06-point difference against a 2 SE
+of ~3, which is not a decision. `scratch/w24/stage_e.txt`, 960 runs.
+
+## The claim the DP was built to test
+
+`propose` scores `amount * (p_now - discount * p_later)` and fires when that is
+positive. `p_later` is the best remaining day INSIDE the cycle, so the rule
+compares now against later and **never against zero**: whenever today is the
+best day left it fires, however bad today is. The continuation value added in
+W24 expresses the comparison against zero, but only on the final attempt.
+
+`_plan_value` extends it to every attempt by backward induction over
+(attempts left, days left), with two terminal values doing all the work:
+reaching the cycle's end with an attempt unspent keeps `vnext`; failing the last
+attempt does not. `agent/tests/test_plan_dp.py` asserts four properties, each
+paired with a mutant that must break it, and at k == 1 the DP reproduces the
+shipped closed-form rule exactly across 161 cells.
+
+## The DP is refuted. Every pre-registered check broke.
+
+| arm | mean | 2 SE | worst vs [1,7] | survival | deaths | att/cyc |
+|---|---|---|---|---|---|---|
+| **drift** (shipping) | **94.86** | 0.98 | −2.25 | **99.4%** | **144** | 1.447 |
+| drift + DP | 86.35 | 1.22 | −10.71 | 86.1% | **3295** | 1.533 |
+| drift + DP, la30 | 85.46 | 1.17 | −10.95 | 85.7% | 3395 | 1.531 |
+| mono | 94.60 | 1.03 | −1.67 | 98.4% | 389 | 1.430 |
+| mono + DP | 91.54 | 1.05 | −5.47 | 88.4% | 2759 | 1.553 |
+| mono + DP, la30 | 89.43 | 1.03 | −7.31 | 88.2% | 2804 | 1.519 |
+| mono, la30 | 94.06 | 1.09 | −1.98 | 99.2% | 201 | **1.376** |
+| `[1,7]` | 87.08 | 3.24 | — | 100.0% | 0 | 1.232 |
+
+* **S-1 BROKE.** Survival 88.38% against the required 99.5%; recovery −3.31
+  against a tolerance of 1 point.
+* **S-2 BROKE, and the direction is the finding.** Attempts per cycle ROSE
+  1.430 -> 1.553 and waits FELL 493,178 -> 476,527. The prediction was the
+  opposite of both.
+* **S-3a BROKE.** The DP was predicted to be roughly inert (< 0.3 points of
+  survival). It moves survival by −9.98 on the monotone filter and −13.26 on
+  the drifting one. It is not inert; it is harmful.
+
+**The mechanism was derived from the DP's own structure BEFORE the run and is
+recorded in `PREREG_DP.md`.** For k >= 2, `FIRE = p*(1+vnext) + (1-p)*V(k-1,·)`
+and `V(k-1,·)` still equals `vnext` whenever the DP would decline the final
+attempt anyway — so **a non-final attempt is nearly free**. Failing it costs
+only the slot, and the slot is worth nothing if it would not have been spent.
+The DP therefore declines to restrain attempts 1-3, arrives at the guarded
+fourth attempt far more often, and mandate deaths go up 23x.
+
+**What that says about the one-step index, which is the useful part.** The
+index's `p_now > discount * p_later` was doing real restraint work on attempts
+1-3 — restraint the DP correctly computes it should not do, under this
+objective. Deleting it is what costs 8.5 points and 3,151 mandates. So the
+objective is not myopic in a way that matters: **it was already correct on
+everything except the final attempt**, which is exactly what the clairvoyant-
+belief counterfactual said when it scored 100.00% with the unchanged myopic
+rule on fewer attempts than the agent spends.
+
+`plan` ships **OFF** and stays off. Nothing is layered on top of it (S-5). It is
+kept, with its property test, because a refuted mechanism with a working test is
+cheaper to re-examine than one that has to be rebuilt.
+
+## The re-selection: `monotone_drain` stays inside noise, and the drifting filter is kept
+
+**mono − drift, paired over 120 population-cells: −0.26 points, paired 2 SE
+0.65.** On ten populations the difference was −0.06; on thirty it is −0.26 with
+an interval that contains zero. The declared rule picks `drift` (94.86 vs
+94.60), and now on evidence rather than on a rounding error.
+
+Per the pre-registration: it stayed inside noise, so it is reported and the
+drifting filter is kept. `monotone_drain` remains available and defaults to
+False.
+
+**This is uncomfortable and is not being smoothed over.** `monotone_drain=True`
+is the CORRECT generative model — the world's balance is non-increasing between
+salary credits and the shipped filter's is not — and it is being left off
+because it does not pay. Three things are true at once and all three belong in
+the record:
+
+1. It is indistinguishable on recovery (−0.26 ± 0.65 over 120 cells).
+2. It has a BETTER worst-case margin against `[1,7]` (−1.67 vs −2.25), and
+   `mono la30` is the most efficient arm measured — 1.376 attempts per cycle,
+   the lowest of any agent arm, at 99.15% survival.
+3. It kills more mandates at the shipped horizon (389 vs 144), which is what
+   the declared rule's tie-break on survival would have penalised.
+
+The earlier explanation for (3) — that a monotone filter destroys the option
+value of waiting because the next payday sits outside the 12-day window — is
+supported by `mono la30`: giving it the horizon takes deaths 389 -> 201 and
+attempts 1.430 -> 1.376 without the DP. The horizon helps; the DP does not.
+
+## What this closes
+
+The residual against `[1,7]` is no longer unexplained (W24), and the last open
+mechanism named at the end of W24 — "the one-step index cannot decline every
+remaining day; extending the continuation value to every attempt is a small
+dynamic program" — has now been built, tested, measured and **refuted**. The
+extension is not needed because the premise was wrong: under this objective the
+attempts it would restrain are ones that should not be restrained.
+
+## The doc consequence of W24, and a tripwire that did not exist
+
+The repair moved the crossover against `[1,7]` from "between ±7 and ±10" to
+**±5**, which made a claim in five files stale. `sim/verify_docs.py` PASSED with
+that claim live, because no rule covered it — the retraction rules written on
+1 September covered the older "±1 to ±3" framing that ±7–±10 had itself
+replaced.
+
+**A new rule, `crossover-7-to-10`, was added with its canary in the same
+commit**, per that file's own instruction. It fires on the ±7–±10 phrasing and
+on the pre-repair figures 9.17 / 7.83 / 6.14. Selftest is **23/23**; the rule
+found four live hits the manual pass would have missed, one of them BANNED on
+the public page.
+
+Resolution, and the convention is the file's own: four markdown files keep the
+old sentence as the record with a SUPERSEDED note beside it —
+`CLAUDE.md`, `docs/00_HANDOFF.md`, `docs/02_RESULTS.md`,
+`docs/06_MODEL_CARD.md`. `docs/index.html` cannot be marked (the rule treats the
+public page as BANNED rather than markable), so that paragraph was corrected,
+and it now states the tie together with what the tie costs: about a quarter more
+attempts per cycle (1.44 vs 1.10) and slower recovery (46.6% vs 49.9% inside ten
+days).
+
+**One marker had to be moved.** The first insertion put the SUPERSEDED note at
+the end of `02_RESULTS.md`'s paragraph, seven lines below the claim, and
+`MARKER_WINDOW` is eight lines either side of the HIT — so it registered as
+unmarked. Moved adjacent to the sentence. Worth recording because a marker that
+is present but out of window looks identical to a missing one in the diff.
+
+`docs/data/scenarios.json` was regenerated: the page's precomputed per-scenario
+data was built under the old constant and `scripts/build_page_data.py --check`
+was red. It is green again, and `docs/index.html`'s batch figures still match.
+
+## Verification at close, W24 + W25
+
+    sim/gate.py --tier full             27 gates, 4 FAIL (all 4 known), 0 VACUOUS
+    sim/verify_docs.py                  PASS, 21 rules
+    sim/verify_docs.py --selftest       23/23
+    sim/verify_brief.py                 07_AGENT_BRIEF matches the code
+    sim/fit_belief.py --check           PASS, records selection match=False
+    scripts/build_page_data.py --check  PASS, data and index.html agree
+    agent/tests/test_parity_vs_harness  24/24 bit-exact (cycle_value pinned to 0)
+    agent/tests/test_plan_dp.py         7/7, every mutant fires
+    agent/tests/test_steelman_schedule  crossover at +/-5
+
+**What is NOT reconciled.** `README.md` and the rest of `docs/` still carry the
+pre-repair 90.58% / −9.17 figures wherever they are quoted outside the four
+marked sentences. That is a prose pass over the same eight files the 1 September
+reconciliation went through, and it has not been done. The four claims the
+tripwire can see are marked; the ones it cannot see are stale and unmarked. Do
+not quote a recovery figure from `README.md` without re-running
+`agent/tests/test_steelman_schedule.py` first.
+
+# ============ RE-SCORE AFTER W24, AND THE DOC PASS THAT WAS OWED ============
+# 1 September 2026.
+
+Nothing had been re-measured since the belief constants changed. Every
+published V-number, the batch headline and the conditional table were all
+pre-repair, and four of them were LIVE FALSE CLAIMS rather than stale framing.
+
+## What moved, and what did not
+
+`py -3.12 agent/tests/test_canonical_world.py --confirm`,
+`logs/w24_canonical_repaired.txt`, at `pop_spend=0.93`:
+
+| | was | now | band | verdict |
+|---|---|---|---|---|
+| V1 due-date failure | 10.58% | 10.58% | 8-15% | HIT, unmoved |
+| V3 fixed-interval recovery | 20.41% | 20.41% | 20-40% | HIT, unmoved |
+| **V5 smart-retry recovery** | **88.40%** | **95.24%** | 70-85% | MISS, further out |
+| V7 recoveries inside 10 days | 42.64% | 42.97% | 85-95% | MISS, unmoved |
+| V7 capture of its ceiling | 82.7% | 83.4% | — | — |
+
+**V1 and V3 could not have moved and did not.** V1 is at-risk over cycles-due, a
+property of the world. V3 runs `doc_legal`, which installs `propose_fixed` and
+consults no belief and never reads `cycle_value`. The re-run confirms that by
+measurement rather than by argument.
+
+**V5 moved 6.84 points FURTHER above its band**, which is the honest cost of the
+repair and is reported as such. Recovery is now 95.24% against a constrained-
+oracle ceiling of 100%, so under 5 points of headroom remain and taking any of
+it would push V5 further out. Recovery is closed.
+
+⚠️ **V5's sample is now half its own selection set.** `test_canonical_world.py`
+scores on populations 700-719, and 700-709 are where the belief prior was
+selected (W24). On held-out 710-719 alone the same quantity is **94.43%**. Both
+are far above the band so the verdict is unchanged, but 94.43% is the honest
+figure and the caveat is now written beside V5 in `docs/02_RESULTS.md`.
+
+The batch headline barely moved: cycles collected 99.37% -> **99.38%**, money
+Rs 7,496,430 -> **Rs 7,511,500**, 2 SE 2.01 -> **1.84**, executed money actions
+8,721 -> **8,702**. The uplift is **unchanged at +9.08** because `payday_wait`
+runs through the harness and carries no belief.
+`logs/w24_headline_repaired.txt`.
+
+## V3 at five times the sample, and the V5 rebuttal it supports
+
+`agent/tests/test_v3_power.py` (new), `logs/w24_v3_power.txt`. 100 populations
+against the canonical 20. Legitimate because neither quantity is agent-facing:
+no selection was ever performed against V1 or V3.
+
+| | 20 pops | 100 pops | band | margin vs 2 SE |
+|---|---|---|---|---|
+| V1 | 10.58% | **10.50% ±0.52** | 8-15% | HIT |
+| V3 | 20.41% ±4.10 | **22.15% ±1.95** | 20-40% | **+2.15 > 1.95** |
+
+**The hit survives and is no longer a coin flip.** The interval is 53% narrower
+and the floor margin now exceeds 2 SE. The old sentence — "0.41 points inside
+its band, a hit a re-run could lose" — was true when written and is now
+withdrawn by the re-run rather than by assertion.
+
+**THE V5 ARGUMENT, now stated in one place wherever V5 is reported.** V3 and V5
+are measured in the same world, at the same calibration, with the same run seed.
+V3 runs a policy this project did not design and lands inside its published
+band. A world calibrated easy would lift both. V3 is in band and V5 is above it,
+so the excess belongs to the agent, not to the world.
+
+**Falsified if** V3 drops below 20% at a larger sample, or holds only at a
+calibration where V1 leaves its own band — the two-dials-two-targets trap
+`00_HANDOFF.md` names. Both are reproducible commands.
+
+**What it is not.** Both bands are `[REPORTED]`, vendor-sourced, aggregating
+non-comparable customer bases; V5's 70-85% is the source's top performers
+against a stated median of 47.6%; the world and the agent share an author. This
+is an internal consistency argument, not independent evidence.
+
+## The tripwire gap that let four false figures through
+
+`sim/verify_docs.py` PASSED while `README.md`, `docs/02_RESULTS.md`,
+`docs/06_MODEL_CARD.md`, `docs/08_ARCHITECTURE.md` and `docs/00_HANDOFF.md` all
+carried pre-repair numbers. Every existing rule matches a stale SENTENCE. **A
+figure is a current claim even when the prose around it is fine**, and no rule
+looked at figures.
+
+New rule `prerepair-agent-figures` matches the pre-repair values themselves —
+88.40, 42.64, 82.7 and the six steelman rows — with a lookbehind so it does not
+fire inside a longer number. Canary added; selftest is **24/24**.
+
+⚠️ **The first version of that pattern shipped a literal backspace byte.** The
+shell collapses `\\b` in heredocs, so an intended word boundary became `\x08`
+and the rule matched nothing. The selftest caught it — the canary discipline
+working exactly as intended, on the rule written to close a gap the same
+discipline had missed. The pattern is now written with no backslashes at all.
+
+## The conditional table had no script behind it
+
+`README.md`, `docs/02_RESULTS.md` and `docs/08_ARCHITECTURE.md` all quote the
+uplift across the `pop_spend` region, whose only provenance was
+`logs/w21_conditional_canonical.txt` — a scratchpad run. The rule that a quoted
+number must have a runnable command had been applied to the steelman table and
+missed this one.
+
+`agent/tests/test_conditional_headline.py` (new) reproduces it.
+`logs/w24_conditional_repaired.txt`:
+
+| pop_spend | payday_wait | agent | uplift | 2 SE | at risk |
+|---|---|---|---|---|---|
+| 0.80 | 99.07% | 100.00% | +0.93 | 0.60 | **2** |
+| 0.85 | 97.36% | 99.83% | +2.47 | 0.93 | 83 |
+| 0.88 | 95.99% | 99.65% | +3.66 | 0.86 | 197 |
+| 0.90 | 94.24% | 99.53% | +5.29 | 0.82 | 299 |
+| **0.93** | 90.29% | **99.38%** | **+9.08** | 1.84 | 557 |
+
+**The first attempt at that script missed the headline cell by 0.04 points**,
+because `agent/batch_report.py` runs `time_major=True` and `time_major` also
+flips `per_customer_tech_rng`, drawing a different technical-decline stream.
+Recorded because the discrepancy looked like a real difference and was a
+configuration mismatch.
+
+**And a mistake worth recording.** A blanket 99.37 -> 99.38 replace across the
+docs silently rewrote three rows of that conditional table, which is a DIFFERENT
+run and had no re-measurement behind it. Caught on review, reverted, then
+resolved properly by re-running the table. A find-and-replace across documents
+that quote several different runs will do this every time.
+
+## Verification at close
+
+    sim/gate.py --tier full             27 gates, 4 FAIL (all 4 known), 0 VACUOUS
+    sim/verify_docs.py                  PASS, 22 rules
+    sim/verify_docs.py --selftest       24/24
+    sim/verify_brief.py                 07_AGENT_BRIEF matches the code
+    sim/fit_belief.py --check           PASS, records selection match=False
+    scripts/build_page_data.py --check  PASS, data and index.html agree
+    agent/tests/test_plan_dp.py         7/7, every mutant fires
+
+# ============ W26/W27 — THE POST-REFIT RE-MEASUREMENT PASS ============
+# 1-2 September 2026.
+
+`sim/w3.py` changed at **2026-09-01 18:08** (W24). Everything that reads
+`w3.FITTED_BELIEF` and predates that timestamp was measuring a filter this
+repository no longer ships. This entry is the record of finding all of it.
+
+## THE known_failures.txt CHANGE, per scripts/pre-commit's own demand
+
+**No gate was added to `sim/known_failures.txt` and none was removed.** The
+tolerated set is unchanged: S1, S1_PD, S2b, S2_LEGACY. Nothing went green
+because a line was added here. What changed is the REASON TEXT on two entries,
+and both changes make the file agree with a suite that had moved underneath it.
+
+**Which gate changed, and to what.** None changed status. Two changed the
+numbers their reasons quote:
+
+| entry | field | old | new | source |
+|---|---|---|---|---|
+| S2b | the moat figure its reason quotes (S2a_PD) | +8.34 (+/-1.36) | **+7.32 (+/-2.02)** | `logs/w26_gate_full_moat_remeasure.txt` |
+| S1_PD | `fair_audit.py`'s fair-arm ECE | 0.041 | **0.031** | `logs/w27_fair_audit_repaired.txt` |
+
+**Why the OLD text was wrong, not why the new text is convenient.** Both
+numbers were measured under `prior_w=9, prior_floor=0.5`. W24 replaced those
+constants. A reason file that quotes a figure the suite no longer produces is
+the exact defect this file's own header describes -- it says so at the top,
+because it has happened before (S2b at -14.51, S2c at +24.04, S1_PD at ECE
+0.040). The old numbers were not wrong when written; they became false when the
+constants moved, and leaving them would have made the file disagree with the
+gate it explains.
+
+**S2a_PD moved because the constant it measures moved.** It is not evidence
+about pooling changing its mind. The un-pooled arm improved (86.05% -> 87.13%)
+while the pooled arm did not (94.39% -> 94.45%), so the gap narrowed from
+below. Nothing was loosened; the gate's threshold (>2 SE) is untouched and it
+still passes.
+
+**Who is fixing the four tolerated failures.** Unchanged from before this pass:
+S1 and S1_PD are X15, now recorded as a LIMITATION with a built repair
+(`monotone_drain`) that is off for a measured reason; S2_LEGACY is retired
+architecture kept red on purpose; S2b is a finding about the control's design.
+No new debt was taken on.
+
+A third edit to the file corrects a MECHANISM rather than a number: the
+attribution "the filter does not model the balance floor at zero" was wrong.
+The floor is modelled. The diffusion leaks through it. That correction is W24's
+and is recorded there; it is repeated in this file because the file is where a
+reader looks for why S1_PD is red.
+
+## What was re-measured, and what moved
+
+All on the pinned interpreter (CPython 3.12.0, numpy 2.4.2). The `python` on
+PATH here is msys2 3.14.3 with no numpy and it burned two runs before this was
+noticed.
+
+| measurement | was | now | transcript |
+|---|---|---|---|
+| S2a_PD, gated moat | +8.34 +/-1.36 | **+7.32 +/-2.02** | `logs/w26_gate_full_moat_remeasure.txt` |
+| S2a, unfitted moat | +9.53 +/-1.81 | +9.53 +/-1.81 (unmoved) | same |
+| W9 moat, `pop_spend=1.05` | +8.46 +/-1.07 | **+6.47 +/-0.62** | `logs/w26_w9_pooling_consent_remeasure.txt` |
+| W9 moat, `pop_spend=0.80` | +3.38 +/-0.39 | **+1.30 +/-0.42** | same |
+| Action space, 120d | +0.498 SIG | **+0.136, 2 SE 0.205, n.s.** | `logs/w27_abl_action_repaired.txt` |
+| STOP over the horizon | -0.102 / +0.498 / +0.845 | **-0.053 / +0.136 / +0.010, all n.s.** | `logs/w27_stop_mech_repaired.txt` |
+| Outage ablation | 0.000 at every severity | **0.000 / 0.000 / +0.017 / +0.051, none sig** | `logs/w27_abl_outage_repaired.txt` |
+| `p_limit` sensitivity | 0.00 / -2.87 / -13.46 | **0.00 / -2.29 / -9.22** | `logs/w27_decline_sweep_repaired.txt` |
+| `fair_audit` fair-arm ECE | 0.041 | **0.031** | `logs/w27_fair_audit_repaired.txt` |
+| `stress_day0` degradation | 4.84 pts | **3.04 pts** | `logs/w27_stress_day0_repaired.txt` |
+| Page payday_err sweep | pre-W24 agent column | re-measured; +/-7 row now reproduces the batch exactly | `logs/w27_page_sweep_repaired.txt` |
+
+## Three pre-registration records fell, and the breaks are the findings
+
+* **W9: 5/5 -> 4/5.** W9-4 predicted consent-gating costs 3-7 points at half
+  consent. It costs **2.77**, below the declared band. The direction survives
+  (-2.77 +/- 0.42 is comfortably non-zero); the band does not. Recorded as a
+  break rather than a hit with a footnote.
+* **Stop mechanism: 4/4 -> 2/4.** E-MECH-1 predicted the gain grows
+  monotonically with the horizon. It does not: -0.053 -> +0.136 -> +0.010.
+  E-MECH-1b predicted 180d above 120d; it is below. **Do not quote STOP as a
+  curve over the horizon.** The two that held are the ones that matter for
+  honesty rather than size: the gain still tracks deaths avoided (r = +0.758)
+  and STOP is still not buying survival by billing less (1.446 -> 1.449).
+* **Action ablation: 4/8 -> 5/8.** This one improved. E-ABL-2 at NUDGE p=0.50
+  now holds because the effect shrank into its bound.
+
+The reading across all three: the world is less saturated and the belief is
+better at the scheduling job, which leaves the action and context layers with
+less to recover. **The agent's edge is the timing brain, and after W24 that is
+more true than it was, not less.**
+
+## A measurement mistake made and caught inside this pass
+
+The action and outage ablations were first re-run WITHOUT `--canonical`, which
+scores populations 700-707 on the pre-canonical world instead of 710-719 on the
+canonical one. The output looked plausible (every arm n.s.) and was nearly
+reported. It was caught by comparing the header line against the previous
+transcript: 700-707 against 710-719, and Rs 12.6M against Rs 7.5M. Both were
+re-run with the flag. **A re-measurement that changes the world and the
+constant at once cannot attribute the movement to either.**
+
+## Two defects found in passing, neither on any list
+
+**`scripts/prove_stage0_refuses.py` had been proving nothing since commit
+91b1fc1.** The decoupled predelivery path shipped and this script was not
+updated with it. `Stage0Gate.issue_notification` calls `executor.notify()`,
+`notify()` failed, **the gate swallowed the exception into a log line**,
+`execute()` refused with `missing_predelivery_order`, and step 1 printed
+ALLOWED with `network calls 0` before dying on a missing record. Non-zero exit,
+no explanation.
+
+Two causes. The binding set neither `charge_amount` nor email/contact, both
+required by the order -- fixed. And underneath that, a **unit collision that is
+not an audit fix**: `RazorpayExecutor.notify` sets `payment_after =
+int(target_t)` and requires a future Unix epoch second, while Stage 0's rules
+read the same `target_t` as simulated hours (`check_peak` is `target_t % 24`).
+No single value satisfies both clocks, so **the live `RazorpayExecutor` has
+never been driven end to end by Stage 0 with a genuine order.** The script now
+prints this and asserts the executor refused for exactly that reason. Recorded
+as a limitation against the rung-5 AutoPay work.
+
+**`docs/06_MODEL_CARD.md` published the wrong shipping constants for a day.**
+Its code block still read `prior_w=9, prior_floor=0.5` after the code stopped
+carrying them, and its provenance paragraph still credited `sim/fit_belief.py`,
+which structurally could not have selected the shipped value. Both corrected.
+
+## The staleness register, and what is deliberately NOT re-run
+
+`docs/02_RESULTS.md` now carries a register naming every measurement family and
+whether a post-18:08 run stands behind it. The honest part is the second table.
+
+**The Bayes-vs-ML six-world comparison is not re-run, on purpose.** Its `bayes
+fitted` column is pre-W24. A straight re-run would be half invalid: the hybrid
+arm's GBDT was trained on Bayes posterior features from the OLD filter, so
+re-scoring it without retraining compares a current Bayes against a stale
+hybrid. Retraining is a fit, not an audit, and this pass was not allowed to
+fit. **The qualitative claim may be quoted; the digits may not.** Also not
+re-run and named: W2 insolvency, W7 transients, W10 realism, the discount
+sweep, the detection benchmark.
+
+`scripts/analysis/` (moved out of `logs/`) is policy-free by construction and
+is NOT stale. A constrained oracle that moved when the belief moved would be a
+defect in the oracle.
+
+## Five retraction rules added, and they found twelve survivors
+
+`stale-pooling-moat`, `stale-action-ablation`, `outage-exactly-zero`,
+`stale-shipping-constants`, `no-balance-floor` -- each with a canary, per
+`verify_docs.py`'s own instruction. They caught twelve live hits a manual sweep
+had already missed, several of them in edits made minutes earlier in this same
+pass. `--selftest` is 29/29 across 27 rules.
+
+`stale-shipping-constants` is deliberately written to match the ASSIGNMENT form
+(`prior_w=9`) and not the arrow form (`prior_w 9 -> 5`), so the record of the
+change stays quotable while a live restatement does not.
+
+## Verification at close
+
+    sim/gate.py --tier full             27 gates, 4 FAIL (all 4 known), 0 VACUOUS
+    sim/verify_docs.py                  PASS, 27 rules
+    sim/verify_docs.py --selftest       29/29
+    sim/verify_brief.py                 07_AGENT_BRIEF matches the code
+    sim/fit_belief.py --check           PASS, records selection match=False
+    scripts/build_page_data.py --check  PASS, data and index.html agree
+    scripts/prove_stage0_refuses.py     PASS (exit 0), and now prints its own limitation

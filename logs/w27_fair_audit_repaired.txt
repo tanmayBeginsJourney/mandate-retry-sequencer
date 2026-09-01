@@ -1,0 +1,56 @@
+==============================================================================
+1. DOES THE FITTED PRIOR GENERALISE ACROSS payday_err?
+==============================================================================
+   Every world in the misspecification study uses payday_err=7.
+   A config whose gain PEAKS at the pe it was fitted on is tuned to
+   the harness. The first fit did exactly that and went negative at
+   pe=14.
+
+   *** READ THIS BEFORE QUOTING THE TABLE BELOW. ***
+   The table below measures the shipping config, selected by
+   sim/fit_belief.py on the training objective. Former shipping
+   values are in sim/fitted_belief.json as former_shipping.
+
+   payday_err         old  shipping                  gain
+   1               93.61%    96.76%    +3.15+/-1.06 SIG
+   3               88.62%    98.15%    +9.53+/-1.29 SIG
+   5               83.57%    97.38%   +13.81+/-1.67 SIG
+   7               82.16%    94.79%   +12.63+/-1.37 SIG
+   10              79.87%    88.41%    +8.55+/-1.27 SIG
+   14              73.40%    83.78%   +10.38+/-2.32 SIG
+
+==============================================================================
+2. WHICH BELIEF DOES GATE S1 MEASURE?
+==============================================================================
+   portfolio          -> Belief   <-- what S1 runs
+   solo_shared_pd     -> BeliefPD   <-- what the project recommends
+   So S1 gates the calibration of the POINT-ESTIMATE filter, not
+   the payday-posterior filter the project actually recommends.
+
+==============================================================================
+3. CALIBRATION OF THE FILTER THAT SHIPS (S1's binning, held-out)
+==============================================================================
+
+   BeliefPD shipped: ECE=0.059 monotone=False  -> S1's rule says FAIL   (n=7748)
+      P in [0.0,0.1)  n=  2351  predicted=0.007  actual=0.064  under by 0.057
+      P in [0.1,0.2)  n=   395  predicted=0.151  actual=0.233  under by 0.082
+      P in [0.2,0.3)  n=   281  predicted=0.244  actual=0.391  under by 0.148
+      P in [0.3,0.4)  n=   464  predicted=0.347  actual=0.360  under by 0.013
+      P in [0.4,0.5)  n=   438  predicted=0.451  actual=0.395  over by 0.056
+      P in [0.5,0.6)  n=   243  predicted=0.551  actual=0.374  over by 0.177
+      P in [0.6,0.7)  n=   110  predicted=0.654  actual=0.536  over by 0.117
+      P in [0.7,0.8)  n=   138  predicted=0.756  actual=0.717  over by 0.039
+      P in [0.8,0.9)  n=   159  predicted=0.849  actual=0.824  over by 0.025
+      P in [0.9,1.0)  n=  3169  predicted=0.995  actual=0.948  over by 0.048
+
+   BeliefPD fair: ECE=0.031 monotone=False  -> S1's rule says FAIL   (n=7082)
+      P in [0.0,0.1)  n=  1585  predicted=0.005  actual=0.054  under by 0.049
+      P in [0.1,0.2)  n=   203  predicted=0.153  actual=0.163  under by 0.009
+      P in [0.2,0.3)  n=   115  predicted=0.251  actual=0.383  under by 0.132
+      P in [0.3,0.4)  n=   149  predicted=0.354  actual=0.430  under by 0.076
+      P in [0.4,0.5)  n=   202  predicted=0.454  actual=0.510  under by 0.056
+      P in [0.5,0.6)  n=   368  predicted=0.551  actual=0.448  over by 0.102
+      P in [0.6,0.7)  n=   294  predicted=0.643  actual=0.622  over by 0.020
+      P in [0.7,0.8)  n=   272  predicted=0.757  actual=0.824  under by 0.066
+      P in [0.8,0.9)  n=   433  predicted=0.853  actual=0.898  under by 0.046
+      P in [0.9,1.0)  n=  3461  predicted=0.987  actual=0.982  over by 0.005

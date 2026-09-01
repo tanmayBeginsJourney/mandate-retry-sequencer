@@ -1,0 +1,12 @@
+PERFECT PAYDAY ESTIMATE (payday_err=0). 20 runs, n=100, held-out pops 710-719.
+
+       arm   recovery    2 SE  cyc_rec    surv  att/at-risk
+     agent     89.16%   +5.93   98.53%   98.6%
+     [1,7]    100.00%   +0.00   99.54%  100.0%
+
+  agent - [1,7] with a PERFECT payday estimate: -10.84 pts
+
+  VERDICT: the agent loses even when payday is known EXACTLY.
+  Payday learning is NOT the bottleneck, so fix #3 (decline-code
+  relocation of payday mass) is aimed at the wrong thing and
+  should NOT be built. The residual is elsewhere.

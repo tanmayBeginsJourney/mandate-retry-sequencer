@@ -178,7 +178,8 @@ state and nothing else. A mutant that touches a counter is not a test.**
 `w3.py:41-63`, `06_MODEL_CARD.md` §1 and error 7's own guard all say it was
 selected by `sim/fit_belief.py`, which is committed *precisely* so the fit is
 reproducible. Two of the five values cannot come out of that file:
-- **`prior_floor=0.25`** — the string `prior_floor` appears **nowhere** in
+- **`prior_floor=0.25`** (a superseded value; see the note at the end of this
+  error) — the string `prior_floor` appears **nowhere** in
   `fit_belief.py`. Every config it evaluates inherits `BeliefPD`'s default
   `1e-6`, i.e. the *hard* window error 8 identifies as the brittle failure.
   The soft floor is described everywhere as "the important part".
@@ -205,7 +206,15 @@ and selects against mean cycle collection over all six stated `payday_err`
 cells. It selected `(stride=1, prior_w=9, prior_day0=8, prior_floor=0.5,
 spend_beta=0)`. That configuration was adopted as `w3.FITTED_BELIEF`. The
 previous shipping values `(1, 12, 8, 0.25, 0)` remain in `sim/fitted_belief.json`
-as `former_shipping`. The train winner scored 94.90% against former 94.53%; on
+as `former_shipping`.
+
+⚠️ **BOTH OF THOSE CONFIGURATIONS ARE NOW SUPERSEDED.** W24 re-selected the
+shipping prior on the canonical world on 1 September 2026: `prior_w` 9 → 5,
+`prior_floor` 0.5 → 0.1, plus `cycle_value` 0 → 0.6 in the agent objective.
+`sim/fit_belief.py` structurally could not have found it — its `prior_w` grid
+is `(5,7,9,12,15)` and it scores on the pre-canonical world — so
+`sim/fitted_belief.json` now records `matches_shipping=false`. The paragraph
+above is the record of what error 12 fixed, not a statement of what ships. The train winner scored 94.90% against former 94.53%; on
 held-out evaluation the former led 95.29% to 94.94%. Shipping the train winner
 is the point of the split. Headline tables were re-measured after adoption.
 
@@ -241,7 +250,9 @@ Three of 25 gates ran the fitted configuration: S1_PD, S4, and T9.
 
 **Resolved 31 August 2026 (afternoon).** The remaining coverage gap was the
 moat and the lock, not a sentence. S2a_PD gates pooling on `FITTED_BELIEF`
-(+8.34 ±1.36). T6_PD is the k=1 identity on the shipping filter. T9 locks
+(+7.32 ±2.02 on the shipped constants; it read +8.34 ±1.36 when this entry was
+written, under the pre-W24 prior). T6_PD is the k=1 identity on the shipping
+filter. T9 locks
 own, pooled, and coordinated under `FITTED_BELIEF` at both operating points
 (34 configs). T1, T7 and T8 include those policies. Five dedicated gates of
 27 run the shipping configuration. Stage 0 mutants stay unfitted on purpose:

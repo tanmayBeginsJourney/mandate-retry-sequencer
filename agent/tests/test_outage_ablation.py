@@ -85,8 +85,10 @@ import w3
 
 from agent.tests._parallel import agent_job, run_jobs
 
-POPS = [700, 701, 702, 703, 704, 705, 706, 707]
-N, K, DAYS, SPEND, PE, RUN_SEED = 100, 5, 120, 1.05, 7, 7
+from agent.tests import _canonical as _CAN
+
+POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
+N, K, DAYS, SPEND, PE, RUN_SEED = 100, 5, 120, _CAN.spend(1.05), 7, 7
 SEVERITIES = [0.0, 0.15, 0.40, 0.80]
 OUTAGE_DAYS = [20, 50, 80, 110]
 DURATION_H = 6
@@ -118,8 +120,10 @@ def main() -> int:
         for arm, kw in ARMS.items():
             for s in POPS:
                 jobs.append((
-                    (sev, arm, s), (N, K, s, SPEND, DAYS), RUN_SEED,
-                    dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
+                    (sev, arm, s), (N, K, s, SPEND, DAYS,
+                                    _CAN.pop_kwargs(s)), RUN_SEED,
+                    dict(**_CAN.run_kwargs(),
+                         payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
                          mode="degenerate", time_major=True,
                          collect_calib=True,
                          outage_kw=(None if sev == 0.0 else

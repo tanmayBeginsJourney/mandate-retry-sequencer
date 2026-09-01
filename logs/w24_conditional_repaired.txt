@@ -1,0 +1,12 @@
+========================================================================================
+ pop_spend  payday_wait     agent    uplift    2 SE   at risk  agent surv  rival surv
+      0.80       99.07%   100.00%     +0.93    0.60         2      100.0%       98.9%
+      0.85       97.36%    99.83%     +2.47    0.93        83       99.9%       97.4%
+      0.88       95.99%    99.65%     +3.66    0.86       197      100.0%       96.0%
+      0.90       94.24%    99.53%     +5.29    0.82       299       99.8%       94.4%
+      0.93       90.29%    99.38%     +9.08    1.84       557       99.8%       90.5%
+========================================================================================
+  The 0.93 cell is the headline cell and must reproduce `agent.batch_report --pops 10 --canonical`.
+  BIAS: `payday_wait` is the harness's own baseline and is weaker than the
+  frozen `[1,7]` schedule. Read this table beside `test_steelman_schedule.py`,
+  never instead of it.

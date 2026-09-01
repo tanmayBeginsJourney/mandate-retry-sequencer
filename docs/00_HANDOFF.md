@@ -15,9 +15,9 @@
 ### The four commands that matter
 
 ```
-py -3.12 -m agent.batch_report --pops 4                # THE DELIVERABLE. ~50s, no key.
-py -3.12 agent/tests/test_recovery_rates.py            # recovery vs the published bands
-py -3.12 agent/tests/test_insolvency_sweep.py          # W2 measurement
+py -3.12 -m agent.batch_report --pops 10 --canonical   # THE DELIVERABLE. ~26s, no key.
+py -3.12 agent/tests/test_canonical_world.py --confirm # the four bands, on the frozen world
+py -3.12 agent/tests/test_steelman_schedule.py         # the agent vs three fixed schedules
 py -3.12 scripts/prove_stage0_refuses.py               # Stage 0 vs the REAL Razorpay client
 ```
 
@@ -30,34 +30,77 @@ credentials, no model download. Only `--llm` needs a key.
 
 ### What is true about the numbers
 
-> **THE BATCH.** 100 customers × 5 mandates, 4 held-out populations, 120 days,
-> `payday_err=7`, `pop_spend=1.05`: **98.01% of billing cycles collected against
-> `payday_wait`'s 57.70%**, +40.30 pts (2 SE 2.32), ₹6,203,060, **zero Stage 0
-> refusals with an independent recount of zero over 8,832 money actions.**
+> **THE BATCH.** 100 customers × about 2 mandates each, 10 held-out
+> populations (seeds 710–719), 120 days, `payday_err=7`, `pop_spend=0.93`,
+> 12 burn-in cycles: **99.38% of billing cycles collected against
+> `payday_wait`'s 90.29%**, +9.08 pts (2 SE 2.01), ₹7,511,500, **zero Stage 0
+> refusals with an independent recount of zero over 8,702 money actions.**
+> Reproduce with `py -3.12 -m agent.batch_report --pops 10 --canonical`.
+>
+> ⚠️ **98.01% / 57.70% / +40.30 / ₹6,203,060 is SUPERSEDED.** That headline
+> was measured on a world carrying three defects — no steady state, collected
+> mandates handed back at every payday, and an invented mandate count of 5.
+> All three are fixed. See NOTES.md, errors 33–35, 1 September 2026.
 >
 > **THE HEADLINE IS CONDITIONAL ON TWO PARAMETERS, NOT ONE.** `payday_err` was
-> always known. `pop_spend` was found on 29 August: at 1.05 the account cannot
-> cover the debit on its due date 53% of the time, against a published real
-> rate of 8–15%. The agent's edge runs **+2.81 → +36.48** across the plausible
-> range. At `pop_spend=0.80` it is **+6.36**, inside the published 6–8%
-> industry benchmark, and nothing was tuned to land there.
+> always known. `pop_spend` is one minus the household saving rate, and India's
+> three published FY25 readings put it between 0.80 and 0.93. **No point in
+> that range is declared.** The agent's edge across it runs **+0.93 → +9.08**,
+> and below 0.90 the world carries too few at-risk cycles to measure a
+> difference at all — 2 of them at 0.80, across a thousand customers.
+> `logs/w24_conditional_repaired.txt`.
 >
 > **THE VALIDATION SUITE is what replaces a public benchmark, because none
-> exists.** At `pop_spend=0.80`: due-date failure **13.68%** (published 8–15%,
-> HIT) and fixed-interval recovery **27.85%** (published 20–40%, HIT), neither
-> fitted. Smart-retry recovery 97.38% (published 70–85%, MISS) and recoveries
-> inside 10 days 41.84% (published 85–95%, MISS).
+> exists.** At `pop_spend=0.93`, n=100: due-date failure **10.50%** (2 SE 0.52,
+> published 8–15%, HIT) and fixed-interval recovery **22.15%** (2 SE 1.95,
+> published 20–40%, HIT by more than the measurement error), neither fitted,
+> both on 100 populations — `py -3.12 agent/tests/test_v3_power.py`.
+> Smart-retry recovery 95.24% (published 70–85%, MISS) and recoveries inside 10
+> days 42.97% (published 85–95%, MISS), both on 20 populations —
+> `py -3.12 agent/tests/test_canonical_world.py --confirm`.
+>
+> **V3 IS THE REBUTTAL TO V5.** Same world, same calibration, same run seed. V3
+> runs a policy this project did not design and lands inside its band; a world
+> calibrated easy would lift both. V5 is above its band because the agent is
+> better than the published systems, not because the world is soft. Falsified
+> if V3 drops below 20% at a larger sample, or holds only where V1 leaves its
+> own band. V5 is measured half on the populations its prior was selected on;
+> held-out it is 94.43%, still far above the band.
+>
+> **BOTH MISSES NOW HAVE A MEASURED CEILING BESIDE THEM.** A clairvoyant
+> schedule that obeys the four-attempt cap, the 24-hour notice and legal hours
+> collects **100%** of at-risk cycles, so the smart-retry row measures the
+> agent rather than the world. The same schedule reaches only **51.5%** of them
+> inside ten days, below the published band's floor; the agent reaches 42.97%,
+> or **83.4% of what is available**. V1 and V7 cannot both be in band in any
+> world with one salary credit a month.
 >
 > **W7 SEARCHED 14 ALTERNATIVE WORLDS AND NONE BEAT IT.** Transient failures
-> were swept on 30 August. They move V3 hard, and they break V1 doing it. **No
-> world in the grid hits more than 2 of 4 targets and the best is still the one
-> above** — so this calibration has now survived a search designed to unseat
-> it, rather than being the first thing tried.
+> were swept on 30 August. They move V3 hard, and they break V1 doing it. No
+> world in that grid hit more than 2 of 4 targets. The canonical world hits 2
+> of 4 as well, and the difference is that every one of its parameters now has
+> a named external source rather than a chosen value.
 >
 > **THE MECHANISM THAT SELLS IT.** The fixed schedule spends all four attempts
 > within four days of the due date, hits the NPCI cap while the account is
-> empty, and the mandate dies. **Survival 32.1% against the agent's 96.6%.**
+> empty, and the mandate dies. **Survival 85.3% against the agent's 98.4%.**
 > Dunning harder costs the customer, measured.
+>
+> **AND THE ONE THAT DOES NOT.** Against a steelmanned fixed schedule — two
+> attempts at frozen offsets from the same noisy payday estimate — the agent
+> **loses** by 9.17 points at `payday_err=1`, 7.83 at ±3 and 6.14 at ±5, ties
+> at ±7, and wins from between ±7 and ±10 upward. Real payday uncertainty in
+> India is unmeasured and the statutory evidence points at the low side.
+> `py -3.12 agent/tests/test_steelman_schedule.py`.
+
+> ⚠️ **SUPERSEDED 1 September 2026 (W24).** The payday prior was refitted
+> on the canonical world (`prior_w` 9 -> 5, `prior_floor` 0.5 -> 0.1) and the
+> mandate's continuation value was added to the objective
+> (`cycle_value=0.6`). **The crossover is now at ±5, not between ±7 and
+> ±10**, and the margins against `[1,7]` on held-out populations 710-719 are
+> −1.16 at ±1, −0.33 at ±3, +1.15 at ±5, +3.55 at ±7, +23.83 at ±10 and
+> +34.41 at ±14. The figures above are the PRE-REPAIR agent and are kept as
+> the record. `py -3.12 agent/tests/test_steelman_schedule.py`.
 
 ### The three traps a fresh session will otherwise walk into
 
@@ -137,7 +180,7 @@ credentials, no model download. Only `--llm` needs a key.
 |---|---|
 | Track 3, mandate retry sequencing | Razorpay lists it as an example direction |
 | Belief over balance **and** payday | Payday posterior is where the moat lives |
-| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth **+8.34 pts (±1.36)** on the shipping filter, gated as S2a_PD. Unfitted S2a is +9.53 (±1.81). Agent W9 (ungated) is +8.46 (±1.07) at the same calibration. |
+| `solo_shared_pd` is the policy, with `w3.FITTED_BELIEF` | Best measured. Pooling worth **+7.32 pts (±2.02)** on the shipping filter, gated as S2a_PD. Unfitted S2a is +9.53 (±1.81). Agent W9 (ungated) is +6.47 (±0.62) at the same calibration and +1.30 (±0.42) at `pop_spend=0.80`. Re-measured 1 Sep 2026; the ±1.36 / +8.34 / +8.46 figures are **superseded** — they were measured on the pre-W24 prior. |
 | **No** coordinated budgeting | Measured −6 pts twice. Cut. |
 | No LLM on the debit-timing path | **ADR-005** (below). Deliberate, defensible. |
 | **Yes** LLM on diagnosis / intervention choice / audit narrative | Needed for the track, and honest |
@@ -196,8 +239,19 @@ The original text, kept as the record:
   loses in all six worlds by 5–12 points, and a Bayes+ML hybrid is worse than
   the filter alone. The earlier +4.03 ML win was a fitted model beating an
   unfitted one. `NOTES.md`, 28 August.
-- **Does pooling survive a properly fitted filter?** Yes:
-  +8.20 unfitted → **+8.46 pts (±1.07)** fitted.
+- **Does pooling survive a properly fitted filter?** Yes, and it shrinks each
+  time the filter gets better. The first two figures below are **superseded**
+  and are kept only to show the direction: +8.20 on the unfitted filter → +8.46
+  (±1.07) on the 31 August prior → **+6.47 pts (±0.62)** on the shipped one, all at
+  `pop_spend=1.05` in the agent (W9). At `pop_spend=0.80` it is **+1.30
+  (±0.42)**. **The shrink is entirely the un-pooled arm improving, not the
+  pooled arm getting worse.** In the gate: pooled 94.39% → 94.45%, own 86.05% →
+  87.13%. In the agent at 1.05: pooled 95.37% → 97.60%, not-pooled 86.91% →
+  91.13%. A sharper payday posterior gives a one-mandate belief more of what it
+  previously had to borrow from the other four, so the moat is now measured
+  against a stronger baseline. Re-measured 1 Sep 2026,
+  `logs/w26_gate_full_moat_remeasure.txt` and
+  `logs/w26_w9_pooling_consent_remeasure.txt`.
 - **Suite runtime.** ~27 min → **~100s full / ~34s fast on an idle machine**,
   output proved byte-identical by T9. T9 locks unfitted policies and
   `solo_pop_pd` / `solo_shared_pd` / `portfolio_pd` under `FITTED_BELIEF` at
@@ -210,7 +264,7 @@ The original text, kept as the record:
   mandate 1's belief. Fixed. S2b now reads −14.09 (the −14.51 this line used
   to quote is stale; see `sim/known_failures.txt`).
 - **Does the day-0 payday prior create a cliff when the population differs?**
-  No. 4.84 pts of gentle degradation across `payday_day0_frac` 0.8→0.2, and the
+  No. 3.04 pts of gentle degradation across `payday_day0_frac` 0.8→0.2 (re-measured on the shipped belief; the superseded figure was 4.84), and the
   margin over `ml_index` *grows* from +5.87 to +14.20 as the population moves
   away from the fit.
 
@@ -307,10 +361,12 @@ The original text, kept as the record:
 
 1. **How accurately can payday be estimated in reality?** Still unmeasured, and
    still the one fact that decides whether the sophisticated version is worth
-   building. What IS now measured is where the crossover sits: the system
-   loses to `payday_wait` at ±1 day, ties at ±3, and wins by +23.6 at ±5
-   rising to +53.2 at ±14 (`06_MODEL_CARD.md` §2). So the open question is
-   narrow and concrete: **is real payday uncertainty above or below ~4 days?**
+   building. What IS now measured is where the crossover sits, and it moved
+   once the baseline was steelmanned. Against the frozen `[1,7]` schedule the
+   agent loses by 9.17 points at ±1, 7.83 at ±3 and 6.14 at ±5, ties at ±7
+   (−1.34), and wins by +20.73 at ±10 and +30.67 at ±14
+   (`agent/tests/test_steelman_schedule.py`). So the open question is narrow
+   and concrete: **is real payday uncertainty above or below about 8 days?**
    Resolution unchanged: make the agent learn payday online and expose its own
    uncertainty, so the posterior width is a product feature rather than an
    assumption. Do not chase the number externally.
@@ -332,7 +388,7 @@ The original text, kept as the record:
    used to appear beside it is `sim/fair_audit.py`'s number on *different*
    populations. They are two measurements, not a range. The break looks
    structural:
-   no balance floor at zero, and a fixed 3-tap kernel standing in for the
+   a diffusion that leaks through the modelled balance floor, and a fixed 3-tap kernel standing in for the
    world's hourly spend jitter.
    Historical, from the 27 August rebuild:
    - **S1** belief calibration: ECE 0.091, reliability curve not monotone.
@@ -351,8 +407,11 @@ The original text, kept as the record:
 6. ~~**Does pooling actually beat placebo pooling?**~~ **RESOLVED 27–28 August.**
    The old S2 was testing the point-estimate trio, not the payday-posterior
    trio the moat is claimed for. Rebuilt as three arms. **S2a — the moat —
-   passes at +9.53 pts (±1.81)** on the unfitted filter and **+8.34 pts (±1.36)
-   as S2a_PD on the filter that ships**. What remains open is narrower: **S2b
+   passes at +9.53 pts (±1.81)** on the unfitted filter and **+7.32 pts (±2.02)
+   as S2a_PD on the filter that ships** (re-measured 1 September 2026; it read
+   +8.34 ±1.36 under the pre-W24 prior, and that figure is **superseded**).
+   What remains open is
+   narrower: **S2b
    shows the placebo is not a clean control** (−14.09 pts), because it injects
    *wrong* observations rather than neutral extra ones. A label-shuffle and a
    posterior-predictive control were both built and measured on 31 August;
@@ -373,7 +432,7 @@ The original text, kept as the record:
       every session; local has run ahead of the remote before**
 - [x] Agent runs end to end over a batch of synthetic merchants
 - [x] One number: money recovered, with `payday_wait` printed beside it
-      — **98.01% vs 57.70%, +40.30 pts, reproduced on a clean clone in 108s**
+      — **99.38% vs 90.29%, +9.08 pts, reproduced on a clean clone in 26s**
 - [x] Audit log: every money action, with reason, constraint check, outcome
 - [x] Stopping rules explicit and demonstrable
 - [x] One failure handled gracefully, on camera —

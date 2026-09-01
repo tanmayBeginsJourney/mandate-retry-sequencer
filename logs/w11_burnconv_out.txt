@@ -1,0 +1,10 @@
+W11-4c  V1 against burn-in length, CANONICAL buffer, policy-free
+ burn_cycles   spend 0.80   spend 0.88
+           0       13.93%       29.35%
+           2        3.46%       15.39%
+           4        2.78%       14.84%
+           8        2.67%       13.27%
+          12        2.45%       12.31%
+          16        2.34%       12.23%
+
+  12 vs 16: 0.11 pts at 0.80, 0.08 pts at 0.88 (registered threshold: < 1.00)

@@ -1,0 +1,40 @@
+W20 ATTEMPT PLACEMENT -- where do the attempts land, and is the agent late?
+20 runs, canonical world, pop_spend=0.93, n=100, payday_err=1, HELD-OUT pops 710-719.
+Collectable days are CLAIRVOYANT and ignore sibling drain, exactly as constrained_oracle does.
+
+============================================================================================
+     arm   at risk  reachable  collected  attempts  inside window  1st att vs due  vs payday
+   agent       584        584      89.9%       872          60.7%             7.0        4.0
+   [1,7]       584        584      99.8%       594          98.1%            10.0        1.0
+  join self-check: 0 attempt(s) fell outside their cycle window. Non-zero here invalidates every row above.
+
+WHERE THE FIRST ATTEMPT LANDS, in days after the TRUE payday. The arms see only a noisy estimate of it.
+============================================================================================
+    agent: 0:190 1:31 2:28 3:21 4:14 5:13 6:8 7:9 8:5 9:1 10:4 11:3 12:16 13:8 14:10 15:9 16:6 17:4 18:3 19:7 20:2 21:6 22:8 23:10 24:9 25:9 26:22 27:29 28:21 29:47
+    [1,7]: 0:171 1:213 2:190 8:10
+
+HOW THE REACHABLE CYCLES ARE LOST.
+============================================================================================
+    agent: 59 reachable cycles lost of 584
+              31 ( 52.5%)  never attempted
+              13 ( 22.0%)  in a gap (straddles collectable days)
+              10 ( 16.9%)  TOO LATE (all after last collectable day)
+               5 (  8.5%)  too early (all before first)
+    [1,7]: 1 reachable cycles lost of 584
+               1 (100.0%)  too early (all before first)
+
+COLLECTABLE WINDOW WIDTH, days per reachable cycle: median 9.0, mean 11.42, p10 6.0, p90 22.7
+
+PRE-REGISTERED PREDICTIONS
+============================================================================================
+  [ HOLD] P-1 agent's first attempt is >= 2 days later vs payday         +3.0 days
+  [BROKE] P-2 TOO LATE is over 50% of the agent's lost reachable cycles  16.9%
+  [ HOLD] P-3 [1,7] lands inside the window >= 10 pts more often         +37.5 pts
+  [BROKE] P-4 median collectable window <= 5 days                        9.0 days
+  [ HOLD] P-5 NEVER ATTEMPTED is over 40% of the agent's lost cycles     52.5%
+  [ HOLD] P-6 the agent loses >= 2x as many reachable cycles as [1,7]    59 vs 1
+  [BROKE] P-7 the agent's first attempt is NOT later than [1,7]'s        +3.0 days
+  4/7 held.
+
+A BROKEN PREDICTION IS THE RESULT, NOT A FAILURE. P-1 is the hypothesis; if it broke, the
+late-placement explanation is dead and the residual stays recorded as unexplained.

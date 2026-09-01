@@ -1,0 +1,67 @@
+TIER=fast   planned runs=96   workers=auto
+prefetch done in 35.9s
+
+--- Tier 1: mutation tests (do the gates actually fire?) ---
+[  ok  ] M1    attempt past the cap                           pe=7: clean=0 -> mutant=277
+[  ok  ] M2    dispatch inside a peak hour                    pe=1: clean=0 -> mutant=1119
+[  ok  ] M3    <24h notification lead                         pe=1: clean=0 -> mutant=1080
+[  ok  ] M4    second pending notification                    pe=1: clean=0 -> mutant=5
+[  ok  ] M5    Z9 re-presented under old notice               pe=1: clean=0 -> mutant=304
+[  ok  ] M6    true-balance leak changes the result           clean=96.9% leaked=88.0%
+[  ok  ] M8    crippled oracle is detectably worse            fixed=100.0% crippled=46.3%
+[  ok  ] M4B   no mutant writes the counter it is graded on   all 5 Stage-0 mutants create state only
+
+--- Tier 2: correctness invariants ---
+[  ok  ] T1    oracle weakly dominates every policy           pe1=100.0% pe7=100.0%, margin=0.4pts, mutant caught
+[  ok  ] T2    forecast is bit-identical with future poisoned 
+[  ok  ] T3    belief has no back-channel to true balance     clean identical; leaky mutant caught
+[  ok  ] T4    same seed -> identical output                  
+[  ok  ] T5    raising the attempt cap does not reduce recovery pe=7: cap2=43.3% cap4=49.3%
+[  ok  ] T6    k=1: pooled == own (nothing to pool)           100.000% vs 100.000%
+[  ok  ] T6_PD k=1: pooled == own on the shipping filter      97.778% vs 97.778%
+[  ok  ] T7    bounds hold; no mandate exceeds the cap        pe=7: 18 policies clean, poison caught (2 clauses)
+[  ok  ] T8    compliant policies clean; documented baseline is not dirty=[], baseline_doc represent-violations=974
+[  ok  ] T9    output identical to the pre-optimisation reference 34 configs exact (26 float-level hashes); shared-RNG mutant caught (223 fields)
+
+--- Tier 3: statistical validity ---
+       reliability, w3.Belief via portfolio (POINT-ESTIMATE payday -- NOT the shipping filter) (n=6555):
+         P in [0.0,0.1)  n=    28  predicted=0.011  actual=0.500  underconfident by 0.489
+         P in [0.1,0.2)  n=    39  predicted=0.143  actual=0.231  underconfident by 0.088
+         P in [0.2,0.3)  n=    64  predicted=0.239  actual=0.734  underconfident by 0.495
+         P in [0.3,0.4)  n=    75  predicted=0.350  actual=0.840  underconfident by 0.490
+         P in [0.4,0.5)  n=    38  predicted=0.436  actual=0.500  underconfident by 0.064
+         P in [0.5,0.6)  n=   256  predicted=0.556  actual=0.496  overconfident by 0.060
+         P in [0.8,0.9)  n=   166  predicted=0.811  actual=0.982  underconfident by 0.170
+         P in [0.9,1.0)  n=  5873  predicted=0.998  actual=0.919  overconfident by 0.079
+[ FAIL ] S1    belief calibration: ECE<0.10 and monotone      ECE=0.091, monotone=False
+       reliability, BeliefPD, fitted config (the shipping filter) (n=8306)  <-- S1_PD:
+         P in [0.0,0.1)  n=  1751  predicted=0.005  actual=0.034  underconfident by 0.029
+         P in [0.1,0.2)  n=   238  predicted=0.151  actual=0.147  overconfident by 0.004
+         P in [0.2,0.3)  n=   178  predicted=0.247  actual=0.343  underconfident by 0.096
+         P in [0.3,0.4)  n=   188  predicted=0.353  actual=0.367  underconfident by 0.014
+         P in [0.4,0.5)  n=   427  predicted=0.448  actual=0.571  underconfident by 0.123
+         P in [0.5,0.6)  n=   348  predicted=0.543  actual=0.503  overconfident by 0.041
+         P in [0.6,0.7)  n=   468  predicted=0.655  actual=0.765  underconfident by 0.110
+         P in [0.7,0.8)  n=   272  predicted=0.762  actual=0.816  underconfident by 0.054
+         P in [0.8,0.9)  n=   337  predicted=0.843  actual=0.944  underconfident by 0.101
+         P in [0.9,1.0)  n=  4099  predicted=0.986  actual=0.986  underconfident by 0.001
+[ FAIL ] S1_PD SHIPPING belief calibration: ECE<0.10 and monotone ECE=0.029, monotone=False
+       S2a / S2b / S2c / S2a_PD / S2_LEGACY / S3 NOT RUN in the fast tier.
+       They need 8 populations at n=100 to have power and are
+       never shrunk to fit a time budget. Run --tier full.
+
+==============================================================================
+SUITE: 20 gates, 2 FAIL, 0 VACUOUS, 18 pass   [tier=fast]
+wall time: 71.2s
+==============================================================================
+
+Known failures still present (tolerated, documented in sim/known_failures.txt):
+    S1    FAIL     belief calibration: ECE<0.10 and monotone      ECE=0.091, monotone=False
+    S1_PD FAIL     SHIPPING belief calibration: ECE<0.10 and monotone ECE=0.029, monotone=False
+
+NOT EXERCISED by the 'fast' tier (still owed a full run):
+    S2_LEGACY
+    S2b
+
+GATE PASS [tier=fast]: 20 gates, 2 bad, all 2 known. Commit allowed.
+Reminder: no number reaches docs/, the pitch or the architecture doc from anything but a --tier full run.

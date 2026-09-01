@@ -35,7 +35,7 @@ from agent.llm.fallback import RetryOnlyDiagnoser, RuleBasedDiagnoser
 from agent.loop import run_agent
 from agent import metrics
 from agent.policy.belief_book import BeliefBook
-from agent.policy.timing import DEFAULT_DISCOUNT
+from agent.policy.timing import DEFAULT_CYCLE_VALUE, DEFAULT_DISCOUNT
 from agent.recovery import batch_legal_ceiling
 
 LOG_DIR = os.path.join(agent._PKG_ROOT, "agent", "runs")
@@ -59,7 +59,8 @@ def make_pop(n: int, k: int, pop_seed: int, spend: float = 1.05,
 
 def at_risk_cycles(pop, seed: int, payday_err: int = 7,
                    p_missed_credit: float = 0.0,
-                   p_transient: float = 0.0, transient_h: int = 24) -> dict:
+                   p_transient: float = 0.0, transient_h: int = 24,
+                   burn_cycles: int = 0, **kw) -> dict:
     """The world's revenue-at-risk set, without running a policy.
 
     Exposed HERE rather than imported from `agent.execution` by the caller,
@@ -74,7 +75,9 @@ def at_risk_cycles(pop, seed: int, payday_err: int = 7,
     return SimExecutor(pop, seed, payday_err,
                        p_missed_credit=p_missed_credit,
                        p_transient=p_transient,
-                       transient_h=transient_h).at_risk_cycles()
+                       transient_h=transient_h,
+                       burn_cycles=burn_cycles,
+                       **kw).at_risk_cycles()
 
 
 def unwinnable_cycles(pop, seed: int, payday_err: int = 7,
@@ -87,6 +90,29 @@ def unwinnable_cycles(pop, seed: int, payday_err: int = 7,
                        p_missed_credit=p_missed_credit,
                        p_transient=p_transient,
                        transient_h=transient_h).unwinnable_cycles()
+
+
+def constrained_oracle(pop, seed: int, payday_err: int = 7,
+                       burn_cycles: int = 0, **kw) -> dict:
+    """Earliest day a LEGAL schedule could collect each at-risk cycle.
+
+    Routed through the composition root for the same reason `at_risk_cycles`
+    is: gate I2 forbids every module under `agent/` except `constraints/
+    stage0.py` and this one from importing `agent.execution` at all."""
+    return SimExecutor(pop, seed, payday_err, burn_cycles=burn_cycles,
+                       **kw).constrained_oracle()
+
+
+def collectable_days(pop, seed: int, payday_err: int = 7,
+                     burn_cycles: int = 0, **kw) -> dict:
+    """Every day a legal presentation would have cleared, per at-risk cycle.
+
+    Routed through the composition root for the same reason `at_risk_cycles`
+    and `constrained_oracle` are: gate I2 forbids every module under `agent/`
+    except `constraints/stage0.py` and this one from importing
+    `agent.execution` at all."""
+    return SimExecutor(pop, seed, payday_err, burn_cycles=burn_cycles,
+                       **kw).collectable_days()
 
 
 def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
@@ -110,13 +136,20 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
              decline_kw: dict | None = None,
              p_missed_credit: float = 0.0,
              p_transient: float = 0.0, transient_h: int = 24,
+             burn_cycles: int = 0,
+             mandate_outflow: bool = False, disc_floor: float = 0.0,
              pooling: str = "all", consent_frac: float | None = None,
              use_llm: bool = False,
              llm_max_calls: int | None = 150,
              executor=None,
              last_attempt_backup: bool | None = None,
              remind_on_fail: bool | None = None,
-             legal_ceiling: int | None = None) -> dict:
+             legal_ceiling: int | None = None,
+             bracket: bool = False,
+             coverage: bool = False,
+             lookahead: int | None = None,
+             cycle_value: float = DEFAULT_CYCLE_VALUE,
+             plan: bool = False) -> dict:
     """One agent run over one population.
 
     `mode="degenerate"` is retry-only with the deterministic diagnoser: the
@@ -157,7 +190,10 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                                declines=declines,
                                p_missed_credit=p_missed_credit,
                                p_transient=p_transient,
-                               transient_h=transient_h)
+                               transient_h=transient_h,
+                               burn_cycles=burn_cycles,
+                               mandate_outflow=mandate_outflow,
+                               disc_floor=disc_floor)
     ledger = AttemptLedger()
     log = AuditLog(log_path, run_id)
     gate = Stage0Gate(executor, ledger, log)
@@ -203,6 +239,18 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
         # fixed schedule that could also nudge, escalate or stop is not a fixed
         # schedule -- it would carry part of the agent's action space into the
         # arm it is supposed to be the control for.
+        diagnoser = RetryOnlyDiagnoser()
+    if mode in ("payday_offsets", "payday_offsets_b1"):
+        # The STEELMANNED payday-anchored baseline. Same forcing as doc_legal
+        # and for the same reason: a baseline that could also nudge or stop
+        # would be carrying part of the agent's action space.
+        from agent.policy.payday_offsets import PaydayOffsetScheduler
+        from agent.policy.payday_offsets import B1_OFFSETS, GENERAL_OFFSETS
+        scheduler = PaydayOffsetScheduler(
+            executor.estimates,
+            offsets=(B1_OFFSETS if mode == "payday_offsets_b1"
+                     else GENERAL_OFFSETS),
+            cycle_days=pop[0]["cycle_days"])
         diagnoser = RetryOnlyDiagnoser()
 
     # W9. `pooling="all"` is the default and is what every published number
@@ -276,6 +324,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                            w3.NPCI_MAX)),
         bcfg=bcfg, bcfg_sha=hashlib.sha256(
             json.dumps(bcfg or {}, sort_keys=True).encode()).hexdigest()[:16],
+        cycle_value=cycle_value, plan=plan,
         outage=outage.asdict() if outage else None,
         declines=declines.asdict() if declines else None,
         use_llm=use_llm, llm_max_calls=llm_max_calls,
@@ -309,7 +358,9 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
                     remind_on_fail=(mode == "full"
                                     if remind_on_fail is None
                                     else remind_on_fail),
-                    legal_ceiling=legal_ceiling)
+                    legal_ceiling=legal_ceiling, bracket=bracket,
+                    coverage=coverage, lookahead=lookahead,
+                    cycle_value=cycle_value, plan=plan)
     res["run_id"] = run_id
     res["log_path"] = log_path
     res["mode"] = mode

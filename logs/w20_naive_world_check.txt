@@ -1,0 +1,16 @@
+ITEM 2 -- naive baseline world check. 50 runs, n=100, payday_err=7, pop_spend=0.93, pops 710-719.
+
+====================================================================================
+              cell   recovery    2 SE   cyc_rec    surv   at risk
+  naive  canonical     23.00%   +5.92    87.01%   85.9%       584
+   naive  no_runkw     22.94%   +3.74    66.62%   64.7%      1899
+  naive  old_world     20.25%   +1.40    51.08%   50.2%      6476
+  agent  canonical     89.54%   +5.41    98.53%   98.5%       584
+  [1,7]  canonical     90.88%   +3.28    97.62%  100.0%       584
+====================================================================================
+  logged suite value for naive at payday_err=7 was 23.00%. This run: 23.00%  REPRODUCES
+  no_runkw  22.94%   old_world 20.25%
+  the settings REACHED the arm iff those differ from 23.00%.
+
+  agent - naive on the canonical world: +66.54 pts
+  [1,7] - naive on the canonical world: +67.88 pts

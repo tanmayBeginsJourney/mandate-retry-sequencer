@@ -20,20 +20,36 @@ or building on top of it. If you are building the agent, read
 **The shipping constants live in one place**, `sim/w3.py`:
 
 ```python
-FITTED_BELIEF = dict(stride=1, prior_w=9, prior_day0=8.0,
-                     prior_floor=0.5, spend_beta=0.0)
+FITTED_BELIEF = dict(stride=1, prior_w=5, prior_day0=8.0,
+                     prior_floor=0.1, spend_beta=0.0)
 ```
+
+⚠️ **This block said `prior_w=9, prior_floor=0.5` until 1 September 2026 and
+that was WRONG — it was stating constants the repository had stopped
+shipping.** The values above are what `sim/w3.py` actually carries. The agent
+also ships `cycle_value=0.6`, which lives in the objective rather than in this
+dict and has no entry here.
 
 Pass it as `harness.run(..., bcfg=w3.FITTED_BELIEF)`. Omitting it silently
 gives you the **old unfitted** filter, which is ~13 points worse — that is not
 a hypothetical, it is what gate **S4**'s mutant does on purpose.
 
-Selected by `sim/fit_belief.py` on 31 August 2026: two-pass coordinate search,
-mean cycle collection across `payday_err={1,3,5,7,10,14}`, training populations
-600–607. The previous shipping values (`prior_w=12`, `prior_floor=0.25`) scored
-slightly higher on held-out evaluation populations and slightly lower on the
-training objective. The train winner shipped; picking the eval winner would
-have fitted on the held-out set. Record: `sim/fitted_belief.json`. Error 12.
+**Selected by W24 on 1 September 2026, NOT by `sim/fit_belief.py`.** The
+shipping values were re-selected on the CANONICAL world (`pop_spend=0.93`,
+k~1+Poisson(1), statutory payday, burn-in 12, mandate outflow on) by mean
+recovery of at-risk cycles across `payday_err {1,3,7,14}` on train populations
+700–709, scored once on held-out 710–719 — the identical rule and grid that
+selected the `[1,7]` steelman, so both sides of that comparison are chosen the
+same way.
+
+`sim/fit_belief.py` **could not have found this value**: it scores on the
+pre-canonical world and its `prior_w` grid is `(5,7,9,12,15)`, which cannot
+reach the canonical optimum. `sim/fitted_belief.json` therefore records
+`matches_shipping=false` with that reason, and its `selected` block is left
+unchanged as what that search actually returned. Error 12.
+
+It is a **plateau, not a peak**: `prior_w` in {3,4,5} × `prior_floor` in
+{0.05,0.1} all land between 91.8 and 92.7 train mean, on a 2 SE of about 3.
 
 **Not gate-protected.** n=100, k=5, 120 days, `pop_spend=1.05`. Training mean
 94.90%; former shipping 94.53%; unfitted baseline 83.42%. Evaluation mean
@@ -61,6 +77,11 @@ never omitted.
 *n=100, 8 held-out populations (700–707), 120d, paired 2 SE. Not gate-protected;
 reproduce with `python sim/headline.py`.*
 
+⚠️ **SUPERSEDED 1 September 2026.** Pre-canonical world, and `payday_wait` is
+not a steelmanned baseline — it targets the estimated payday on its first
+attempt only, then retries daily, burning the NPCI cap in three days. Kept as
+the record.
+
 | Payday known to | `payday_wait` | **shipping** | oracle | difference |
 |---|---|---|---|---|
 | ±1 day | **99.24%** | 96.44% | 100% | **−2.81** ±0.46 SIG — heuristic wins |
@@ -70,8 +91,36 @@ reproduce with `python sim/headline.py`.*
 | ±10 days | 48.11% | **94.14%** | 100% | **+46.03** ±3.62 SIG |
 | ±14 days | 40.01% | **91.99%** | 100% | **+51.98** ±2.66 SIG |
 
-**The crossover is between ±1 and ±3 days.** Below that, build the heuristic.
-Above it, the gap is enormous and grows.
+*Every row above is superseded. Kept as the record.*
+
+### The current table, against a steelmanned fixed schedule
+
+`[1,7]`: two attempts at frozen offsets from the same noisy payday estimate the
+agent gets, selected once on train populations 700-709 and never re-tuned.
+Recovery of at-risk cycles, canonical world, `pop_spend=0.93`, held-out
+710-719, n=100. `py -3.12 agent/tests/test_steelman_schedule.py`.
+
+| Payday known to | `[1,7]` | **shipping** | difference |
+|---|---|---|---|
+| ±1 day | **99.75%** | 98.59% | **−1.16** — the fixed schedule wins |
+| ±3 days | **98.51%** | 98.18% | **−0.33** |
+| ±5 days | **96.63%** | 97.78% | **+1.15** |
+| ±7 days | 90.88% | 94.43% | +3.55 |
+| ±10 days | 66.93% | **90.76%** | **+23.83** |
+| ±14 days | 55.47% | **89.88%** | **+34.41** |
+
+**The crossover is between ±7 and ±10 days.** Below that, build the fixed
+schedule. Above it, the gap is large and grows. Against the old strawman the
+crossover looked like ±1 to ±3; steelmanning the baseline moved it by six
+days, and moved it onto the wrong side of what the payroll evidence suggests.
+
+⚠️ **SUPERSEDED 1 September 2026 (W24).** The payday prior was refitted on
+the canonical world (`prior_w` 9 -> 5, `prior_floor` 0.5 -> 0.1) and the
+mandate's continuation value was added to the objective (`cycle_value=0.6`).
+**The crossover is now at ±5, not between ±7 and ±10.** Held-out margins
+against `[1,7]`: −1.16 at ±1, −0.33 at ±3, +1.15 at ±5, +3.55 at ±7,
++23.83 at ±10, +34.41 at ±14. The figures above are the PRE-REPAIR agent and
+are kept as the record. `py -3.12 agent/tests/test_steelman_schedule.py`.
 
 The shipping filter sits at **92–96% from ±1 to ±14** while the heuristic falls
 from 99% to 40%.
@@ -118,21 +167,28 @@ the probability.**
 
 ### The cross-merchant moat
 
-**+8.34 pts (±1.36), gated as S2a_PD, on the filter that ships.** Unfitted
-S2a is +9.53 (±1.81) on the same populations.
+**+7.32 pts (±2.02), gated as S2a_PD, on the filter that ships.** Unfitted
+S2a is +9.53 (±1.81) on the same populations. Re-measured 1 September 2026;
+`logs/w26_gate_full_moat_remeasure.txt`.
 
-⚠️ **AND IT IS THE HARD-WORLD FIGURE. Added 30 August 2026 (W9).** Measured
-in the agent at two calibrations, pooling is worth **+8.46 pts (±1.07) at
-`pop_spend=1.05` and +3.38 (±0.39) at `pop_spend=0.80`** — a factor of 2.5
-across the same range the headline is already reported over. Every existing
-quotation of +9.53 in this repository is the unfitted hard-world number.
-Quote S2a_PD for the shipping filter; quote +3.38 beside it for the
+⚠️ **AND IT IS THE HARD-WORLD FIGURE. Added 30 August 2026 (W9), re-measured
+1 September 2026.** Measured in the agent at two calibrations, pooling is worth
+**+6.47 pts (±0.62) at `pop_spend=1.05` and +1.30 (±0.42) at `pop_spend=0.80`**
+— a factor of five across the same range the headline is already reported over.
+Every existing quotation of +9.53 in this repository is the unfitted hard-world
+number. Quote S2a_PD for the shipping filter; quote +1.30 beside it for the
 calibration that matches the published failure rate. `02_RESULTS.md`, W9;
 `python agent/tests/test_pooling_consent.py` for the 0.80 cell, not
 gate-protected.
 
-S2a_PD and the agent W9 figure at 1.05 agree to a point (8.34 gated harness
-vs 8.46 ungated agent). Do not average them.
+**S2a_PD and the agent W9 figure no longer agree to a point.** They read 7.32
+(gated harness) and 6.47 (ungated agent), 0.85 apart with overlapping intervals.
+Until the W24 refit they were 8.34 and 8.46 and this section said they agreed;
+that sentence is **withdrawn** and both figures are **superseded**. The gap has a named cause rather than being noise to
+be waved at: the W24 change shipped as a **pair** — a narrower payday prior plus
+`cycle_value=0.6` — and `sim/harness.py` prices no continuation value, so every
+harness-path measurement sees the prior without its partner. Do not average
+them, and do not present the harness figure as the agent's.
 
 ⚠️ **Do NOT quote S2c (+23.62) as independent evidence.** For paired means it is
 algebraically S2a + |S2b|, and S2b is placebo *damage*, not pooling benefit. See
@@ -148,12 +204,14 @@ fixed:
 
 | `payday_day0_frac` | `payday_wait` | **shipping** | `ml_index` | shipping − ml |
 |---|---|---|---|---|
-| 0.2 | 55.60% | **90.79%** | 76.59% | **+14.20** ±2.24 SIG |
-| 0.4 | 58.70% | **93.31%** | 82.29% | +11.02 ±1.62 SIG |
-| 0.6 ← fitted here | 59.14% | **95.63%** | 86.18% | +9.44 ±1.84 SIG |
-| 0.8 | 58.58% | **97.26%** | 91.38% | +5.87 ±1.05 SIG |
+| 0.2 | 55.60% | **91.75%** | 76.59% | **+15.16** ±2.12 SIG |
+| 0.4 | 58.70% | **93.03%** | 82.29% | +10.75 ±1.49 SIG |
+| 0.6 ← fitted here | 59.14% | **94.79%** | 86.18% | +8.60 ±1.99 SIG |
+| 0.8 | 58.58% | **95.36%** | 91.38% | +3.98 ±1.53 SIG |
 
-**No cliff.** 4.84 points of gentle, monotone degradation across a 4× change in
+*Re-measured 1 September 2026 on the shipped belief, `logs/w27_stress_day0_repaired.txt`. The superseded column read 90.79 / 93.31 / 95.63 / 97.26 with 4.84 points of degradation.*
+
+**No cliff.** 3.04 points of gentle, monotone degradation across a 4× change in
 the parameter; never falls below the *unfitted* filter; stays 35–39 points above
 `payday_wait` throughout. And the margin over ML **grows** as the population
 moves away from the fit, because `prior_day0` is a *prior* that evidence
@@ -170,10 +228,10 @@ rather than by an empty account — costs, swept:
 
 | `p_limit` | 0.00 | 0.05 | 0.15 |
 |---|---|---|---|
-| vs rate 0 | **+0.000** | **−2.87** | **−13.46** |
+| vs rate 0 | **+0.000** | **−2.29** | **−9.22** |
 
 `[GUESS]` throughout; the NPCI code list names `Z8` and `IE` without saying how
-often they fire. **Never quote −13.46 on its own** — it is the top of a guessed
+often they fire. **Never quote −9.22 on its own** — it is the top of a guessed
 range, the curve is steeply superlinear, and interpolating the middle is not
 safe. `02_RESULTS.md` has the mechanism: it is the one failure family where the
 money IS there, and the frozen policy re-presents the same amount until the cap
@@ -279,7 +337,7 @@ as the record of what was wrong. Do not reintroduce it.
 | Gate | State | Why it is red |
 |---|---|---|
 | **S1** | FAIL | Calibration of `w3.Belief` (point-estimate payday) via `portfolio`. ECE 0.091 — *inside* the 0.10 bound — but the reliability curve is **not monotone**. **S1 does not measure the shipping filter**; that was error 9. |
-| **S1_PD** | FAIL | The same threshold on the filter that *does* ship. ECE **0.029**, still not monotone. Fitting halved the error and did not order the curve. The remaining break is structural: the filter models no balance floor at zero, and approximates the world's hourly `U(0.4,1.6)` spend jitter with a fixed 3-tap kernel. **Neither is a parameter you can fit.** |
+| **S1_PD** | FAIL | The same threshold on the filter that *does* ship. ECE **0.025**, still not monotone. Fitting halved the error and did not order the curve. The remaining break is structural: the filter's **diffusion leaks through the balance floor it does model** (the drain rounds to zero bins for 22 of 30 days and `np.convolve(..., "same")` discards its end taps), and it approximates the world's hourly `U(0.4,1.6)` spend jitter with a fixed 3-tap kernel. **Neither is a parameter you can fit.** *(This row previously said "the filter models no balance floor at zero". That attribution was WRONG and is corrected: `_shift` piles mass at bin 0 on every drain. See `sim/known_failures.txt`.)* |
 | ~~**M1**~~ | ✅ **GREEN** | Was VACUOUS: the mutant could not trip the counter at either operating point, because the deepest any mandate-cycle reaches is 3 attempts at ±1d and 4 at ±7d against `NPCI_MAX=4`, so a 5th attempt never happened. **Fixed 30 August 2026** by running the mutant at `cap_override=2`, which tests the counter mechanism rather than the NPCI-specific value. The attempt-cap claim now has a working test. |
 | **S2b** | FAIL | The placebo control is not neutral (−14.09 pts). Extra unmatched `observe()` calls damage this filter: a donor-balance outcome, a label-shuffle of real outcomes, and a posterior-predictive draw were all worse than own on the T9 population (NOTES.md, 31 August). Neutrality versus own is the wrong property. Quote S2a / S2a_PD, never S2c. |
 | **S2_LEGACY** | FAIL | The retired point-estimate S2, kept unchanged and failing on purpose so the S2 rewrite is auditable rather than looking like test-loosening. Goes only when the point-estimate architecture is formally removed. |
@@ -526,13 +584,26 @@ this event or the auditor will correctly report violations that did not happen.*
 Say this plainly and do not let it drift:
 
 - The action space (retry / wait / nudge / escalate / stop) is worth
-  **+1.371 pts at a 120-day horizon**, and that figure is a **curve over the
-  horizon** (+0.563 at 60d, +1.790 at 180d), not a constant. Its entire channel
-  is mandate-death prevention.
-- The context layer (outage detection) is worth **+0.058 pts at severity 0.80**
-  (`suppress`, not significant on the adopted prior; re-run 31 August 2026),
-  which is the most extreme setting swept and a pure `[GUESS]`. **Pausing on
-  outage is significantly NEGATIVE at severity 0.40 (-0.529, SIG).**
+  **+0.136 pts at a 120-day horizon against a 2 SE of 0.205** on the frozen
+  world — **not significant**, so the honest statement is that the action space
+  has no measured effect on recovery at the shipping belief. Only the funding
+  nudge at `p=0.25` and `p=0.50` clears its interval (+0.353 and +0.387).
+  Its channel is mandate-death prevention, and the per-population gain still
+  correlates with deaths avoided (r = +0.758, was +0.926). **It is no longer a
+  curve that grows with the horizon**: on the shipped belief the gain is −0.053
+  at 60 days, +0.136 at 120 and +0.010 at 180, none of them significant, and
+  pre-registered check E-MECH-1 BROKE on that non-monotonicity
+  (`logs/w27_stop_mech_repaired.txt`, record 2/4). Re-measured 1 September 2026,
+  `logs/w27_abl_action_repaired.txt`. *(The **+0.498** this bullet carried was
+  measured on the pre-W24 belief, and the +1.371 / +0.563 / +1.790 triple
+  before it was pre-canonical. Both are superseded.)*
+- The context layer (outage detection) is worth **0.000 pts at severities 0.00
+  and 0.15, +0.017 at 0.40 and +0.051 at 0.80, none of them significant**, on
+  the frozen world, `pause` and `both` alike and `suppress` flat throughout
+  (`logs/w27_abl_outage_repaired.txt`). Severity is a pure `[GUESS]`. *(The
+  "0.000 at every severity swept" phrasing this bullet used to carry was
+  measured on the pre-W24 belief and is superseded — the conclusion is
+  unchanged, the literal zeros are not.)*
 - `NUDGE` is worth approximately zero and credits no money. `ESCALATE` is a
   zero-credit workflow action. `PARTIAL` is a recommendation only - its legality
   under one mandate is unestablished.
@@ -561,10 +632,12 @@ crossover is between severity 0.40 and 0.80 and severity is a pure `[GUESS]`.
 Do not present either agent number as "money recovered". The money number is
 still the one in section 2, and `payday_wait` is still a permanent row beside it.
 
-**UPDATED 29 August 2026 - there is now a measured batch number, in section
-7b:** **98.01% against `payday_wait`'s 57.70%, +40.30 pts (2 SE 2.32, SIG)**,
-Rs 6,203,060, zero Stage 0 refusals with an independent recount of zero. Run it
-with `python -m agent.batch_report --llm`. The capability claim in this section
+**There is a measured batch number, in section 7b:** **99.38% against
+`payday_wait`'s 90.29%, +9.08 pts (2 SE 2.01, SIG)**, Rs 7,511,500, zero Stage 0
+refusals with an independent recount of zero. Run it with
+`py -3.12 -m agent.batch_report --pops 10 --canonical`. *(98.01% / 57.70% /
++40.30 / Rs 6,203,060 is SUPERSEDED: measured before errors 33-35 were
+fixed.)* The capability claim in this section
 stands unchanged beside it.
 
 ---
@@ -602,9 +675,9 @@ the registered answers, the rubric and the baseline share one author.*
 The full 40-case eval table is historical. Do not quote 6/21 vs 9/21 as
 shipping evidence — those are cases the rules own in production.
 
-**Batch:** deterministic **98.01%** against `payday_wait` **57.70%**,
-**+40.30 pts (2 SE 2.32, SIG)**, ₹6,203,060 recovered, **zero Stage 0 refusals
-with the independent auditor recounting zero over 9,428 executed money
+**Batch:** deterministic **99.38%** against `payday_wait` **90.29%**,
+**+9.08 pts (2 SE 2.01, SIG)**, ₹7,511,500 recovered, **zero Stage 0 refusals
+with the independent auditor recounting zero over 8,702 executed money
 actions**. No LLM column in the money table; `--llm` measures the overlay beside
 the deterministic arm.
 

@@ -779,6 +779,11 @@ class StopRule(Enum):
     ESCALATED = "ESCALATED"
     AGENT_STOP = "AGENT_STOP"       # the diagnosis layer chose STOP
     LAST_ATTEMPT_HELD = "LAST_ATTEMPT_HELD"  # 4th debit replaced by unpaid backup link
+    # The timing policy declined the LAST attempt of a cycle because the odds
+    # of collecting did not cover the mandate's remaining cycles. Distinct from
+    # LAST_ATTEMPT_HELD, which is the backup-link path and says nothing about
+    # probability. See agent/policy/timing.py, the continuation value.
+    MANDATE_PRESERVED = "MANDATE_PRESERVED"
     # Batch-wide legal maximum: n_mandates × 4 × cycles in the horizon.
     # Circuit breaker, not a consumable. Fires only if a per-mandate cap bug
     # would exceed that total. Expected count 0 on a clean run.

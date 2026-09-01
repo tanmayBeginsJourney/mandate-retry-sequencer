@@ -34,11 +34,32 @@ with `docs/`, `docs/` still wins and the disagreement is a bug in the rewrite �
 fix it rather than leaving both.
 
 ⚠️ **The headline is conditional on `pop_spend` as well as on `payday_err`.**
-The uplift runs **+3.52 → +36.48** across the plausible range of world hardness
-and is **+6.36** at `pop_spend=0.80`, where the world's failure rate matches the
-published record. Both artifacts now say so. **The operating point moves again
-when W7 lands, so expect to restate these once more — and do it in every place
-at once.** `grep -rn "40.30\\|36.48\\|98.01" README.md docs/` finds them.
+**Restated 1 September 2026 on the canonical world; the +3.52 -> +36.48 range
+and the +6.36 at `pop_spend=0.80` are superseded.** `pop_spend` is now one minus
+the RBI household saving rate, scored across the region **[0.80, 0.93]** with no
+point declared, and the uplift over `payday_wait` runs **+0.93 -> +9.08** across
+it. Below 0.90 the world carries too few at-risk cycles to measure a difference
+at all -- two of them at 0.80, across a thousand customers. The batch headline
+is **99.38% / 90.29% / +9.08 pts (2 SE 2.01) / Rs 7,511,500**.
+`grep -rn "40.30\|36.48\|98.01" README.md docs/` finds any survivor, and
+`py -3.12 sim/verify_docs.py` fails on one that is not marked as withdrawn.
+
+⚠️ **AND THE AGENT LOSES TO A STEELMANNED FIXED SCHEDULE BELOW +/-7 DAYS.**
+`payday_wait` is not a strong baseline. Against `[1,7]` -- two attempts at
+frozen offsets from the same noisy payday estimate -- the agent is behind by
+9.17 points at `payday_err=1`, 7.83 at +/-3 and 6.14 at +/-5, level at +/-7, and
+ahead only from between +/-7 and +/-10 upward. Real payday uncertainty in India
+is unmeasured and the payroll evidence points at the losing side. Do not quote
+the `payday_wait` margin without this beside it.
+`py -3.12 agent/tests/test_steelman_schedule.py`.
+
+⚠️ **SUPERSEDED 1 September 2026 (W24).** The payday prior was refitted on
+the canonical world (`prior_w` 9 -> 5, `prior_floor` 0.5 -> 0.1) and the
+mandate's continuation value was added to the objective (`cycle_value=0.6`).
+**The crossover is now at ±5, not between ±7 and ±10.** Held-out margins
+against `[1,7]`: −1.16 at ±1, −0.33 at ±3, +1.15 at ±5, +3.55 at ±7,
++23.83 at ±10, +34.41 at ±14. The figures above are the PRE-REPAIR agent and
+are kept as the record. `py -3.12 agent/tests/test_steelman_schedule.py`.
 
 ⚠️ **The README's Limitations section lists ONLY what cannot be fixed from
 here** — unobtainable data, unpublished decline rates, unresolved law,
@@ -495,9 +516,16 @@ policies. Error 13's remaining gap was the moat and the lock, not the
 mutants.
 
 **The pooling claim is resolved and is not blocked by S2b.** S2a_PD passes at
-+8.34 pts (±1.36) on the filter that ships. Unfitted S2a is +9.53 pts (±1.81).
+**+7.32 pts (±2.02)** on the filter that ships — re-measured 1 September 2026 on
+the shipped constants, `logs/w26_gate_full_moat_remeasure.txt`. Unfitted S2a is
++9.53 pts (±1.81) and did not move, because it does not read `FITTED_BELIEF`.
 S2c (+23.62) is algebraically S2a + |S2b| and must **not** be quoted as
 independent evidence.
+
+~~S2a_PD passes at +8.34 pts (±1.36).~~ **SUPERSEDED 1 September 2026.** That
+figure was measured with `prior_w=9, prior_floor=0.5`. The prior was re-selected
+on the canonical world (W24) and S2a_PD moved by construction, not by chance.
+Do not quote +8.34 anywhere.
 
 Do not "fix" any of these by loosening a threshold. S1's 0.10 bound was
 declared in `05_TEST_DESIGN.md` before any result was seen, and S1_PD uses the

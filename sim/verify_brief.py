@@ -45,8 +45,12 @@ check("w3.PEAK", sorted(w3.PEAK), [10, 11, 12, 17, 18, 19, 20, 21])
 check("harness.LOOKAHEAD_DAYS", harness.LOOKAHEAD_DAYS, 12)
 check("harness.P_TECH", harness.P_TECH, 0.008)
 check("(w3.Z9, w3.TECH, w3.OK)", (w3.Z9, w3.TECH, w3.OK), ("Z9", "TECH", "OK"))
+# Re-selected on the canonical world 1 September 2026 (W24): prior_w 9 -> 5,
+# prior_floor 0.5 -> 0.1. This literal is a TRANSCRIPTION of what
+# docs/07_AGENT_BRIEF.md prints, so it must move in the same commit the brief
+# does -- updating one without the other is what makes this checker vacuous.
 check("w3.FITTED_BELIEF", w3.FITTED_BELIEF,
-      dict(stride=1, prior_w=9, prior_day0=8.0, prior_floor=0.5,
+      dict(stride=1, prior_w=5, prior_day0=8.0, prior_floor=0.1,
            spend_beta=0.0))
 check("index_score signature",
       list(w3.index_score.__code__.co_varnames[:4]),

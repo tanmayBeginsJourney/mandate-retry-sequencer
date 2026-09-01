@@ -256,6 +256,205 @@ RETRACTIONS = [
             "Measured 30 Aug 2026.",
         retracted_on="2026-08-30",
     ),
+    Retraction(
+        id="old-headline-4030",
+        pattern=r"98\.01|57\.70|\+?40\.30|6,203,060",
+        why="The batch headline is 99.37% against payday_wait's 90.29%, "
+            "+9.08 pts (2 SE 2.01), Rs 7,496,430, over 10 held-out "
+            "populations on the canonical world. The 98.01/57.70/+40.30/"
+            "Rs 6,203,060 figures were measured on a world with no steady "
+            "state, mandate outflow missing and k fixed at an invented 5 "
+            "(NOTES.md errors 33-35, 1 Sep 2026). Reproduce the current one "
+            "with `py -3.12 -m agent.batch_report --pops 10 --canonical`.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="uplift-curve-3648",
+        pattern=r"\+?36\.48|\+3\.52 (to|->|-)|\+2\.81 (to|->|-)",
+        why="pop_spend is now an externally derived REGION [0.80, 0.93] -- "
+            "one minus the RBI household saving rate -- and the uplift across "
+            "it runs +0.93 to +9.08, not +3.52 to +36.48. pop_spend=1.05 is "
+            "off the scale entirely. Below 0.90 the world carries too few "
+            "at-risk cycles to measure a difference: 2 at 0.80. "
+            "logs/w21_conditional_canonical.txt.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="crossover-1-to-3",
+        pattern=r"crossover (sits |is )?(between|at) .{0,4}(1|one) and .{0,6}(3|three)"
+                r"|above or below ~?4 days",
+        why="Against the STEELMANNED fixed schedule [1,7] the crossover is "
+            "between +/-7 and +/-10 days, not +/-1 to +/-3. `payday_wait` is "
+            "not a steelman: it targets the estimated payday on its first "
+            "attempt only, then retries daily and burns the NPCI cap in three "
+            "days. agent/tests/test_steelman_schedule.py.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="prerepair-agent-figures",
+        # Written without backslashes on purpose: this shell collapses
+        # them in heredocs, and an earlier version of this pattern
+        # shipped with a literal backspace byte where a word boundary
+        # was meant. The selftest caught it.
+        pattern=r"(?<![0-9.])88[.]40[ ]?%|(?<![0-9.])42[.]64[ ]?%|(?<![0-9.])82[.]7[ ]?%|(?<![0-9.])90[.]58[ ]?%|(?<![0-9.])90[.]68[ ]?%|(?<![0-9.])90[.]49[ ]?%|(?<![0-9.])89[.]54[ ]?%|(?<![0-9.])87[.]66[ ]?%|(?<![0-9.])86[.]14[ ]?%",
+        why="PRE-REPAIR FIGURES. These are the agent measured under the OLD "
+            "belief constants (prior_w=9, prior_floor=0.5, no continuation "
+            "value). On the shipped defaults the same measurements are: V5 "
+            "95.24%, V7 42.97%, V7 capture 83.4%, and the steelman rows "
+            "98.59 / 98.18 / 97.78 / 94.43 / 90.76 / 89.88 across payday_err "
+            "1/3/5/7/10/14. Re-measured 1 September 2026 -- "
+            "logs/w24_canonical_repaired.txt and "
+            "agent/tests/test_steelman_schedule.py. A FIGURE is a current "
+            "claim even when the sentence around it carries no stale framing, "
+            "which is why this rule is separate from crossover-7-to-10: that "
+            "one caught the WORDS and every number beside them stayed live.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="crossover-7-to-10",
+        pattern=r"crossover (sits |is )?(between|at) .{0,6}(7|seven) and .{0,7}(10|ten)"
+                r"|above or below (about )?ten days"
+                r"|behind by 9\.17|9\.17 points at|7\.83 at|6\.14 at",
+        why="SUPERSEDED 1 September 2026 by W24. The payday prior was refitted "
+            "on the canonical world (prior_w 9 -> 5, prior_floor 0.5 -> 0.1) "
+            "and the mandate's continuation value was added to the objective "
+            "(cycle_value=0.6). On held-out populations 710-719 the margin "
+            "against [1,7] is -1.16 at payday_err=1, -0.33 at 3, +1.15 at 5, "
+            "+3.55 at 7, +23.83 at 10 and +34.41 at 14, so the CROSSOVER IS AT "
+            "+/-5, not between +/-7 and +/-10. The -9.17 / -7.83 / -6.14 "
+            "figures are the pre-repair agent. "
+            "agent/tests/test_steelman_schedule.py.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="action-space-1371",
+        pattern=r"1\.371|\+?0\.563 (pts|points)|1\.790 (pts|points)",
+        why="On the canonical world the action space is worth +0.498 pts at "
+            "120 days, -0.102 at 60 and +0.845 at 180. STOP and ESCALATE are "
+            "0.000 and never fire; the whole gain is the last-attempt hold, "
+            "which correlates with deaths avoided at r=+0.926. "
+            "logs/w17_abl_stop_canonical.txt.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="v7-all-cycles-denominator",
+        pattern=r"35\.8% of at-risk|mean \*?\*?14\.7 days",
+        why="Those are the ALL-CYCLES figures, not the at-risk ones. On "
+            "at-risk cycles the due-date-to-money gap averages 9.40 days and "
+            "59.8% have money inside ten days. W6 was specified against the "
+            "wrong denominator. The measured V7 ceiling is 51.5% and the "
+            "agent reaches 42.64%, so it is BELOW the ceiling, not above it.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="outage-pause-negative",
+        pattern=r"-0\.529|\+0\.058 (pts|points)",
+        why="On the canonical world outage detection is worth 0.000 pts at "
+            "every severity swept (0.00, 0.15, 0.40, 0.80) for pause, "
+            "suppress and both alike, and none is significant. "
+            "logs/w17_abl_outage_canonical.txt.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="stale-pooling-moat",
+        # Bare figures, guarded so a longer number containing them (1.363,
+        # 38.34) does not trip the rule. Written without backslash-d for the
+        # reason recorded on `prerepair-agent-figures`.
+        pattern=r"(?<![0-9.])8[.]34(?![0-9])"
+                r"|(?<![0-9.])8[.]46(?![0-9])"
+                r"|(?<![0-9.])8[.]20 unfitted"
+                r"|(?<![0-9.])3[.]38(?![0-9])"
+                r"|(?<![0-9.])3[.]86(?![0-9])"
+                r"|(?<![0-9.])4[.]79 (pts|points)"
+                r"|(?<![0-9.])1[.]4[8] at 0[.]80"
+                r"|(?<![0-9.])1[.]50 at 0[.]80"
+                r"|agree to a point",
+        why="STALE POOLING MOAT. These were measured with prior_w=9, "
+            "prior_floor=0.5 -- the belief constants replaced by W24 on "
+            "1 September 2026. S2a_PD is now +7.32 pts (+/-2.02), not +8.34 "
+            "(+/-1.36); the agent W9 figure is +6.47 (+/-0.62) at "
+            "pop_spend=1.05 and +1.30 (+/-0.42) at 0.80, not +8.46 and +3.38; "
+            "half-consent costs 2.77 and 0.57, not 3.86/1.50 or 4.79/1.48. "
+            "S2a (unfitted, +9.53 +/-1.81) did NOT move and is not covered "
+            "here. S2a_PD and W9 no longer 'agree to a point' -- they are 0.85 "
+            "apart, because sim/harness.py prices no continuation value and so "
+            "measures the W24 prior without the cycle_value=0.6 it shipped "
+            "with. Re-measured in logs/w26_gate_full_moat_remeasure.txt and "
+            "logs/w26_w9_pooling_consent_remeasure.txt. A FIGURE is a current "
+            "claim: quoting +8.34 next to correct prose is still a false "
+            "statement, which is why this rule catches digits and not framing.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="stale-action-ablation",
+        pattern=r"(?<![0-9.])0[.]498(?![0-9])"
+                r"|(?<![0-9.])2[.]064(?![0-9])"
+                r"|(?<![0-9.])0[.]651(?![0-9])"
+                r"|(?<![0-9.])0[.]532(?![0-9])"
+                r"|(?<![0-9.])1[.]363(?![0-9])"
+                r"|(?<![0-9.])2[.]889(?![0-9])"
+                r"|(?<![0-9.])98[.]81\s?%",
+        why="STALE ACTION-SPACE ABLATION. Re-measured on the canonical world "
+            "and the SHIPPED belief on 1 September 2026: the whole action "
+            "space is +0.136 pts against a 2 SE of 0.205 -- NOT SIGNIFICANT. "
+            "Only NUDGE at p=0.25 and p=0.50 clears its interval (+0.353, "
+            "+0.387). Degenerate collection is 99.21%, not 98.81%. "
+            "logs/w27_abl_action_repaired.txt. Three generations of this "
+            "figure are now retired: +1.371 (pre-canonical, see "
+            "action-space-1371), +2.064 (pre-canonical, other conditions), and "
+            "+0.498 (canonical world, PRE-W24 belief). ESCALATE and STOP are "
+            "still worth exactly 0.000 and still never fire -- that is the one "
+            "claim here that survived every re-measurement.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="outage-exactly-zero",
+        pattern=r"0[.]000 (pts|points) at every severity"
+                r"|every arm at every severity is 0[.]000"
+                r"|0[.]000 points at\s+every",
+        why="On the SHIPPED belief the outage ablation is +0.000 at severities "
+            "0.00 and 0.15, +0.017 at 0.40 and +0.051 at 0.80 -- none of them "
+            "significant. logs/w27_abl_outage_repaired.txt. The CONCLUSION is "
+            "unchanged and always has been (acting on outage detection buys "
+            "nothing this experiment can measure), but the literal zeros were "
+            "the pre-W24 belief. Quote the intervals, not the zeros: a column "
+            "of exact zeros reads as a stronger claim than the data supports.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="stale-shipping-constants",
+        # Only as a STATEMENT of what ships. The W24 arrows ("prior_w 9 -> 5")
+        # are the record of the change and must stay quotable, so the pattern
+        # requires the assignment form and not the arrow form.
+        pattern=r"prior_w\s*=\s*9(?![0-9])"
+                r"|prior_floor\s*=\s*0[.]5(?![0-9])"
+                r"|prior_w\s*=\s*12(?![0-9])"
+                r"|prior_floor\s*=\s*0[.]25(?![0-9])",
+        why="THE SHIPPING CONSTANTS ARE prior_w=5, prior_floor=0.1 since W24 "
+            "on 1 September 2026, plus cycle_value=0.6 in the agent's "
+            "objective. docs/06_MODEL_CARD.md published prior_w=9, "
+            "prior_floor=0.5 as the shipping block for a full day after the "
+            "change -- a document stating constants the code had stopped "
+            "carrying. Historical mentions are fine next to a marker; a live "
+            "assignment is not. Write the change as an arrow (prior_w 9 -> 5) "
+            "when recording it, which this rule deliberately does not match.",
+        retracted_on="2026-09-01",
+    ),
+    Retraction(
+        id="no-balance-floor",
+        pattern=r"no balance floor at zero"
+                r"|models no balance floor"
+                r"|does not model the balance floor",
+        why="WRONG MECHANISM, corrected 1 September 2026 (W24). The floor IS "
+            "modelled -- `_shift` piles mass at bin 0 on every drain. What is "
+            "broken is the DIFFUSION: the modelled drain rounds to zero bins "
+            "for 22 of a cycle's 30 days, and np.convolve(p, k, 'same') "
+            "discards the end taps, so 12% of the mass in bin 0 falls off the "
+            "bottom daily and renormalisation pushes it back up. The filter "
+            "manufactures money. sim/known_failures.txt carries the corrected "
+            "attribution and w3.BeliefPD(monotone_drain=True) is the repair.",
+        retracted_on="2026-09-01",
+    ),
 ]
 
 
@@ -314,6 +513,10 @@ def selftest() -> int:
         "no-request-ever-sent": "No API key is used and no request has ever been sent.",
         "headline-one-parameter": "The headline is conditional on one parameter.",
         "six-red-gates": "Six gates are red on a clean checkout.",
+        # Added 1 Sep 2026: this rule shipped on 31 Aug with no canary, so it
+        # was an untested tripwire for a day -- the exact shape of defect the
+        # selftest exists to catch.
+        "only-3-of-25-shipping": "Only 3 of 25 gates run the shipping filter.",
         "retired-headline": "Collection went from 41.7% to 76.3% in the study.",
         "readme-150-lines": "README.md the front door. Under 150 lines, on purpose.",
         "stale-error-count": "There are twenty-seven errors in this project.",
@@ -321,6 +524,35 @@ def selftest() -> int:
         "llm-score-is-a-floor": "Every score is at low and 10/21 may be a floor.",
         "nothing-to-diagnose": "The LLM does not move the money because there is nothing to diagnose.",
         "w7-moves-three-targets": "W7 is the only item that moves three validation targets.",
+        "old-headline-4030": "The agent collects 98.01% against the baseline's 57.70%, +40.30 pts, Rs 6,203,060.",
+        "uplift-curve-3648": "The uplift runs +3.52 to +36.48 across the plausible range.",
+        "crossover-1-to-3": "The crossover sits between +/-1 and +/-3 days.",
+        "prerepair-agent-figures":
+            "Recovery under smart retry timing is 88.40%, the agent reaches "
+            "42.64% inside ten days, and it collects 90.58% at +/-1 day.",
+        "crossover-7-to-10": "The crossover sits between +/-7 and +/-10 days, "
+                             "and the agent is behind by 9.17 points at "
+                             "payday_err=1.",
+        "action-space-1371": "The action space is worth 1.371 pts at a 120-day horizon.",
+        "v7-all-cycles-denominator": "Only 35.8% of at-risk cycles have money inside ten days.",
+        "outage-pause-negative": "Pausing on outage measured -0.529 points and is significant.",
+        "stale-pooling-moat":
+            "Pooling is worth +8.34 pts on the shipping filter and +3.38 at "
+            "pop_spend=0.80; the agent measures +8.46, so S2a_PD and W9 "
+            "agree to a point, and half consent costs 3.86 and 1.50 at 0.80.",
+        "stale-action-ablation":
+            "The action space is worth +0.498 pts at 120 days, +1.363 at 60 "
+            "and +2.889 at 180, against a policy collecting 98.81% of cycles; "
+            "the pre-canonical figure was +2.064 with NUDGE at +0.651 and "
+            "+0.532.",
+        "outage-exactly-zero":
+            "The context layer is worth 0.000 pts at every severity swept.",
+        "stale-shipping-constants":
+            "FITTED_BELIEF = dict(stride=1, prior_w=9, prior_day0=8.0, "
+            "prior_floor=0.5, spend_beta=0.0)",
+        "no-balance-floor":
+            "The remaining break is structural: the filter models no balance "
+            "floor at zero.",
     }
     print("SELFTEST -- every rule must fire on a sentence it is meant to catch")
     print("=" * 74)

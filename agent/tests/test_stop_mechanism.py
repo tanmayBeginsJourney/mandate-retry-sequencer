@@ -61,8 +61,10 @@ if PKG not in sys.path:
 
 import numpy as np
 
-POPS = [700, 701, 702, 703, 704, 705, 706, 707]
-N, K, SPEND, PE, RUN_SEED = 100, 5, 1.05, 7, 7
+from agent.tests import _canonical as _CAN
+
+POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
+N, K, SPEND, PE, RUN_SEED = 100, 5, _CAN.spend(1.05), 7, 7
 HORIZONS = [60, 120, 180]
 
 
@@ -72,11 +74,14 @@ def _job(args):
     import agent  # noqa: F401
     import w3
     from agent.batch import make_pop, run_once
-    pop = make_pop(N, K, pop_seed, spend=SPEND, days=days)
+    from agent.tests import _canonical as _C
+    pop = make_pop(N, K, pop_seed, spend=SPEND, days=days,
+                   **_C.pop_kwargs(pop_seed))
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         r = run_once(pop, RUN_SEED, payday_err=PE, pop_spend=SPEND,
                      bcfg=w3.FITTED_BELIEF,
-                     log_path=os.path.join(tmp, "a.jsonl"), **kw)
+                     log_path=os.path.join(tmp, "a.jsonl"),
+                     **_C.run_kwargs(), **kw)
         r.pop("log_path", None)
     return (label, pop_seed, days), r
 

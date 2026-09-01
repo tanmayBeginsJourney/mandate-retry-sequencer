@@ -74,9 +74,23 @@ def main() -> int:
     for pe, bkey, label in CONFIGS:
         bcfg = w3.FITTED_BELIEF if bkey == "fitted" else None
         for s in POPS:
+            # `cycle_value=0.0` IS THE POINT OF THIS LINE, not a convenience.
+            # Parity is defined against `harness.run("solo_shared_pd")`, whose
+            # objective is `w3.index_score` alone and has no continuation
+            # value. The agent's shipping default is
+            # `timing.DEFAULT_CYCLE_VALUE = 0.6`, so an agent run at the
+            # default is deliberately NOT the harness's policy and cannot be
+            # bit-identical to it.
+            #
+            # Pinning it to zero keeps this gate measuring what it was built to
+            # measure -- that the belief filter, the forecast and the index
+            # arithmetic are reproduced exactly -- rather than quietly
+            # redefining parity to include a term the reference does not have.
+            # Zeroing it is not loosening the test: every float the gate
+            # compares is still produced by the same code path.
             ajobs.append(((label, s), POP_SPEC(s), RUN_SEED,
                           dict(payday_err=pe, pop_spend=SPEND, bcfg=bcfg,
-                               mode="degenerate"), True))
+                               mode="degenerate", cycle_value=0.0), True))
             hjobs.append(((label, s), "solo_shared_pd", POP_SPEC(s), RUN_SEED,
                           dict(payday_err=pe, pop_spend=SPEND, bcfg=bcfg)))
     A = run_jobs(agent_job, ajobs)

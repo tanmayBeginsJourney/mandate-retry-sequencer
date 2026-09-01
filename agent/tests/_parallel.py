@@ -55,18 +55,25 @@ if PKG not in sys.path:
 def agent_job(spec):
     """spec = (key, pop_spec, run_seed, run_kwargs, want_audit).
 
-    pop_spec = (n, k, pop_seed, spend, days). Populations are rebuilt inside
-    the worker from their spec rather than pickled, exactly as sim/runner.py
-    does it -- `w3.make_pop` is deterministic in its seed, so this is
-    identity-preserving by construction.
+    pop_spec = (n, k, pop_seed, spend, days[, pop_kwargs]). Populations are
+    rebuilt inside the worker from their spec rather than pickled, exactly as
+    sim/runner.py does it -- `w3.make_pop` is deterministic in its seed, so
+    this is identity-preserving by construction.
+
+    THE OPTIONAL SIXTH ELEMENT is a dict of extra `w3.make_pop` keywords, added
+    31 August 2026 for W10 (`k_mean`, `payday_mode`, `amount_mode`). It follows
+    the pattern `sim/runner.py:build_pop` already uses for its own optional
+    tail: a five-element spec builds exactly the population it always did, so
+    every existing caller is untouched.
     """
     import tempfile
     key, pop_spec, run_seed, kw, want_audit = spec
     import agent  # noqa: F401
     from agent.batch import make_pop, run_once
 
-    n, k, pop_seed, spend, days = pop_spec
-    pop = make_pop(n, k, pop_seed, spend=spend, days=days)
+    n, k, pop_seed, spend, days = pop_spec[:5]
+    pop_kw = dict(pop_spec[5]) if len(pop_spec) > 5 else {}
+    pop = make_pop(n, k, pop_seed, spend=spend, days=days, **pop_kw)
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         r = run_once(pop, run_seed, log_path=os.path.join(tmp, "a.jsonl"), **kw)
         if want_audit:
@@ -87,8 +94,9 @@ def harness_job(spec):
     import agent  # noqa: F401
     import harness
     from agent.batch import make_pop
-    n, k, pop_seed, spend, days = pop_spec
-    pop = make_pop(n, k, pop_seed, spend=spend, days=days)
+    n, k, pop_seed, spend, days = pop_spec[:5]
+    pop_kw = dict(pop_spec[5]) if len(pop_spec) > 5 else {}
+    pop = make_pop(n, k, pop_seed, spend=spend, days=days, **pop_kw)
     return key, harness.run(policy, pop, run_seed, **kw)
 
 

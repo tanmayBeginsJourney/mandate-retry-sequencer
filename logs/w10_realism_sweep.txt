@@ -1,0 +1,82 @@
+W10 -- POPULATION REALISM. Pre-registered in NOTES.md, 31 Aug 2026.
+320 runs: 8 cells x 20 populations x 2 arms, n=40 120d payday_err=+/-7 pop_spend=0.8 (PINNED, not re-derived)
+  exploratory n=40; k mixture seed 4242
+
+========================================================================================================
+            cell             arm   V1 fail   recovery    2 SE    <=10d    surv  cyc_rec  at risk
+        base k=5           agent    13.68%     96.79%   +1.34    40.8%   99.7%   99.53%     1660
+        base k=5  fixed schedule    13.68%     25.96%   +2.49   100.0%   76.6%   76.65%     1660
+--------------------------------------------------------------------------------------------------------
+        R1 k~2.0           agent    10.23%     98.57%   +1.09    34.9%   99.7%   99.71%      528
+        R1 k~2.0  fixed schedule    10.23%     25.10%   +3.31   100.0%   80.5%   80.41%      528
+--------------------------------------------------------------------------------------------------------
+        R1 k~2.5           agent     9.56%     97.20%   +2.77    33.7%   99.6%   99.59%      586
+        R1 k~2.5  fixed schedule     9.56%     27.08%   +6.06   100.0%   81.8%   81.56%      586
+--------------------------------------------------------------------------------------------------------
+        R1 k~3.0           agent    11.53%     98.54%   +0.97    39.0%   99.8%   99.73%      888
+        R1 k~3.0  fixed schedule    11.53%     26.37%   +4.19   100.0%   78.5%   78.52%      888
+--------------------------------------------------------------------------------------------------------
+    R2 k~3.0+pay           agent     6.51%     98.77%   +0.92    42.6%   99.9%   99.78%      502
+    R2 k~3.0+pay  fixed schedule     6.51%     31.56%   +7.56   100.0%   88.9%   88.92%      502
+--------------------------------------------------------------------------------------------------------
+    R3 k~3.0+amt           agent    15.49%     92.13%   +2.55    37.8%   99.6%   99.04%     1193
+    R3 k~3.0+amt  fixed schedule    15.49%     25.25%   +2.82   100.0%   74.0%   74.09%     1193
+--------------------------------------------------------------------------------------------------------
+       ALL k~3.0           agent    10.79%     93.16%   +2.97    39.0%   99.6%   99.05%      831
+       ALL k~3.0  fixed schedule    10.79%     31.14%   +5.44   100.0%   83.7%   83.85%      831
+--------------------------------------------------------------------------------------------------------
+       ALL k~2.0           agent     7.19%     90.98%   +4.75    40.4%   99.3%   99.13%      371
+       ALL k~2.0  fixed schedule     7.19%     36.04%   +5.68   100.0%   89.6%   89.63%      371
+--------------------------------------------------------------------------------------------------------
+
+VALIDATION SCORECARD PER CELL -- published bands, none fitted
+========================================================================================================
+            cell                V1                V3                V5                V7   score
+        base k=5       13.68% HIT        25.96% HIT        96.79% miss       40.76% miss     2/4
+        R1 k~2.0       10.23% HIT        25.10% HIT        98.57% miss       34.87% miss     2/4
+        R1 k~2.5        9.56% HIT        27.08% HIT        97.20% miss       33.67% miss     2/4
+        R1 k~3.0       11.53% HIT        26.37% HIT        98.54% miss       39.01% miss     2/4
+    R2 k~3.0+pay        6.51% miss       31.56% HIT        98.77% miss       42.56% miss     1/4
+    R3 k~3.0+amt       15.49% miss       25.25% HIT        92.13% miss       37.81% miss     1/4
+       ALL k~3.0       10.79% HIT        31.14% HIT        93.16% miss       38.96% miss     2/4
+       ALL k~2.0        7.19% miss       36.04% HIT        90.98% miss       40.41% miss     1/4
+
+PRE-REGISTERED PREDICTIONS (NOTES.md, 31 Aug 2026, before this ran)
+========================================================================================================
+  BROKE  W10-1  V3 rises as k falls; at k~3.0 it lands in 28-45%
+           26.37% vs 25.96% at k=5
+  HELD   W10-2  V5 stays ABOVE 90% at every k -- k is not a V5 lever
+           R1 k~2.0=98.57%  R1 k~2.5=97.20%  R1 k~3.0=98.54%
+  BROKE  W10-3  V7 moves by LESS than 5 pts across the k range
+           base k=5=40.8%  R1 k~2.0=34.9%  R1 k~2.5=33.7%  R1 k~3.0=39.0%
+  HELD   W10-4  fixed-schedule survival rises >=3 pts from k=5 to k~2.0
+           76.6% -> 80.5%
+  BROKE  W10-5  R2 (statutory payday) moves all four targets by <3 pts
+           dV1=-5.01 dV3=+5.19 dV5=+0.23 dV7=+3.55
+  HELD   W10-7  R3 (amount decoupled) RAISES V1 by 1-5 pts at k~3.0
+           11.53% -> 15.49%
+  HELD   W10-8  R3 puts >40% of at-risk cycles in the bottom salary quartile
+           46.0% with R3, 21.9% without (policy-free, k=5)
+  HELD   W10-9  R3 drops V5 by <8 pts and it stays above 85%
+           98.54% -> 92.13%
+  BROKE  W10-10  R3 drops V7 by 2-10 pts
+           39.0% -> 37.8%
+  HELD   W10-11  after ALL three fixes the world still scores at most 2/4
+           ALL k~3.0 = 2/4, ALL k~2.0 = 1/4
+  HELD   W10-13  V1 under a mean-2 mixture is above fixed k=2 (7.66%) and lands in 8-11%
+           10.23% (fixed k=2 measured 7.66% policy-free)
+
+  Pre-registration record: 7/11
+
+  W10-6 and W10-12 are not scorable here. W10-6 predicts payday_err=7
+  becomes internally inconsistent with a statutory payday window and
+  needs a payday_wait comparison; W10-12 names the NEXT step and is
+  scored by whether topup_p and terminal declines are what close the
+  residual, which this run cannot answer.
+
+  BIAS. Every band above is [REPORTED], vendor-sourced, aggregating
+  non-comparable customer bases, and V5's 70-85% is what the source
+  calls TOP PERFORMERS -- its stated median is 47.6%. The k mixture
+  changes the number of RNG draws per customer, so cells with
+  different k are different worlds and not the same world with a
+  mechanism overlaid; only R2 and R3 hold the draw sequence fixed.

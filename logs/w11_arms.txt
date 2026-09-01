@@ -1,0 +1,83 @@
+W11 -- STATIONARITY. Pre-registered in NOTES.md, 31 Aug 2026.
+360 runs: 9 cells x 20 populations x 2 arms, n=40 120d payday_err=+/-7 pop_spend swept over (0.8, 0.85, 0.88, 0.9, 0.93) burn_cycles=12
+  buffer is in MULTIPLES OF ONE MONTHLY SALARY. CANONICAL is lognormal(median 0.25, sigma 1.0),
+  committed before this ran and NOT selected as the V1-optimal cell.
+
+========================================================================================================
+            cell             arm   V1 fail   recovery    2 SE    <=10d    surv  cyc_rec  at risk
+           today           agent    13.68%     96.79%   +1.34    40.8%   99.7%   99.53%     1660
+           today  fixed schedule    13.68%     25.96%   +2.49   100.0%   76.6%   76.65%     1660
+--------------------------------------------------------------------------------------------------------
+       burn only           agent     0.53%     27.22%  +19.63    18.1%   99.8%   99.84%       64
+       burn only  fixed schedule     0.53%      9.46%   +8.35    25.0%   99.4%   99.49%       64
+--------------------------------------------------------------------------------------------------------
+      canon 0.80           agent     2.68%     95.39%   +5.76    57.3%   99.8%   99.78%      325
+      canon 0.80  fixed schedule     2.68%     39.06%   +9.66    95.0%   96.2%   97.40%      325
+--------------------------------------------------------------------------------------------------------
+      canon 0.85           agent     8.09%     86.27%   +5.15    40.3%   99.0%   98.60%      982
+      canon 0.85  fixed schedule     8.09%     24.05%   +4.03   100.0%   90.5%   92.21%      982
+--------------------------------------------------------------------------------------------------------
+      canon 0.88           agent    13.17%     92.24%   +2.84    37.1%   99.3%   98.69%     1597
+      canon 0.88  fixed schedule    13.17%     23.06%   +3.67   100.0%   85.2%   87.37%     1597
+--------------------------------------------------------------------------------------------------------
+      canon 0.90           agent    17.43%     90.43%   +2.74    37.0%   98.9%   98.10%     2115
+      canon 0.90  fixed schedule    17.43%     20.83%   +3.31   100.0%   81.1%   83.54%     2115
+--------------------------------------------------------------------------------------------------------
+      canon 0.93           agent    25.72%     87.95%   +3.06    35.8%   98.1%   96.76%     3120
+      canon 0.93  fixed schedule    25.72%     19.35%   +2.42   100.0%   73.0%   75.91%     3120
+--------------------------------------------------------------------------------------------------------
+     R1R2R3 0.80           agent     2.13%     77.99%  +14.89    53.3%   99.7%   99.50%      101
+     R1R2R3 0.80  fixed schedule     2.13%     32.54%  +17.15    60.0%   97.0%   97.70%      101
+--------------------------------------------------------------------------------------------------------
+     R1R2R3 0.88           agent     9.74%     80.16%   +6.57    43.3%   98.0%   97.46%      458
+     R1R2R3 0.88  fixed schedule     9.74%     19.83%   +9.26    70.0%   88.8%   89.96%      458
+--------------------------------------------------------------------------------------------------------
+
+VALIDATION SCORECARD PER CELL
+========================================================================================================
+            cell                V1                V3                V5                V7   score
+           today      13.68%  HIT       25.96%  HIT       96.79%  miss      40.76%  miss     2/4
+       burn only       0.53%  miss       9.46%  miss      27.22%  miss      18.13%  miss     0/4
+      canon 0.80       2.68%  miss      39.06%  HIT       95.39%  miss      57.26%  miss     1/4
+      canon 0.85       8.09%  HIT       24.05%  HIT       86.27%  miss      40.27%  miss     2/4
+      canon 0.88      13.17%  HIT       23.06%  HIT       92.24%  miss      37.10%  miss     2/4
+      canon 0.90      17.43%  miss      20.83%  HIT       90.43%  miss      37.05%  miss     1/4
+      canon 0.93      25.72%  miss      19.35%  miss      87.95%  miss      35.81%  miss     0/4
+     R1R2R3 0.80       2.13%  miss      32.54%  HIT       77.99%  HIT       53.35%  miss     2/4
+     R1R2R3 0.88       9.74%  HIT       19.83%  miss      80.16%  HIT       43.28%  miss     2/4
+
+PRE-REGISTERED PREDICTIONS (NOTES.md, 31 Aug 2026, before this ran)
+========================================================================================================
+  W11-5/6/7 were registered against a BUFFER sweep at pop_spend=0.80.
+  That design was replaced by this SPEND sweep at the canonical
+  buffer when option (c) was taken -- the buffer cells carried 27-441
+  at-risk cycles and had no power. The conditioning variable is
+  therefore NOT the one registered. They are scored below on their
+  SUBSTANCE, and that substitution is stated rather than hidden.
+
+  BROKE  W11-5  [substance] V5 stays ABOVE 90% across the swept range
+           0.80=95.4%  0.85=86.3%  0.88=92.2%  0.90=90.4%  0.93=88.0%
+  BROKE  W11-6  [substance] V7 moves by less than 5 pts across the range
+           0.80=57.3%  0.85=40.3%  0.88=37.1%  0.90=37.0%  0.93=35.8%
+  HELD   W11-7  [substance] V3 moves by less than 5 pts from today to canon 0.88
+           25.96% -> 23.06%
+  HELD   W11-8  the world still scores at most 2/4 EVERYWHERE in the externally derived range
+           0.80=1/4  0.85=2/4  0.88=2/4  0.90=1/4  0.93=0/4
+  HELD   W11-12  cycle_rec FALLS from today's 99.60%
+           today=99.53%  canon 0.88=98.69%
+
+  Pre-registration record for this run: 3/5
+  W11-1/2/3/4b/4c were scored POLICY-FREE and all five HELD.
+  NOTES.md, 31 August 2026.
+
+  W11-1 (horizon independence) and W11-4c (burn-in convergence) are
+  POLICY-FREE and are measured by scripts/check_stationarity.py, not
+  here -- they are properties of the world and running an arm to
+  answer them would be measuring the wrong thing.
+  W11-9/10/11 are the headline and pooling numbers and need the
+  1.05 calibration and the pooling arms. Separate runs.
+
+  BIAS. Bands are [REPORTED], vendor-sourced. V5's 70-85% is the
+  source's TOP PERFORMERS; its median is 47.6%. Burn-in changes the
+  number of RNG draws per customer, so a burn-in cell is a different
+  world from a non-burn-in one and not the same world plus a fix.

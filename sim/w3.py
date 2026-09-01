@@ -69,29 +69,218 @@ Z9, TECH, OK = "Z9", "TECH", "OK"
 #
 # Gate S4 holds this, paired with the `ignore_bcfg` mutant so the gate goes
 # red if the plumbing that applies it is ever broken.
-FITTED_BELIEF = dict(stride=1, prior_w=9, prior_day0=8.0,
-                     prior_floor=0.5, spend_beta=0.0)
+FITTED_BELIEF = dict(stride=1, prior_w=5, prior_day0=8.0,
+                     prior_floor=0.1, spend_beta=0.0)
+
+# ---------------------------------------------------------------------------
+# RESELECTED 1 September 2026 ON THE CANONICAL WORLD. W24.
+#
+#   was  prior_w=9,  prior_floor=0.5      (31 August 2026, sim/fit_belief.py)
+#   now  prior_w=5,  prior_floor=0.1
+#
+# `stride`, `prior_day0` and `spend_beta` are UNCHANGED.
+#
+# WHY THE OLD VALUES WERE WRONG, and there are two independent reasons.
+#
+# 1. THEY WERE FITTED ON A WORLD THAT NO LONGER EXISTS. `sim/fit_belief.py`
+#    scores on `SPEND, POP_SPEND = 1.05, 1.05`, `K = 5`, seeds 600-607, with
+#    `make_pop`'s default `payday_mode="uniform_tail"` and no burn-in or
+#    mandate outflow. The canonical world is `pop_spend=0.93`, k ~ 1+Poisson(1),
+#    salary-independent amounts, a STATUTORY payday confined to days 0-7, 12
+#    burn-in cycles and mandate outflow on. The prior was never refitted after
+#    errors 33-35 rebuilt the world.
+#
+# 2. THE SEARCH COULD NOT HAVE FOUND IT. `sweep_prior` iterates
+#    `w in (5, 7, 9, 12, 15)`. The canonical optimum is at or below the grid's
+#    floor, so no run of that fitter can return it.
+#
+# WHY THE 1 SEPTEMBER CHECK THAT SAID "DO NOT REFIT" DOES NOT APPLY. That check
+# compared the FITTED prior against the UNFITTED `exp(-0.10d)` and found them
+# within noise, and concluded a refit would not help. The two are nearly the
+# same WIDTH -- an effective 21.0 and 27.4 hypotheses of 30 respectively, by
+# exp(entropy) -- so the comparison could not have detected what it was asked
+# to. At `est_pay=4` the old fitted prior held 0.095 of its mass within a day
+# of the estimate, LESS than the unfitted prior's 0.181, because the 8x day-0
+# boost pulls mass away from the estimate for the 40% of the canonical
+# population not paid on day 0. The new values hold 0.300 there.
+#
+# SELECTION. Max mean recovery of at-risk cycles across payday_err {1,3,7,14}
+# on TRAIN populations 700-709, ties on worst margin against `[1,7]` -- the
+# same rule and grid `agent/policy/payday_offsets.py` used to select `[1,7]`,
+# so both sides of that comparison are chosen the same way. Scored ONCE on
+# held-out 710-719. It is a PLATEAU, not a peak: prior_w in {3,4,5} x
+# prior_floor in {0.05,0.1} all land between 91.8 and 92.7 train mean against
+# the old values' 86.15, on a 2 SE of about 3 points.
+#
+# MEASURED CONSEQUENCE, held-out populations 710-719, agent vs `[1,7]`:
+#   payday_err   0      1      3      5      7     10     14
+#   was      -10.84  -9.17  -7.83  -6.14  -1.34 +20.73 +30.67
+#   now       -0.76  -1.16  -0.33  +1.15  +3.55 +23.83 +34.41
+# (the "now" row also carries the continuation value; see
+#  agent/policy/timing.py. The prior alone accounts for the low-noise half and
+#  COSTS 2-3 points at payday_err 10 and 14.)
+#
+# THE TRADE-OFF THIS BUYS AND SELLS. A narrower prior spends less mass on
+# paydays the estimate says are impossible, which is worth 8-10 points where
+# the estimate is good. Where the estimate is BAD the true payday can fall
+# outside the window and the soft floor of 0.1 is the only thing that recovers
+# it, so the prior alone loses 2.88 points at payday_err=10 and 2.20 at 14.
+# Those are bought back by the continuation value and then some. The
+# configuration is therefore only defensible as a PAIR, and the payday_err
+# range it is valid over is stated in NOTES.md, 1 September 2026.
+# ---------------------------------------------------------------------------
 
 
 def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
-             payday_day0_frac=0.60, irregular_frac=0.0, n_credits=6):
+             payday_day0_frac=0.60, irregular_frac=0.0, n_credits=6,
+             k_mean=None, k_max=8, k_seed=None,
+             payday_mode="uniform_tail", payday_window=7,
+             amount_mode="salary_frac", amount_median=855.0,
+             amount_sigma=0.55,
+             buffer=None, buffer_median=None, buffer_sigma=1.0,
+             buffer_seed=None):
+    """Draw a population. W10 (docs/04_BUILD_PLAN.md) adds three guarded knobs.
+
+    Every W10 argument defaults to the behaviour this function has had since
+    27 August 2026, so an unchanged call draws the identical population and
+    gate T9 is untouched. The three of them exist because `k`,
+    `payday_day0_frac` and `amt_frac` were invented constants with no source,
+    and between them they were setting the world's difficulty. NOTES.md,
+    31 August 2026, carries the external evidence and the plausible range
+    declared for each BEFORE anything was measured.
+
+    R1 -- `k_mean` / `k_max` / `k_seed`. How many mandates a customer holds.
+        `k_mean=None` uses the scalar `k`, unchanged. Set it and each customer
+        draws `k_i = 1 + Poisson(k_mean - 1)`, capped at `k_max`, so everybody
+        holds at least one mandate and the population has a SPREAD.
+
+        THE SPREAD IS THE POINT, not the mean. The share of at-risk cycles
+        caused by one mandate draining the account before another presents runs
+        0.0 / 10.2 / 25.4 / 39.2 / 48.9 percent at k = 1..5 -- convex in k. So a
+        population averaging two mandates is not the same world as a population
+        where everyone holds exactly two, and a scalar `k` cannot express the
+        difference.
+
+        ⚠️ **THE COUNTS COME FROM `k_seed`, NOT FROM `rng`, and unlike W2 and W7
+        that does NOT buy stream isolation.** A customer holding three mandates
+        instead of five makes two fewer amount draws, so every later value moves
+        no matter which generator the count came from. The separate generator
+        buys only that the SEQUENCE of counts is stable while other arguments
+        change. Varying `k` is varying the world, not overlaying a mechanism on
+        it, and no amount of RNG discipline makes it otherwise -- which is why
+        this docstring says so instead of implying a guarantee it cannot give.
+        Passing `k_mean` without `k_seed` raises.
+
+    R2 -- `payday_mode`. Where in the month the salary lands.
+        `"uniform_tail"` is the old behaviour: day 0 with probability
+        `payday_day0_frac`, otherwise uniform over days 1..cycle_days-1.
+        `"statutory"` keeps the day-0 mass and confines the remainder to days
+        1..`payday_window`.
+
+        India's Payment of Wages Act requires wages before the 7th day after
+        the wage period for establishments under 1,000 workers and the 10th for
+        larger ones, and typical Indian payroll credits on the last day or the
+        1st. The uniform tail puts 13% of the population on a payday between
+        day 15 and day 29, which that deadline effectively forbids.
+
+        Both branches make exactly one `random()` and at most one `integers()`
+        call, so the stream POSITION is identical either way and only the value
+        differs.
+
+    R3 -- `amount_mode`. What the debit is worth.
+        `"salary_frac"` is the old behaviour: `salary * amt_frac * U(0.7, 1.3)`,
+        so the debit scales with income. `"absolute"` draws
+        `lognormal(median=amount_median, sigma=amount_sigma)` INDEPENDENTLY of
+        salary, clipped to the same [99, 15000] range.
+
+        A subscription costs what it costs. The same mandate is priced at 199
+        rupees whether the customer earns 19,000 or 190,000, and the coupled
+        version gives every customer the identical debit-to-income ratio so
+        nobody is ever stretched. `amount_median` defaults to 855.0, which is
+        what the coupled draw produces at the median salary, so switching modes
+        changes the COUPLING and not the central value -- the two are separable
+        and only one of them is the modelling error.
+
+        One `uniform()` becomes one `lognormal()`, so the stream position is
+        again unchanged.
+
+    The published UPI AutoPay ticket range is 149-2,499 rupees with a 15,000
+    regulatory cap; the clip retains it. Sources and the declared plausible
+    range for every swept value are in NOTES.md, 31 August 2026.
+    """
+    if buffer is not None and buffer_median is not None:
+        raise ValueError("pass buffer (a scalar, for the sweep) or "
+                         "buffer_median (the canonical distribution), not both")
+    if buffer_median is not None and buffer_seed is None:
+        raise ValueError(
+            "buffer_median needs its own buffer_seed. The per-customer buffer "
+            "is drawn from a separate generator so switching the sweep's "
+            "scalar for the canonical distribution does not also redraw every "
+            "salary and amount.")
+    if k_mean is not None and k_seed is None:
+        raise ValueError(
+            "k_mean needs its own k_seed. The mandate counts are drawn from a "
+            "separate generator so the sequence of counts is stable while "
+            "other arguments move.")
+    if payday_mode not in ("uniform_tail", "statutory"):
+        raise ValueError(f"unknown payday_mode {payday_mode!r}")
+    if amount_mode not in ("salary_frac", "absolute"):
+        raise ValueError(f"unknown amount_mode {amount_mode!r}")
+
+    # W11-S2. The per-customer carry-over buffer, in multiples of ONE MONTHLY
+    # SALARY. `buffer` is a scalar for the sweep; `buffer_median` selects the
+    # canonical lognormal. Its median is fixed by the published "75% of Indians
+    # have no emergency fund" figure at sigma=1.0, not chosen -- see NOTES.md,
+    # 31 August 2026, B3. Drawn from its own generator so the two forms are
+    # comparable on one population.
+    if buffer_median is not None:
+        brng = np.random.default_rng(buffer_seed)
+        buffers = [float(brng.lognormal(np.log(buffer_median), buffer_sigma))
+                   for _ in range(n)]
+    elif buffer is not None:
+        buffers = [float(buffer)] * n
+    else:
+        buffers = None
+
+    if k_mean is None:
+        counts = [k] * n
+    else:
+        krng = np.random.default_rng(k_seed)
+        counts = [int(min(1 + krng.poisson(max(0.0, k_mean - 1.0)), k_max))
+                  for _ in range(n)]
+
     pop = []
-    for _ in range(n):
-        payday = 0 if rng.random() < payday_day0_frac else int(rng.integers(1, cycle_days))
+    for ci in range(n):
+        if payday_mode == "statutory":
+            payday = (0 if rng.random() < payday_day0_frac
+                      else int(rng.integers(1, payday_window + 1)))
+        else:
+            payday = 0 if rng.random() < payday_day0_frac else int(rng.integers(1, cycle_days))
         salary = float(rng.lognormal(np.log(19000), 0.55))
-        mandates = [dict(merchant=int(m),
-                         amount=float(np.clip(round(salary * amt_frac *
-                                                    rng.uniform(0.7, 1.3), -1), 99, 15000)),
-                         due_day=int(rng.integers(0, cycle_days)))
-                    for m in rng.choice(60, size=k, replace=False)]
+        if amount_mode == "absolute":
+            mandates = [dict(merchant=int(m),
+                             amount=float(np.clip(round(rng.lognormal(
+                                 np.log(amount_median), amount_sigma), -1),
+                                 99, 15000)),
+                             due_day=int(rng.integers(0, cycle_days)))
+                        for m in rng.choice(60, size=counts[ci], replace=False)]
+        else:
+            mandates = [dict(merchant=int(m),
+                             amount=float(np.clip(round(salary * amt_frac *
+                                                        rng.uniform(0.7, 1.3), -1), 99, 15000)),
+                             due_day=int(rng.integers(0, cycle_days)))
+                        for m in rng.choice(60, size=counts[ci], replace=False)]
         irregular = bool(rng.random() < irregular_frac)
         credit_days = (sorted(int(x) for x in rng.integers(0, cycle_days, n_credits))
                        if irregular else [payday])
-        pop.append(dict(payday=payday, irregular=irregular,
+        rec = dict(payday=payday, irregular=irregular,
                         credit_days=credit_days, n_credits=n_credits,
                         salary=salary,
                         spend=float(np.clip(rng.normal(spend, 0.10 * spend), 0.4 * spend, 1.6 * spend)),
-                        mandates=mandates, days=days, cycle_days=cycle_days))
+                        mandates=mandates, days=days, cycle_days=cycle_days)
+        if buffers is not None:
+            rec["buffer"] = buffers[ci]
+        pop.append(rec)
     return pop
 
 
@@ -116,7 +305,9 @@ def hourly_spend_profile(cycle_days, decay=DEFAULT_DECAY):
 
 
 def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
-                  p_transient=0.0, transient_h=24, hold_rng=None):
+                  p_transient=0.0, transient_h=24, hold_rng=None,
+                  burn_cycles=0, mandate_outflow=False,
+                  disc_floor=0.0):
     """True balance at every hour. Salary lands at hour 0 of payday.
 
     `decay` shifts the WORLD's spend curve away from what the beliefs assume.
@@ -175,9 +366,88 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
     """
     days, cyc = c["days"], c["cycle_days"]
     T = days * HOURS
-    bal = np.zeros(T)
+    # W11-S1. Burn-in is a whole number of CYCLES simulated before day 0 and
+    # thrown away, so the measurement window starts from a balance the world
+    # produced rather than from `salary * U(0, 0.06)`. Because it is a whole
+    # number of cycles the payday phase at day 0 is unchanged, and at
+    # `burn_cycles=0` every line below runs exactly as it did.
+    #
+    # WHY BURN-IN AND NOT AN EXPLICIT INITIAL DRAW. An explicit draw needs its
+    # own external anchor and a flat starting buffer for everybody is the wrong
+    # shape -- 75% of Indian households have no emergency fund. Burn-in has no
+    # free parameter at all: it is a convergence setting, checked by running it
+    # longer, not a value chosen against any target.
+    burn = int(burn_cycles) * cyc
+    Tx = (burn + days) * HOURS
+    bal = np.zeros(Tx)
     b = c["salary"] * rng.uniform(0.0, 0.06)
     prof = hourly_spend_profile(cyc, DEFAULT_DECAY if decay is None else decay)
+    # W11-S2. The carry-over cap. At each payday, anything above
+    # `buffer * salary` LEAVES the account before the new salary lands -- a
+    # recurring deposit, an SIP, an auto-sweep FD. Without it this world is a
+    # savings accumulator: at pop_spend=0.80 the balance grows by a fifth of a
+    # salary every cycle without bound, the at-risk rate decays 29.80% -> 0.75%
+    # across four cycles, and the due-date failure rate becomes a function of
+    # how long the run is (27.67% at 60d, 4.24% at 360d). See NOTES.md,
+    # 31 August 2026, and candidate error 33.
+    #
+    # It is applied BEFORE the credit, on last cycle's leftovers, not after.
+    # Capping after the credit would take away the money the month is meant to
+    # be spent from.
+    buf = c.get("buffer")
+    # W11-S3. THE MANDATE OUTFLOW, and the coupling it fixes.
+    #
+    # `pop_spend` is derived as 1 minus the household savings rate, which is
+    # TOTAL money leaving the account. Subscriptions are part of that, not
+    # something stacked on top of it -- and until now they were stacked: this
+    # function modelled discretionary spend only, and `drained` in the executor
+    # gave collected debits BACK at every payday. At k=5 that handed every
+    # customer 22.5% of a salary per cycle and made the household spend 110% of
+    # its income. Candidate error 34.
+    #
+    # So when this is on: discretionary = pop_spend - subscription burden, and
+    # the mandate amounts are actually removed from the account.
+    #
+    # ⚠️ IT MUST BE PAIRED WITH `drained` OFF IN THE EXECUTOR. Deducting here
+    # while `attempt()` and `at_risk_cycles()` still subtract `drained` counts
+    # every collected debit twice and silently makes the world ~22% harder than
+    # intended. `SimExecutor` enforces the pairing; do not set one without the
+    # other.
+    #
+    # IT IS POLICY-FREE ON PURPOSE. Every mandate is deducted on its due date
+    # whether or not any policy collected it, so `at_risk_cycles()` stays
+    # identical across arms and they keep the shared denominator that makes
+    # their recovery rates comparable. Deducting only what was actually
+    # collected is the "correct" model and it destroys that denominator, which
+    # is why it is not done. The cost is that uncollected debits are removed
+    # anyway, so the world is slightly HARDER than truth -- the conservative
+    # direction, and small while collection rates are near 99%.
+    burden = 0.0
+    if mandate_outflow:
+        burden = sum(m["amount"] for m in c["mandates"]) / c["salary"]
+    disc = max(disc_floor, c["spend"] - burden) if mandate_outflow else c["spend"]
+    # Per extended-day mandate total. Deducted INSIDE the loop, at
+    # DECISION_HOUR + 1, so that (a) a mandate's own debit does not suppress
+    # the balance `at_risk_cycles` reads for it at DECISION_HOUR, and (b) the
+    # payday buffer cap sees the balance AFTER subscriptions have been paid.
+    #
+    # (b) is not a detail. A first implementation subtracted a running total
+    # after the trace was built; the cap then removed the very surplus the
+    # subscriptions were meant to come out of, the cumulative subtraction grew
+    # without bound against a capped balance, and V1 went to 99.4% with the
+    # oracle ceiling at 0.4%. Caught by rule 3. NOTES.md, 31 August 2026.
+    mand = None
+    if mandate_outflow:
+        mand = np.zeros(burn + days)
+        for m in c["mandates"]:
+            j = -(int(burn_cycles) + 1)
+            while True:
+                dx = m["due_day"] + j * cyc + burn
+                j += 1
+                if dx >= burn + days:
+                    break
+                if dx >= 0:
+                    mand[dx] += m["amount"]
     # One draw per cycle, taken up front so the stream position does not depend
     # on which days happen to be paydays. This must not consume from `rng`:
     # otherwise every W2 cell changes both insolvency and the spending trace.
@@ -187,7 +457,7 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
                 "p_missed_credit > 0 needs its own missed_rng. Drawing missed "
                 "credits from the money path's rng shifts every later spend "
                 "draw and changes two mechanisms at once.")
-        missed = missed_rng.random(days // cyc + 2) < p_missed_credit
+        missed = missed_rng.random((burn + days) // cyc + 2) < p_missed_credit
     else:
         missed = None
     # W7. One draw per DAY, taken up front for the same reason `missed` is: the
@@ -203,33 +473,42 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
                 "the money path's rng shifts every later draw, which makes "
                 "the transient world a different world rather than the same "
                 "world with holds on it.")
-        holds = hold_rng.random(days) < p_transient
+        holds = hold_rng.random(burn + days) < p_transient
     else:
         holds = None
-    for d in range(days):
+    for dx in range(burn + days):
+        d = dx - burn
         phase = (d - c["payday"]) % cyc
         # Which cycle of THIS customer's salary calendar d falls in. Used only
-        # to index `missed`; >= 0 for every d at which a credit can land.
-        ci = max(0, (d - c["payday"]) // cyc)
+        # to index `missed`; the `+ burn_cycles + 1` offset keeps it >= 0 once
+        # burn-in puts days before day 0 on the timeline.
+        ci = max(0, (d - c["payday"]) // cyc + int(burn_cycles) + 1)
         skip = missed is not None and missed[ci]
+        if phase == 0 and buf is not None:
+            # The sweep. Last cycle's leftovers above the buffer leave.
+            b = min(b, float(buf) * c["salary"])
         if c.get("irregular"):
             share = c["salary"] / len(c["credit_days"])
             if not skip:
                 b += share * sum(1 for cd in c["credit_days"] if cd == d % cyc)
         elif phase == 0 and not skip:
             b += c["salary"]
-        day_spend = c["salary"] * c["spend"] * prof[phase]
+        day_spend = c["salary"] * disc * prof[phase]
         for h in range(HOURS):
             b = max(b - day_spend / HOURS * rng.uniform(0.4, 1.6), 0.0)
-            bal[d * HOURS + h] = b
+            if mand is not None and h == DECISION_HOUR + 1 and mand[dx]:
+                b = max(b - mand[dx], 0.0)
+            bal[dx * HOURS + h] = b
     # W7, applied AFTER the trace exists: a hold blocks access to money that is
     # otherwise there, so it is an overlay on the balance rather than a change
     # to how the balance evolves. Overlapping holds simply merge.
     if holds is not None:
         for d in np.flatnonzero(holds):
             lo = int(d) * HOURS
-            bal[lo:min(lo + transient_h, T)] = 0.0
-    return bal
+            bal[lo:min(lo + transient_h, Tx)] = 0.0
+    # Throw the burn-in away. What is returned is the same shape and the same
+    # calendar it always was.
+    return bal[burn * HOURS:] if burn else bal
 
 
 # ------------------------------------------------------------------ belief ---
@@ -419,10 +698,51 @@ class BeliefPD:
 
     def __init__(self, est_salary, est_payday, cycle_days, days,
                  est_spend=0.80, pop_info=True, stride=3,
-                 prior_w=None, prior_day0=1.0, prior_floor=1e-6):
+                 prior_w=None, prior_day0=1.0, prior_floor=1e-6,
+                 monotone_drain=False):
         """
         THE THREE FITTABLE HANDICAPS (all default to the original values, so an
         unconfigured BeliefPD is bit-identical and gate T9 stays exact).
+
+        `monotone_drain` is a FOURTH, and it is a repair rather than a
+        handicap. It defaults to False, which is the arithmetic every published
+        number was measured on and which gate T9 locks byte for byte.
+
+        WHAT IT FIXES. Between salary credits the world's balance is
+        non-increasing: `w3.balance_trace` only ever subtracts, and clamps at
+        zero. The filter's daily update was
+        `_shift(p, round(drain/bw))` followed by a SYMMETRIC 3-tap convolution
+        on the BALANCE, and that convolution lets the balance rise. Two things
+        follow, both measured on 1 September 2026:
+
+          * **The modelled drain rounds to zero bins from day 8 of the cycle
+            onward -- 22 of its 30 days.** `drain = est_salary * est_spend *
+            prof[phase]` with `prof` decaying as exp(-0.42d), against a bin
+            width of `2.5 * est_salary / 90`. So for most of the cycle the
+            update is a driftless symmetric random walk on the balance.
+          * **`np.convolve(p, k, "same")` drops the end taps**, so 12% of the
+            mass sitting in bin 0 falls off the bottom every day, and the
+            `p / p.sum()` that follows redistributes it across the whole
+            distribution -- upward. The floor is not missing; the diffusion
+            leaks through it and renormalisation turns the leak into drift.
+
+        Together they manufacture money. Starting from the state
+        `observe(amount, False)` produces -- all mass in bin 0, i.e. "this
+        customer could not pay 855 rupees" -- and running twelve days with NO
+        income and NO drain modelled, the filter ends up believing
+        **P(balance >= 2 bins) = 0.374**.
+
+        The repair moves the 3-tap kernel from the balance to the DRAIN, whose
+        support is non-negative, and applies it through `_shift`, which clamps
+        at bin 0 and conserves mass exactly. A zero balance with no credit
+        stays a zero balance. With the drain at n bins the taps are
+        {n-1, n, n+1} as before; at n = 0 they collapse to
+        {stay 0.88, down one bin 0.12}. No new constant is introduced.
+
+        `sim/known_failures.txt` attributes S1_PD's monotonicity break to "the
+        filter does not model the balance floor at zero". The floor IS modelled
+        -- `_shift` piles mass at bin 0 -- and the guess names the wrong half of
+        the mechanism. Corrected here.
 
         `stride`   was 3 -- a compute hack from the research phase. On a
                    30-day cycle it yields hypotheses [0,3,...,27], so only 74%
@@ -468,6 +788,7 @@ class BeliefPD:
         self.P = np.tile(p0, (len(self.hyp), 1))
         self.prof = hourly_spend_profile(cycle_days)
         self._k = np.array([0.12, 0.76, 0.12])
+        self.monotone_drain = bool(monotone_drain)
         self._fc = []          # rolling forecast; see Belief.forecast()
 
     def _shift(self, p, bins):
@@ -488,10 +809,26 @@ class BeliefPD:
             p = self._shift(p, -int(self.est_salary / self.bw))
         phase = (day - h) % self.cyc
         drain = self.est_salary * self.est_spend * self.prof[phase]
-        p = self._shift(p, int(round(drain / self.bw)))
-        p = np.convolve(p, self._k, mode="same")
-        s = p.sum()
-        return p / s if s > 0 else np.ones(NB) / NB
+        n = int(round(drain / self.bw))
+        if not self.monotone_drain:
+            p = self._shift(p, n)
+            p = np.convolve(p, self._k, mode="same")
+            s = p.sum()
+            return p / s if s > 0 else np.ones(NB) / NB
+        # MONOTONE DRAIN. See the `monotone_drain` note in __init__.
+        # The 3-tap kernel is drain UNCERTAINTY -- the customer may have spent
+        # one bin more or one bin less than the modelled amount -- so it is
+        # applied to the DRAIN, whose support is non-negative, instead of to
+        # the balance, whose support is not. Spending "minus one bin" is
+        # income, and between paydays there is none.
+        taps: dict[int, float] = {}
+        for off, wt in zip((-1, 0, 1), self._k):
+            taps[max(0, n + int(off))] = taps.get(max(0, n + int(off)), 0.0) + float(wt)
+        out = np.zeros(NB)
+        for k, wt in taps.items():
+            out += wt * self._shift(p, k)
+        s = out.sum()
+        return out / s if s > 0 else np.ones(NB) / NB
 
     def advance(self, day):
         # See Belief.advance -- the first entry of yesterday's rollout IS

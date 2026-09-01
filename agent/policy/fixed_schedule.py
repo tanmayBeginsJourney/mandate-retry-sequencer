@@ -51,7 +51,8 @@ from agent.ports import InterventionKind, Rupees, ScheduleProposal
 def propose_fixed(amount: Rupees, day: int, now_t: int, cycle_close: int,
                   attempts_used: int,
                   kind: InterventionKind = InterventionKind.RETRY,
-                  cap: int = CAP) -> TimingDecision:
+                  cap: int = CAP,
+                  customer_id: int | None = None) -> TimingDecision:
     """Attempt on the earliest legal day. No belief is consulted.
 
     Mirrors `agent.policy.timing.propose`'s signature and return type so the

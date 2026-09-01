@@ -1,0 +1,28 @@
+B-1 -- THE BEST NON-ADAPTIVE SCHEDULE. Pre-registered in NOTES.md, 1 Sep 2026.
+  n=100 x 20 populations, canonical world, burn 12, mandate outflow ON.
+  Offsets from the NOISY est_payday (+/-7d), <= 4 attempts, no due-date presentation, legal hours.
+  Chosen with full HINDSIGHT over the population. It is not the
+  Bayes-optimal policy and not an upper bound on the agent: the
+  agent adapts and B-1 does not.
+
+================================================================================================
+  spend  at-risk    B-1 V5   agent V5   margin    B-1 V7   agent V7   margin
+   0.88      420   100.00%     91.71%    -8.29    48.10%     40.43%    -7.67
+   0.93     1269   100.00%     88.40%   -11.60    47.68%     42.64%    -5.04
+
+  spend 0.88: best V5 schedule = est_payday + [0, 1, 7, 25] days
+              best V7 schedule = est_payday + [2, 7, 25, 28] days
+  spend 0.93: best V5 schedule = est_payday + [0, 2, 7, 25] days
+              best V7 schedule = est_payday + [3, 7, 25, 28] days
+
+PRE-REGISTERED VERDICT (declared before this was built)
+================================================================================================
+  spend 0.88  V5: DEFECT: agent loses to a fixed schedule by 8.29 pts. Investigate, do not report as a result.
+  spend 0.93  V5: DEFECT: agent loses to a fixed schedule by 11.60 pts. Investigate, do not report as a result.
+
+  BIAS. B-1 is chosen with hindsight over the SAME populations the
+  agent is scored on, so it is flattered relative to a schedule that
+  had to be picked in advance -- which makes the agent's margin over
+  it a LOWER bound on the value of adaptivity, not an upper one.
+  V7's B-1 optimises earliness directly, so it is the best a fixed
+  schedule can do on that metric and not a by-product of the V5 fit.

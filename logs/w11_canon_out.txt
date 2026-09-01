@@ -1,0 +1,12 @@
+CANONICAL buffer draw: median 0.268  mean 0.407  P(<0.5)=0.745  P(<0.10)=0.152
+  anchor: 75%% of Indians have no emergency fund -> target P(<0.5)=0.75
+
+  spend    V1 120d    V1 240d    drift   at-risk
+   0.80      2.45%      2.75%   -0.30        89  
+   0.85      7.89%      8.08%   -0.19       287  
+   0.88     12.31%     12.90%   -0.59       448 H
+   0.90     16.76%     17.10%   -0.34       610  
+   0.93     23.58%     24.35%   -0.77       858  
+
+  H = V1 inside the published 8-15%. Every spend row here is inside
+  the externally derived [0.80, 0.93]. Today's run has 1660 at-risk.

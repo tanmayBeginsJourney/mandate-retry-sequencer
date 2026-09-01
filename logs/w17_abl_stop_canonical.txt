@@ -1,0 +1,36 @@
+========================================================================================
+STOP MECHANISM -- is the gain really preserved mandates collecting in later cycles?
+n=100, k=5, 8 populations, payday_err=7, FITTED_BELIEF, paired 2 SE
+========================================================================================
+ horizon  cycles    degen    +STOP     gain     2SE   sig  dead d  dead s  att/cyc d  att/cyc s
+      60       2    98.17    98.07   -0.102   0.198  n.s.      23       0      2.228      2.230
+     120       4    98.81    99.31   +0.498   0.428   SIG      25       1      1.444      1.454
+     180       6    98.63    99.48   +0.845   0.537   SIG      33       1      1.288      1.302
+
+Per-population, 120d:
+    pop  gain pts  deaths avoided
+    710    +0.000               2
+    711    -0.331               0
+    712    +0.318               2
+    713    +0.000               0
+    714    +0.327               2
+    715    +0.688               2
+    716    +1.017               5
+    717    +1.923               6
+    718    +0.000               0
+    719    +1.034               5
+  Pearson r(gain, deaths avoided) = +0.926
+
+========================================================================================
+PRE-REGISTERED CHECKS
+========================================================================================
+  HELD   E-MECH-1 STOP's gain grows monotonically with horizon   [60d -0.102 -> 120d +0.498 -> 180d +0.845]
+  BROKE  E-MECH-1b 60d below and 180d above the 120d figure   [-0.102 < 1.371 < +0.845]
+  HELD   E-MECH-2 gain tracks deaths avoided (r > 0.5)   [r = +0.926]
+  HELD   E-MECH-3 STOP does not buy survival by not billing   [att/cyc 1.444 -> 1.454 (+0.7%)]
+
+Pre-registration record for this measurement: 3/4
+
+A BROKEN prediction here means the mechanism story is wrong and
+the +1.371 has an unidentified cause. Do not quote it until the
+cause is named.

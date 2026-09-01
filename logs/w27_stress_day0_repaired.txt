@@ -1,0 +1,23 @@
+160 runs: 4 day0 fractions x 8 populations x 5 arms
+Stage 0 violations across all 160 runs: NONE
+
+prior_day0 stays at 8.0 throughout; only the WORLD moves.
+The fit was done at payday_day0_frac=0.60.
+
+payday_day0_frac      payday_wait  bayes_shipped     bayes_fair       ml_index         oracle
+0.2                        55.60%         81.38%         91.75%         76.59%        100.00%
+0.4                        58.70%         82.50%         93.03%         82.29%        100.00%
+0.6                        59.14%         82.16%         94.79%         86.18%        100.00%   <-- fitted here
+0.8                        58.58%         82.93%         95.36%         91.38%        100.00%
+
+payday_day0_frac            fair - ml    fair - payday_wait
+0.2                +15.16+/-2.12 SIG     +36.15+/-3.29 SIG 
+0.4                +10.75+/-1.49 SIG     +34.34+/-2.93 SIG 
+0.6                 +8.60+/-1.99 SIG     +35.64+/-2.76 SIG 
+0.8                 +3.98+/-1.53 SIG     +36.78+/-2.77 SIG 
+
+bayes_fair at the fitted population (0.60): 94.79%
+bayes_fair worst across the sweep         : 91.75%
+total degradation                         : 3.04 pts
+
+saved C:\codeing\razorpay\razorpay_handoff\pkg\sim\ml_artifacts\stress_day0.json

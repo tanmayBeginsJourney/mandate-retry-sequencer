@@ -1,0 +1,18 @@
+W14 topup_p. 160 runs, canonical world, pop_spend=0.93, n=40 x 20 pops.
+  anchor [0.04, 0.14] (Baremetrics, 1M+ dunning emails). 0.15 shown, NOT selectable.
+
+  topup_p       V1        V3        V5    2 SE       V7   V7 ceil  capture    surv
+     0.00    9.49%    21.39%    90.65%   +5.44   44.29%     47.0%    94.3%   98.4%
+     0.05    9.49%    26.10%    90.50%   +6.08   44.99%     47.0%    95.8%   98.4%
+     0.10    9.49%    32.80%    90.29%   +5.94   45.00%     47.0%    95.8%   98.4%
+     0.15    9.49%    36.92%    91.10%   +5.03   44.02%     47.0%    93.7%   98.6%  *outside anchor
+
+PRE-REGISTERED (NOTES.md, 1 Sep 2026, before this ran)
+  HELD   W14-1  V1 moves EXACTLY zero (structural: at_risk reads w.bal, topup writes w.topups)
+  HELD   W14-3  V3 rises more than V5 at every non-zero rate
+  BROKE  W14-4  V3 leaves 20-40% before V7 reaches 85%
+  HELD   W14-5  V5 stays ABOVE 85% at every anchored rate
+  HELD   W14-6  at topup_p=0.10 measured V7 stays BELOW 85%
+
+  4/5 held. W14-2 (ceiling cannot move) is structural: ceiling 47.0% is one number for every row above.
+  STOPPING RULE: rates inside [0.04,0.14] putting V7 in band with V1 and V5 in theirs: NONE -> rail-limited reframe stands

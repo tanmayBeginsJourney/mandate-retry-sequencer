@@ -130,16 +130,20 @@ any other layer knowing.
 **1. One belief per customer, shared by all `k` mandates.** This is the claim
 the project is built on: a failed debit for merchant A is evidence about the
 same customer's ability to pay merchant B. Build one filter per *mandate* and
-you have a system that works and is **8.3 points worse** in the hard world on
-the shipping filter (gate S2a_PD) —
+you have a system that works and is **7.3 points worse** in the hard world on
+the shipping filter (gate S2a_PD) — and **1.3 points worse** at
+`pop_spend=0.80` —
 and nothing tells you, because both configurations run clean.
 `agent/policy/belief_book.py` enforces the sharing and
 `agent/tests/test_one_belief.py` asserts it.
 
 **It is a curve, not a number, and it is reported as one.** Pooling is worth
-**+8.34 points (S2a_PD, gated) at `pop_spend=1.05` and +3.38 at `pop_spend=0.80`**,
+**+7.32 points (S2a_PD, gated) at `pop_spend=1.05` and +1.30 at `pop_spend=0.80`**,
 the same two calibrations the headline is reported over. The 0.80 cell is an
-agent measurement, not gate-protected.
+agent measurement, not gate-protected. Re-measured 1 September 2026 after the
+payday prior was re-selected; the curve is now a factor of five end to end, not
+2.5, so the seam is load-bearing in the hard world and much less so at the
+gentler calibration.
 
 **And it is a per-customer permission, not an assumption.** Sharing one
 customer's outcomes across merchants is the part of this design with a live
@@ -147,7 +151,7 @@ legal question attached — mandates are structurally per-merchant, and India's
 DPDP Rules 2025 operationalise consent and purpose limitation. A system that
 can only run pooled cannot answer that question. This one takes `pooling` in
 `{all, none, consented}`, and the cost of withholding is measured rather than
-argued: **4.79 points at half consent in the hard world, 1.48 at the gentler
+argued: **2.77 points at half consent in the hard world, 0.57 at the gentler
 one.**
 
 *(Gate S2a, `--tier full`: +9.53 pts ±1.81, on the unfitted filter. The
@@ -239,62 +243,77 @@ calls in the default sim, which has no merchant notes).
 python -m agent.batch_report --pops 4        # ~50s, no API key, no network
 ```
 
-*100 customers × 5 mandates, 4 held-out populations, 120 days, `payday_err=7`,
-`pop_spend=1.05`. **Not gate-protected** — an `agent/` script; reproduce with
-the command above.*
+*100 customers × about 2 mandates each (`1 + Poisson(1)`, capped at 8), 10
+held-out populations (710–719), 120 days, `payday_err=7`, `pop_spend=0.93`, 12
+burn-in cycles discarded. **Not gate-protected** — an `agent/` script;
+reproduce with the command above.*
 
 | arm | cycles collected | ₹ recovered | survival | att/cycle |
 |---|---|---|---|---|
-| `payday_wait` (rival) | 57.70% | — | 60.75% | 1.493 |
-| agent, deterministic | **98.01%** | ₹6,203,060 | **99.85%** | 1.554 |
+| `payday_wait` (rival) | 90.29% | — | 90.52% | 1.272 |
+| agent, deterministic | **99.38%** | ₹7,511,500 | **99.84%** | 1.450 |
 
-**+40.30 pts, 2 SE 2.32.** Stage 0 refusals: **0**, with an independent recount
-of **0** over **8,832 executed money actions**.
+**+9.08 pts, 2 SE 2.01.** Stage 0 refusals: **0**, with an independent recount
+of **0** over **8,702 executed money actions**.
 
 **Survival is the more interesting row.** The fixed schedule spends its four
 attempts in four days, hits the cap while the account is empty, and the mandate
-dies — **32.1% survival against the agent's 96.6%**. Dunning harder costs the
+dies — **85.3% survival against the agent's 98.4%**. Dunning harder costs the
 merchant the customer, and the cycle-based metric prices that automatically
 without inventing a lifetime-value constant.
 
-*Those two survival figures are a second experiment, at `pop_spend=1.05` over 8
-populations: `python agent/tests/test_recovery_rates.py`. Not gate-protected.
-Named separately so it is not mistaken for the 4-population batch above.*
+*Those two survival figures are a second experiment, over 20 populations at the
+same `pop_spend`: `py -3.12 agent/tests/test_canonical_world.py --confirm`. Not
+gate-protected. Named separately so it is not mistaken for the 10-population
+batch above.*
 
 ### What the number is conditional on — two parameters, not one
 
-**How well payday is known.** *8 populations, `pop_spend=1.05`.*
+**How well payday is known.** Measured against `[1,7]`, a steelmanned fixed
+schedule: two attempts at frozen offsets from the same noisy payday estimate
+the agent gets, selected once on train populations and never re-tuned.
+*Recovery of at-risk cycles, 10 held-out populations, `pop_spend=0.93`.*
 
-| `payday_err` | `payday_wait` | agent | agent − baseline |
+| `payday_err` | `[1,7]` | agent | agent − baseline |
 |---|---|---|---|
-| ±1 day | **99.24%** | 96.44% | **−2.81** ±0.46 — **the heuristic wins** |
-| ±3 days | 94.65% | 96.06% | +1.41 ±1.08 |
-| ±7 days | 59.14% | **95.63%** | **+36.48** ±3.20 |
+| ±1 day | **99.75%** | 98.59% | **−1.16** — **the fixed schedule wins** |
+| ±3 days | **98.51%** | 98.18% | **−0.33** |
+| ±5 days | **96.63%** | 97.78% | **+1.15** |
+| ±7 days | 90.88% | 94.43% | +3.55 |
+| ±10 days | 66.93% | **90.76%** | **+23.83** |
+| ±14 days | 55.47% | **89.88%** | **+34.41** |
 
-**How hard the world is** — `pop_spend`, the share of salary spent per cycle.
-*Same design.*
+**How hard the world is** — `pop_spend`, the share of salary spent per cycle,
+set to one minus the household saving rate. India's three published FY25
+readings put it in [0.80, 0.93]; no point inside is declared.
+*Cycles collected, same 10 populations, `payday_err=7`.*
 
-| `pop_spend` | `payday_wait` | agent | agent − baseline |
-|---|---|---|---|
-| 0.60 | 96.48% | 100.00% | **+3.52** ±0.90 |
-| **0.80** | 93.21% | 99.56% | **+6.36** ±1.43 |
-| 0.90 | 82.96% | 97.89% | +14.93 ±1.96 |
-| 1.05 | 59.14% | 95.63% | **+36.48** ±3.20 |
+| `pop_spend` | `payday_wait` | agent | agent − baseline | at-risk cycles |
+|---|---|---|---|---|
+| 0.80 | 99.07% | 100.00% | +0.93 ±0.60 | **2** |
+| 0.85 | 97.36% | 99.83% | +2.47 ±0.93 | 83 |
+| 0.88 | 95.99% | 99.65% | +3.66 ±0.86 | 197 |
+| 0.90 | 94.24% | 99.53% | +5.29 ±0.82 | 299 |
+| **0.93** | 90.29% | 99.38% | **+9.08** ±1.84 | 557 |
 
-*Neither table is gate-protected. Reproduce with `python sim/headline.py` and
-`python scripts/spend_sweep.py`.*
+*Neither table is gate-protected. Reproduce with
+`py -3.12 agent/tests/test_steelman_schedule.py` and
+`logs/w24_conditional_repaired.txt`.*
 
 **Read those two tables together and the honest summary is this.** The system's
-advantage is not a constant; it is a curve in two variables. It **loses** to a
-five-line heuristic when payday is already known to within a day, is slightly
-ahead at three days, and only becomes large when payday is genuinely uncertain
-and the customer is genuinely stretched. At `pop_spend=0.80`, the setting where
-this world's due-date failure rate lands inside the published 8–15% band, the
-agent is worth **+6.36 points** — which sits inside the published 6–8% industry
-benchmark for retry optimisation, and nothing was tuned to land there.
+advantage is not a constant; it is a curve in two variables, and one of those
+curves crosses zero inside the plausible range. It **loses** to a frozen
+two-offset schedule whenever payday is known to within five days, ties at
+seven, and only becomes large when payday is genuinely uncertain. At
+`pop_spend=0.93`, the setting where this world's due-date failure rate lands
+inside the published 8–15% band, the agent is worth **+9.08 points** against
+`payday_wait` — just above the published 6–8% industry benchmark for retry
+optimisation, and nothing was tuned to land there.
 
-The ±1-day cell and the easy-world cell are different measurements. The +36.48
-cell is the same configuration appearing in both sweeps.
+Below `pop_spend=0.90` the world carries too few at-risk cycles to measure a
+difference: two of them at 0.80, across a thousand customers. The last column
+is where the whole difference lives, since both arms collect every cycle that
+was never at risk.
 
 `payday_wait` is a permanent row in the report and cannot be switched off. It
 is what a good rival builds in an afternoon, and the case for this system has

@@ -5,3 +5,6 @@ agent/tests/_bench_cache.pkl
 .env
 scratch/
 .claude/
+
+# Internal remediation ledger. Stays local by the maintainer's decision.
+REMEDIATION_STATUS.md

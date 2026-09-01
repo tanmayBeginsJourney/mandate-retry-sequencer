@@ -1,0 +1,12 @@
+THE FORK -- both arms on HELD-OUT populations 710-719, n=100, pop_spend=0.93
+  B-1 frontier from the same held-out set; agent compared at its OWN
+  measured attempt budget via the concave envelope.
+
+     prior       V5    2 SE       V7  attempts  B-1 @ budget   margin     verdict
+    fitted   89.54%   +5.41   43.58%      1.53        95.26%    -5.72      DEFECT
+  unfitted   88.96%   +3.88   40.99%      1.43        92.28%    -3.32     matches
+
+  Registered lines: >= +2 exceeds, +/-2 matches, <= -5 DEFECT.
+  FORK: if BOTH lose ~7 pts the defect is in the retry policy, not
+  the prior, and a refit will not fix it. If only the fitted arm
+  loses, the stale prior is the cause.

@@ -1,0 +1,9 @@
+Collectable DAYS per at-risk cycle, CANONICAL world (of 29 legal days)
+  spend   hour rule   mean  median   p10      n
+   0.88  best legal   13.1      11     6    179
+   0.88 decision hr   13.0      11     6    179
+   0.93  best legal   10.7       8     6    552
+   0.93 decision hr   10.5       8     5    552
+
+If the mean is ~20+/29 then four attempts hit nearly everything, and
+B-1's 100% says the WORLD is easy -- not that the agent is bad.

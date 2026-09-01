@@ -17,7 +17,7 @@ the README's Limitations section and nowhere else.
 | **2** | **Pitch video, 5 minutes** | Judged deliverable, never started. Open with the errors, then the mechanism, then the demo, then the conditional result. | not started |
 | **3** | **Razorpay TEST MODE — send a real request** | **Rungs 0–4 are DONE.** Rungs 0–3 found two defects on the money path (errors 28 and 29). **Rung 4 authenticates for real: HTTP 200 on `GET /v1/payments?count=1` with a `rzp_test_` key**, which exercises the transport's success path. `scripts/razorpay_ladder.py`, transcript in `logs/razorpay_ladder.json`. **Rung 5 remains NOT RUN**, and the blocker is a prerequisite rather than a key: charging needs a `token_id` from a completed AutoPay registration, and test mode mocks the bank approval rather than the registration flow. That is a checkout integration, not a connectivity rung. | **0–4 DONE; 5 needs an authorised mandate** |
 | ~~**4**~~ | ~~**Put the validation suite on `docs/index.html`**~~ | ✅ **DONE 30 August 2026.** New section 07, *"Does this world behave like the real one?"*, with the four-row table, why two hits at one calibration are harder to arrange than one, the two misses and their two separate causes, and the fact that better-scoring calibrations were found twice and rejected both times. The old section 07 (limits) is now 08 and the nav carries a `Validation` link. Verified rendered: same figure width as the existing results section, no horizontal overflow, hit/miss tags resolve in both light and dark, no console errors. | **DONE** |
-| ~~**5**~~ | ~~**W9 — non-pooled default + consent-gating**~~ | ✅ **DONE 30 August 2026, 5/5 pre-registered.** `BeliefBook` takes `pooling` in `{all, none, consented}` plus a per-customer consent set; `"all"` is the default and parity is still bit-exact 24/24. **The cost of withholding pooling is now measured at two calibrations instead of argued:** 9.54 pts at `pop_spend=1.05`, **3.47 at 0.80**, and 4.79 / 1.48 at half consent. **The finding is that the moat is a curve in world hardness like the headline is, and every existing quotation of +9.53 was the hard-world figure missing its conditional** — now fixed in seven files. Also fixed: `run_once` stamped `policy="solo_shared_pd"` unconditionally, so a non-pooled run would have been mislabelled *in the audit trail*. | **DONE** |
+| ~~**5**~~ | ~~**W9 — non-pooled default + consent-gating**~~ | ✅ **DONE 30 August 2026. Re-measured 1 September 2026 and the record is now 4/5, not 5/5** — W9-4 broke on the shipped payday prior (2.77 points at half consent against a declared band of 3–7). `BeliefBook` takes `pooling` in `{all, none, consented}` plus a per-customer consent set; `"all"` is the default and parity is still bit-exact 24/24. **The cost of withholding pooling is now measured at two calibrations instead of argued:** 6.47 pts at `pop_spend=1.05`, **1.30 at 0.80**, and 2.77 / 0.57 at half consent. *(The 9.54 / 3.47 / 4.79 / 1.48 figures this row carried were the 30 August run on the pre-W24 prior.)* **The finding is that the moat is a curve in world hardness like the headline is, and every existing quotation of +9.53 was the hard-world figure missing its conditional** — now fixed in seven files. Also fixed: `run_once` stamped `policy="solo_shared_pd"` unconditionally, so a non-pooled run would have been mislabelled *in the audit trail*. | **DONE** |
 | ~~**6**~~ | ~~**Package the RUNTIME failure-recovery story**~~ | ✅ **DONE 30 August 2026.** The rubric's *"Failure Recovery: how the applicant identified system failures **at runtime** and engineered graceful fallbacks."* Nine rows — LLM→rule-engine fallback (94.8%), governance rejection, Stage 0 refusal, outage suppression, the `pending` outcome, idempotent retries, the refused-credential raise, crashed-worker detection, `LogFileNotEmpty` — now appear in **all three** places: `08_ARCHITECTURE.md`, a new README section *"When something breaks while it is running"* with the real `--mutants` output, and the public page's section 03. The framing that carries it is that **the fallback is the 95% path, not a cold branch**. | **DONE** |
 | ~~**7**~~ | ~~**W5 — decline taxonomy ON by default**~~ | ✅ **MEASURED 30 August 2026, and the reason for doing it was WRONG.** `--declines` on `batch_report`. With the taxonomy on and terminal codes everywhere, the LLM arm scores **87.39% against the deterministic 88.54%** — 1.15 points BEHIND, not ahead, though the 2 SE bands (1.52 / 2.67) overlap so it is indistinguishable from zero. **The standing explanation — "the LLM does not move the money because there is nothing to diagnose" — is refuted.** What the LLM arm does do is stop 2.2× as often and kill 5 fewer mandates, trading collection for survival. ⚠️ **And the test cannot detect a small effect:** the 150-call cap makes the LLM arm 93.3% fallback, so only 520 of 9,910 money attempts were model-sourced. An uncapped batch is ~120,000 live calls, about **$120**. **Adopting the taxonomy as the default is still a deliverable decision and has NOT been taken.** | **measured; not adopted** |
 | **8** | **The agent is blind to transient failures** | **Measured 30 August, not guessed.** It never presents on the due date, and `w3.BeliefPD.observe` takes no decline code, so a lien and an empty account give the identical posterior. It waits for payday on money already in the account — **15.1%** of transient-only cycles collected on the first legal day, **48.4%** over ten days. Fix is a design choice: let the belief condition on the decline family, or add a "re-present sooner" intervention. **Neither puts the LLM on the timing path.** | diagnosed, not built |
@@ -105,11 +105,12 @@ idea.
 **Built, gated, measured and wired into `batch_report.py`.** `agent/metrics.py`,
 `SimExecutor.at_risk_cycles()`, `agent/tests/test_recovery_metric.py` (5 checks,
 5 mutants, all trip), `agent/tests/test_recovery_rates.py` (the measurement).
-Parity is still bit-exact 24/24 and isolation still 5/5; the batch headline after
-the 31 August prior adoption is 98.01% / 57.70% / +40.30.
+Parity is still bit-exact 24/24 and isolation still 5/5; the batch headline on
+the frozen world is **99.38% / 90.29% / +9.08** (the 31 August figure of
+98.01% / 57.70% / +40.30 is superseded — errors 33-35).
 
-**V1 is hit and was not fitted: 13.68% first-presentation failure at
-`pop_spend=0.80`, inside the published 8–15%.** Full table and the two broken
+**V1 is hit and was not fitted: 10.58% first-presentation failure at
+`pop_spend=0.93`, inside the published 8–15%.** Full table and the two broken
 predictions in `02_RESULTS.md`. **R-3 (`payday_wait`'s recovery rate) is
 deferred to the validation suite**, because the baselines live in the frozen
 harness and emit no per-cycle record — implementing `baseline_doc` as an agent
@@ -181,8 +182,12 @@ cancellation is not independent of how hard the merchant is dunning.
 Model a per-cycle cancellation hazard that **rises with failed attempts and
 nudges**. This is the highest-value change on this page, for one reason:
 
-> **It is what makes the agent's restraint valuable.** `STOP` is currently
-> worth **+1.371 pts** because mandate death is rare and cheap. Under a
+> **It is what makes the agent's restraint valuable.** On the frozen world the
+> whole action space is worth **+0.136 pts** at 120 days against a 2 SE of
+> 0.205 -- not significant -- and `STOP` itself is worth **0.000** and never
+> fires, because mandate death is rare and cheap.
+> (Superseded figures: **+0.498** was the pre-W24 belief, and the +1.371
+> before it was the pre-canonical world. `logs/w27_abl_action_repaired.txt`.) Under a
 > pressure-responsive hazard, an agent that declines to burn a fourth attempt
 > is protecting a live subscription, and the action space stops being a
 > rounding error. It also turns a defensive result into a product argument:
@@ -298,13 +303,18 @@ today. That is the correct direction and it should be reported as such.
 
 ## W6. Due dates that cluster near paydays
 
-**Added 30 August 2026, after V7's miss was traced.** `w3.make_pop` draws
-`due_day` and `payday` independently, so the gap between a debit and the money
-that would cover it is uniform over the cycle — mean 14.7 days. **Only 35.8% of
-at-risk cycles have money inside ten days**, against a published ~90% of
-recoveries landing there. The agent already recovers 42.6% inside ten days,
-which is above the ceiling this world sets, so **V7 cannot be fixed by a better
-policy, and W2 will not touch it.**
+**Added 30 August 2026, after V7's miss was traced.** ⚠️ **CORRECTED
+1 September 2026: the two figures this item was specified against are the
+ALL-CYCLES figures, not the at-risk ones, and the specification is therefore
+superseded.** `w3.make_pop` draws `due_day` and `payday` independently, so the
+gap between a debit and the money that would cover it is uniform over the cycle
+— mean 14.7 days, and only 35.8% of ALL cycles have money inside ten days.
+**On AT-RISK cycles the gap averages 9.40 days and 59.8% have money inside ten
+days.** The measured ceiling for a legal clairvoyant schedule is **51.5%** and
+the agent reaches **42.97%**, so the agent is BELOW the ceiling, not above it.
+V7 is still rail-limited — 51.5% is under the published band's 85% floor — but
+the reason is the ceiling itself, not a claim that the agent has already
+exceeded it.
 
 Real subscription billing is not uniform: people subscribe just after being
 paid, and merchants bill on the 1st. Draw `due_day` with mass concentrated a few
@@ -433,10 +443,13 @@ Three things a judge needs and cannot currently get:
 
 
 **Scope added and not in the original plan:** a context layer (rail-outage
-detection), built because the action space measured only +1.371 pts against a
-policy already at 95.31% — the world is saturated at the scheduling task. The
-context layer's own recovery value is +0.058 pts at the most extreme severity
-swept (not significant on the adopted prior; re-run 31 August 2026); its defensible claim is a capability, not a number. `02_RESULTS.md`.
+detection), built because the action space measured only +0.136 pts (2 SE
+0.205, not significant) against a policy already collecting 99.21% of cycles — the world is saturated at the
+scheduling task. The context layer's own recovery value is **0.000 pts at severities
+0.00 and 0.15, +0.017 at 0.40 and +0.051 at 0.80, none significant** on the
+frozen world (`logs/w27_abl_outage_repaired.txt`); its defensible claim is a
+capability, not a number. *(The "0.000 at every severity swept" phrasing was
+the pre-W24 belief and is superseded.)* `02_RESULTS.md`.
 
 ## WHERE WE ACTUALLY WERE, 28 August — HISTORICAL, kept for the reasoning
 

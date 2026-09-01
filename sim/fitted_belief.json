@@ -69,8 +69,8 @@
   "stride": 1
  },
  "k": 5,
- "matches_shipping": true,
- "model_fingerprint": "e4f36b356c4300f199550a60610dcc3d36ce2ce599b2e2752bfa478d59f6d8fd",
+ "matches_shipping": false,
+ "model_fingerprint": "7c3eb0f0dfe630db27ed7d55947e303eba453c67eeb95979f95aa3b8aaa13b5c",
  "n": 100,
  "numpy": "2.4.2",
  "objective": "mean cycle_rec across payday_err cells on training populations",
@@ -96,13 +96,14 @@
  "selection_margin_points": 0.0,
  "shipping": {
   "prior_day0": 8.0,
-  "prior_floor": 0.5,
-  "prior_w": 9,
+  "prior_floor": 0.1,
+  "prior_w": 5,
   "spend_beta": 0.0,
   "stride": 1
  },
+ "shipping_source": "NOT selected by this file. sim/fit_belief.py scores on the PRE-CANONICAL world (pop_spend=1.05, k=5, uniform_tail payday, seeds 600-607, no burn-in, no mandate outflow), and its prior_w grid is (5,7,9,12,15) so it cannot reach the canonical optimum at all. `shipping` was re-selected on 1 September 2026 on the CANONICAL world (pop_spend=0.93, k~1+Poisson(1), statutory payday, burn-in 12, mandate outflow on) by mean recovery of at-risk cycles across payday_err {1,3,7,14} on TRAIN populations 700-709, scored once on held-out 710-719. `selected` below is still what THIS file's search returned, unchanged, which is why matches_shipping is now false. See NOTES.md, 1 September 2026, W24.",
  "spend": 1.05,
- "status": "reproduced",
+ "status": "superseded_by_canonical_world_reselection",
  "train_by_payday_err": {
   "1": {
    "base": 0.9273634850327936,
@@ -156,5 +157,17 @@
   605,
   606,
   607
+ ],
+ "train_populations_shipping": [
+  700,
+  701,
+  702,
+  703,
+  704,
+  705,
+  706,
+  707,
+  708,
+  709
  ]
 }

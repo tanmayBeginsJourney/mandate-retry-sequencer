@@ -1,0 +1,27 @@
+PAGE SWEEP -- agent vs payday_wait, canonical world, batch_report config.
+120 runs: 6 levels x 10 held-out pops x 2 arms, n=100, 120d, pop_spend=0.93, run seed 7, mode=full.
+
+ payday_err  payday_wait     agent    delta    2 SE   at risk  verdict
+          1       99.80%    99.81%    +0.01    0.18       557  tie
+          3       99.25%    99.56%    +0.31    0.46       557  tie
+          5       94.17%    99.58%    +5.41    1.59       557  agent wins
+          7       90.29%    99.38%    +9.08    1.84       557  agent wins
+         10       87.48%    99.25%   +11.77    1.45       557  agent wins
+         14       86.13%    98.83%   +12.71    1.00       557  agent wins
+
+SWEEP for scripts/build_page_data.py -- transcribe, do not compute.
+The delta is printed from the paired difference, NOT from
+subtracting the two rounded columns; those can disagree by a
+hundredth and a page that disagrees with its own source invites
+the reader to check nothing else.
+SWEEP = [
+    (1  99.80, 99.81, +0.01, 0.18, "tie"),
+    (3  99.25, 99.56, +0.31, 0.46, "tie"),
+    (5  94.17, 99.58, +5.41, 1.59, "agent wins"),
+    (7  90.29, 99.38, +9.08, 1.84, "agent wins"),
+    (10 87.48, 99.25, +11.77, 1.45, "agent wins"),
+    (14 86.13, 98.83, +12.71, 1.00, "agent wins"),
+]
+
+  The +/-7 row is the headline cell and must reproduce `agent.batch_report --pops 10 --canonical`.
+  BIAS: `payday_wait` is the harness's own baseline and is weaker than the frozen `[1,7]` schedule. Read this beside `test_steelman_schedule.py`, never instead of it.

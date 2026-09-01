@@ -31,30 +31,53 @@ Every decision is appended to an audit log, including the decision to wait.
 
 ## Results
 
-| | agent | fixed schedule | source |
-|---|---|---|---|
-| Billing cycles collected | 98.01% | — | `agent.batch_report` |
-| Recovered across the batch | ₹6,203,060 | — | `agent.batch_report` |
-| Of debits that would fail on their due date, share recovered | 90.84% | 16.35% | `test_recovery_rates` |
-| Mandates alive after 120 days | 96.6% | 32.1% | `test_recovery_rates` |
+Two different quantities are reported below, in two tables, because they have
+different denominators. **Cycle collection** counts every billing cycle due,
+including the ones that never failed. **Recovery** counts only the debits that
+would have failed on their due date. Published industry figures are recovery
+rates. This project's own metric is cycle collection, because it prices mandate
+death: a dead mandate forfeits its remaining cycles.
 
-The first two rows use full agent mode: 100 customers × 5 mandates, population
-seeds 700–703, run seed 7, and 120 days. The last two use degenerate mode over
-population seeds 700–707 with run seed 907. Both use `payday_err=7` and
-`pop_spend=1.05`. In the four-population full-mode batch, the `payday_wait`
-baseline collects 57.70% of cycles, 40.30 points below the agent (2 SE 2.32).
+Both tables run the same world: 100 customers, mandates per customer drawn from
+`1 + Poisson(1)` capped at 8, 120 days, `payday_err=7`, `pop_spend=0.93`, and 12
+burn-in cycles discarded before measurement.
 
-The fixed schedule's survival rate is low because it uses all four attempts
+**Cycles collected.** *Full agent mode, 10 held-out populations (seeds
+710–719), run seed 7.* `py -3.12 -m agent.batch_report --pops 10 --canonical`
+
+| | agent | `payday_wait` |
+|---|---|---|
+| Billing cycles collected | 99.38% | 90.29% |
+| Recovered across the batch | ₹7,511,500 | — |
+
+**+9.08 points, 2 SE 2.01.**
+
+**Recovery of debits that would fail on their due date.** *Degenerate mode, 20
+populations (seeds 700–719), run seed 907.*
+`py -3.12 agent/tests/test_canonical_world.py --confirm`
+
+| | agent | fixed schedule |
+|---|---|---|
+| Share of at-risk debits recovered | 95.24% | 20.41% |
+| Mandates alive after 120 days | 99.4% | 85.3% |
+
+`pop_spend` is the share of a salary a customer spends per cycle. It is set to
+one minus India's household saving rate, which three published RBI readings put
+between 7% and 20%, so `pop_spend` is a range of 0.80 to 0.93 rather than a
+single value. 0.93 is the top of that range and the only part of it where
+enough debits fail to measure a recovery difference at all — see
+[Sensitivity to world hardness](#sensitivity-to-world-hardness).
+
+The fixed schedule's survival rate is lower because it uses all four attempts
 within four days of the due date and reaches the NPCI cap while the account is
-still empty. The cycle-collection metric prices mandate death directly: a dead
-mandate forfeits its remaining cycles, so no lifetime-value constant is needed.
+still empty.
 
 All results are simulated. No Razorpay transaction, mandate or decline code has
 been observed by this project.
 
 [`docs/index.html`](docs/index.html) is an interactive walkthrough of one
-customer's month, a rail outage, and the cases where the baseline wins. Static
-page, no build step: `python -m http.server --directory docs`.
+customer's month, a rail outage, and the cases where the baseline keeps up.
+Static page, no build step: `python -m http.server --directory docs`.
 
 ## External validation
 
@@ -69,55 +92,101 @@ were not used in calibration.
 
 | | measured | published | |
 |---|---|---|---|
-| Share of debits failing on their due date | 13.68% | 8–15% | hit |
-| Recovery under a fixed-interval retry schedule | 27.85% | 20–40% | hit |
-| Recovery under smart retry timing | 96.78% | 70–85% | miss, too high |
-| Share of recoveries landing inside 10 days | 42.94% | 85–95% | miss, too slow |
+| Share of debits failing on their due date | 10.50% | 8–15% | hit |
+| Recovery under a fixed-interval retry schedule | 22.15% | 20–40% | hit |
+| Recovery under smart retry timing | 95.24% | 70–85% | miss, too high |
+| Share of recoveries landing inside 10 days | 42.97% | 85–95% | miss, too slow |
 
-8 held-out populations at `pop_spend=0.80`, the calibration whose failure rate
-falls inside the published band. Reproduce with
-`py -3.12 agent/tests/test_recovery_rates.py`. Sources are listed in
-[`docs/01_FACTS.md`](docs/01_FACTS.md). The command prints all measurements and
-exits non-zero because two pre-registered predictions are marked `BROKE`; a
-broken prediction is not reported to automation as a passing test.
+100 customers per population at `pop_spend=0.93`, the end of the range where
+the failure rate falls inside the published band. Sources are listed in
+[`docs/01_FACTS.md`](docs/01_FACTS.md).
+
+**The four rows do not share a sample size.** Rows one and two are properties of
+the world and of a policy this project did not write, so they are measured on
+100 populations: `py -3.12 agent/tests/test_v3_power.py`. Rows three and four
+measure the agent and are measured on 20:
+`py -3.12 agent/tests/test_canonical_world.py --confirm`.
+
+**Why the third row is above its band.** The second and third rows are measured
+in the same world, at the same calibration, with the same run seed. The second
+runs a policy this project did not design — Razorpay's documented
+fixed-interval schedule, made legal — and it lands inside its published band at
+22.15%, with a 2 SE of 1.95 over 100 populations. A world calibrated to be easy
+would lift both rows. The second is in band and the third is above it, so the
+excess belongs to the agent rather than to the world.
+
+**What would falsify it.** The second row dropping below 20% at a larger
+sample, which would mean the world is harder than the published baseline range
+and the third row's excess is not the agent. Or the second row sitting in band
+only at a calibration where the first leaves its own band, which would be two
+dials fitted to two targets rather than a world that matches on both.
+
+**What it is not.** Both bands are `[REPORTED]`, vendor-sourced, and aggregate
+customer bases that are not comparable to each other or to this world. The
+70–85% band is the source's top performers; its stated median is 47.6%. The
+world and the agent share an author. This is an internal consistency argument,
+not independent evidence.
 
 The two hits come from different parts of the model: the first is a property of
 the simulated world, the second of a baseline policy running inside it.
 
-The two misses have separate causes, both in the world model rather than the
-agent:
+The two misses have separate causes:
 
 - Recovery is too high because no simulated customer is permanently unable to
-  pay. A clairvoyant scheduler collects 100% at every calibration tested.
-  Adding customers who cannot pay brings recovery into the published band.
+  pay. A clairvoyant schedule that obeys the four-attempt cap, the 24-hour
+  notice rule and legal presentation hours still collects 100% of at-risk
+  cycles at every calibration tested. The third row therefore measures the
+  agent's behaviour rather than the world's difficulty.
 - Recovery is too slow because a mandate's due date and its customer's payday
-  are drawn independently, so the gap between them averages half a cycle. Only
-  35.8% of at-risk cycles have money available inside ten days, and the agent
-  recovers 42.6% of them in that window. Real billing dates cluster near
-  paydays; these do not.
+  are drawn independently, so the gap between them averages half a cycle. The
+  same clairvoyant schedule reaches only 51.5% of at-risk cycles inside ten
+  days, which is below the published band's floor. The agent reaches 42.97%,
+  or 83.4% of what is available. The published band is drawn from card
+  dunning, where a customer can fix the instrument on demand; UPI AutoPay
+  recovery waits for a roughly monthly salary credit.
 
 Temporary account holds were expected to account for the second miss. Swept
-across 14 alternative worlds, they moved it by under one point. No alternative
-world in that sweep scores better against the published figures than the
-calibration above.
+across 14 alternative worlds, they moved it by under one point.
+
+Income paid in several instalments a month is the only mechanism found that
+lifts the ten-day ceiling. Swept over irregular-income fractions of 0.20 to
+0.60 and 4 to 12 credits a month, the ceiling reaches 87.57% at the top corner
+and stays at 71.8–81.2% in the middle. It is left off. No source gives a
+payment-frequency mix for UPI AutoPay holders specifically, and at the agent's
+measured capture ratio of 83.4% even the top corner puts the fourth row at
+about 73%, still below its band.
 
 ### Sensitivity to world hardness
 
-`pop_spend` sets how much of a salary a customer spends per cycle.
+`pop_spend` sets how much of a salary a customer spends per cycle. It is one
+minus the household saving rate. India's published FY25 rate has three readings
+— about 18–20% including physical assets, 11.8% gross financial, 7% net
+financial — which puts `pop_spend` between 0.80 and 0.93. No single value inside
+that range is declared.
 
-| `pop_spend` | baseline per-attempt approval | agent − baseline |
-|---|---|---|
-| 0.60 | 93.2% | +3.52 ±0.90 |
-| 0.80 | 84.6% | +6.36 ±1.43 |
-| 0.90 | 66.2% | +14.93 ±1.96 |
-| 1.05 | 39.7% | +36.48 ±3.20 |
+| `pop_spend` | `payday_wait` | agent | agent − baseline | at-risk cycles |
+|---|---|---|---|---|
+| 0.80 | 99.07% | 100.00% | +0.93 ±0.60 | 2 |
+| 0.85 | 97.36% | 99.83% | +2.47 ±0.93 | 83 |
+| 0.88 | 95.99% | 99.65% | +3.66 ±0.86 | 197 |
+| 0.90 | 94.24% | 99.53% | +5.29 ±0.82 | 299 |
+| 0.93 | 90.29% | 99.38% | +9.08 ±1.84 | 557 |
 
-Due-date failure is 13.68% at `pop_spend=0.80` and 68.71% at 1.05.
+Cycles collected, 10 held-out populations of 100 customers, 120 days,
+`payday_err=7`, run seed 7. Due-date failure is 3.49% at `pop_spend=0.88` and
+10.58% at 0.93.
 
-At 0.80, where the failure rate matches the published band, the agent is worth
-6.36 points. The published industry benchmark for retry optimisation is a 6–8%
-uplift. No parameter was fitted against either figure. Reproduce with
-`py -3.12 scripts/spend_sweep.py`.
+The last column is the number of billing cycles a debit on the due date would
+not have covered. Both arms collect every cycle that was never at risk, so the
+difference between them is carried entirely by that column. At `pop_spend=0.80`
+there are two such cycles across a thousand customers, and the +0.93 in that
+row is not a measurement of anything.
+
+At 0.93 the agent is worth 9.08 points. The published industry benchmark for
+retry optimisation is a 6–8% uplift. No parameter was fitted against either
+figure. Reproduce with `py -3.12 -m agent.batch_report --pops 10 --canonical`
+for the 0.93 row; the other rows change `pop_spend` and are not
+gate-protected.
 
 ## Quickstart
 
@@ -125,24 +194,35 @@ Verified Windows commands:
 
 ```powershell
 py -3.12 -m pip install numpy==2.4.2
-py -3.12 -m agent.batch_report --pops 4
+py -3.12 -m agent.batch_report --pops 10 --canonical
 ```
 
 On macOS or Linux, use a Python 3.12 interpreter with NumPy 2.4.2 and replace
 `py -3.12` with that interpreter's command.
 
-Roughly 50 seconds. No API key, no network, no model download.
+Roughly 30 seconds. No API key, no network, no model download.
 
-The run covers four populations of 100 customers and prints the headline beside
-the baseline, then the supporting detail. Stopping rules that fired:
+The run covers ten populations of 100 customers and prints the headline beside
+the baseline, then the supporting detail:
+
+```
+THE BATCH -- 100 customers x ~2 mandates (1 + Poisson(1), capped at 8) over 10 held-out populations, 120 days, payday_err=+/-7, pop_spend=0.93
+
+                   arm  cycles collected    Rs recovered  survival  att/cycle    2 SE
+   payday_wait (rival)            90.29%              --    90.52%      1.272
+  agent, deterministic            99.38%    Rs 7,511,500    99.84%      1.450   2.011
+
+  agent, deterministic vs payday_wait: +9.08 pts (2 SE 2.01, SIG)
+```
+
+Stopping rules that fired:
 
 ```
 STOPPING RULES THAT FIRED, grouped by rule
   agent, deterministic
-     COLLECTED             6172
-     CYCLE_CLOSED           630
-     ESCALATED               45
-     AGENT_STOP               4
+     COLLECTED             7535
+     CYCLE_CLOSED           311
+     LAST_ATTEMPT_HELD       28
      MANDATE_DEAD             3
 ```
 
@@ -157,7 +237,7 @@ quantities; a clean run has zero in both columns for different reasons:
   agent, deterministic        lead             0                 0
   agent, deterministic     pending             0                 0
   agent, deterministic   represent             0                 0
-                             TOTAL             0                 0   over 8954 executed money actions
+                             TOTAL             0                 0   over 8702 executed money actions
 ```
 
 Querying the audit trail by `action_id` returns the full chain behind one
@@ -165,9 +245,9 @@ payment. The report chooses the first fully logged success, so its generated
 action ID is run-specific. One example chain is:
 
 ```
-  mandate c11m1
+  mandate c16m0
   WHAT THE BELIEF THOUGHT
-     p(success) now 0.3114, best later 0.3081, index score +17.60  -> ok
+     p(success) now 0.8931, best later 0.9657, index score +2.42  -> ok
   WHAT THE DIAGNOSER SAID, AND WHY
      root cause   INSUFFICIENT_FUNDS
      intervention RETRY  confidence 0.7
@@ -177,12 +257,12 @@ action ID is run-specific. One example chain is:
   ALL FIVE CONSTRAINT VERDICTS
      cap PASS   peak PASS   lead PASS   pending PASS   represent PASS
   THE MONEY ACTION
-     Rs 630.00 at t=56 (day 2, hour 08), notified t=32, gate=ALLOWED
+     Rs 520.00 at t=344 (day 14, hour 08), notified t=320, gate=ALLOWED
   THE OUTCOME
-     OK  success=True  recovered Rs 630.00
+     OK  success=True  recovered Rs 520.00
 ```
 
-That run writes 29,671 events to `agent/runs/batch_report_chain.jsonl`, one row
+That run writes 31,225 events to `agent/runs/batch_report_chain.jsonl`, one row
 per event, append-only.
 
 Two further offline commands:
@@ -272,11 +352,18 @@ flowchart LR
   A -.-> R["independent recount<br/><i>shares no code with the enforcer</i>"]
 ```
 
-Sharing one belief across a customer's mandates is worth **8.34 points**
-(gate S2a_PD, shipping filter, ±1.36) at `pop_spend=1.05` and 3.38 points
-at 0.80 (agent measurement, not gate-protected). Like the headline, it
-varies with world hardness. This is the case for running the system at an
-aggregator rather than at a single merchant.
+Sharing one belief across a customer's mandates is worth **7.32 points**
+(gate S2a_PD, shipping filter, ±2.02) at `pop_spend=1.05` and **1.30 points**
+(±0.42) at 0.80 (agent measurement, not gate-protected). Both figures come from
+the gate suite's world, which runs 5 mandates per customer, and that is not the
+world the results above are measured on. Like the headline, the figure varies
+with world hardness — and it varies by more than a factor of five across the
+two calibrations, so the hard-world number on its own overstates it. This is
+the case for running the system at an aggregator rather than at a single
+merchant, and it is a weaker case at the gentler calibration than at the harder
+one. Both were re-measured on 1 September 2026 after the payday prior was
+re-selected; `logs/w26_gate_full_moat_remeasure.txt` and
+`logs/w26_w9_pooling_consent_remeasure.txt`.
 
 Two boundaries are enforced in code, each with a test:
 
@@ -331,41 +418,66 @@ by default.
 
 ## Timing sensitivity
 
-Results depend on how accurately payday can be estimated in advance.
-`payday_wait`, the baseline throughout, estimates the payday, waits for it, and
-then attempts once a day.
+Results depend on how accurately payday can be estimated in advance. Three
+fixed schedules are measured against the agent. `naive` is Razorpay's
+documented schedule made legal (T+1 to T+4). `payday_wait` estimates the
+payday, waits for it, and then attempts once a day. `[1,7]` places two
+attempts at fixed offsets from the same noisy payday estimate the agent is
+given; the offsets were chosen once on training populations and then frozen.
 
-*n=100, 8 held-out populations (seeds 700–707), 120 days, paired 2 SE.
-Reproduce with `py -3.12 sim/headline.py`.*
+*Recovery of at-risk cycles. n=100, 10 held-out populations (seeds 710–719),
+120 days, `pop_spend=0.93`, paired 2 SE. `payday_wait` runs through the
+harness, which computes no at-risk denominator, so it appears in the cycle
+column only. Reproduce with
+`py -3.12 agent/tests/test_steelman_schedule.py`.*
 
-| Payday known to | `payday_wait` | This agent | Difference |
-|---|---|---|---|
-| ±1 day | 99.24% | 96.44% | −2.81 ±0.46 |
-| ±3 days | 94.65% | 96.06% | +1.41 ±1.08 |
-| ±5 days | 72.18% | 95.38% | +23.20 ±2.57 |
-| ±7 days | 59.14% | 95.63% | +36.48 ±3.20 |
-| ±10 days | 48.11% | 94.14% | +46.03 ±3.62 |
-| ±14 days | 40.01% | 91.99% | +51.98 ±2.66 |
+| Payday known to | `naive` | `[1,7]` | This agent | agent − `[1,7]` |
+|---|---|---|---|---|
+| ±1 day | 23.00% | 99.75% | 98.59% | −1.16 |
+| ±3 days | 23.00% | 98.51% | 98.18% | −0.33 |
+| ±5 days | 23.00% | 96.63% | 97.78% | +1.15 |
+| ±7 days | 23.00% | 90.88% | 94.43% | +3.55 |
+| ±10 days | 23.00% | 66.93% | 90.76% | +23.83 |
+| ±14 days | 23.00% | 55.47% | 89.88% | +34.41 |
 
-The baseline is better when payday is known to about one day. At ±3 days the
-agent is ahead by 1.41 points (2 SE 1.08). Beyond that the baseline degrades
-sharply while the agent holds between 92% and 96%, because it recovers the
-payday from observed outcomes instead of relying on the estimate it was given.
+The two are level when payday is known to within three days — −1.16 and −0.33
+are both inside the measurement error — and the agent is ahead from ±5 upward.
+The agent is nearly flat across the range (98.59% to 89.88%) because it recovers
+the payday from observed outcomes; `[1,7]` collapses (99.75% to 55.47%) because
+it cannot. `naive` is unaffected by the estimate because it never uses one.
 
-How accurately payday can be estimated in India is unknown; no measurement of it
-was found. The agent therefore learns it online and reports its own uncertainty.
+Where the two are level, `[1,7]` is the cheaper policy: it collects the same
+share on about a quarter fewer attempts per cycle (1.10 against 1.44) and
+recovers faster (49.9% of at-risk cycles inside ten days at ±1 day, against
+46.6%). The agent's value at that end of the range is not higher collection. It
+is that its collection does not depend on the payday estimate being good.
+
+How accurately payday can be estimated in India is unmeasured. The Code on
+Wages requires payment by the 7th or 10th of the month, most firms pay on the
+last working day, and government salaries land on a fixed date — which points
+at the low end of this table, where the frozen schedule wins.
+
+A large margin over `naive` is not evidence for the belief filter. At ±1 day
+the agent is 67.58 points ahead of `naive` and `[1,7]` is 76.75 points ahead.
+Two fixed offsets take more of that margin than the agent does at every level
+up to ±7.
 
 Two further results:
 
-- The agent's action space is worth 1.371 points at 120 days, almost entirely by
-  holding back a final attempt to avoid mandate death. It is 0.563 points at 60
-  days and 1.790 at 180, so the value grows with the horizon.
+- The agent's action space is worth 0.136 points at 120 days and that is
+  **inside its own error bar** (2 SE 0.205), so it is reported as no measured
+  effect rather than as a small win. Adding the funding nudge at its higher
+  rates does clear the bar: +0.353 (2 SE 0.205) at `p=0.25` and +0.387 (2 SE
+  0.217) at `p=0.50`. `ESCALATE` and `STOP` never fire and are worth 0.000
+  each. Re-measured on the shipped belief; `logs/w27_abl_action_repaired.txt`.
 - Outage detection works, but acting on it does not help. Pooling outcomes
   across merchants, the agent detects a degraded UPI rail with 0 false alarms in
   48 runs and a true-positive rate of 1.00 at n≥100. A single merchant sees 0.38
   attempts per 24-hour window against a floor of 8 and cannot evaluate the
-  statistic. Pausing dispatch during a detected outage measured −0.529 points,
-  so it is off by default.
+  statistic. Pausing dispatch during a detected outage measured 0.000 points at
+  severity 0.00 and 0.15, +0.017 at 0.40 and +0.051 at 0.80 — **none of them
+  significant**, every one inside its own error bar. It is off by default.
+  `logs/w27_abl_outage_repaired.txt`.
 
 Experimental design and bias analysis for all of the above:
 [`docs/02_RESULTS.md`](docs/02_RESULTS.md).
@@ -429,22 +541,43 @@ notification. Delivery is only considered proven when the corresponding
   them, and no source gives AutoPay-specific rates. Every rate in this
   repository is swept rather than chosen, and reported as a curve. The largest
   single sensitivity: sweeping the limit-decline rate over 0.00 / 0.05 / 0.15
-  costs 0.00 / −2.87 / −13.46 points.
+  costs 0.00 / −2.29 / −9.22 points.
 - **The legal status of cross-merchant pooling is unresolved in Indian law.** No
   statute or RBI circular addresses it directly. The nearest instrument is the
   DPDP Act 2023, whose purpose-limitation and consent provisions were
   operationalised by the DPDP Rules notified on 14 November 2025, which points
   at consent-gating rather than prohibition. Pooling is therefore a per-customer
   permission, and the cost of withholding it is measured: running fully
-  non-pooled costs 8.46 points at `pop_spend=1.05` and 3.38 at 0.80; pooling
-  only for consenting customers costs 3.86 and 1.50 at half consent. Reproduce
-  with `py -3.12 agent/tests/test_pooling_consent.py`.
-- **Two calibration gates fail on monotonicity.** The belief filter models no
-  balance floor at zero and approximates hourly spend jitter with a fixed 3-tap
-  kernel. Both are structural and no parameter fixes either. Calibration error
-  is inside its bound (ECE 0.026); the ordering of the reliability curve is
-  what fails.
-- **Sample size is bounded by compute.** n=100 × 5 mandates × 8 populations, one
+  non-pooled costs 6.47 points (±0.62) at `pop_spend=1.05` and 1.30 (±0.42) at
+  0.80; pooling only for consenting customers costs 2.77 and 0.57 at half
+  consent. Those figures are measured on the gate suite's world (5 mandates per
+  customer), not on the world the results above use. Re-measured 1 September
+  2026 on the shipped payday prior, which cut every cell — the 0.80 column is
+  now close enough to zero that consent-gating is nearly free at the gentler
+  calibration. Reproduce with
+  `py -3.12 agent/tests/test_pooling_consent.py`.
+- **Two calibration gates fail on monotonicity.** The belief filter models the
+  balance floor at zero, but its diffusion leaks through it: the modelled drain
+  rounds to zero bins for 22 of a cycle's 30 days, and the 3-tap convolution
+  discards its end taps, so mass in the lowest bin falls off the bottom each
+  day and renormalisation pushes it back up. The filter can therefore believe
+  money appeared where none did. A repair exists —
+  `w3.BeliefPD(monotone_drain=True)` applies the kernel to the drain, whose
+  support is non-negative — and it is **off by default**, because it is
+  indistinguishable on recovery (−0.26 points, 2 SE 0.65, over 120
+  population-cells) and kills more mandates at the shipping horizon (389
+  against 144). Calibration error is inside its bound (ECE 0.025); the ordering
+  of the reliability curve is what fails, and the repair is not expected to fix
+  that half.
+- **Stage 0 and the live Razorpay executor keep two different clocks.** Stage 0
+  reads `target_t` as simulated hours (the peak-hour rule is `target_t % 24`);
+  `RazorpayExecutor.notify` reads the same field as a future Unix epoch second
+  when it creates the pre-debit order. No single value satisfies both, so the
+  live executor has never been driven end to end by Stage 0 with a genuine
+  order. `scripts/prove_stage0_refuses.py` prints this rather than working
+  around it, and the executor refuses instead of fabricating a debit.
+- **Sample size is bounded by compute.** n=100 customers, about 2 mandates each,
+  over 10 populations for the batch result and 20 for the validation table, one
   run seed each.
 
 ## Repository map

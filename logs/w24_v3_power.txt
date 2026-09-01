@@ -1,0 +1,33 @@
+﻿V3 AND V1 AT FIVE TIMES THE SAMPLE
+100 runs: 100 populations x 1 arm (doc_legal), n=100, 120d, payday_err=+/-7, pop_spend=0.93
+doc_legal consults no belief, so the 1 Sept belief repair cannot move either number.
+
+========================================================================================
+  target  n pops     value    2 SE          band   verdict   floor margin
+      V1     100    10.50%   +0.52         8-15%       HIT         +2.50
+      V3     100    22.15%   +1.95        20-40%       HIT         +2.15
+----------------------------------------------------------------------------------------
+was (20 pops)            10.58%   +0.00   V1
+                    20.41%   +4.10   V3
+  at-risk cycles 6304 of 60183 due, pooled over 100 populations
+
+DOES THE V3 HIT SURVIVE?
+========================================================================================
+  floor margin +2.15 points against a 2 SE of 1.95 (was 4.10, 53% narrower)
+  VERDICT: the hit SURVIVES and the margin now exceeds 2 SE.
+  V3 is inside its published band by more than the measurement error.
+
+WHAT THIS IS EVIDENCE FOR, AND WHAT WOULD FALSIFY IT
+========================================================================================
+  V3 is the only validation target measured on a policy this project did not
+  write. It running in band is the evidence that the canonical world is not
+  calibrated easy -- which is the whole rebuttal to V5 sitting ABOVE its band.
+
+  FALSIFIED IF: V3 drops below 20% at a larger sample (the world is harder than
+  the published baseline range and V5's excess is not the agent), or if V3 is
+  only in band at a calibration where V1 leaves ITS band (two dials fitted to
+  two targets, which is the trap docs/00_HANDOFF.md names).
+
+  BIAS. Both bands are [REPORTED], vendor-sourced, and aggregate non-comparable
+  customer bases. The world and the agent share an author. Neither number is
+  independent evidence.

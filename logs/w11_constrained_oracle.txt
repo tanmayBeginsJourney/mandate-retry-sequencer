@@ -1,0 +1,17 @@
+THE CONSTRAINED ORACLE -- best a LEGAL schedule could do
+  4 attempts, no due-date presentation, legal hours only, clairvoyant.
+  CLAIRVOYANT: it needs one attempt, so the cap never binds on IT.
+  Upper bound. Ignores sibling drain, as unwinnable_cycles does.
+
+          cell  at-risk  V5 ceiling  V7 ceiling  median day  measured V5  measured V7
+         today      658     100.00%      77.96%         1.0       96.79%       40.76%
+    canon 0.80      115     100.00%      93.91%         1.0       95.39%       57.26%
+    canon 0.85      405     100.00%      69.63%         1.0       86.27%       40.27%
+    canon 0.88      663     100.00%      65.31%         4.0       92.24%       37.10%
+    canon 0.93     1256     100.00%      57.88%         7.0       87.95%       35.81%
+   R1R2R3 0.80       42     100.00%      85.71%         1.0       77.99%       53.35%
+   R1R2R3 0.88      189     100.00%      67.72%         4.0       80.16%       43.28%
+
+  V7's published band is 85-95%. Compare it to the V7 CEILING column,
+  not to the measured column: no policy can recover a cycle before
+  the money exists.

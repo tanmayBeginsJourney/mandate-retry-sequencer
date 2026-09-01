@@ -127,13 +127,17 @@ anything the project reports.
   figures are inconsistent and the page does not reconcile them.** Use for
   order-of-magnitude framing only, and say which figure you used.
 
-- `[VERIFIED]` **What the calibration costs, measured.** At `pop_spend=1.05` the
-  simulated account cannot cover the debit on its due date **53%** of the time
-  and the agent beats the baseline by **+36.48** pts. At `pop_spend=0.80` the
-  baseline's per-attempt approval is **84.6%** — inside the band the sources
-  above report — and the agent is worth **+6.36** pts (2 SE 1.43), which is
-  inside the 6–8% industry benchmark below. Reproduce with
-  `python scripts/spend_sweep.py`. Table in `02_RESULTS.md`.
+- `[VERIFIED]` **What the calibration costs, measured.** ⚠️ **Corrected
+  1 September 2026: the +36.48 / +6.36 pair below was measured on a world with
+  three defects in it and is withdrawn.** On the frozen world `pop_spend` is one
+  minus the household saving rate and runs over **[0.80, 0.93]**. Due-date
+  failure is **3.49%** at 0.88 and **10.58%** at 0.93. The agent beats
+  `payday_wait` by **+0.93** at 0.80, **+3.66** at 0.88 and **+9.08** at 0.93,
+  the last of which sits just above the 6–8% industry benchmark below. Below
+  0.90 the world carries too few at-risk cycles to measure the difference: 2 at
+  `pop_spend=0.80`, across a thousand customers. Reproduce with
+  `py -3.12 -m agent.batch_report --pops 10 --canonical` for the 0.93 row;
+  the full region is `logs/w24_conditional_repaired.txt`.
 
 ## UPI rail outages — added 28 August 2026, for the agent's context layer
 
@@ -321,9 +325,16 @@ the docs — it needs a key to observe.
     Act require personal data be processed for specified, legitimate purposes.
 
   **What this means for the project, and it is not "give up".** The pooled
-  configuration is worth **+8.34 points in the hard world (S2a_PD) and +3.38 at
-  `pop_spend=0.80`** (W9, `02_RESULTS.md`) and it is the single largest component
-  of the result. The response is to stop treating pooling as the default and
+  configuration is worth **+7.32 points in the hard world (S2a_PD) and +1.30
+  (±0.42) at `pop_spend=0.80`** (W9, `02_RESULTS.md`), re-measured 1 September
+  2026 on the shipped payday prior. The **superseded** figures were +8.34 /
+  +3.38, so **both cells shrank**, and at the gentler calibration — the one
+  inside the externally derived `pop_spend` region — pooling is now worth about
+  a point. It is still one of the larger components of the result, but it is no
+  longer large enough that the compliant-by-default configuration can be
+  described as giving up the product. The response is unchanged and the cost of
+  it is lower than when this paragraph was written: stop treating pooling as
+  the default and
   start treating it as **consent-gated**, with the non-pooled configuration
   measured and reported beside it. `solo_pop_pd` — one belief per mandate rather
   than per customer — already exists as a policy arm, so the compliant-by-default
@@ -544,7 +555,7 @@ space, no money, and no NPCI constraints. Neither has usable public code.
   `agent/execution/sim_executor.py:DeclineMix` is therefore **swept, never
   picked**, and reported as a curve — `02_RESULTS.md`. **`p_limit` is the
   largest single sensitivity in the agent (0.00 / 0.05 / 0.15 →
-  0.00 / −2.87 / −13.46 pts) and must never be quoted as a point.**
+  0.00 / −2.29 / −9.22 pts) and must never be quoted as a point.**
 
 - `[REPORTED]` **Razorpay operates a test mode** with its own API key pair,
   test UPI VPAs (`success@razorpay` / `failure@razorpay`) and mocked mandate

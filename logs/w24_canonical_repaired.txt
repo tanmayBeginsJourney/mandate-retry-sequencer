@@ -1,0 +1,36 @@
+﻿THE CANONICAL WORLD -- scored as a REGION, not at a point.
+80 runs: 2 spend levels x 20 populations x 2 arms, n=100 120d payday_err=+/-7
+  CONFIRMATION n=100; burn 12, mandate outflow ON, irregular_frac 0.00 (tested, immaterial)
+  pop_spend = 1 - household savings rate. 0.80 total / 0.88 gross financial / 0.93 net financial.
+
+============================================================================================================
+  spend             arm       V1   recovery    2 SE   <=10d    surv  cyc_rec  at risk
+   0.88           agent    3.49%     95.46%   +3.07   44.6%   99.8%   99.69%      420
+   0.88  fixed schedule    3.49%     18.96%   +6.88   80.0%   93.9%   94.52%      420
+------------------------------------------------------------------------------------------------------------
+   0.93           agent   10.58%     95.24%   +1.69   43.0%   99.4%   99.17%     1269
+   0.93  fixed schedule   10.58%     20.41%   +4.10  100.0%   85.3%   86.38%     1269
+------------------------------------------------------------------------------------------------------------
+
+THE REGION. Which targets hold in which sub-range.
+============================================================================================================
+  spend              V1              V3              V5              V7   V7 ceiling   capture
+   0.88     3.49% miss    18.96% miss    95.46% miss    44.61% miss        52.4%     85.2%
+   0.93    10.58% HIT     20.41% HIT     95.24% miss    42.97% miss        51.5%     83.4%
+
+  V5 CEILING is 100.0% at every cell (constrained oracle, clairvoyant),
+  so V5 measures AGENT BEHAVIOUR and is not world validation.
+  V7 CEILING is the best a LEGAL schedule could reach inside 10 days.
+  CAPTURE is measured V7 as a share of that ceiling -- the honest
+  headline for this rail, because the 85-95% band is card dunning,
+  where the customer fixes the instrument on demand. UPI AutoPay
+  recovery waits on a roughly monthly salary credit. The published
+  band contains no UPI data, which is the point and not a caveat.
+
+  Best in region: 2/4 at pop_spend=0.93.
+  No point in the region is declared as THE calibration.
+
+  BIAS. Bands are [REPORTED], vendor-sourced, aggregating
+  non-comparable customer bases. V5's 70-85% is the source's TOP
+  PERFORMERS; its stated median is 47.6%. The world and the agent
+  share an author, so none of this is independent evidence.

@@ -3,8 +3,8 @@
   "collect_calib": true,
   "fitted_belief": {
    "prior_day0": 8.0,
-   "prior_floor": 0.5,
-   "prior_w": 9,
+   "prior_floor": 0.1,
+   "prior_w": 5,
    "spend_beta": 0.0,
    "stride": 1
   },
@@ -248,24 +248,24 @@
    "violations": 0
   },
   "portfolio_pd|fitted|pe1": {
-   "approval": "0x1.b2cfd07fe2c4ep-1",
-   "att_per_cycle": "0x1.38f36ff2998b5p+0",
+   "approval": "0x1.bdb6db6db6db7p-1",
+   "att_per_cycle": "0x1.38abf82ee6987p+0",
    "calib_head": [
-    "0x1.c6ada76e6d282p-2",
-    "0x1.62d06536e6e8cp-1",
-    "0x1.e8e4ae369189ap-1"
+    "0x1.2b9c5cc16c483p-1",
+    "0x1.a87b9dd8e5270p-1",
+    "0x1.e9e7a473dc0fcp-1"
    ],
-   "calib_n": 1121,
-   "calib_sha256": "ec0caf08740952aa4a9336a58700851a62a6d589a944fe35c847a5456e3010e5",
+   "calib_n": 1120,
+   "calib_sha256": "245b7632a657a88e9095915693b9f1e7c5c7ad88f73541ec14d4d6def277c9a4",
    "calib_tail": [
-    "0x1.ffffffe460f20p-1",
-    "0x1.ffffffc07cb12p-1",
-    "0x1.169573c73f826p-1"
+    "0x1.ffffffe551936p-1",
+    "0x1.ffffffc25e327p-1",
+    "0x1.16982c65fa8dbp-1"
    ],
-   "cycle_rec": "0x1.f82ee6986d6f6p-1",
+   "cycle_rec": "0x1.f94cc5a7393aep-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.fe4b17e4b17e5p-1",
+   "survival": "0x1.0000000000000p+0",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -276,24 +276,24 @@
    "violations": 0
   },
   "portfolio_pd|fitted|pe7": {
-   "approval": "0x1.abbac2f5fa88ap-1",
-   "att_per_cycle": "0x1.39c9d73db263fp+0",
+   "approval": "0x1.96061b0a07d9ap-1",
+   "att_per_cycle": "0x1.47bf3b76a5d3ep+0",
    "calib_head": [
-    "0x1.c6ada76e6d283p-2",
-    "0x1.62d06536e6e8cp-1",
-    "0x1.e8dd3bbbdb6b5p-1"
+    "0x1.0f84db7a6c64cp-1",
+    "0x1.a5724aea7d1bdp-1",
+    "0x1.e6eba287ea604p-1"
    ],
-   "calib_n": 1124,
-   "calib_sha256": "8102b580b331e9f0795f2354a6a398a18f50761906fc69473d68950a8bb8f304",
+   "calib_n": 1174,
+   "calib_sha256": "91aeceacc35f571c4f035b5fc07661cb605010f93acd2fa58af9d117236d0d2a",
    "calib_tail": [
-    "0x1.ffffffe460cdap-1",
-    "0x1.ffffffc07cae7p-1",
-    "0x1.169573c73f826p-1"
+    "0x1.ffffffe550f48p-1",
+    "0x1.ffffffc25e29ap-1",
+    "0x1.16982c65fa8d9p-1"
    ],
-   "cycle_rec": "0x1.f3b76a5d3e415p-1",
+   "cycle_rec": "0x1.e7fdc441e2687p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.fae147ae147aep-1",
+   "survival": "0x1.f40da740da741p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -584,24 +584,24 @@
    "violations": 0
   },
   "solo_pop_pd|fitted|pe1": {
-   "approval": "0x1.2ad52ad52ad53p-1",
-   "att_per_cycle": "0x1.ae7b64c7e2f76p+0",
+   "approval": "0x1.4befca70684d8p-1",
+   "att_per_cycle": "0x1.95a2c1beac872p+0",
    "calib_head": [
-    "0x1.c6ada76e6d282p-2",
-    "0x1.c6ada76e6d282p-2",
-    "0x1.5bf1b94ff1ca4p-1"
+    "0x1.2b9c5cc16c483p-1",
+    "0x1.2b9c5cc16c483p-1",
+    "0x1.a0665b1868bb1p-1"
    ],
-   "calib_n": 1542,
-   "calib_sha256": "4c9c6b1d9b199ea3558e2f77a826e110bb34d89030f03b917181ec6943bd006a",
+   "calib_n": 1453,
+   "calib_sha256": "3be310ecf65207571f4fdc8eb1f39757f84867258ad8f3fc4157a8d23e4ef33a",
    "calib_tail": [
-    "0x1.65fcf56957096p-1",
-    "0x1.3a504fabe1cccp-3",
-    "0x1.3a504fabe1cccp-3"
+    "0x1.6c9448912fe9dp-1",
+    "0x1.4c0e6fad91dd1p-3",
+    "0x1.4c0e6fad91dd1p-3"
    ],
-   "cycle_rec": "0x1.d85b9172bd473p-1",
+   "cycle_rec": "0x1.e3864806b33a6p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.d0369d0369d03p-1",
+   "survival": "0x1.da740da740da7p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -612,24 +612,24 @@
    "violations": 0
   },
   "solo_pop_pd|fitted|pe7": {
-   "approval": "0x1.269f461116e66p-1",
-   "att_per_cycle": "0x1.a232cf252138bp+0",
+   "approval": "0x1.22c5072890886p-1",
+   "att_per_cycle": "0x1.a350ae33ed043p+0",
    "calib_head": [
-    "0x1.c6ada76e6d283p-2",
-    "0x1.c6ada76e6d283p-2",
-    "0x1.597b72f8e0a30p-1"
+    "0x1.0f84db7a6c64cp-1",
+    "0x1.166a785cf8a57p-1",
+    "0x1.93273e9ae73eep-1"
    ],
-   "calib_n": 1498,
-   "calib_sha256": "67a7e5888a964bcc027d3eabcb8988ec0fd9479c85fc31b4b008b38a3150d1aa",
+   "calib_n": 1502,
+   "calib_sha256": "d43aaee4b36c1fb1667613ac743895b23b2f76b598b8ca39cff0bcadd7ce16d0",
    "calib_tail": [
-    "0x1.65470e7db1690p-1",
-    "0x1.38a9afaa86b96p-3",
-    "0x1.38a9afaa86b96p-3"
+    "0x1.59d9e7e5f0447p-1",
+    "0x1.469be21401f18p-3",
+    "0x1.469be21401f18p-3"
    ],
-   "cycle_rec": "0x1.c67da086008efp-1",
+   "cycle_rec": "0x1.bac3fa6aa4b60p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.bbbbbbbbbbbbcp-1",
+   "survival": "0x1.afc962fc962fdp-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -752,24 +752,24 @@
    "violations": 0
   },
   "solo_shared_pd|fitted|pe1": {
-   "approval": "0x1.670a5c4d9c297p-1",
+   "approval": "0x1.72b83ac5cae0fp-1",
    "att_per_cycle": "0x1.7b64c7e2f7588p+0",
    "calib_head": [
-    "0x1.c6ada76e6d282p-2",
-    "0x1.62d06536e6e8cp-1",
-    "0x1.e8e4ae369189ap-1"
+    "0x1.2b9c5cc16c483p-1",
+    "0x1.a87b9dd8e5270p-1",
+    "0x1.e9e7a473dc0fcp-1"
    ],
    "calib_n": 1359,
-   "calib_sha256": "e793958802a2b8638c76a34446631647e988f94674af8920d9537a030a8adba8",
+   "calib_sha256": "22cc484e6126950681a181dccffda48259c9632d17e91d8fcfc7d1f6d0ad151b",
    "calib_tail": [
-    "0x1.7eb035357d347p-3",
-    "0x1.34c7d97cd1064p-47",
-    "0x1.43c7ad8aec96fp-67"
+    "0x1.7eb0353002ff2p-3",
+    "0x1.2b4af21fdbc9fp-47",
+    "0x1.39d4c9a758693p-67"
    ],
-   "cycle_rec": "0x1.efcedda974f90p-1",
+   "cycle_rec": "0x1.f79ff7110789ap-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.f258bf258bf26p-1",
+   "survival": "0x1.fc962fc962fc9p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,
@@ -780,24 +780,24 @@
    "violations": 0
   },
   "solo_shared_pd|fitted|pe7": {
-   "approval": "0x1.5fd679f9b283ap-1",
-   "att_per_cycle": "0x1.818912b45837dp+0",
+   "approval": "0x1.4e8e532d4902cp-1",
+   "att_per_cycle": "0x1.82a6f1c324036p+0",
    "calib_head": [
-    "0x1.c6ada76e6d283p-2",
-    "0x1.62d06536e6e8cp-1",
-    "0x1.e8dd3bbbdb6b5p-1"
+    "0x1.0f84db7a6c64cp-1",
+    "0x1.a5724aea7d1bdp-1",
+    "0x1.e6eba287ea604p-1"
    ],
-   "calib_n": 1381,
-   "calib_sha256": "57ef42f6da1ca263b6d3b1c27c5d1217076b7de8ac5e6706f88896ae5b38bfea",
+   "calib_n": 1385,
+   "calib_sha256": "f9377f84fd02957441aee1d5b33bcceecc09ee2f9001f988c4301cdf65cbb69e",
    "calib_tail": [
-    "0x1.7eb035357d346p-3",
-    "0x1.34c7d97cd1061p-47",
-    "0x1.43c7ad8aec96dp-67"
+    "0x1.7eb0353002fe1p-3",
+    "0x1.2b4af08457ee4p-47",
+    "0x1.39d4c7f7d72cep-67"
    ],
-   "cycle_rec": "0x1.f17bac3fa6aa5p-1",
+   "cycle_rec": "0x1.d3e415378e192p-1",
    "cycles_due": 917,
    "starvation": "0x0.0p+0",
-   "survival": "0x1.f40da740da741p-1",
+   "survival": "0x1.da740da740da7p-1",
    "vdetail": {
     "cap": 0,
     "lead": 0,

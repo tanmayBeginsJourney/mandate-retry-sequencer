@@ -46,7 +46,8 @@ from agent.llm.caseview import build_case_view
 from agent.llm.compose import compose_outreach
 from agent.llm.governance import sanitise
 from agent.policy.belief_book import BeliefBook
-from agent.policy.timing import DEFAULT_DISCOUNT, Reason, propose
+from agent.policy.timing import (DEFAULT_CYCLE_VALUE, DEFAULT_DISCOUNT,
+                                 Reason, propose)
 from agent.ports import (TECH, Allowed, Diagnosis, InterventionKind,
                          MandateRef, MoneyAction, Refused, RootCause, StopRule,
                          INDETERMINATE_CODES, to_paise)
@@ -320,6 +321,18 @@ class LoopContext:
     remind_on_fail: bool = False
     # n_mandates × 4 × cycles in the horizon. Circuit breaker, not a budget.
     legal_ceiling: int = 2 ** 31 - 1
+    bracket: bool = False
+    coverage: bool = False
+    lookahead: int | None = None
+    #: P(a future billing cycle collects), used to price the mandate's
+    #: continuation value on the LAST attempt of a cycle. 0.0 is inert and
+    #: reproduces the behaviour every measurement before 1 September 2026 was
+    #: taken on. See agent/policy/timing.py for the selection and the sweep.
+    cycle_value: float = DEFAULT_CYCLE_VALUE
+    #: W25. Choose by backward induction over (attempts left, days left)
+    #: instead of the one-step index. OFF by default; the DP is measured, not
+    #: shipped. See agent/policy/timing.py and agent/tests/test_plan_dp.py.
+    plan: bool = False
     # ---- outage response switches, each measurable in isolation
     pause_on_outage: bool = False
     # "never" | "outage_only" | "always"
@@ -691,13 +704,31 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
         if ctx.scheduler is None:
             td = propose(belief, m.amount, day, t, m.cycle_close,
                          m.attempts_used, kind=InterventionKind.RETRY,
-                         discount=ctx.discount)
+                         discount=ctx.discount,
+                         bracket=getattr(ctx, "bracket", False),
+                         coverage=getattr(ctx, "coverage", False),
+                         lookahead=getattr(ctx, "lookahead", None),
+                         # Billing cycles this mandate still has after the
+                         # current one. `cycles_due` counts cycles that CLOSE
+                         # inside the horizon, which is the same denominator
+                         # the recovery metric is reported against, so a
+                         # forfeited cycle costs the objective exactly what it
+                         # costs the score.
+                         cycles_left=max(
+                             0, m.cycles_due(ctx.days) - m.cycle - 1),
+                         cycle_value=ctx.cycle_value,
+                         plan=getattr(ctx, "plan", False))
         else:
             # A baseline arm. It never sees `belief` -- that is the whole
             # point of the seam, and it is why this branch cannot accidentally
             # borrow the timing policy's machinery.
+            # `customer_id` is passed so a payday-anchored baseline can read
+            # the SAME noisy estimate the agent's belief is seeded from.
+            # `propose_fixed` ignores it. No scheduler can reach a true payday
+            # or a balance: `estimates()` is the only accessor and it is noisy.
             td = ctx.scheduler(m.amount, day, t, m.cycle_close,
-                               m.attempts_used, kind=InterventionKind.RETRY)
+                               m.attempts_used, kind=InterventionKind.RETRY,
+                               customer_id=m.ref.customer_id)
 
         if ctx.log_ticks:
             ctx.log.emit(EventKind.DECISION_TICK, t, mandate_uid=m.ref.uid,
@@ -712,6 +743,21 @@ def _phase_decide(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
                 ctx.stops[StopRule.CYCLE_CLOSED.value] += 1
             elif td.reason == Reason.NO_LEGAL_SLOT:
                 ctx.stops[StopRule.NO_LEGAL_SLOT.value] += 1
+            elif td.reason == Reason.MANDATE_PRESERVED:
+                # The cycle is forfeited to keep the mandate alive. Held for
+                # the REST of the cycle, not just today: the odds only fall as
+                # the window closes, so re-asking every morning would spend a
+                # decision on a question already answered.
+                m.halted_in_cycle = m.cycle
+                ctx.stops[StopRule.MANDATE_PRESERVED.value] += 1
+                ctx.log.emit(EventKind.STOP, t, mandate_uid=m.ref.uid,
+                             cycle=m.cycle,
+                             rule=StopRule.MANDATE_PRESERVED.value,
+                             terminal=False,
+                             p_now=td.p_now, index_score=td.index_score,
+                             detail="last attempt declined: the odds of "
+                                    "collecting did not cover the mandate's "
+                                    "remaining billing cycles")
             continue
 
         p = td.proposal
@@ -735,7 +781,12 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
               scheduler=None, compose_llm: bool = False,
               last_attempt_backup: bool = False,
               remind_on_fail: bool = False,
-              legal_ceiling: int | None = None) -> dict:
+              legal_ceiling: int | None = None,
+              bracket: bool = False,
+              coverage: bool = False,
+              lookahead: int | None = None,
+              cycle_value: float = DEFAULT_CYCLE_VALUE,
+              plan: bool = False) -> dict:
     """Run the agent over a population. Same metric names as `harness.run`."""
     days = pop[0]["days"]
     cyc = pop[0]["cycle_days"]
@@ -754,7 +805,9 @@ def run_agent(pop, seed, gate: Stage0Gate, book: BeliefBook, log: AuditLog,
                       scheduler=scheduler, compose_llm=compose_llm,
                       last_attempt_backup=last_attempt_backup,
                       remind_on_fail=remind_on_fail,
-                      legal_ceiling=ceiling)
+                      legal_ceiling=ceiling, bracket=bracket,
+                      coverage=coverage, lookahead=lookahead,
+                      cycle_value=cycle_value, plan=plan)
 
     runtimes = []
     for ci, c in enumerate(pop):

@@ -210,8 +210,8 @@ b = w3.BeliefPD(
     days,                   # horizon, e.g. 120
     est_spend=est_spend,
     pop_info=True,          # INERT on BeliefPD -- see below. Harmless.
-    **cfg,                  # stride=1, prior_w=9, prior_day0=8.0,
-)                           # prior_floor=0.5
+    **cfg,                  # stride=1, prior_w=5, prior_day0=8.0,
+)                           # prior_floor=0.1
 ```
 
 With the fitted `spend_beta=0.0` the `est_spend` line reduces to `pop_spend`,

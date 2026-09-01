@@ -1,0 +1,11 @@
+STEELMAN RE-TUNED AT EACH payday_err (best 2 offsets, train 700-709,
+scored on held-out 710-719). Agent from the same held-out set.
+
+ payday_err     offsets  steel TEST  attempts    agent  agent-steel
+          1      [0, 1]     100.00%      1.28   90.58%        -9.42
+          3      [0, 3]     100.00%      1.43   90.68%        -9.32
+          7     [7, 28]      94.18%      1.46   89.54%        -4.64
+         14    [13, 27]      68.84%      1.57   86.14%       +17.30
+
+  Each row's schedule is the best available AT THAT NOISE LEVEL, so
+  the steelman is no longer handicapped away from payday_err=7.

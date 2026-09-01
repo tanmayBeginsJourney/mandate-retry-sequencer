@@ -1,0 +1,109 @@
+﻿running 10 agent runs + 10 baseline runs, one process each
+
+========================================================================================================
+THE BATCH -- 100 customers x ~2 mandates (1 + Poisson(1), capped at 8) over 10 held-out populations, 120 days, payday_err=+/-7, pop_spend=0.93
+========================================================================================================
+CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1), statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.
+Mandates are spread over 60 synthetic merchants (w3.make_pop draws merchant ids from range(60)); a batch is that population grouped by merchant.
+
+                   arm  cycles collected    Rs recovered  survival  att/cycle    2 SE
+   payday_wait (rival)            90.29%              --    90.52%      1.272        
+  agent, deterministic            99.38%    Rs 7,511,500    99.84%      1.446   1.844
+
+  agent, deterministic vs payday_wait: +9.08 pts (2 SE 1.84, SIG)
+
+  `payday_wait` IS A PERMANENT ROW AND CANNOT BE SWITCHED OFF. It is
+  the five-line heuristic a good rival builds in an afternoon, and at
+  payday_err of about 1 day it BEATS us. The headline is conditional
+  on that parameter, on how poor the world is, and on nothing else
+  -- docs/06_MODEL_CARD.md 2 and the spend sweep in 02_RESULTS.md.
+
+========================================================================================================
+RECOVERY RATE -- the only number here that can be compared to the outside world
+========================================================================================================
+  Cycles collected / cycles due is THIS project's metric and it counts
+  cycles that never failed. Every published industry figure is a
+  RECOVERY RATE: of the payments that failed, the share collected.
+  They are different quantities. docs/04_BUILD_PLAN.md W0.
+
+  REVENUE AT RISK is defined by the WORLD, not by any policy: the
+  mandate-cycles a debit on the due date would not have covered.
+  Identical for every arm, so the arms stay comparable.
+
+                   arm    at risk   recovered   recovery rate   <=10 days   median days
+  agent, deterministic        557         532          95.64%      42.72%          11.8
+
+  First-presentation failure rate: 9.24%. A property of the
+  WORLD -- no policy moves it. Published figures put real UPI
+  AutoPay failure at 8-15% (docs/01_FACTS.md, all [REPORTED],
+  all from vendors selling recovery software).
+
+  THE AT-RISK SET EXCLUDES technical declines and the decline
+  taxonomy, both properties of the rail rather than of funding.
+  That makes it SMALLER than a real failed-payment population and
+  so it FLATTERS every recovery rate above. Said here rather than
+  in a footnote.
+
+========================================================================================================
+STOPPING RULES THAT FIRED, grouped by rule
+========================================================================================================
+  agent, deterministic
+     COLLECTED             7548
+     CYCLE_CLOSED           307
+     LAST_ATTEMPT_HELD       28
+     MANDATE_DEAD             3
+
+========================================================================================================
+STAGE 0 -- the gate's own refusals, and an INDEPENDENT RECOUNT from the audit log alone
+========================================================================================================
+  The recount shares no code with the enforcer: `auditor.py` may not
+  import `constraints/rules.py` or `stage0.py` and gate I3 fails if
+  it ever does. If the two columns disagree, believe the auditor --
+  it was right the one time they did (docs/03_ERRORS.md).
+  These columns are not expected to agree: the gate counts actions it
+  stopped; the auditor counts illegal actions that still executed.
+  A clean run has zero in both columns for different reasons.
+
+                   arm        rule  gate refused  illegal executed
+  agent, deterministic         cap             0                 0
+  agent, deterministic        peak             0                 0
+  agent, deterministic        lead             0                 0
+  agent, deterministic     pending             0                 0
+  agent, deterministic   represent             0                 0
+                             TOTAL             0                 0   over 8702 executed money actions
+
+========================================================================================================
+ONE RECOVERED RUPEE, END TO END -- what `WHERE action_id = ?` returns
+========================================================================================================
+  action_id 0341318b8dc89bdb   mandate c18m1
+  WHAT THE BELIEF THOUGHT
+     p(success) now 0.5753, best later 0.6150, index score +11.83  -> ok
+  WHAT THE DIAGNOSER SAID, AND WHY
+     root cause   INSUFFICIENT_FUNDS
+     intervention RETRY  confidence 0.7
+     source       fallback  prompt det-rules-v2
+     rationale    Proceeding with the attempt our timing model scores highest in the remaining window.
+     governance   ok=True
+  ALL FIVE CONSTRAINT VERDICTS
+     cap        PASS
+     peak       PASS
+     lead       PASS
+     pending    PASS
+     represent  PASS
+  THE MONEY ACTION
+     Rs 1,250.00 at t=152 (day 6, hour 08), notified t=128, gate=ALLOWED
+  THE OUTCOME
+     OK  success=True  recovered Rs 1,250.00
+  full trail: C:\codeing\razorpay\razorpay_handoff\pkg\agent\runs\batch_report_chain.jsonl  (30538 events)
+
+========================================================================================================
+WHAT THIS NUMBER IS NOT
+========================================================================================================
+  * No real data. Every figure is simulation; no Razorpay
+    transaction, mandate or decline code has ever been seen.
+  * Conditional on payday_err=7. At +/-1 day payday_wait wins.
+  * The decline taxonomy is OFF here (every rate 0), so this is the
+    world without frozen accounts, broken mandates or limit hits.
+    With p_limit swept 0.00/0.05/0.15 the cost is
+    0.00 / -2.87 / -13.46 pts and every rate is a [GUESS].
+  * 10 populations, one run seed each. Not a large study.

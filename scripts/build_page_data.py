@@ -78,20 +78,30 @@ PAYDAY_ERRS = [1, 3, 5, 7, 10, 14]
 # reads.
 # --------------------------------------------------------------------------
 
-#: docs/02_RESULTS.md, "The headline is conditional". n=100, 8 held-out
-#: populations 700-707, 120d, paired 2 SE. NOT gate-protected.
+#: THE CANONICAL WORLD, `logs/w27_page_sweep_repaired.txt`, produced by
+#: `py -3.12 agent/tests/test_page_sweep.py`. RE-MEASURED on the shipped belief
+#: 1 September 2026; the previous transcript
+#: (`logs/w23_page_sweep_canonical.txt`) was the pre-W24 agent and its +/-7 row
+#: had drifted a hundredth away from the re-run batch, which is the symptom of
+#: a transcribed table outliving its source. Until this pass the table had NO
+#: committed script behind it at all. Cycles collected,
+#: n=100, 10 held-out populations 710-719, 120d, pop_spend=0.93, run seed 7,
+#: mode=full, burn 12, mandate outflow ON, paired 2 SE. NOT gate-protected.
+#: Same configuration as `agent.batch_report --canonical`, so the +/-7 row IS
+#: the headline cell. Replaces the pre-canonical sweep, which ran on a world
+#: with no steady state and an invented mandate count (NOTES.md errors 33-35).
 SWEEP = [
     # err, payday_wait, agent (fitted), the DOCUMENTED difference, 2 SE, verdict.
     # The difference is transcribed, NOT computed as agent - payday_wait: the
-    # two columns are rounded to 2dp and subtracting them gives +47.51 where
-    # docs/02_RESULTS.md says +47.50. A page that disagrees with its own
-    # source by a hundredth invites the reader to check nothing else.
-    (1,  99.24, 95.73, -3.51, 0.36, "heuristic wins"),
-    (3,  94.65, 95.82, +1.17, 1.35, "tie"),
-    (5,  72.18, 95.82, +23.64, 2.61, "agent wins"),
-    (7,  59.14, 95.57, +36.43, 3.37, "agent wins"),
-    (10, 48.11, 95.62, +47.50, 3.17, "agent wins"),
-    (14, 40.01, 93.16, +53.15, 2.90, "agent wins"),
+    # two columns are rounded to 2dp and subtracting them can disagree with the
+    # source by a hundredth. A page that disagrees with its own source by a
+    # hundredth invites the reader to check nothing else.
+    (1,  99.80, 99.81, +0.01, 0.18, "tie"),
+    (3,  99.25, 99.56, +0.31, 0.46, "tie"),
+    (5,  94.17, 99.58, +5.41, 1.59, "agent wins"),
+    (7,  90.29, 99.38, +9.08, 1.84, "agent wins"),
+    (10, 87.48, 99.25, +11.77, 1.45, "agent wins"),
+    (14, 86.13, 98.83, +12.71, 1.00, "agent wins"),
 ]
 
 #: docs/02_RESULTS.md, "A bank-shaped outage is 3.5x less detectable".
@@ -114,15 +124,31 @@ POOLING_VOLUME = [
 #: the monitor-off arm at the same severity. THE 0.40 ROW IS NEGATIVE AND
 #: SIGNIFICANT and the page is required to show it -- see the module docstring
 #: of docs/index.html.
+#: RE-MEASURED on the canonical world AND the shipped belief,
+#: `logs/w27_abl_outage_repaired.txt`. Nothing is significant at any severity.
+#: Two superseded readings: the pre-canonical -0.273 / -0.529 (SIG) / +0.199,
+#: and the pre-W24 exactly-zero row from `logs/w17_abl_outage_canonical.txt`.
+#: The conclusion never changed; the literal zeros did, so the page shows the
+#: intervals rather than a column of zeros a reader cannot argue with.
 OUTAGE_ABLATION = [
-    (0.15, -0.273, 0.275, False),
-    (0.40, -0.529, 0.296, True),
-    (0.80, +0.199, 0.634, False),
+    (0.15, 0.000, 0.000, False),
+    (0.40, 0.017, 0.035, False),
+    (0.80, 0.051, 0.074, False),
 ]
 
-#: docs/02_RESULTS.md, "THE BATCH NUMBER". 4 held-out populations.
-BATCH = dict(agent=98.01, payday_wait=57.70, delta=40.30, two_se=2.32,
-             rupees=6203060, populations=4, money_actions=9428,
+#: docs/02_RESULTS.md, "THE BATCH NUMBER". 10 held-out populations on the
+#: canonical world: `py -3.12 -m agent.batch_report --pops 10 --canonical`,
+#: transcript `logs/w24_headline_repaired.txt`.
+#:
+#: RE-MEASURED 1 September 2026 after the belief repair (prior_w 9 -> 5,
+#: prior_floor 0.5 -> 0.1, cycle_value 0 -> 0.6). The uplift is unchanged at
+#: +9.08 because `payday_wait` runs through the harness and carries no belief;
+#: what moved is the agent's own collection (99.37 -> 99.38), the money
+#: (7,496,430 -> 7,511,500), the interval (2 SE 2.01 -> 1.84) and the executed
+#: money actions (8,721 -> 8,702). Previous transcript:
+#: `logs/w19_headline_canonical.txt`.
+BATCH = dict(agent=99.38, payday_wait=90.29, delta=9.08, two_se=1.84,
+             rupees=7511500, populations=10, money_actions=8702,
              stage0_refusals=0, auditor_recount=0)
 
 

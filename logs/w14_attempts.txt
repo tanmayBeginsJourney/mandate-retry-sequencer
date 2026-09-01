@@ -1,0 +1,9 @@
+ATTEMPTS SPENT ON AT-RISK CYCLES (NPCI cap is 4)
+  spend  at-risk  mean att  median   used 0   used 4  recovered  att|won
+   0.88      134      1.58       2     5.2%     3.7%      90.3%     1.58
+   0.93      417      1.53       1     6.7%     3.8%      88.0%     1.53
+
+  used 0 = at-risk cycles the agent NEVER attempted.
+  used 4 = cycles where it exhausted the cap.
+  B-1 spends 4 on every cycle. If mean is well under 4 and 'used 0'
+  is large, the gap is UNUSED attempts, not mis-timed ones.

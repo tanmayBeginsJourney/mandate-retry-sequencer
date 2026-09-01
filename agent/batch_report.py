@@ -60,8 +60,11 @@ from agent.audit.log import read_rows
 from agent.constraints.auditor import replay
 from agent.tests._parallel import agent_job, harness_job, run_jobs
 
-POPS = [700, 701, 702, 703, 704, 705, 706, 707]
-N, K, DAYS, SPEND, PE, RUN_SEED = 100, 5, 120, 1.05, 7, 7
+from agent.tests import _canonical as _CAN
+
+POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
+N, K, DAYS, SPEND, PE, RUN_SEED = (100, 5, 120,
+                                   _CAN.spend(1.05), 7, 7)
 
 
 def _rupees(paise: int) -> str:
@@ -93,6 +96,10 @@ def main(argv=None) -> int:
     # agent/tests/test_decline_sweep.py; every one is a [GUESS] and is swept
     # there, never picked. It is OFF by default: turning it on changes the
     # headline, and that is a decision about the deliverable, not a flag.
+    ap.add_argument("--canonical", action="store_true",
+                    help="run on the frozen canonical world "
+                         "(agent/tests/_canonical.py) instead of "
+                         "the pre-W10 world")
     ap.add_argument("--declines", action="store_true",
                     help="run with the richer decline taxonomy on. NOT the "
                          "published configuration -- the headline is measured "
@@ -118,11 +125,13 @@ def main(argv=None) -> int:
     jobs = []
     for name, kw in arms.items():
         for s in pops:
-            jobs.append(((name, s), (a.n, K, s, SPEND, a.days), RUN_SEED,
-                         dict(kw), True))
+            jobs.append(((name, s),
+                         (a.n, K, s, SPEND, a.days, _CAN.pop_kwargs(s)),
+                         RUN_SEED, dict(kw, **_CAN.run_kwargs()), True))
     hjobs = [(("payday_wait", s), "payday_wait",
-              (a.n, K, s, SPEND, a.days), RUN_SEED,
-              dict(payday_err=PE, pop_spend=SPEND)) for s in pops]
+              (a.n, K, s, SPEND, a.days, _CAN.pop_kwargs(s)), RUN_SEED,
+              dict(payday_err=PE, pop_spend=SPEND, **_CAN.run_kwargs()))
+             for s in pops]
 
     print(f"running {len(jobs)} agent runs + {len(hjobs)} baseline runs, "
           f"one process each", flush=True)
@@ -132,9 +141,17 @@ def main(argv=None) -> int:
     # ------------------------------------------------------------- the money
     print()
     print("=" * 104)
-    print(f"THE BATCH -- {a.n} customers x {K} mandates over "
-          f"{len(pops)} held-out populations, {a.days} days, payday_err=+/-{PE}")
+    # `K` is the CAP on mandates per customer, and under --canonical the count
+    # is drawn from 1 + Poisson(1) rather than fixed at K. Printing "x 5
+    # mandates" there would state a condition the run does not have, which is
+    # the shape of defect the whole canonical pass exists to remove.
+    _k = ("~2 mandates (1 + Poisson(1), capped at 8)" if _CAN.enabled()
+          else f"{K} mandates")
+    print(f"THE BATCH -- {a.n} customers x {_k} over "
+          f"{len(pops)} held-out populations, {a.days} days, payday_err=+/-{PE}"
+          f", pop_spend={SPEND}")
     print("=" * 104)
+    print(_CAN.banner())
     n_merch = len({m["merchant"] for s in pops[:1]
                    for c in [None] for m in []} or range(60))
     print(f"Mandates are spread over {n_merch} synthetic merchants "

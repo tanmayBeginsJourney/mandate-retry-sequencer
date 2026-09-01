@@ -70,8 +70,13 @@ S2b
 # observe() is a hard truncation of the balance bins, not a martingale, so
 # extra unmatched likelihoods hurt whether they come from a donor, a
 # shuffled pool, or the model's own P(success). Neutrality versus own is
-# the wrong property. The moat is S2a (unfitted, +9.53) and S2a_PD
-# (shipping, +8.34). Do not quote S2c.
+# the wrong property. The moat is S2a (unfitted, +9.53 +/-1.81) and S2a_PD
+# (shipping, +7.32 +/-2.02, re-measured 1 September 2026 on the shipped
+# constants -- logs/w26_gate_full_moat_remeasure.txt). Do not quote S2c.
+#
+# S2a_PD was +8.34 (+/-1.36) until the payday prior was re-selected on the
+# canonical world (prior_w 9 -> 5, prior_floor 0.5 -> 0.1). That figure is
+# retired: it measured a constant this repository no longer ships.
 
 # ---------------------------------------------------------------------------
 S2_LEGACY
@@ -93,7 +98,7 @@ S2_LEGACY
 
 # ---------------------------------------------------------------------------
 S1_PD
-# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.029, monotone=False.
+# "SHIPPING belief calibration: ECE<0.10 and monotone". ECE=0.025, monotone=False.
 #
 # ADDED 2026-08-28, and the reason it exists is the finding.
 #
@@ -115,17 +120,56 @@ S1_PD
 # at ~60% confidence).
 #
 # TWO DIFFERENT ECE NUMBERS EXIST FOR THIS FILTER AND THEY ARE NOT THE SAME
-# MEASUREMENT. This gate reports ECE=0.029 on populations Pc0-Pc2 (n=120,
+# MEASUREMENT. This gate reports ECE=0.025 on populations Pc0-Pc2 (n=120,
 # pop seeds 300-302, run seeds 800-802). sim/fair_audit.py reports 0.059
-# shipped -> 0.041 fitted on DIFFERENT populations (n=100, pop seeds
+# shipped -> 0.031 fair on DIFFERENT populations (n=100, pop seeds
 # 700-702, run seeds 1600-1602). This file used to quote fair_audit's 0.040
-# as if it were the gate's. Quote 0.029 for S1_PD and name fair_audit when
-# quoting 0.040. Fitting improved ECE on both and made neither monotone.
+# as if it were the gate's. Quote 0.025 for S1_PD and name fair_audit when
+# quoting 0.031. Fitting improved ECE on both and made neither monotone.
 #
-# The remaining break is in the mid-range, and the plausible causes
-# are the two things the fit does not touch: the filter does not model the
-# balance floor at zero, and it approximates the world's hourly U(0.4,1.6)
-# spend jitter with a fixed 3-tap kernel.
+# RE-RUN 1 September 2026 on the shipped prior:
+# logs/w27_fair_audit_repaired.txt -- the first time this script's output has
+# ever been captured to a file. The fair arm moved 0.041 -> 0.031; the 0.041
+# figure is superseded and must not be quoted.
+#
+# ECE MOVED 0.029 -> 0.025 ON 1 SEPTEMBER 2026 when FITTED_BELIEF was
+# re-selected on the canonical world (prior_w 9 -> 5, prior_floor 0.5 -> 0.1;
+# see sim/w3.py). Still not monotone. The gate is unchanged and so is its
+# threshold; only the number it reports moved.
+#
+# ⚠️ THE MECHANISM GUESSED AT BELOW WAS WRONG IN ONE HALF AND IS CORRECTED HERE.
+# It read: "the filter does not model the balance floor at zero, and it
+# approximates the world's hourly U(0.4,1.6) spend jitter with a fixed 3-tap
+# kernel."
+#
+# THE FLOOR IS MODELLED. `BeliefPD._shift` piles every bin of mass that would
+# fall below zero into bin 0, on every drain, and always has.
+#
+# WHAT IS ACTUALLY WRONG is the DIFFUSION, and it was found by reading the
+# arithmetic rather than by sweeping:
+#
+#   1. `drain = est_salary * est_spend * prof[phase]` with prof decaying as
+#      exp(-0.42d), against a bin width of 2.5*est_salary/90. The modelled
+#      drain therefore ROUNDS TO ZERO BINS from day 8 of the cycle onward --
+#      22 of its 30 days -- so for most of the cycle the update was a
+#      driftless symmetric random walk on the balance.
+#   2. `np.convolve(p, k, "same")` discards the end taps, so 12% of the mass
+#      in bin 0 falls off the bottom each day, and the `p / p.sum()` that
+#      follows redistributes it across the whole distribution -- upward.
+#
+# Together they manufacture money. From the exact state observe(amount, False)
+# produces -- all mass in bin 0 -- twelve days with NO income and NO drain
+# modelled leave the filter believing P(balance >= 2 bins) = 0.3735. The
+# world's balance is non-increasing between salary credits, so this is wrong
+# rather than imprecise.
+#
+# `w3.BeliefPD(monotone_drain=True)` repairs it by moving the 3-tap kernel from
+# the balance to the DRAIN, whose support is non-negative. It defaults to False
+# and is NOT shipped: it is measured, it matches the shipping filter on
+# recovery, and it costs survival (98.6% against 99.5%) for a reason that is
+# understood and recorded. See NOTES.md, 1 September 2026, W24/W25. Fixing the
+# calibration gate is not what it was built for and S1_PD is not expected to
+# go green from it.
 #
 # Do NOT loosen the 0.10 bound; ECE is already well inside it. The gate fails
 # on monotonicity and raising the ECE bound would only hide which half is

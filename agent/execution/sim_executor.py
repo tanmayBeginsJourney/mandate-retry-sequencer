@@ -290,11 +290,20 @@ class SimExecutor:
                  per_customer_tech_rng: bool = False,
                  declines: "DeclineMix | None" = None, n_banks: int = N_BANKS,
                  p_missed_credit: float = 0.0,
-                 p_transient: float = 0.0, transient_h: int = 24):
+                 p_transient: float = 0.0, transient_h: int = 24,
+                 burn_cycles: int = 0, mandate_outflow: bool = False,
+                 disc_floor: float = 0.0):
         self.pop = pop
         self.days = pop[0]["days"]
         self.cyc = pop[0]["cycle_days"]
         self.T = self.days * w3.HOURS
+        self.burn_cycles = burn_cycles
+        # W11-S3. THE PAIRING IS MANDATORY. `w3.balance_trace` removes every
+        # mandate amount from the account on its due date when this is on, so
+        # `drained` must NOT also subtract it -- that counts each collected
+        # debit twice. `drained` is therefore dead whenever `mandate_outflow`
+        # is set, in `attempt()` and in `at_risk_cycles()` together.
+        self.mandate_outflow = mandate_outflow
         self.topup_p = topup_p
         self.topup_lag = topup_lag
         self.topup_life = topup_life
@@ -387,7 +396,10 @@ class SimExecutor:
                                    p_transient=p_transient,
                                    transient_h=transient_h,
                                    hold_rng=np.random.default_rng(
-                                       seed + 8237 + 31 * ci))
+                                       seed + 8237 + 31 * ci),
+                                   burn_cycles=burn_cycles,
+                                   mandate_outflow=mandate_outflow,
+                                   disc_floor=disc_floor)
             est_sal = c["salary"] * rng.uniform(0.7, 1.3)
             est_pay = int((c["payday"] +
                            rng.integers(-payday_err, payday_err + 1)) % self.cyc)
@@ -474,7 +486,8 @@ class SimExecutor:
                 t = day * w3.HOURS + w3.DECISION_HOUR
                 avail = max(w.bal[t] - drained, 0.0)
                 if avail >= amount:
-                    drained += amount
+                    if not self.mandate_outflow:
+                        drained += amount
                 elif counts:
                     at_risk[(f"c{ci}m{mi}", cycle)] = day
         return at_risk
@@ -512,6 +525,92 @@ class SimExecutor:
                         for d in range(day, hi))
                     if not reachable:
                         out[(f"c{ci}m{mi}", cycle)] = day
+        return out
+
+    def constrained_oracle(self) -> dict[tuple[str, int], int]:
+        """Earliest day a LEGAL schedule could have collected each at-risk cycle.
+
+        Returns `{(mandate_uid, cycle): days_after_due}` for every at-risk cycle
+        a legal schedule could reach at all. A cycle absent from this dict is
+        one NO legal policy collects, however clever.
+
+        WHY THIS EXISTS. `unwinnable_cycles` is documented as ignoring the
+        four-attempt cap and the due-date rule, so "the oracle is 100%" was
+        being read as "every cycle is winnable" -- error 35, retracted in
+        NOTES.md on 31 August 2026. This applies the constraints a real policy
+        actually faces:
+
+          * **it cannot present on the due date.** A mandate becomes actionable
+            when its cycle opens on day T, and NPCI wants >=24h between
+            notification and debit, so the earliest legal presentation is T+1.
+          * **it must land on a legal hour.** Peak windows are refused by
+            Stage 0, so only `w3.LEGAL_HOURS` count.
+          * **the cycle closes** when the next one opens.
+
+        IT IS STILL AN UPPER BOUND, AND CLAIRVOYANT, AND BOTH MATTER.
+
+          * It has perfect foresight of the balance, so it needs only ONE
+            attempt and the four-attempt cap never binds on it. The cap binds on
+            policies that must *search*. So the gap between this ceiling and a
+            real arm mixes scheduling skill with INFORMATION, and this number
+            alone cannot separate them.
+          * It ignores drain from the customer's other mandates, exactly as
+            `unwinnable_cycles` does, so it is optimistic in the same direction.
+
+        What it IS good for is the question no other quantity here answers:
+        **of the cycles a legal schedule could reach, how many could it reach
+        EARLY?** That is a hard ceiling on validation target V7, and V7 is
+        defined on days-to-recovery, which no amount of policy skill can shorten
+        below the day the money actually arrives.
+        """
+        out: dict[tuple[str, int], int] = {}
+        for (uid, cycle), due_day in self.at_risk_cycles().items():
+            ci = int(uid.split("m")[0][1:])
+            mi = int(uid.split("m")[1])
+            w = self.worlds[ci]
+            amount = self.pop[ci]["mandates"][mi]["amount"]
+            hi = min(due_day + self.cyc, self.days)
+            for d in range(due_day + 1, hi):
+                if any(w.bal[d * w3.HOURS + h] >= amount
+                       for h in w3.LEGAL_HOURS):
+                    out[(uid, cycle)] = d - due_day
+                    break
+        return out
+
+    def collectable_days(self) -> dict[tuple[str, int], tuple[int, ...]]:
+        """EVERY day a legal presentation would have cleared, not just the first.
+
+        Returns `{(mandate_uid, cycle): (days_after_due, ...)}`, sorted. The
+        same constraints as `constrained_oracle` -- no presentation on the due
+        date, legal hours only, cycle closes when the next opens -- so the
+        first element of each tuple is exactly that method's value. A cycle
+        with an empty window is omitted, matching it too.
+
+        WHY THE WHOLE SET AND NOT THE EARLIEST. `constrained_oracle` answers
+        "could a legal schedule reach this cycle at all", which is a ceiling.
+        This answers a different question: **given that an arm attempted on
+        some day and failed, was it early, late, or in a gap?** The earliest
+        day cannot distinguish those, and the distinction is the whole content
+        of the placement diagnostic (W20, 1 September 2026).
+
+        It is clairvoyant in exactly the same way and is NOT a policy. Nothing
+        under `agent/` may call it; it is read by tests through the composition
+        root, like its two neighbours.
+        """
+        out: dict[tuple[str, int], tuple[int, ...]] = {}
+        for (uid, cycle), due_day in self.at_risk_cycles().items():
+            ci = int(uid.split("m")[0][1:])
+            mi = int(uid.split("m")[1])
+            w = self.worlds[ci]
+            amount = self.pop[ci]["mandates"][mi]["amount"]
+            hi = min(due_day + self.cyc, self.days)
+            days = tuple(
+                d - due_day
+                for d in range(due_day + 1, hi)
+                if any(w.bal[d * w3.HOURS + h] >= amount
+                       for h in w3.LEGAL_HOURS))
+            if days:
+                out[(uid, cycle)] = days
         return out
 
     # ---- what the loop is allowed to read: the NOISY estimates only.
@@ -613,7 +712,8 @@ class SimExecutor:
 
         if success:
             self.n_success += 1
-            w.drained += amount
+            if not self.mandate_outflow:
+                w.drained += amount
         elif self.topup_p > 0 and self.trng.random() < self.topup_p:
             cr = amount * self.topup_mult
             lo = min(t + self.topup_lag, self.T)

@@ -1,0 +1,42 @@
+====================================================================================================
+ACTION ABLATION -- degenerate -> each action added -> full
+n=100, k=5, 8 populations 710-719, 120d, payday_err=7, FITTED_BELIEF, paired 2 SE vs degenerate
+====================================================================================================
+            arm  cycle_rec   vs degen     2SE   sig   Rs recovered    surv  att/cyc  refus  auditV
+     degenerate      98.81     +0.000   0.000  n.s.      7,462,010   98.71    1.444      0       0
+     rules_none      99.31     +0.498   0.428   SIG      7,489,490   99.95    1.454      0       0
+  +NUDGE p=0.10      99.31     +0.498   0.428   SIG      7,496,070   99.95    1.454      0       0
+  +NUDGE p=0.25      99.34     +0.532   0.412   SIG      7,518,900   99.95    1.455      0       0
+  +NUDGE p=0.50      99.46     +0.651   0.480   SIG      7,553,710   99.95    1.455      0       0
+      +ESCALATE      99.31     +0.498   0.428   SIG      7,489,490   99.95    1.454      0       0
+          +STOP      99.31     +0.498   0.428   SIG      7,489,490   99.95    1.454      0       0
+    full p=0.25      99.34     +0.532   0.412   SIG      7,518,900   99.95    1.455      0       0
+    payday_wait      73.94    -24.867   1.704  <- the permanent baseline row. Never omit it.
+
+Action usage (summed over 8 populations) -- a zero EFFECT and a zero USAGE are different findings:
+            arm   nudges    took   escal   stops    waits    dead
+     degenerate        0       0       0       0    61567      25
+     rules_none     1026       0       0       0    62126       1
+  +NUDGE p=0.10     1021      56       0       0    62123       1
+  +NUDGE p=0.25     1013     235       0       0    61940       1
+  +NUDGE p=0.50     1001     490       0       0    62122       1
+      +ESCALATE     1026       0       0       0    62126       1
+          +STOP     1026       0       0       0    62126       1
+    full p=0.25     1013     235       0       0    61940       1
+
+====================================================================================================
+PRE-REGISTERED CHECKS
+====================================================================================================
+  BROKE  E-ABL-1 rules_none == degenerate exactly   [consistency: the ablation isolates what it claims to]
+  HELD   E-ABL-2 NUDGE@0.10 |effect| < 0.6 pts   [measured +0.498]
+  HELD   E-ABL-2 NUDGE@0.25 |effect| < 0.6 pts   [measured +0.532]
+  BROKE  E-ABL-2 NUDGE@0.50 |effect| < 0.6 pts   [measured +0.651]
+  BROKE  E-ABL-3 ESCALATE in [-0.3, 0.0]   [measured +0.498]
+  HELD   E-ABL-4 STOP in [-1.0, +0.5]   [measured +0.498]
+  BROKE  E-ABL-5 full <= degenerate   [measured +0.532]
+  HELD   E-ABL-6 zero refusals and zero audited violations   [refusals=0 auditV=0]
+
+Pre-registration record for this measurement: 4/8
+
+A BROKEN prediction is a finding and goes in NOTES.md with its
+mechanism. The non-zero exit prevents automation calling it a pass.

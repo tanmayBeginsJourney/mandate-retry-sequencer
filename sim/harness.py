@@ -106,7 +106,8 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
         topup_life=48, topup_mult=1.15, discount=0.92, payday_err=1,
         cap_override=None, collect_calib=False, mutate=None, pop_spend=0.80,
         n_mandates_hint=None, collect_ml=False, ml_predict=None,
-        spend_decay=None, bcfg=None):
+        spend_decay=None, bcfg=None,
+        burn_cycles=0, mandate_outflow=False):
     """
     `mutate` injects a deliberate defect, used only by the mutation tests:
       'cap'       -> attempt a 5th time in a cycle
@@ -165,7 +166,15 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
     hostile_placebo = policy.startswith("solo_placebo")
 
     for ci, c in enumerate(pop):
-        bal = w3.balance_trace(c, rng, decay=spend_decay)
+        # W11/W18. Guarded and inert at the defaults, so every gated number
+        # is untouched. They exist so a HARNESS baseline can run on the
+        # canonical world -- without them `payday_wait` runs on the OLD
+        # population while the agent arms run canonical, and the two are not
+        # comparable. That defect was live in test_action_ablation.py's
+        # payday_wait row on 1 September 2026 and produced a wrong +24.87.
+        bal = w3.balance_trace(c, rng, decay=spend_decay,
+                               burn_cycles=burn_cycles,
+                               mandate_outflow=mandate_outflow)
         # Hostile-control donor trace uses its own generator (seed+31*ci),
         # never the money path. Skip the build when this run is not the
         # hostile placebo -- that generator is otherwise unused, so skipping
