@@ -68,22 +68,27 @@ def published_reasons() -> list[str]:
 
 
 class FakeTransport:
-    """Returns a scripted payload. Records every call."""
+    """Returns a scripted payload. Records every call.
+
+    Speaks `request(method, url, body)`, which is the whole transport
+    interface: `agent/execution/razorpay_api.py` builds every call on it. A
+    fake at this level means the object under test is the real client, the
+    real body builder and the real response classifier.
+    """
 
     def __init__(self, payload=None, status=200, raises=False):
         self.payload, self.status, self.raises = payload or {}, status, raises
         self.calls = 0
-        self.keys: list[str] = []
+        self.sent: list[tuple[str, str, dict | None]] = []
 
-    def post(self, url, body, idempotency_key):
+    def request(self, method, url, body=None):
         self.calls += 1
-        self.keys.append(idempotency_key)
+        self.sent.append((method, url, body))
         if self.raises:
-            raise OSError("connection reset by peer")
-        return self.status, self.payload
-
-    def get(self, url):
-        self.calls += 1
+            # A transport that cannot reach the provider returns "no status",
+            # exactly as the real one does. It does not raise past this point:
+            # the caller must never see a socket error as a payment answer.
+            return None, {}
         return self.status, self.payload
 
 
@@ -100,10 +105,10 @@ def _ex(transport, uid="c45m3"):
 def _seed_predelivery(ex: RazorpayExecutor, ref: MandateRef, target_t: int,
                       order_id: str = "order_test") -> None:
     """Sim hour indices are not Unix times; seed decoupled-flow state for gates."""
-    ex._predelivery[(ref.uid, target_t)] = PredeliveryOrder(
+    ex.journal.save(PredeliveryOrder(
         mandate_uid=ref.uid, target_t=target_t, order_id=order_id,
         amount_paise=55000, payment_after=target_t,
-        phase=PredeliveryPhase.ORDER_CREATED)
+        phase=PredeliveryPhase.ORDER_CREATED))
 
 
 REF = MandateRef(45, 3, 17)
@@ -233,7 +238,7 @@ def gate_R3() -> None:
     ex = _ex(FakeTransport())
     bad = []
     for name, payload, fam, succ, pend in CASES:
-        o = ex._outcome_from_payment(payload, t=264)
+        o = ex._outcome_from_response(payload, 264, "")
         got = family_of(o.code)
         if not (got == fam and o.success == succ and o.pending == pend):
             bad.append(f"{name}: got {got}/{o.success}/{o.pending}, "
@@ -241,19 +246,19 @@ def gate_R3() -> None:
     ok(f"R3a  all {len(CASES)} recorded shapes normalise correctly",
        not bad, "; ".join(bad))
 
-    o = ex._outcome_from_payment({"id": "p", "status": "created"}, t=1)
+    o = ex._outcome_from_response({"id": "p", "status": "created"}, 1, "")
     ok("R3b  MUTANT would credit an unresolved payment; we do not",
        o.success is False and o.pending is True,
        f"success={o.success} pending={o.pending}")
 
     ok("R3c  the vendor's own string survives on raw_code",
-       ex._outcome_from_payment(
+       ex._outcome_from_response(
            {"status": "failed", "error": {"reason": "insufficient_funds"}},
-           t=1).raw_code == "insufficient_funds")
+           1, "").raw_code == "insufficient_funds")
 
     ok("R3d  success is never True while pending is True",
        all(not (c.success and c.pending)
-           for c in [ex._outcome_from_payment(p, 1) for _, p, _, _, _ in CASES]))
+           for c in [ex._outcome_from_response(p, 1, "") for _, p, _, _, _ in CASES]))
 
 
 # ===========================================================================
@@ -274,28 +279,45 @@ def gate_R4() -> None:
     ok("R4d  the code is INDETERMINATE, not Z9 and not TECH",
        o.code in INDETERMINATE_CODES, o.code)
     ok("R4e  raw_code says it was OUR transport, not their decline",
-       o.raw_code == "transport_failure", o.raw_code)
-    ok("R4f  the transport was retried, not the debit",
-       t.calls == 3 and len(set(t.keys)) == 1,
-       f"{t.calls} calls, {len(set(t.keys))} distinct idempotency keys")
+       o.raw_code == "transport_lost", o.raw_code)
+    # THE DEBIT IS SUBMITTED ONCE. Razorpay documents no idempotency key for
+    # create/recurring, so a resend after a lost response is not guaranteed to
+    # be deduplicated by anything except the order -- and if the first request
+    # DID land, the resend returns "order already paid", turning a successful
+    # debit into a rejection. Their own guidance is to wait for the status of
+    # the previous payment before creating another. So: one submission, then
+    # reconcile.
+    ok("R4f  the debit is submitted exactly once, never retried",
+       t.calls == 1, f"{t.calls} provider calls")
 
 
 # ===========================================================================
-# R5  idempotency
+# R5  the order receipt is the real idempotency anchor
 # ===========================================================================
 def gate_R5() -> None:
-    print("\nR5  the idempotency key is deterministic per money action")
-    print("    mutant: derive the key from uuid4(), so a retry after a crash")
-    print("            becomes a second debit")
-    k1 = RazorpayExecutor.idempotency_key("act_abc", REF, 264)
-    k2 = RazorpayExecutor.idempotency_key("act_abc", REF, 264)
-    k3 = RazorpayExecutor.idempotency_key("act_xyz", REF, 264)
-    k4 = RazorpayExecutor.idempotency_key("act_abc", MandateRef(45, 4, 17), 264)
-    ok("R5a  same action -> same key", k1 == k2, k1)
-    ok("R5b  different action -> different key", k1 != k3)
-    ok("R5c  different mandate -> different key", k1 != k4)
-    ok("R5d  keys are the documented shape",
-       k1.startswith("rcv_") and len(k1) == 36, f"{k1} len={len(k1)}")
+    print("\nR5  the order receipt is deterministic per (mandate, target)")
+    print("    mutant: derive the receipt from uuid4() or wall clock, so a")
+    print("            restart creates a SECOND order for the same debit and")
+    print("            the provider's one-payment-per-order rule stops")
+    print("            protecting anything")
+    # Razorpay treats an order's receipt as an idempotency key -- a second
+    # create with the same value is rejected -- and an order can be paid once.
+    # Those two documented properties are what make the debit at-most-once.
+    k1 = RazorpayExecutor.receipt_for("act_abc", REF, 264)
+    k2 = RazorpayExecutor.receipt_for("act_abc", REF, 264)
+    k3 = RazorpayExecutor.receipt_for("act_xyz", REF, 264)
+    k4 = RazorpayExecutor.receipt_for("act_abc", MandateRef(45, 4, 17), 264)
+    k5 = RazorpayExecutor.receipt_for("act_abc", REF, 265)
+    ok("R5a  same action -> same receipt", k1 == k2, k1)
+    ok("R5b  different action -> different receipt", k1 != k3)
+    ok("R5c  different mandate -> different receipt", k1 != k4)
+    ok("R5d  different target hour -> different receipt", k1 != k5)
+    ok("R5e  it fits Razorpay's 40-character receipt limit",
+       k1.startswith("rcv_") and len(k1) <= 40, f"{k1} len={len(k1)}")
+    ok("R5f  no idempotency header is sent on the money path",
+       not any("idempotency" in str(k).lower()
+               for k in dir(RazorpayExecutor)),
+       "Razorpay documents none for create/recurring")
 
 
 # ===========================================================================
@@ -307,7 +329,7 @@ def gate_R6(tmp: str) -> None:
     print("            purpose), which would let the request go out")
 
     class Tripwire(FakeTransport):
-        def post(self, url, body, key):
+        def request(self, method, url, body=None):
             self.calls += 1
             raise AssertionError("network reached")
 
@@ -447,7 +469,10 @@ def gate_R9(mutant: str | None = None) -> None:
         ex = _ex(FakeTransport(payload=payload, status=status))
         _seed_predelivery(ex, REF, 8)
         if mutant == "blind":
-            ex._is_configuration_fault = staticmethod(lambda s, p: False)
+            # The pre-30-August behaviour: hand every response with a status
+            # to the payment parser, so an authentication failure parses as a
+            # customer decline.
+            ex._refuses_request = lambda r: False
         try:
             return ex.attempt(REF, 550.0, 8, action_id="a1"), None
         except Exception as e:                      # noqa: BLE001
@@ -478,10 +503,14 @@ def gate_R9(mutant: str | None = None) -> None:
     ok("R9d  a 200 captured payment is untouched",
        err is None and out is not None and out.success is True)
 
-    # (e) a 200 whose body is an API error is NOT reclassified -- the widening
-    #     branch is deliberately restricted to 4xx.
-    ok("R9e  the widening branch never fires below 400",
-       RazorpayExecutor._is_configuration_fault(200, LIVE_401) is False)
+    # (e) the classifier reads the SHAPE of the error object, and the two
+    #     shapes are the ones Razorpay's error documentation distinguishes:
+    #     a payment failure carries `reason` / `metadata.payment_id`; an
+    #     API-level rejection carries `code` and `description` alone.
+    ok("R9e  a bare code+description is a request refusal, not a decline",
+       RazorpayExecutor._is_payment_outcome(LIVE_401) is False)
+    ok("R9e2 an error carrying a reason IS a payment outcome",
+       RazorpayExecutor._is_payment_outcome(DOC_400_DECLINE) is True)
 
     # (f) the fixture is still what the wire said, if the transcript is here.
     path = os.path.join(PKG, "logs", "razorpay_ladder.json")
@@ -502,9 +531,10 @@ def gate_R9(mutant: str | None = None) -> None:
 # R10  Stage 0 hands the executor the id it audited
 # ===========================================================================
 def gate_R10(tmp: str, mutant: str | None = None) -> None:
-    print("\nR10 the idempotency key is derived from the AUDITED action_id")
+    print("\nR10 the provider request carries the AUDITED action_id")
     print("    mutant: `drop`, dispatch without the action_id -- which is")
-    print("            what Stage 0 did until 30 August 2026")
+    print("            what Stage 0 did until 30 August 2026, and which")
+    print("            leaves no join between the trail and the dashboard")
 
     t = FakeTransport(payload={"id": "pay_ok", "status": "captured"}, status=200)
     ex = _ex(t)
@@ -528,18 +558,21 @@ def gate_R10(tmp: str, mutant: str | None = None) -> None:
     _seed_predelivery(ex, REF, target_t)
     gate.submit(a)
 
-    want = RazorpayExecutor.idempotency_key(aid, REF, target_t)
-    weak = RazorpayExecutor.idempotency_key(f"{REF.uid}@{target_t}", REF, target_t)
-    got = t.keys[-1] if t.keys else None
+    sent = [b for _, url, b in t.sent if url.endswith("/create/recurring")]
+    notes = (sent[-1] or {}).get("notes", {}) if sent else {}
 
-    ok("R10a the executor was reached", bool(t.keys), f"calls={t.calls}")
-    ok("R10b the key is derived from the audited action_id", got == want,
-       f"got={got}")
-    ok("R10c and is NOT the weaker mandate@hour fallback", got != weak,
-       "the fallback is still deterministic, but not tied to the trail")
-    ok("R10d the same action_id reproduces the same key after a restart",
-       RazorpayExecutor.idempotency_key(aid, REF, target_t) == want,
-       "which is the entire point of an idempotency key")
+    ok("R10a the executor was reached", bool(sent), f"calls={t.calls}")
+    ok("R10b the request carries the audited action_id",
+       notes.get("action_id") == aid, f"notes={notes}")
+    ok("R10c it also carries the mandate, so one row joins both directions",
+       notes.get("mandate_uid") == REF.uid, f"notes={notes}")
+    ok("R10d the executor recorded the raw response under that same id",
+       aid in ex.raw, f"keys={sorted(ex.raw)}")
+    # The receipt is what the PROVIDER deduplicates on, and it must survive a
+    # restart unchanged or the one-payment-per-order guarantee is worthless.
+    ok("R10e the order receipt is reproducible after a restart",
+       RazorpayExecutor.receipt_for(f"notify:{REF.uid}", REF, target_t)
+       == RazorpayExecutor.receipt_for(f"notify:{REF.uid}", REF, target_t))
 
 
 def report() -> None:

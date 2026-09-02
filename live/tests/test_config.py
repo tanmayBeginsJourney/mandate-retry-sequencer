@@ -1,0 +1,115 @@
+"""C-gates: the mode switch fails closed in both directions.
+
+The two ways to get this wrong are not symmetric and both have happened in real
+systems. Configuring LIVE with a missing credential and quietly falling back to
+a mock means a deployment that looks healthy and collects nothing. Configuring
+OFFLINE and reaching the network means a test suite that charges customers.
+Every gate here is one of those two directions.
+"""
+from __future__ import annotations
+
+import live.tests  # noqa: F401
+from agent.execution.razorpay_api import RazorpayApi
+from agent.execution.razorpay_mock import MockRazorpayApi
+from live.config import ConfigError, Mode, load
+from live.service import LiveService
+from live.tests._harness import Results
+
+LIVE_ENV = {"RECOVERY_MODE": "live",
+            "RAZORPAY_KEY_ID": "rzp_live_XXXXXXXXXXXX",
+            "RAZORPAY_KEY_SECRET": "s" * 24,
+            "RAZORPAY_WEBHOOK_SECRET": "w" * 24}
+
+
+def _raises(fn) -> ConfigError | None:
+    try:
+        fn()
+    except ConfigError as e:
+        return e
+    return None
+
+
+def main() -> int:
+    r = Results("LIVE CONFIGURATION GATES (offline)")
+
+    r.section("C1  an unset mode is offline, and a misspelled one is an error")
+    r.ok("C1a  no RECOVERY_MODE means offline",
+         load({}).mode is Mode.OFFLINE)
+    err = _raises(lambda: load({"RECOVERY_MODE": "production"}))
+    r.ok("C1b  an unrecognised mode raises rather than guessing",
+         err is not None, str(err or "")[:60])
+    err = _raises(lambda: load({"RECOVERY_MODE": "LIVE", **{
+        k: v for k, v in LIVE_ENV.items() if k != "RECOVERY_MODE"}}))
+    r.ok("C1c  case does not change the meaning of a mode", err is None)
+
+    r.section("C2  LIVE without a credential fails closed, never demotes")
+    for missing in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET",
+                    "RAZORPAY_WEBHOOK_SECRET"):
+        env = {k: v for k, v in LIVE_ENV.items() if k != missing}
+        err = _raises(lambda e=env: load(e))
+        r.ok(f"C2   missing {missing} raises", err is not None,
+             (str(err) if err else "NO ERROR -- it fell back")[:70])
+    err = _raises(lambda: load({**LIVE_ENV, "RAZORPAY_KEY_ID": "not-a-key"}))
+    r.ok("C2d  a key that is not a Razorpay key id raises", err is not None)
+
+    r.section("C3  the debit switch is separate from the mode switch")
+    cfg = load(LIVE_ENV)
+    allowed, why = cfg.may_debit()
+    r.ok("C3a  live mode alone does NOT permit a debit", allowed is False, why)
+    cfg2 = load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": "yes"})
+    r.ok("C3b  live plus the explicit flag permits one",
+         cfg2.may_debit()[0] is True)
+    for truthy in ("1", "true", "on", "YES ", "y"):
+        c = load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": truthy})
+        if truthy.strip().lower() == "yes":
+            continue
+        r.ok(f"C3c  {truthy!r} does not enable live debits",
+             c.may_debit()[0] is False,
+             "only the literal word 'yes' counts")
+    err = _raises(lambda: load({**LIVE_ENV,
+                                "RAZORPAY_KEY_ID": "rzp_test_XXXXXXXXXXXX",
+                                "RECOVERY_LIVE_DEBIT": "yes"}))
+    r.ok("C3d  authorising real debits against a TEST key raises",
+         err is not None, str(err or "")[:70])
+    err = _raises(lambda: load({"RECOVERY_MODE": "offline",
+                                "RECOVERY_LIVE_DEBIT": "yes"}))
+    r.ok("C3e  the debit flag in offline mode raises rather than being ignored",
+         err is not None)
+
+    r.section("C4  the amount ceiling is real and is validated")
+    err = _raises(lambda: load({"RECOVERY_MAX_DEBIT_PAISE": "50"}))
+    r.ok("C4a  a ceiling below Razorpay's Rs 1 minimum raises", err is not None)
+    err = _raises(lambda: load({"RECOVERY_MAX_DEBIT_PAISE": "lots"}))
+    r.ok("C4b  a non-integer ceiling raises", err is not None)
+
+    r.section("C5  the mode chooses the rail, and nothing else does")
+    off = LiveService._build_api(load({}))
+    r.ok("C5a  offline builds the mock", isinstance(off, MockRazorpayApi))
+    on = LiveService._build_api(load(LIVE_ENV))
+    r.ok("C5b  live builds the real client", isinstance(on, RazorpayApi))
+    r.ok("C5c  the mock has no generic HTTP escape hatch",
+         _no_raw_http(off), "call() must refuse")
+
+    r.section("C6  describe() shows the mode without showing the secret")
+    text = repr(load(LIVE_ENV).describe())
+    r.ok("C6a  the key prefix IS shown, because an operator must see it",
+         "rzp_live" in text)
+    r.ok("C6b  the key id itself is not", "XXXXXXXXXXXX" not in text)
+    r.ok("C6c  the key secret is not", "s" * 24 not in text)
+    r.ok("C6d  the webhook secret is not", "w" * 24 not in text)
+
+    return r.summary()
+
+
+def _no_raw_http(mock) -> bool:
+    try:
+        mock.call("POST", "https://api.razorpay.com/v1/payments")
+    except NotImplementedError:
+        return True
+    except Exception:                                # noqa: BLE001
+        return False
+    return False
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

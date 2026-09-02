@@ -13,7 +13,6 @@ ORDER_CREATED is NOT proof the customer received the regulatory pre-debit alert.
 """
 from __future__ import annotations
 
-import copy
 import json
 import re
 from dataclasses import dataclass, field

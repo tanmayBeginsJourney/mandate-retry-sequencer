@@ -32,8 +32,10 @@ class FakeTransport:
         self.link_status = "created"
         self.created_refs = set()
 
-    def post(self, url, body, idempotency_key):
-        self.calls.append(("POST", url, body, idempotency_key))
+    def request(self, method, url, body=None):
+        self.calls.append((method, url, body))
+        if method == "GET":
+            return self._get(url)
         if url.endswith("/cancel"):
             self.link_status = "cancelled"
             return 200, {"id": "plink_test1", "status": "cancelled"}
@@ -55,8 +57,7 @@ class FakeTransport:
             return 200, {"id": "cust_should_not", "entity": "customer"}
         return 200, {}
 
-    def get(self, url):
-        self.calls.append(("GET", url, None, None))
+    def _get(self, url):
         if "reference_id=" in url:
             return 200, {"entity": "collection", "count": 1, "items": [
                 {"id": "plink_test1", "status": self.link_status,

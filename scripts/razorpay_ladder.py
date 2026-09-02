@@ -27,9 +27,10 @@ WHAT THIS MOVES AND WHAT IT DOES NOT. Rungs 1 and 2 are rejected at the
 authentication layer, so Razorpay never reads the request body. This script
 therefore says NOTHING about whether our body shape is right -- the largest
 standing unknown in that file -- and it moves no money, touches no account, and
-creates no entity. It exercises the shipped `_UrllibTransport` and the shipped
-`_outcome_from_payment`, not a re-implementation of either, because a test that
-re-implements the thing under test proves only that it can be written twice.
+creates no entity. It exercises the shipped `Transport` and the shipped
+`_outcome_from_response`, not a re-implementation of either, because a test
+that re-implements the thing under test proves only that it can be written
+twice.
 
 Run:  python scripts/razorpay_ladder.py
 """
@@ -46,9 +47,9 @@ PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
-from agent.execution.razorpay_executor import (API_BASE, MandateBinding,
-                                               RazorpayExecutor,
-                                               _UrllibTransport)
+from agent.execution.razorpay_api import API_BASE, Transport
+from agent.execution.razorpay_executor import (MandateBinding,
+                                               RazorpayExecutor)
 from agent.execution.razorpay_predelivery import ORDER_CREATED
 from agent.llm.client import _load_dotenv
 from agent.ports import MandateRef
@@ -117,13 +118,12 @@ def rung0() -> dict:
 
 def _probe(label: str, key_id: str, key_secret: str) -> dict:
     """One POST through the SHIPPED transport. Returns the recorded exchange."""
-    t = _UrllibTransport(key_id, key_secret, timeout=20.0)
+    t = Transport(key_id, key_secret, timeout=20.0)
     started = time.time()
-    try:
-        status, payload = t.post(CHARGE_URL, PROBE_BODY, "rcv_ladder_probe")
-        err = None
-    except Exception as e:                      # socket / DNS / TLS
-        status, payload, err = None, {}, repr(e)
+    status, payload = t.request("POST", CHARGE_URL, PROBE_BODY)
+    # The transport answers "no status" for a socket, DNS or TLS failure
+    # rather than raising, so a lost request is never mistaken for a decline.
+    err = None if status is not None else "no response from the provider"
     ms = int((time.time() - started) * 1000)
     print(f"    {label}")
     print(f"      POST   {CHARGE_URL}")
@@ -159,11 +159,9 @@ class _ReplayTransport:
         self.status, self.payload = status, payload
         self.posts = 0
 
-    def post(self, url, body, idempotency_key):
-        self.posts += 1
-        return self.status, self.payload
-
-    def get(self, url):
+    def request(self, method, url, body=None):
+        if method == "POST":
+            self.posts += 1
         return self.status, self.payload
 
 
@@ -180,13 +178,12 @@ class _SequenceTransport:
     def __init__(self, posts: list[tuple[int, dict]]):
         self.posts = list(posts)
 
-    def post(self, url, body, idempotency_key):
+    def request(self, method, url, body=None):
+        if method == "GET":
+            return 404, {}
         if not self.posts:
             return 500, {"error": {"code": "TEST", "description": "empty"}}
         return self.posts.pop(0)
-
-    def get(self, url):
-        return 404, {}
 
 
 def rung3(captured: list[dict]) -> dict:
@@ -200,7 +197,7 @@ def rung3(captured: list[dict]) -> dict:
             continue
 
         ex = _executor(_ReplayTransport(status, payload))
-        out = ex._outcome_from_payment(payload, t=0)
+        out = ex._outcome_from_response(payload, 0, "")
 
         ex2 = _executor(_ReplayTransport(status, payload))
         end = ex2.attempt(MandateRef(0, 0, 0), 499.0, 0, action_id="probe")
@@ -216,7 +213,7 @@ def rung3(captured: list[dict]) -> dict:
         }
         rec["cases"].append(case)
         print(f"    {cap['label']}  (HTTP {status})")
-        print(f"      _outcome_from_payment -> code={out.code!r} "
+        print(f"      _outcome_from_response -> code={out.code!r} "
               f"success={out.success} pending={out.pending} "
               f"raw_code={out.raw_code!r}")
         print(f"      attempt() no order  -> raw_code={end.raw_code!r} "
@@ -232,13 +229,17 @@ def rung3(captured: list[dict]) -> dict:
         bindings={"c0m0": MandateBinding(
             "cust_probe", "token_probe", rzp_email="probe@example.com",
             rzp_contact="+919000000001", charge_amount=499.0)},
-        transport=seq)
-    future_t = int(time.time()) + 26 * 3600
+        transport=seq,
+        # Stage 0 counts simulated hours; Razorpay wants a future epoch
+        # second. `epoch_origin` is where the two meet -- see
+        # RazorpayExecutor._epoch.
+        epoch_origin=int(time.time()))
+    target_h = 26
     ref = MandateRef(0, 0, 0)
-    notify_out = ex3.notify(ref, 0.0, notify_t=future_t - 24, target_t=future_t)
+    notify_out = ex3.notify(ref, 0.0, notify_t=target_h - 24, target_t=target_h)
     raised = None
     try:
-        ex3.attempt(ref, 499.0, future_t, action_id="probe")
+        ex3.attempt(ref, 499.0, target_h, action_id="probe")
     except Exception as e:                          # noqa: BLE001
         raised = type(e).__name__
     rec["auth_after_order"] = {
@@ -278,14 +279,11 @@ def rung4() -> dict:
         print("    or reads real merchant data. Use a test-mode key.")
         return {"rung": 4, "state": "REFUSED", "reason": "not a test-mode key"}
 
-    t = _UrllibTransport(kid, sec, timeout=20.0)
+    t = Transport(kid, sec, timeout=20.0)
     url = f"{API_BASE}/payments?count=1"
     started = time.time()
-    try:
-        status, payload = t.get(url)
-        err = None
-    except Exception as e:                      # noqa: BLE001
-        status, payload, err = None, {}, repr(e)
+    status, payload = t.request("GET", url)
+    err = None if status is not None else "no response from the provider"
     ms = int((time.time() - started) * 1000)
     print(f"      GET    {url}")
     print(f"      status {status}   ({ms} ms)")
@@ -359,17 +357,17 @@ def rung5a() -> dict:
     amount_paise = int(os.environ.get("RAZORPAY_TEST_AMOUNT_PAISE", "49900"))
     email = os.environ.get("RAZORPAY_DEFAULT_EMAIL", "predelivery@example.com")
     contact = os.environ.get("RAZORPAY_DEFAULT_CONTACT", "+919000000099")
-    future_t = int(time.time()) + 26 * 3600
+    target_h = 26
     ref_uid = "c0m0"
     ex = RazorpayExecutor(
         bindings={ref_uid: MandateBinding(
             rzp_customer_id=cust, rzp_token_id=token,
             rzp_email=email, rzp_contact=contact,
             charge_amount=amount_paise / 100.0)},
-        key_id=kid, key_secret=sec)
+        key_id=kid, key_secret=sec, epoch_origin=int(time.time()))
     ref = MandateRef(0, 0, 0)
     started = time.time()
-    out = ex.notify(ref, 0.0, notify_t=future_t - 24, target_t=future_t)
+    out = ex.notify(ref, 0.0, notify_t=target_h - 24, target_t=target_h)
     ms = int((time.time() - started) * 1000)
     ok = out.get("executed") and out.get("phase") == ORDER_CREATED
     print(f"    notify phase={out.get('phase')!r} order_id={out.get('order_id')!r}")

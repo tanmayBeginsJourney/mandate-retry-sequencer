@@ -72,6 +72,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 AGENT = os.path.dirname(HERE)
 PKG = os.path.dirname(AGENT)
+LIVE = os.path.join(PKG, "live")
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
@@ -156,6 +157,39 @@ RULES = [
 ]
 
 
+#: THE SAME QUESTION, ASKED OF THE SERVICE PACKAGE. `live/` is a sibling of
+#: `agent/`, not a layer inside it, so I2's matcher never sees it -- and a
+#: boundary that stops at a directory edge is a boundary somebody walks around.
+#: These two rules put `live/` under the same discipline.
+#:
+#: L1 is I2 restated for the second composition root. `live/service.py` wires a
+#: RazorpayExecutor to a Stage0Gate exactly as `agent/batch.py` wires a
+#: SimExecutor, and it is the only module in the package allowed to.
+#:
+#: L2 is the direction of the dependency. `agent/` is the decision
+#: architecture; `live/` is a service wrapped around it. If anything under
+#: `agent/` imported `live/`, the core would depend on its own deployment and
+#: the simulation would stop being runnable without a database.
+LIVE_RULES = [
+    ("L1",
+     "in live/ only service.py may hold an executor",
+     lambda p: p.endswith(".py") and not p.startswith("tests/"),
+     ("agent.execution",),
+     ("service.py",),
+     "add `from agent.execution.razorpay_executor import RazorpayExecutor` to "
+     "live/api.py so an HTTP route can charge a mandate without the gate"),
+
+    ("L2",
+     "the decision core must not depend on the service that wraps it",
+     lambda p: p.endswith(".py"),
+     ("live",),
+     (),
+     "add `from live.store import Store` to agent/policy/belief_book.py so "
+     "the belief can persist itself, which makes the simulation need a "
+     "database to run"),
+]
+
+
 def _imports(path: str) -> list[tuple[str, int]]:
     """Every module name imported by a file, with line numbers."""
     with open(path, encoding="utf-8") as fh:
@@ -212,12 +246,13 @@ def _declares(path: str, rid: str) -> bool:
         return marker in fh.read()
 
 
-def check_tree(root: str, files: list[str] | None = None) -> list[str]:
+def check_tree(root: str, files: list[str] | None = None,
+               rules: list | None = None) -> list[str]:
     """Returns a list of violation strings. Empty means clean."""
     problems = []
     for path in (files if files is not None else _py_files(root)):
-        rel = _rel(path)
-        for rid, desc, matches, forbidden, exempt, _mutant in RULES:
+        rel = os.path.relpath(path, root).replace("\\", "/")
+        for rid, desc, matches, forbidden, exempt, _mutant in (rules or RULES):
             if not matches(rel) or rel in exempt:
                 continue
             if _declares(path, rid):
@@ -246,6 +281,12 @@ MUTANT_SOURCES = {
            "from agent.constraints.stage0 import Stage0Gate\n"),
 }
 
+LIVE_MUTANT_SOURCES = {
+    "L1": ("api.py",
+           "from agent.execution.razorpay_executor import RazorpayExecutor\n"),
+    "L2": ("_mutant_core.py", "from live.store import Store\n"),
+}
+
 #: A rule with a declaration escape hatch needs the OPPOSITE canary too: a file
 #: that declares must NOT be flagged. Without it `_declares` could be wired to
 #: return False always and every mutant would still trip, which is a checker
@@ -257,7 +298,8 @@ DECLARED_SOURCES = {
 }
 
 
-def _check_synthetic(rid: str, relpath: str, src: str) -> list[str]:
+def _check_synthetic(rid: str, relpath: str, src: str,
+                     rules: list | None = None) -> list[str]:
     """Write `src` at `relpath` in a scratch tree and run the REAL checker on
     it, as the module it would be if it lived under `agent/`."""
     import tempfile
@@ -267,7 +309,7 @@ def _check_synthetic(rid: str, relpath: str, src: str) -> list[str]:
         with open(full, "w", encoding="utf-8") as fh:
             fh.write('"""synthetic mutant. touches no counter."""\n' + src)
         problems = []
-        for r, desc, matches, forbidden, exempt, _m in RULES:
+        for r, desc, matches, forbidden, exempt, _m in (rules or RULES):
             if r != rid or not matches(relpath) or relpath in exempt:
                 continue
             if _declares(full, r):
@@ -284,6 +326,9 @@ def run_mutants() -> tuple[list[str], list[str], list[str]]:
     tripped, missed = [], []
     for rid, (relpath, src) in MUTANT_SOURCES.items():
         (tripped if _check_synthetic(rid, relpath, src) else missed).append(rid)
+    for rid, (relpath, src) in LIVE_MUTANT_SOURCES.items():
+        hit = _check_synthetic(rid, relpath, src, rules=LIVE_RULES)
+        (tripped if hit else missed).append(rid)
     false_pos = [rid for rid, (relpath, src) in DECLARED_SOURCES.items()
                  if _check_synthetic(rid, relpath, src)]
     return tripped, missed, false_pos
@@ -293,7 +338,7 @@ def main() -> int:
     print("=" * 70)
     print("LAYER ISOLATION -- import-graph gates")
     print("=" * 70)
-    for rid, desc, _m, forbidden, exempt, mutant in RULES:
+    for rid, desc, _m, forbidden, exempt, mutant in RULES + LIVE_RULES:
         print(f"  {rid}  {desc}")
         print(f"      forbidden: {', '.join(forbidden)}")
         if exempt:
@@ -305,7 +350,8 @@ def main() -> int:
     print()
 
     tripped, missed, false_pos = run_mutants()
-    print(f"MUTANTS: {len(tripped)}/{len(MUTANT_SOURCES)} tripped the checker")
+    n_mutants = len(MUTANT_SOURCES) + len(LIVE_MUTANT_SOURCES)
+    print(f"MUTANTS: {len(tripped)}/{n_mutants} tripped the checker")
     if missed:
         print(f"  VACUOUS -- these rules cannot be tripped: {missed}")
         print("  A gate no mutant can fail is not a gate. Treated as FAIL.")
@@ -333,12 +379,23 @@ def main() -> int:
         print()
 
     problems = check_tree(AGENT)
+    # L2 asks about `agent/`, so it is checked against the agent tree; L1 asks
+    # about `live/` and is checked against that one.
+    problems += check_tree(AGENT, rules=[r for r in LIVE_RULES if r[0] == "L2"])
+    n_live = 0
+    if os.path.isdir(LIVE):
+        live_files = _py_files(LIVE)
+        n_live = len(live_files)
+        problems += check_tree(LIVE, live_files,
+                               rules=[r for r in LIVE_RULES if r[0] == "L1"])
+
     if problems:
         print(f"FAIL -- {len(problems)} isolation violation(s):")
         for p in problems:
             print(f"  {p}")
     else:
-        print(f"PASS -- {len(_py_files(AGENT))} files, 0 isolation violations")
+        print(f"PASS -- {len(_py_files(AGENT))} files under agent/, "
+              f"{n_live} under live/, 0 isolation violations")
 
     return 1 if (problems or missed or false_pos) else 0
 

@@ -824,6 +824,68 @@ has nothing left to recover.
 
 ---
 
+## The live rail
+
+Everything in this section is about `live/`, the service that runs the same
+decision layers against Razorpay. **None of it is evidence about Razorpay.** The
+gates run against a mock rail written from Razorpay's published documentation.
+They establish that the state machine, the crash handling and the safety
+boundaries behave as described; they establish nothing about whether Razorpay
+accepts these request bodies, because Razorpay has never read one.
+
+### What has and has not touched Razorpay
+
+| | Evidence |
+|---|---|
+| Test-mode API authentication | **exercised** — HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
+| The shape of a real API-level error envelope | **exercised** — an unauthenticated POST to the recurring-charge endpoint returns `code` and `description` alone, same transcript |
+| Test-mode Customer and Payment Link create, fetch, cancel | implemented, runnable against `rzp_test_` keys; **no transcript is committed** |
+| UPI AutoPay mandate registration | **not available** on the test account used here. UPI and Recurring Payments are on-demand Razorpay features and were not provisioned, so no `token_id` exists for any request to reference |
+| Pre-debit notification order | implemented; **not demonstrated** against an authorised mandate |
+| `order.notification.delivered` from Razorpay | **not observed** |
+| Webhook signature verification against a payload Razorpay signed | **not observed** |
+| A recurring charge on an authorised mandate | implemented; **never submitted** |
+
+No live API key exists for this project. Razorpay's current documentation
+requires verified website details before live keys can be generated, and the
+verification takes up to three working days. Everything below therefore stops at
+the boundary where money would move.
+
+### The offline gates
+
+`py -3.12 -m live.tests.run_all` — seven gate files, 218 checks, about four
+seconds. Each file runs in its own process. None needs a key, opens a socket to
+Razorpay, or can move money.
+
+| Gate file | Checks | What it establishes |
+|---|---|---|
+| `test_config` | 24 | The mode switch fails closed in both directions. Live mode with a missing credential raises rather than demoting to the mock; the debit flag in offline mode raises rather than being ignored; only the literal word `yes` enables real debits; no secret appears in what the console is shown |
+| `test_state_machine` | 22 | Every ordered pair of attempt states, exhaustively. No transition walks backwards, terminal states are final, two different terminals are recorded as a conflict rather than resolved, and a deemed transaction reads as unknown rather than failed |
+| `test_webhooks` | 32 | Signature over raw bytes; a re-serialised body fails, which is why the verifier takes bytes. A duplicate delivery adds no row. A late `payment.authorized` cannot displace a `payment.captured`. A forged signature is rejected **and recorded**. An unhandled event type is acknowledged rather than 4xx'd |
+| `test_flow` | 45 | The lifecycle end to end, and seven crash boundaries: a lost response stays unknown and blocks a second debit, an order lost to a crash is recovered by its receipt rather than created twice, an accepted-but-uninterpreted webhook is replayed at startup and replaying it again is a no-op, a restart mid-debit finishes the debit without creating a second attempt |
+| `test_safety` | 42 | `Diagnosis` has no temporal, monetary or identity field. A prompt injection in the merchant note produces a diagnosis and nothing else. Stage 0 refuses a peak-hour debit with zero provider calls. No route accepts an amount. The demonstration clock cannot move in live mode |
+| `test_parity` | 15 | The live service and the batch run reach the **same objects** — `timing.propose`, `BeliefBook`, `Stage0Gate` — checked by identity. `live/service.py` defines no decision function of its own, and nothing under `agent/` imports `live/` |
+| `test_api` | 38 | The served surface over a real socket: content security policy, path traversal, body limits, the header names Razorpay sends, and that loading the console makes no provider call and creates no attempt |
+
+The import-graph gates in `agent/tests/test_layer_isolation.py` gained two rules
+for the new package and now run **nine named mutants, nine tripped**, over 87
+files under `agent/` and 18 under `live/`, with zero violations.
+
+### What the mock does, and what that is worth
+
+The mock answers the way Razorpay's documentation says Razorpay answers, and it
+fails on purpose: it declines with reasons drawn from Razorpay's published list,
+loses responses without answering, refuses a second order carrying a receipt it
+has seen, refuses a second payment against an order already paid, redelivers
+webhooks under the same event id, and delivers a payment's two events in the
+wrong order.
+
+A mock that always captured would prove only that a success can be parsed. This
+one exercises the branches that matter. It is still a mock: it is a reading of a
+document, and the document could be wrong, incomplete, or describe an endpoint
+that behaves differently on a particular account. Every request shape in this
+repository is a hypothesis with a citation.
+
 ## Gate status
 
 `py -3.12 sim/gate.py --tier full` runs **27 gates**. On a clean checkout:

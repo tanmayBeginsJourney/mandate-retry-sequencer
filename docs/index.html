@@ -285,6 +285,7 @@ footer{padding:56px 0 90px}
       <a href="#pooling">Pooling</a>
       <a href="#declines">Declines</a>
       <a href="#validation">Validation</a>
+      <a href="#live">Live rail</a>
       <a href="#scope">Scope</a>
     </div>
     <button class="themebtn" id="theme" aria-label="Switch between light and dark">◐</button>
@@ -926,9 +927,6 @@ footer{padding:56px 0 90px}
 </section>
 
 <!-- =====================================================================
-     07 — SCOPE AND LIMITS
-     ===================================================================== -->
-<!-- =====================================================================
      07 — THE VALIDATION SUITE
      ===================================================================== -->
 <section id="validation">
@@ -1058,10 +1056,186 @@ footer{padding:56px 0 90px}
   </div>
 </section>
 
-<section id="scope">
+<!-- =====================================================================
+     08 — THE LIVE RAIL
+     ===================================================================== -->
+<section id="live">
   <div class="wrap">
     <div class="shead">
       <div class="n">08</div>
+      <div>
+        <h2>Running against Razorpay</h2>
+        <p>The same decision layers run against Razorpay's UPI AutoPay API instead of the
+        simulation. The scheduler, the belief filter, the diagnosis layer and the constraint gate
+        are the same objects, not copies: a test asserts it by object identity. What changes is
+        the executor underneath them, and the fact that state has to survive a crash.</p>
+      </div>
+    </div>
+
+    <div class="figure">
+      <div class="figure-head">
+        <div>
+          <h3>One debit, end to end</h3>
+          <p class="tiny" style="margin:0">Where each decision is made, and what is durable.</p>
+        </div>
+      </div>
+      <div class="figure-body">
+        <svg viewBox="0 0 860 340" role="img"
+             aria-label="A debit flows from the belief filter through the scheduler, the diagnosis
+             layer and the constraint gate to Razorpay, and the outcome returns by webhook to
+             update the belief."
+             style="width:100%;height:auto;display:block">
+          <defs>
+            <marker id="lv-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                    markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0 0 L8 4 L0 8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <g fill="none" stroke="currentColor" stroke-width="1.25"
+             marker-end="url(#lv-arrow)" opacity=".45">
+            <path d="M150 62 H262"/>
+            <path d="M410 62 H522"/>
+            <path d="M670 78 V128"/>
+            <path d="M598 152 H452"/>
+            <path d="M340 176 V226"/>
+            <path d="M262 250 H150"/>
+            <path d="M78 226 V88"/>
+          </g>
+
+          <g font-size="13" font-weight="600">
+            <rect x="20" y="40" width="130" height="44" rx="8"
+                  fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1"/>
+            <text x="85" y="60" text-anchor="middle" fill="var(--accent-ink)">belief filter</text>
+            <text x="85" y="76" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">balance · payday</text>
+
+            <rect x="262" y="40" width="148" height="44" rx="8"
+                  fill="var(--surface-2)" stroke="var(--rule)"/>
+            <text x="336" y="60" text-anchor="middle" fill="var(--ink)">scheduler</text>
+            <text x="336" y="76" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">chooses the hour</text>
+
+            <rect x="522" y="40" width="148" height="44" rx="8"
+                  fill="var(--surface-2)" stroke="var(--rule)"/>
+            <text x="596" y="60" text-anchor="middle" fill="var(--ink)">diagnosis</text>
+            <text x="596" y="76" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">cause · intervention</text>
+
+            <rect x="452" y="128" width="218" height="48" rx="8"
+                  fill="var(--surface-2)" stroke="var(--rule)"/>
+            <text x="561" y="148" text-anchor="middle" fill="var(--ink)">Stage 0</text>
+            <text x="561" y="165" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">five mandate rules · allowed or refused</text>
+
+            <rect x="240" y="226" width="200" height="48" rx="8"
+                  fill="var(--surface-2)" stroke="var(--rule)"/>
+            <text x="340" y="246" text-anchor="middle" fill="var(--ink)">Razorpay</text>
+            <text x="340" y="263" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">order · recurring charge</text>
+
+            <rect x="20" y="226" width="130" height="48" rx="8"
+                  fill="var(--surface-2)" stroke="var(--rule)"/>
+            <text x="85" y="246" text-anchor="middle" fill="var(--ink)">webhook</text>
+            <text x="85" y="263" text-anchor="middle" font-size="11" font-weight="400"
+                  fill="var(--muted)">signed · deduped</text>
+          </g>
+
+          <g font-size="11" fill="var(--faint)">
+            <text x="200" y="56">when</text>
+            <text x="455" y="56">what</text>
+            <text x="680" y="108">whether</text>
+            <text x="196" y="220">outcome</text>
+          </g>
+
+          <text x="700" y="250" font-size="11.5" fill="var(--muted)">
+            <tspan x="700" dy="0">Durable before the</tspan>
+            <tspan x="700" dy="14">request leaves:</tspan>
+            <tspan x="700" dy="16" font-family="var(--mono)" font-size="10.5">intent</tspan>
+            <tspan x="700" dy="13" font-family="var(--mono)" font-size="10.5">order id</tspan>
+            <tspan x="700" dy="13" font-family="var(--mono)" font-size="10.5">every event</tspan>
+          </text>
+        </svg>
+      </div>
+      <div class="figure-foot">
+        <p class="tiny" style="margin:0">The diagnosis layer sits between the scheduler and the
+        gate and cannot reach either. Its return type has no field for a time, an amount or a
+        mandate, so a prompt injection has nowhere to put one.</p>
+      </div>
+    </div>
+
+    <h3 style="margin:34px 0 10px">What has touched Razorpay, and what has not</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Capability</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Test-mode API authentication</td>
+              <td>Exercised. HTTP 200 on a read endpoint with a test key, transcript committed</td></tr>
+          <tr><td>The shape of a real API-level error</td>
+              <td>Exercised. An unauthenticated request returns a code and a description alone</td></tr>
+          <tr><td>Mandate registration</td>
+              <td>Not available. UPI AutoPay is an on-demand feature and was not provisioned on the test account, so no mandate token exists</td></tr>
+          <tr><td>Pre-debit notification order</td>
+              <td>Implemented. Not demonstrated against an authorised mandate</td></tr>
+          <tr><td>A webhook Razorpay signed</td>
+              <td>Not observed</td></tr>
+          <tr><td>A recurring charge on an authorised mandate</td>
+              <td>Implemented. Never submitted</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="tiny" style="margin:12px 0 0">No live API key exists for this project. Razorpay
+    requires verified website details before live keys are issued. Everything stops at the
+    boundary where money would move.</p>
+
+    <h3 style="margin:34px 0 10px">What the offline suite establishes</h3>
+    <p class="small" style="max-width:62ch">Seven gate files, 218 checks, about four seconds,
+    against a mock rail written from Razorpay's published documentation. It establishes that the
+    state machine and the failure handling behave as described. It establishes nothing about
+    Razorpay, because Razorpay has never read one of these requests.</p>
+
+    <div class="grid3" style="margin-top:18px">
+      <div class="card scope">
+        <h3>Survives the crash</h3>
+        <ul>
+          <li>The intent is on disk before the request leaves</li>
+          <li>A lost response stays unknown, and blocks a second debit rather than licensing one</li>
+          <li>An order lost to a crash is found by its receipt, not created again</li>
+          <li>An accepted-but-uninterpreted webhook is replayed at startup, and replaying it twice changes nothing</li>
+        </ul>
+      </div>
+      <div class="card scope">
+        <h3>Survives the provider</h3>
+        <ul>
+          <li>The signature is checked over the exact bytes received</li>
+          <li>A redelivered event adds no row &mdash; the event id is a primary key</li>
+          <li>A late event cannot walk a payment backwards</li>
+          <li>Two contradictory outcomes are recorded as a conflict, not resolved by arrival order</li>
+        </ul>
+      </div>
+      <div class="card scope">
+        <h3>Cannot be talked into a debit</h3>
+        <ul>
+          <li>No route accepts an amount, a token or a time</li>
+          <li>The one route that can move money reads no request body at all</li>
+          <li>Live mode with a missing credential refuses to start rather than falling back to the mock</li>
+          <li>Submitting a real debit needs a second switch, set to one specific word</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="tiny" style="margin:18px 0 0">A passing mock suite and a working integration are
+    different claims. The mock declines, loses responses and redelivers webhooks on purpose,
+    which is enough to test a state machine. It is a reading of a document, and the document is
+    not the API.</p>
+  </div>
+</section>
+
+<section id="scope">
+  <div class="wrap">
+    <div class="shead">
+      <div class="n">09</div>
       <div>
         <h2>Scope</h2>
         <p>No Razorpay transaction, mandate or decline code has been observed by this project.
@@ -1175,10 +1349,15 @@ footer{padding:56px 0 90px}
         calibration gates: the filter's diffusion leaks through the balance floor it does
         model, so it can believe money appeared where none did. A repair exists, is measured,
         and is off because it kills more mandates at this horizon.</li>
-      <li><b>The constraint layer and the live Razorpay executor keep two different clocks</b>
-        for the same field, so the live executor has not been driven end to end by the
-        constraint layer with a genuine order. A committed proof script asserts the refusal
-        rather than working around it.</li>
+      <li><b>The live path has never met Razorpay.</b> The pre-debit order, the recurring
+        charge, the webhook handler and the reconciliation are exercised only against a mock
+        rail written from Razorpay's documentation. Their API has read none of these request
+        bodies, so every request shape is a hypothesis with a citation.</li>
+      <li><b>The customer's income and payday are supplied, not inferred.</b> The belief filter
+        needs both to have a prior at all, and a live integration has no oracle for either: the
+        merchant knows the subscription price, not the pay cycle. The live service takes them as
+        an operator estimate and records them as one. Nothing here measures how wrong they are
+        on real customers.</li>
       <li><b>The single-customer walkthrough in section 01 is one customer.</b> It comes from
         the same world and the same held-out population as the batch figure, and it is chosen
         for legibility rather than for being typical or flattering. The three mandates in the
