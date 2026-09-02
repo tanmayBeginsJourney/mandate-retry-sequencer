@@ -12,7 +12,7 @@ salary across four cycles, and the at-risk rate collapses 29.80% / 8.62% /
 3.05% / 0.75%. So the due-date failure rate is a function of how long the run
 is -- 27.67% at 60 days, 13.72% at 120, 4.24% at 360 -- and V1's agreement with
 a published 8-15% band is the horizon cutting a decaying transient at the right
-place. Candidate error 33. NOTES.md, 31 August 2026.
+place. See docs/errors.md, "The world had no steady state".
 
 THE REPAIR IS TWO PARTS AND THEY ARE NOT SEPARABLE.
 
@@ -31,13 +31,13 @@ THE CANONICAL BUFFER WAS COMMITTED BEFORE THIS RAN and is NOT the V1-optimal
 cell: lognormal(median 0.25 monthly salaries, sigma 1.0), fixed by the published
 "75% of Indians have no emergency fund" figure -- P(buffer < 0.5) = 0.756 at
 sigma 1.0. The scalar sweep exists to show the curve, not to pick from.
-NOTES.md, 31 August 2026, B3.
+the development log.
 
 `pop_spend` STAYS AT 0.80 and is now derived rather than inherited:
 `pop_spend = 1 - household savings rate`, and RBI's FY25 household saving
 including physical assets is ~18-20%. The derivation names no validation target.
 
-PRE-REGISTERED: W11-1 to W11-12 in NOTES.md, 31 August 2026, with W11-4 VOID
+PRE-REGISTERED: W11-1 to W11-12 in the development log, with W11-4 VOID
 and replaced by W11-4b/W11-4c when S1 changed from an explicit initial draw to
 burn-in. W11-5, W11-6 and W11-8 all predict the repair does NOT fix the
 scoreboard.
@@ -124,7 +124,7 @@ def main() -> int:
                                   bcfg=w3.FITTED_BELIEF, mode=mode,
                                   burn_cycles=burn),
                              False))
-    print("W11 -- STATIONARITY. Pre-registered in NOTES.md, 31 Aug 2026.")
+    print("W11 -- STATIONARITY. pre-registered 31 Aug 2026.")
     print(f"{len(jobs)} runs: {len(CELLS)} cells x {len(POPS)} populations x "
           f"{len(ARMS)} arms, n={N} {DAYS}d payday_err=+/-{PE} "
           f"pop_spend swept over {SPENDS} burn_cycles={BURN}")
@@ -178,7 +178,7 @@ def main() -> int:
 
     cans = [f"canon {x:.2f}" for x in SPENDS]
     print()
-    print("PRE-REGISTERED PREDICTIONS (NOTES.md, 31 Aug 2026, before this ran)")
+    print("PRE-REGISTERED PREDICTIONS (31 Aug 2026, before this ran)")
     print("=" * 104)
     print("  W11-5/6/7 were registered against a BUFFER sweep at pop_spend=0.80.")
     print("  That design was replaced by this SPEND sweep at the canonical")
@@ -215,7 +215,7 @@ def main() -> int:
     print()
     print(f"  Pre-registration record for this run: {n_held}/{len(preds)}")
     print("  W11-1/2/3/4b/4c were scored POLICY-FREE and all five HELD.")
-    print("  NOTES.md, 31 August 2026.")
+    print("  the development log.")
     print()
     print("  W11-1 (horizon independence) and W11-4c (burn-in convergence) are")
     print("  POLICY-FREE and are measured by scripts/check_stationarity.py, not")

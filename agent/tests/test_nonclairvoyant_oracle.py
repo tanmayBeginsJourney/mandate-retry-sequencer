@@ -7,7 +7,8 @@ WHY THE CLAIRVOYANT ORACLE WAS NOT ENOUGH. `SimExecutor.constrained_oracle`
 reads 100% at every cell, because with perfect foresight it needs ONE attempt
 and the four-attempt cap never binds on it. So it cannot say whether the agent's
 ~88% recovery is close to what is achievable or far from it, and V5 claims have
-been hedged since. Error 35, NOTES.md, 31 August 2026.
+been hedged since. docs/errors.md, "An unconstrained oracle used to justify a
+modelling decision", 31 August 2026.
 
 WHAT B-1 IS. The best schedule of at most `NPCI_MAX` attempt days, expressed as
 offsets from the ESTIMATED payday -- the same noisy `est_payday` the agent is
@@ -32,7 +33,7 @@ If the published 70-85% smart-retry band describes largely non-adaptive retry
 systems -- and "smart retries + card updater + email" plausibly does -- then
 agent-beats-B-1 is the V5 story, and the margin is what the belief filter buys.
 
-PRE-REGISTERED IN NOTES.md, 1 September 2026, BEFORE THIS WAS BUILT:
+PRE-REGISTERED 1 September 2026, BEFORE THIS WAS BUILT:
 
     agent >= B-1 + 2 pts   exceeds best non-adaptive; adaptivity worth the margin
     agent within +/-2 pts  matches non-adaptive; no measurable adaptive gain
@@ -60,32 +61,29 @@ import agent  # noqa: F401
 import w3
 
 from agent.batch import at_risk_cycles, make_pop
+# I2-EXEMPT: reads SimExecutor.estimates to build the non-clairvoyant oracle's offsets; there is no world-opinion route to a per-customer estimate.
 from agent.execution.sim_executor import SimExecutor
 
-N, K_FIXED, DAYS, PE = 100, 5, 120, 7
-POPS = list(range(700, 720))
-BURN, CYC = 12, 30
-K_SEED, BUF_SEED = 4242, 9182
-SPENDS = (0.88, 0.93)
-EARLY = 10
+from agent.tests import _canonical as _CAN
 
-CANONICAL = dict(k_mean=2.0, k_seed=K_SEED, k_max=8,
-                 payday_mode="statutory",
-                 amount_mode="absolute", amount_median=855.0,
-                 buffer_median=0.25, buffer_sigma=1.0, buffer_seed=BUF_SEED,
-                 irregular_frac=0.00)
-RUN_KW = dict(burn_cycles=BURN, mandate_outflow=True)
+#: THE CANONICAL WORLD, IMPORTED rather than copied.
+_C = ["--canonical"]
+N, K_FIXED, DAYS, PE = _CAN.N, 5, 120, 7
+POPS = list(range(700, 720))
+BURN, CYC = _CAN.BURN, 30
+SPENDS = (0.88, _CAN.SPEND)
+EARLY = 10
+RUN_KW = _CAN.run_kwargs(_C)
 
 #: Measured agent recovery / early share, from test_canonical_world.py
 #: --confirm at n=100, 20 populations. logs/w13_canonical_n100.txt.
+#: HISTORICAL: measured before the canonical n moved to 500. Kept as the
+#: reference these bounds were declared against, not as a current figure.
 AGENT = {0.88: (0.9171, 0.4043), 0.93: (0.8840, 0.4264)}
 
 
 def percell(pop_seed):
-    kw = dict(CANONICAL)
-    kw["k_seed"] = K_SEED + pop_seed
-    kw["buffer_seed"] = BUF_SEED + pop_seed
-    return kw
+    return _CAN.pop_kwargs(pop_seed, _C)
 
 
 def build_matrix(spend):
@@ -143,7 +141,7 @@ def best_schedule(M, cap):
 
 def main() -> int:
     print("B-1 -- THE BEST NON-ADAPTIVE SCHEDULE. "
-          "Pre-registered in NOTES.md, 1 Sep 2026.")
+          "pre-registered 1 Sep 2026.")
     print(f"  n={N} x {len(POPS)} populations, canonical world, burn {BURN}, "
           f"mandate outflow ON.")
     print(f"  Offsets from the NOISY est_payday (+/-{PE}d), "

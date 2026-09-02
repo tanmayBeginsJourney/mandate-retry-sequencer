@@ -16,7 +16,7 @@ point every time. Established by isolation:
 
 That last one is the decisive evidence: the failing code is code that
 demonstrably worked hours earlier and has not changed. This is the intermittent
-0xC0000005 already recorded in NOTES.md, not a defect in `agent/`.
+0xC0000005 already recorded in the development log, not a defect in `agent/`.
 
 THE MITIGATION, and why it is not a workaround. `ProcessPoolExecutor` with
 `max_tasks_per_child=1` gives every run a brand-new interpreter that exits
@@ -34,7 +34,8 @@ censoring).
 
 WINDOWS SPAWN: the worker lives in THIS module, which has no side effects on
 import, so a re-importing child executes nothing. Callers still need
-`if __name__ == "__main__":` -- see NOTES.md error 10, the 97 minutes.
+`if __name__ == "__main__":` -- see docs/errors.md, "A language model wired
+into a loop that asks 119,667 times", and the 97 minutes that cost.
 """
 from __future__ import annotations
 

@@ -298,17 +298,62 @@ footer{padding:56px 0 90px}
     <p class="lede" style="margin-top:22px">
       Indian subscription payments are collected by a standing mandate on UPI. When the
       account is short on the due date the debit is declined, and the usual response is
-      to retry on the following days. This agent estimates when the salary arrives and
-      schedules the attempt for a day the balance is likely to cover it.
+      to retry on the following days. This agent treats each decline as a measurement of
+      the customer's balance, estimates when the salary arrives, and schedules the
+      attempt for a day the money is likely to be there.
     </p>
 
     <div class="hero-stats">
-      <div class="hstat"><span class="v num" id="s-agent">99.38%</span>
+      <div class="hstat"><span class="v num" id="s-agent">99.12%</span>
         <span class="k">of billing cycles collected by the agent</span></div>
-      <div class="hstat dim"><span class="v num" id="s-base">90.29%</span>
+      <div class="hstat dim"><span class="v num" id="s-base">90.41%</span>
         <span class="k">collected by a simple payday baseline</span></div>
-      <div class="hstat"><span class="v num" id="s-rupees">₹75.1L</span>
-        <span class="k">recovered across 4 populations of 100 customers</span></div>
+      <div class="hstat"><span class="v num" id="s-rupees">₹371.6L</span>
+        <span class="k">recovered across 10 held-out populations of 500 customers</span></div>
+    </div>
+
+    <p class="tiny" style="margin-top:18px;max-width:74ch">
+      A difference of <b>+8.70 percentage points</b>, 2 SE 0.68
+      across populations, measured at <code>payday_err=&plusmn;7</code> and
+      <code>pop_spend=0.93</code>. It is a curve in both of those, not a constant: across the
+      plausible range of household spending it runs from +0.89 to +8.70. A fixed
+      two-attempt schedule collects more than the agent when payday is already known to within
+      three days. Repeating the run on four different random seeds moves the difference by
+      1.89 points, which the interval above does not include. The populations are held out,
+      the sample size was chosen by running the same experiment at five sizes, and one command
+      reproduces every figure on this page.
+    </p>
+
+    <div class="grid3" style="margin-top:28px">
+      <div class="card scope">
+        <h3>Simulated</h3>
+        <ul>
+          <li>Every balance, salary date, debit outcome and rupee total on this page</li>
+          <li>The customer and merchant population</li>
+        </ul>
+      </div>
+      <div class="card scope">
+        <h3>Real</h3>
+        <ul>
+          <li>Razorpay test-mode API authentication, and a funding reminder delivered over
+            SMTP &mdash; both exercised against live endpoints, both with a committed
+            transcript</li>
+          <li>Test-mode Customer records and Payment Links: implemented and runnable against
+            <code>rzp_test_</code> keys, with no transcript of a run committed</li>
+          <li><b>An authorised recurring debit is not demonstrated.</b> The recurring-charge
+            request is implemented but has never been submitted against an authorised
+            mandate, and no figure here depends on one</li>
+        </ul>
+      </div>
+      <div class="card scope">
+        <h3>The language model</h3>
+        <ul>
+          <li>Names the root cause, picks the intervention, writes the justification</li>
+          <li><b>It cannot decide when to debit.</b> The type it returns has no field for
+            a time, and an import check keeps it away from the timing code</li>
+          <li>Every figure here is produced by the deterministic path</li>
+        </ul>
+      </div>
     </div>
 
     <div class="cta-row">
@@ -327,17 +372,19 @@ footer{padding:56px 0 90px}
       <div class="n">01</div>
       <div>
         <h2>One customer's billing cycle</h2>
-        <p>Customer <code id="uid">c45m3</code>, from a simulated population of 100. The
-        month below is read out of the audit log of an agent run.</p>
+        <p>Customer <code id="uid">c12m1</code>, one of two subscriptions held by the same
+        person, from a simulated population of 500. The month below is read out of the
+        audit log of an agent run.</p>
       </div>
     </div>
 
     <ul class="beats">
-      <li><span class="w">Day 4</span><span>The ₹550 debit is due.</span></li>
-      <li><span class="w">Day 4</span><span>The account holds <b>₹215</b>.</span></li>
-      <li><span class="w">Day 9</span><span>The salary lands. The account jumps to <b>₹10,583</b>.</span></li>
-      <li><span class="w">The baseline</span><span>Charges on the due date, then retries on the next three days. All four attempts hit the same empty account.</span></li>
-      <li><span class="w">The agent</span><span>Skips the due date, waits for the balance to rise, sends the required notice, and debits once.</span></li>
+      <li><span class="w">Day 16</span><span>The ₹620 debit is due. The account holds <b>₹0</b>: the salary landed on day 3 and has been spent.</span></li>
+      <li><span class="w">Day 17</span><span>The agent has seen nothing yet this cycle, so it attempts. <b>Declined.</b> That decline is the measurement.</span></li>
+      <li><span class="w">Days 18–28</span><span>The balance estimate collapses and the agent holds, watching the odds of a later day stay far above today's.</span></li>
+      <li><span class="w">Day 29</span><span>It attempts again, a day early. Declined again.</span></li>
+      <li><span class="w">Day 33</span><span>The salary lands, the account jumps to <b>₹26,854</b>, and the debit collects.</span></li>
+      <li><span class="w">The baseline</span><span>Charges on the due date, then retries on the next three days. All four attempts hit the same empty account and the mandate reaches its legal cap.</span></li>
     </ul>
 
     <div class="figure">
@@ -348,7 +395,7 @@ footer{padding:56px 0 90px}
           attempts: <b>✓</b> collected, <b>✕</b> declined.</p>
         </div>
         <div class="tiny num" style="text-align:right;white-space:nowrap">
-          population seed 700 · run seed 7
+          population seed 710 · run seed 7
         </div>
       </div>
 
@@ -356,18 +403,19 @@ footer{padding:56px 0 90px}
         <svg class="chart wide" id="timeline" viewBox="0 0 920 366" role="img"
              aria-labelledby="tl-t tl-d">
           <title id="tl-t">One customer's billing cycle</title>
-          <desc id="tl-d">A balance that sits at ₹215 for five days, jumps to ₹10,583 when the
-            salary lands on day 9, then decays. Beneath it, a fixed retry schedule fires four
-            attempts into the empty days and collects nothing, while the agent waits and
-            collects with a single attempt after the salary arrives.</desc>
+          <desc id="tl-d">A balance that sits at zero from the due date on day 16 until the
+            salary lands on day 33 and the account jumps to ₹26,854, then decays back to zero
+            by day 45. Beneath it, a fixed retry schedule fires four attempts into the empty
+            days and collects nothing, while the agent spends two attempts learning that the
+            account is empty and collects on the third, after the salary arrives.</desc>
         </svg>
       </div>
 
       <div class="ctlbar">
         <div class="ctl">
           <label for="c-day">Step through the month</label>
-          <input type="range" id="c-day" min="4" max="33" step="1" value="33">
-          <div class="ticks"><span>day 4</span><span>day 33</span></div>
+          <input type="range" id="c-day" min="16" max="45" step="1" value="45">
+          <div class="ticks"><span>day 16</span><span>day 45</span></div>
         </div>
         <div class="ctl" style="flex:0 0 auto">
           <span class="cl">&nbsp;</span>
@@ -401,23 +449,25 @@ footer{padding:56px 0 90px}
       <div class="card">
         <h3>The waiting decision</h3>
         <p class="small" style="margin-bottom:0">Each day the agent compares two numbers: the
-        chance the debit clears today, and the best chance available on any remaining day of the
-        cycle. On day 4 those are <b>12%</b> and <b>31%</b>, so it holds the attempt. Only four
-        attempts are available for the whole cycle, so an attempt against an empty account is
-        wasted.</p>
+        chance the debit clears tomorrow, and the best chance available on any remaining day of
+        the cycle. On day 16 it has seen nothing this cycle and rates those <b>92%</b> and
+        <b>97%</b>, so it attempts. After the decline they are <b>15%</b> and <b>96%</b>, and it
+        holds. Only four attempts are available for the whole cycle, so an attempt against an
+        empty account is wasted.</p>
       </div>
       <div class="card">
         <h3>Where the agent fails on this customer</h3>
         <p class="small" style="margin-bottom:0">At ±10 or ±14 days of payday uncertainty the
-        agent misses this customer's cycle: it waits past the salary credit and both remaining
-        attempts decline. Two other customers in the same population where it performs worse are
-        named in <code>scripts/build_page_data.py</code>.</p>
+        agent misses this customer's cycle entirely: all three attempts land before the salary
+        and decline. Two other customers in the same population that it also fails to collect
+        from are named in <code>scripts/build_page_data.py</code>.</p>
       </div>
     </div>
 
     <p class="tiny" style="margin-top:20px">
-      This customer has a flat balance, one salary credit and one debit. The arrows and
-      decisions come from agent runs at six levels of payday uncertainty, stored in
+      This customer holds two subscriptions and receives one salary credit a month. The arrows
+      and decisions come from agent runs at six levels of payday uncertainty on held-out
+      population 710 — one of the ten the batch result above is measured on — stored in
       <code>docs/data/scenarios.json</code>.
     </p>
   </div>
@@ -442,19 +492,19 @@ footer{padding:56px 0 90px}
     <div class="grid3" style="margin-bottom:22px">
       <div class="card">
         <div class="rk">Collected by the agent</div>
-        <div id="b-agent" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">99.38%</div>
+        <div id="b-agent" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">99.12%</div>
         <p class="tiny" style="margin:6px 0 0">of billing cycles due, over 120 days</p>
       </div>
       <div class="card">
         <div class="rk">Collected by the baseline</div>
-        <div id="b-base" style="font-size:32px;font-weight:500;letter-spacing:-.02em;color:var(--muted)" class="num">90.29%</div>
-        <p class="tiny" style="margin:6px 0 0">a difference of <span id="b-delta">+9.08 points, 2 SE 1.84</span></p>
+        <div id="b-base" style="font-size:32px;font-weight:500;letter-spacing:-.02em;color:var(--muted)" class="num">90.41%</div>
+        <p class="tiny" style="margin:6px 0 0">a difference of <span id="b-delta">+8.70 points, 2 SE 0.68</span></p>
       </div>
       <div class="card">
         <div class="rk">Recovered in simulation</div>
-        <div id="b-rupees" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">₹7,511,500</div>
+        <div id="b-rupees" style="font-size:32px;font-weight:500;letter-spacing:-.02em" class="num">₹37,164,850</div>
         <p class="tiny" style="margin:6px 0 0">zero constraint refusals, and an independent
-          recount of zero over 8,702 money actions</p>
+          recount of zero over 44,271 money actions</p>
       </div>
     </div>
 
@@ -463,15 +513,15 @@ footer{padding:56px 0 90px}
         <div>
           <h3>Collection rate against payday uncertainty</h3>
           <p class="tiny" style="margin:0">The slider in section 01 moves the highlighted point.
-          Below about four days of uncertainty the two are level.</p>
+          At ±1 day of uncertainty the two are level.</p>
         </div>
       </div>
       <div class="figure-body">
         <svg class="chart wide" id="sweep" viewBox="0 0 920 330" role="img"
              aria-labelledby="sw-t sw-d">
           <title id="sw-t">Collection rate as payday uncertainty grows</title>
-          <desc id="sw-d">The baseline falls from 99.8% at ±1 day to 86.1% at ±14 days. The
-            agent stays between 99.8% and 98.8% across the same range.</desc>
+          <desc id="sw-d">The baseline falls from 99.45% at ±1 day to 85.25% at ±14 days.
+            The agent stays between 99.42% and 98.40% across the same range.</desc>
         </svg>
       </div>
       <div class="figure-foot">
@@ -488,11 +538,11 @@ footer{padding:56px 0 90px}
           </table>
         </div>
         <p class="tiny" style="margin-top:14px">
-          100 customers × about 2 mandates each, 10 held-out populations (seeds 710–719),
+          500 customers × about 2 mandates each, 10 held-out populations (seeds 710–719),
           120 days, <code>pop_spend=0.93</code>, paired 2 SE. Transcript
-          <code>logs/w27_page_sweep_repaired.txt</code>; reproduce the ±7 row with
+          <code>logs/w30_page_sweep_n500.txt</code>; reproduce the ±7 row with
           <code>py -3.12 -m agent.batch_report --pops 10 --canonical</code>, transcript
-          <code>logs/w24_headline_repaired.txt</code>.
+          <code>logs/w30_headline_n500.txt</code>.
           <span class="tag">not gate-protected</span>
         </p>
       </div>
@@ -503,14 +553,14 @@ footer{padding:56px 0 90px}
         <h3>The baseline</h3>
         <p class="small" style="margin-bottom:0"><code>payday_wait</code> estimates the
         customer's payday, waits until that date, then attempts once a day. At ±1 day of error
-        it collects <b>99.80%</b>, level with the agent's 99.81%.</p>
+        it collects <b>99.45%</b>, level with the agent's 99.42%.</p>
       </div>
       <div class="card">
         <h3>Payday predictability</h3>
-        <p class="small" style="margin-bottom:0">Unknown. No measurement of payday
-        predictability in India was found, so it appears here as a slider rather than a fixed
-        value. The agent learns payday from observed outcomes and reports its own
-        uncertainty.</p>
+        <p class="small" style="margin-bottom:0">Not published. No measurement of payday
+        predictability in India was found, so it is a swept parameter here rather than a fixed
+        value, and the whole curve is reported. The agent learns payday from observed outcomes
+        and reports its own uncertainty.</p>
       </div>
     </div>
   </div>
@@ -575,8 +625,8 @@ footer{padding:56px 0 90px}
         <p class="small" style="margin-bottom:0"><b>The constraint layer refuses; a separate
         auditor recounts.</b> One component blocks illegal actions. A second rebuilds what was
         legal from the audit log, using code that cannot import the first. Both counts are
-        printed side by side. Over 8,702 money actions in the headline batch, both are
-        zero.</p>
+        printed side by side. Over 44,271 money actions in the headline batch,
+        both are zero.</p>
       </div>
     </div>
 
@@ -666,8 +716,8 @@ footer{padding:56px 0 90px}
         </div>
         <div class="seg" role="group" aria-label="Which moment to show">
           <button id="o-quiet" aria-pressed="false">Rail healthy</button>
-          <button id="o-caught" aria-pressed="true">Rail degraded</button>
-          <button id="o-false" aria-pressed="false">A false alarm</button>
+          <button id="o-caught" aria-pressed="false">Rail degraded</button>
+          <button id="o-false" aria-pressed="true">An alarm outside a window</button>
         </div>
       </div>
 
@@ -692,21 +742,33 @@ footer{padding:56px 0 90px}
         80 and 110, each removing about 40% of attempts. No source reports what fraction of
         AutoPay debits fail during a UPI incident, so that severity is swept across three values
         rather than chosen. In a separate study containing no outages, the detector raised a
-        false alarm in <b>0 of 48 runs</b>. The day-67 alarm above comes from a single run of a
+        false alarm in <b>0 of 48 runs</b>. The alarm shown above comes from a single run of a
         horizon that does contain outages; the two are different measurements. Where an
         outage is present, the detector catches it in <b>0.75 of runs at 100 customers</b> and
-        all of them at 200. Transcript <code>logs/w28_detection_power.txt</code>.</p>
+        all of them at 200. Transcript <code>logs/w30_detect_study.txt</code>.</p>
+        <p class="tiny" style="margin:10px 0 0">This panel runs the world the outage
+        measurements are made in &mdash; 100 customers holding five mandates each at
+        <code>pop_spend=1.05</code> &mdash; and not the world the batch figure above uses. That
+        world was chosen because it has the attempt volume to show where the detector starts
+        working, which is what this panel is for.</p>
+        <p class="tiny" style="margin:10px 0 0">Measured on the world the batch figure does use,
+        500 customers holding about two subscriptions each carry <b>38.5 attempts per 24-hour
+        window</b> against the detector's floor of eight, and <b>every injected outage at
+        severity 0.40 is caught</b>. At 100 customers that world averages 7.6 attempts per
+        window &mdash; just under the floor &mdash; and the detector still fires in 0.70 of
+        runs, because individual windows run above the mean. Transcript
+        <code>logs/w30_detect_canonical.txt</code>.</p>
       </div>
     </div>
 
     <div class="grid2" style="margin-top:22px">
       <div class="card">
         <h3>Pausing during a detected outage</h3>
-        <p class="small">Pausing dispatch during a detected outage is <b>worth nothing this
-        experiment can distinguish from zero</b> at any severity, measured across 8
-        populations. It costs a scheduling day whether or not the rail is actually degraded,
-        and most of the day's attempts have already been sent by the time enough evidence
-        accumulates.</p>
+        <p class="small">Pausing dispatch during a detected outage is <b>worth a fifth of a
+        point at the worst severity tested</b>, and less below it, measured across 10
+        populations. The effect is small because pausing costs a scheduling day whether or not
+        the rail is actually degraded, and most of the day's attempts have already been sent by
+        the time enough evidence accumulates.</p>
         <div class="tablewrap" style="margin-top:14px">
           <table id="ablation-table">
             <thead><tr><th>Outage severity</th><th class="n">Pausing is worth</th><th class="n">2 SE</th><th></th></tr></thead>
@@ -715,10 +777,10 @@ footer{padding:56px 0 90px}
         </div>
         <p class="tiny" style="margin-top:12px">Pausing is off by default. The shipped
         behaviour is detection plus a change to how declines are folded into the balance
-        estimate. Measured on the current simulation, pausing is worth nothing the
-        experiment can distinguish from zero: 0.000 points at the two lowest severities,
-        +0.017 and +0.051 at the two highest, every one of them inside its own error bar.
-        Transcript <code>logs/w27_abl_outage_repaired.txt</code>.</p>
+        estimate. The gain grows with severity and clears its error bar at every severity above
+        zero, but the threshold written down in advance for shipping it was more than one
+        point, and the largest measured gain is +0.221. Transcript
+        <code>logs/w30_abl_outage_n500.txt</code>.</p>
       </div>
       <div class="card">
         <h3>Effect of pausing on detection</h3>
@@ -727,7 +789,7 @@ footer{padding:56px 0 90px}
         outage window instead of two.</p>
         <div class="bars" id="pause-bars" style="margin-top:16px"></div>
         <p class="tiny" style="margin-top:16px">One run, no error bars. The recovery
-        difference is consistent with the 8-population measurement on the left but does not
+        difference is consistent with the 10-population measurement on the left but does not
         replicate it.</p>
       </div>
     </div>
@@ -745,7 +807,10 @@ footer{padding:56px 0 90px}
         <h2>Merchant-level and pooled data</h2>
         <p>A single merchant charges a customer once a month and so observes one attempt per
         customer per month. An aggregator carrying that customer's other subscriptions observes
-        five. Estimating payday and detecting an outage both depend on attempt volume.</p>
+        more. Estimating payday and detecting an outage both depend on attempt volume, and how
+        much more an aggregator observes depends on how many subscriptions a customer holds.
+        The agent keeps one belief state per customer, shared across that customer's
+        subscriptions, and what that sharing is worth is measured below.</p>
       </div>
     </div>
 
@@ -765,7 +830,7 @@ footer{padding:56px 0 90px}
         <div class="bars" id="vol-bars"></div>
         <p class="tiny" style="margin:14px 0 0">The vertical mark on each bar is the
         eight-attempt floor. Below it the agent does not evaluate the outage test.
-        Transcript <code>logs/w28_detection_power.txt</code>.</p>
+        Transcript <code>logs/w30_detect_study.txt</code>.</p>
         <div class="rv" id="p-read" style="margin-top:16px"></div>
       </div>
     </div>
@@ -773,18 +838,27 @@ footer{padding:56px 0 90px}
     <div class="grid2" style="margin-top:22px">
       <div class="card">
         <h3>Effect on collection rate</h3>
-        <p class="small">Sharing one estimate across a customer's subscriptions, instead of each
-        merchant estimating that customer separately, is worth <b>+7.32 percentage points</b>
-        (±2.02) at <code>pop_spend=1.05</code> on the shipping filter (gate S2a_PD) and <b>+1.30</b> (±0.42) at 0.80, the calibration whose
-        failure rate matches the published band. The 0.80 figure is an agent measurement, not gate-protected.
-        <b>The value varies with world hardness by a factor of five</b>, so the hard-world number on its own is not the value of pooling.</p>
-        <p class="small" style="margin-bottom:0">The legal position on sharing one customer's
-        outcomes across merchants is unsettled, so pooling is a <b>per-customer permission</b>.
-        Pooling only for consenting customers costs 2.77 points at half consent at
-        <code>pop_spend=1.05</code>, and 0.57 at 0.80. Re-measured 1 September 2026 after the
-        payday prior was re-selected, which cut every one of these figures. Transcripts
-        <code>logs/w26_gate_full_moat_remeasure.txt</code> and
-        <code>logs/w26_w9_pooling_consent_remeasure.txt</code>.</p>
+        <p class="small">The sharing is implemented and switchable, so its value is measured
+        rather than argued. Running fully unpooled &mdash; each merchant estimating the same
+        customer separately &mdash; costs <b>0.16 percentage points</b> (±0.16) in the world
+        the headline above is measured in, about two subscriptions per customer.
+        <b>That is not distinguishable from zero.</b> The same measurement in a world where
+        every customer holds five subscriptions costs <b>6.47 points</b> (±0.62) at
+        <code>pop_spend=1.05</code> and <b>1.30</b> (±0.42) at 0.80.</p>
+        <p class="small">Pooling pays in proportion to how many subscriptions a customer holds.
+        Published aggregates &mdash; about 95 million active AutoPay mandates against a UPI
+        base past 500 million users &mdash; put the mean between one and three, and this
+        simulation uses two. No source gives the distribution itself, so the exact
+        <code>1 + Poisson(1)</code> draw is a modelling approximation. How much turns on the
+        count is measured rather than assumed: the five-subscription figure above is that same
+        measurement above the top of the derived range. The case for running this at an
+        aggregator rather than at a merchant is conditional on that count. Transcripts
+        <code>logs/w30_pooling_canonical.txt</code> and
+        <code>logs/w30_pooling_gateworld.txt</code>.</p>
+        <p class="small" style="margin-bottom:0">Pooling is a <b>per-customer permission</b>,
+        so an operator can switch it off per customer without changing anything else. Pooling
+        only for consenting customers costs 2.77 points at half consent in the
+        five-subscription world, and 0.07 in the canonical one.</p>
       </div>
       <div class="card">
         <h3>Bank-level outages</h3>
@@ -800,11 +874,15 @@ footer{padding:56px 0 90px}
 
     <div class="card" style="margin-top:16px;border-color:var(--warn);background:var(--warn-soft)">
       <h3 style="color:var(--warn-ink)">Legal status</h3>
-      <p class="small" style="margin-bottom:0;color:var(--ink-2)">Whether a payment aggregator
-      may lawfully use one merchant's transaction outcomes to schedule another merchant's debit
-      for the same customer has not been established. Razorpay's merchant terms, their privacy
-      policy and the relevant RBI directions have not been read. The repository records this as
-      an open question.</p>
+      <p class="small" style="margin-bottom:0;color:var(--ink-2)">Whether cross-merchant
+      pooling &mdash; a payment aggregator using one merchant's transaction outcomes to schedule
+      another merchant's debit for the same customer &mdash; is lawful in India
+      <b>has not been established</b> either way. The treatment is jurisdiction- and
+      provider-dependent and is a question of law, outside the scope of this engineering
+      evaluation. No statute or circular addresses the scenario directly; Razorpay's merchant
+      terms, their privacy policy and the relevant RBI directions have not been read. The
+      engineering response is to make pooling a per-customer permission, which is not a legal
+      conclusion.</p>
     </div>
   </div>
 </section>
@@ -887,25 +965,25 @@ footer{padding:56px 0 90px}
             <tbody>
               <tr>
                 <td>Share of debits failing on their due date</td>
-                <td class="n pos">10.50%</td>
+                <td class="n pos">10.62%</td>
                 <td class="n">8–15%</td>
                 <td><span class="tag good">hit</span></td>
               </tr>
               <tr>
                 <td>Recovery under a fixed-interval retry schedule</td>
-                <td class="n pos">22.15%</td>
+                <td class="n pos">21.80%</td>
                 <td class="n">20–40%</td>
                 <td><span class="tag good">hit</span></td>
               </tr>
               <tr>
                 <td>Recovery under smart retry timing</td>
-                <td class="n neg">95.24%</td>
+                <td class="n neg">94.19%</td>
                 <td class="n">70–85%</td>
                 <td><span class="tag warn">miss — too high</span></td>
               </tr>
               <tr>
                 <td>Share of recoveries landing inside 10 days</td>
-                <td class="n neg">42.97%</td>
+                <td class="n neg">42.90%</td>
                 <td class="n">85–95%</td>
                 <td><span class="tag warn">miss — too slow</span></td>
               </tr>
@@ -913,17 +991,17 @@ footer{padding:56px 0 90px}
           </table>
         </div>
         <p class="tiny" style="margin-top:14px">
-          100 customers × about 2 mandates each, 120 days, at
+          500 customers × about 2 mandates each, 120 days, at
           <code>pop_spend=0.93</code> — the end of the plausible range whose due-date failure
           rate matches the published record. The four rows do not share a sample size. Rows
           one and two are properties of the world and of a policy this project did not write,
           measured on 100 populations with
           <code>py -3.12 agent/tests/test_v3_power.py</code> (transcript
-          <code>logs/w24_v3_power.txt</code>); the second clears its band's floor by 2.15
-          points against a 2 SE of 1.95. Rows three and four measure the agent, on 20
+          <code>logs/w30_v3_power_n500.txt</code>); the second clears its band's floor by 1.80
+          points against a 2 SE of 0.71. Rows three and four measure the agent, on 20
           populations, with
           <code>py -3.12 agent/tests/test_canonical_world.py --confirm</code> (transcript
-          <code>logs/w24_canonical_repaired.txt</code>).
+          <code>logs/w30_canonical_n500.txt</code>).
           <span class="tag">not gate-protected</span>
         </p>
       </div>
@@ -951,8 +1029,8 @@ footer{padding:56px 0 90px}
         four-attempt cap and notice rules collects 100% here, so that row measures the agent
         rather than the world. Recovery is too slow because a mandate's due date and its
         customer's payday are drawn independently, so the gap between them averages half a
-        cycle. The same clairvoyant schedule reaches only 51.5% of failed debits inside ten
-        days, below the published band's floor; the agent reaches 83.4% of that. The two
+        cycle. The same clairvoyant schedule reaches only 51.9% of failed debits inside ten
+        days, below the published band's floor; the agent reaches 82.6% of that. The two
         rows have separate causes.</p>
       </div>
     </div>
@@ -966,10 +1044,9 @@ footer{padding:56px 0 90px}
       outside their bands. Fourteen alternative calibrations have been swept and none scores
       better against the four figures than the one reported here.</p>
       <p class="tiny" style="margin:8px 0 0">Transcripts <code>logs/w7_rerun.txt</code>
-      (transient holds) and <code>logs/w2_rerun.txt</code> (insolvency). Both were measured
-      before the belief was repaired on 1 September 2026 and neither has been re-run, so they
-      are quoted here for the direction of the sweep and not for its levels. The staleness
-      register in <a href="02_RESULTS.md">the full results</a> names them.</p>
+      (transient holds) and <code>logs/w2_rerun.txt</code> (insolvency). Both were measured on
+      an earlier experimental world and are quoted here for the direction of the sweep rather
+      than for its levels. <a href="results.md">The full results</a> name them.</p>
     </div>
 
     <p class="tiny" style="margin-top:22px">
@@ -1017,47 +1094,62 @@ footer{padding:56px 0 90px}
         </ul>
       </div>
       <div class="card scope">
-        <h3>Not known</h3>
+        <h3>Not established by this project</h3>
         <ul>
-          <li>How often each decline reason actually occurs</li>
-          <li>How accurately payday can be predicted in India</li>
-          <li>Whether cross-merchant pooling is legally permitted</li>
-          <li>What fraction of debits fail during a UPI incident</li>
+          <li>How often each decline reason actually occurs &mdash; every rate is swept
+            rather than chosen</li>
+          <li>How accurately payday can be predicted in India &mdash; swept from ±1 to ±14
+            days</li>
+          <li>What fraction of debits fail during a UPI incident &mdash; severity is swept</li>
+          <li>The distribution of AutoPay mandates one customer holds. Published aggregates
+            put the mean between one and three; the exact draw is a modelling
+            approximation</li>
           <li>Whether Razorpay's API accepts the recurring-charge request body written here.
             The client authenticates against the test API and reads successfully; charging
-            requires an authorised mandate, which this project does not have</li>
+            requires an authorised mandate, which this test account cannot register</li>
+          <li>The legal treatment of cross-merchant pooling, which is a question of law and
+            outside the scope of this evaluation</li>
         </ul>
       </div>
     </div>
 
     <h3 style="margin:38px 0 0;font-size:20px;font-family:var(--serif);font-weight:400">Limitations</h3>
     <ul class="limits" style="margin-top:14px">
-      <li><b>The headline depends on two parameters.</b> At ±1 and ±3 days of payday error
-        the agent and the baseline are level; the +9.08 point figure is measured at ±7 days. It
-        also depends on spending pressure: the difference runs +0.93 to +9.08 across the
-        plausible range of household spending, and below the top of that range the world
-        produces too few failed debits to measure a difference at all &mdash; two of them at
-        <code>pop_spend=0.80</code>, across a thousand customers.</li>
-      <li><b>A fixed schedule matches the agent when payday is predictable.</b> Two
+      <li><b>The headline depends on two parameters, and both are swept rather than
+        assumed.</b> The +8.70 point figure is measured under a ±7-day payday-error regime;
+        at ±1 day the agent and the baseline are level. It also depends on spending pressure:
+        the difference runs +0.89 to +8.70 across the plausible range of household spending,
+        and at the gentle end of that range the world produces few enough failed debits that
+        the row is a thin measurement &mdash; 49 of them at <code>pop_spend=0.80</code>,
+        across five thousand customers.</li>
+      <li><b>Every figure here is one random seed, and the interval beside it does not say
+        so.</b> The 2 SE quoted with the headline is the spread across the ten populations.
+        Running the identical experiment on four different run seeds moves the difference
+        between the agent and the baseline by 1.89 points &mdash; from +7.38 to +9.26 &mdash;
+        and almost all of that movement is the baseline, which waits for a payday estimate the
+        seed draws. The agent's own collection moves by 0.18 points.</li>
+      <li><b>A fixed schedule beats the agent when payday is predictable.</b> Two
         attempts placed at frozen offsets from the same payday estimate the agent is given
-        collect 99.75% of at-risk cycles at ±1 day, against the agent's 98.59%. The agent is
-        behind by 1.16 points there and by 0.33 at ±3, both inside the measurement error, and
-        ahead by 1.15 at ±5, 3.55 at ±7, 23.83 at ±10 and 34.41 at ±14. It reaches that tie
-        while spending about a quarter more attempts per cycle, 1.44 against 1.10, and
-        recovering more slowly: 46.6% of at-risk cycles inside ten days against the fixed
-        schedule's 49.9%. Transcripts <code>logs/w25_steelman_final.txt</code> and
-        <code>logs/w24_heldout_confirmation.txt</code>. How accurately payday can be estimated in India is unmeasured, and
-        Indian payroll practice &mdash; statutory payment by the 7th or 10th, most firms on the
-        last working day, government salaries on a fixed date &mdash; points at the predictable
-        end, where the fixed schedule is the simpler choice. The agent's advantage is
-        protection against that estimate being wrong.</li>
+        collect 99.89% of at-risk cycles at ±1 day, against the agent's 97.90%. The agent is
+        behind by 2.00 points there and by 1.62 at ±3, both by more than the paired
+        measurement error, level at ±5, and ahead by 2.16 at ±7, 20.05 at ±10 and 33.90 at
+        ±14. The fixed schedule also loses no mandates at any level tested &mdash; 100.0%
+        survival against the agent's 99.0&ndash;99.5%. Transcript
+        <code>logs/w30_steelman_n500.txt</code>. How
+        accurately payday can be estimated in India is unmeasured, and Indian payroll practice
+        &mdash; statutory payment by the 7th or 10th, most firms on the last working day,
+        government salaries on a fixed date &mdash; points at the predictable end, where the
+        fixed schedule is the simpler choice. The agent's advantage is protection against that
+        estimate being wrong.</li>
       <li><b>The headline batch runs with the richer decline taxonomy switched off</b>, so it
-        contains no frozen accounts, revoked mandates or limit hits. Switching it on costs
-        between 0 and 13.5 points. Every rate in that sweep is unsourced.</li>
-      <li><b>The largest single sensitivity is an unsourced rate.</b> How often a debit is
-        refused by a transaction or mandate limit is not published anywhere. Sweeping it over
-        0.00 / 0.05 / 0.15 costs 0.00 / −2.29 / −9.22 points. The curve is non-linear, so the
-        midpoint of the range is not the midpoint of the cost.</li>
+        contains no frozen accounts, revoked mandates or limit hits. The taxonomy is
+        implemented and its cost is measured: switching it on costs between 0 and 13.5 points
+        across the swept range. No source publishes those rates, which is why they are swept
+        rather than set.</li>
+      <li><b>The largest single sensitivity is a rate nobody publishes.</b> How often a
+        debit is refused by a transaction or mandate limit is not published anywhere, so it
+        is swept rather than chosen. The curve is non-linear, so the midpoint of the range is
+        not the midpoint of the cost.</li>
       <li><b>The timing score contains a hand-chosen discount factor.</b> Sweeping it from
         0.80 to 1.00 on the shipping filter moves recovery by 3.9 points, from 91.3% to 95.2%.
         The shipped 0.92 is not the best cell on that grid &mdash; 0.88 scores 0.44 points
@@ -1065,21 +1157,33 @@ footer{padding:56px 0 90px}
       <li><b>Four of the simulation's twenty-seven checks fail on a clean checkout.</b> Each
         has a written reason recorded rather than a loosened threshold. Two are calibration
         gates that no parameter fixes; two are controls left failing so that a rewrite of the
-        surrounding tests remains auditable.</li>
+        surrounding tests remains auditable. They are diagnostics on specific properties and
+        the other twenty-three gates pass unchanged.</li>
       <li><b>Simulation results are not production estimates.</b> The published industry
-        benchmark for retry optimisation is a 6–8% uplift. The +9.08 point figure describes
+        benchmark for retry optimisation is a 6–8% uplift. The +8.70 point figure describes
         this simulated world at <code>pop_spend=0.93</code>.</li>
       <li><b>Two of the four external checks are missed, and one of them cannot be hit on
         this rail.</b> A clairvoyant schedule obeying the same four-attempt cap and notice
-        rules reaches only 51.5% of failed debits inside ten days, against a published band of
-        85–95% drawn from card dunning. The agent reaches 43.0%, or 83.4% of what is
+        rules reaches only 51.9% of failed debits inside ten days, against a published band of
+        85–95% drawn from card dunning. The agent reaches 42.9%, or 82.6% of what is
         available.</li>
-      <li><b>The study is small:</b> 100 customers, about 2 mandates each, 10 populations for
-        the batch figure and 20 for the external checks, one run seed each.</li>
-      <li><b>The single-customer walkthrough in section 01 is drawn from an earlier
-        calibration of the same simulation</b>, with 5 mandates per customer instead of about
-        2. It illustrates the mechanism. Every aggregate figure on this page comes from the
-        current one.</li>
+      <li><b>The study is small:</b> 500 customers, about 2 mandates each, 10 populations
+        for the batch figure and 20 for the external checks, one run seed each. The sample
+        size was chosen by running the same experiment at 100, 250, 500, 1,000 and 2,000
+        customers; 500 sits within 0.19 points of 2,000 on the headline difference.</li>
+      <li><b>The belief is not well calibrated.</b> Two of the four failing checks are
+        calibration gates: the filter's diffusion leaks through the balance floor it does
+        model, so it can believe money appeared where none did. A repair exists, is measured,
+        and is off because it kills more mandates at this horizon.</li>
+      <li><b>The constraint layer and the live Razorpay executor keep two different clocks</b>
+        for the same field, so the live executor has not been driven end to end by the
+        constraint layer with a genuine order. A committed proof script asserts the refusal
+        rather than working around it.</li>
+      <li><b>The single-customer walkthrough in section 01 is one customer.</b> It comes from
+        the same world and the same held-out population as the batch figure, and it is chosen
+        for legibility rather than for being typical or flattering. The three mandates in the
+        same population that the agent attempts at least three times and never collects are
+        named in the repository.</li>
     </ul>
   </div>
 </section>
@@ -1089,11 +1193,9 @@ footer{padding:56px 0 90px}
     <p class="small" style="margin:0">Built for Razorpay's AI Buildathon, Track 3.</p>
     <div class="flinks">
       <a href="../">Repository and README</a>
-      <a href="08_ARCHITECTURE.md">Architecture — one page</a>
-      <a href="06_MODEL_CARD.md">Model card — what ships and what it was never tested on</a>
-      <a href="02_RESULTS.md">Full results</a>
-      <a href="03_ERRORS.md">Errors found in this project's own work</a>
-      <a href="01_FACTS.md">External facts and sources</a>
+      <a href="architecture.md">Architecture — components, interfaces, the decision rule</a>
+      <a href="results.md">Results — every figure with its design, the model card and the sources</a>
+      <a href="errors.md">Failure analysis — defects found in this project's own work</a>
     </div>
     <p class="tiny" style="margin-top:22px">
       Every scenario on this page is pre-computed by <code>scripts/build_page_data.py</code>
@@ -1111,7 +1213,7 @@ footer{padding:56px 0 90px}
    =========================================================================== */
 
 const ERRS = [1, 3, 5, 7, 10, 14];
-const S = { errIdx: 3, day: null, timer: null, outage: "caught", pooled: true, decl: "z9" };
+const S = { errIdx: 3, day: null, timer: null, outage: "false", pooled: true, decl: "z9" };
 let D = null;
 
 const $ = (id) => document.getElementById(id);
@@ -1448,7 +1550,7 @@ function drawSweepTable() {
   const tb = document.querySelector("#sweep-table tbody");
   tb.innerHTML = "";
   D.sweep.forEach((r, i) => {
-    /* r.diff is transcribed from docs/02_RESULTS.md, not computed from the two
+    /* r.diff is transcribed from docs/results.md, not computed from the two
        columns beside it: subtracting the rounded columns disagrees with the
        source by a hundredth at ±10 days. */
     const tr = document.createElement("tr");
@@ -1555,6 +1657,25 @@ function drawOutage() {
   const c = outageCases()[S.outage];
   const dots = $("o-dots");
   dots.innerHTML = "";
+
+  /* A state the run never entered has no moment to show. Saying so is the
+     honest rendering: this run's detector fired once and the firing landed on
+     the closing edge of a window, so it is counted outside one. Inventing a
+     moment, or picking a seed until all three exist, would make the panel a
+     drawing rather than a readout. */
+  if (!c) {
+    dots.innerHTML = "<span class=\"tiny\">this run never entered that state</span>";
+    $("o-saw").innerHTML = "No decision hour in this run matches.";
+    $("o-said").innerHTML = "<b>Not present in this run.</b> The detector " +
+      "changed state twice over 120 days, and neither change fell inside an " +
+      "injected window: the alarm landed at the closing edge of the day-50 " +
+      "outage and is therefore counted outside it." +
+      "<span class=\"said\">The share of windows caught is measured over 48 " +
+      "runs, not read off this one. See the note below the panel.</span>";
+    drawOutageRest();
+    return;
+  }
+
   for (let i = 0; i < c.n_attempts; i++) {
     const d = document.createElement("i");
     /* Only the technical declines are marked. The rest are simply "not a
@@ -1588,7 +1709,10 @@ function drawOutage() {
       "day is not a test.</span>";
   }
   $("o-said").innerHTML = said;
+  drawOutageRest();
+}
 
+function drawOutageRest() {
   /* --- pausing table */
   const ab = document.querySelector("#ablation-table tbody");
   ab.innerHTML = "";
@@ -1598,8 +1722,15 @@ function drawOutage() {
     tr.innerHTML = "<td>" + fmt(r.severity, 2) + "</td>" +
       "<td class=\"n " + (r.delta < 0 ? "neg" : "") + "\">" + sign + fmt(Math.abs(r.delta), 3) + " pts</td>" +
       "<td class=\"n\">" + fmt(r.two_se, 3) + "</td>" +
-      "<td>" + (r.significant ? "<span class=\"tag warn\">a real loss</span>"
-        : "<span class=\"tag\">not significant</span>") + "</td>";
+      // The verdict reads the SIGN as well as the significance. It used to
+      // print "a real loss" whenever the row was significant, which was
+      // written when every significant row was negative; when the effect
+      // turned positive the label started contradicting the number beside it.
+      "<td>" + (!r.significant
+        ? "<span class=\"tag\">not significant</span>"
+        : r.delta < 0
+          ? "<span class=\"tag warn\">a real loss</span>"
+          : "<span class=\"tag good\">a real gain</span>") + "</td>";
     ab.appendChild(tr);
   });
 
@@ -1647,12 +1778,18 @@ function drawPooling() {
   }).join("");
 
   const det = D.pooling.detection;
+  // Read the volumes out of the data rather than repeating them. Two literals
+  // here said 22.5 and 0.38 while the chart beside them was drawing 23.1 and
+  // 0.38 from scenarios.json.
+  const ref = vols.filter((r) => r.n === 100)[0] || vols[vols.length - 1];
   $("p-read").innerHTML = S.pooled
-    ? "Pooling every merchant's outcomes gives the agent <b>22.5 attempts</b> per 24-hour window " +
-      "at 100 customers — comfortably above the floor of 8 below which the test cannot be " +
-      "evaluated. A rail-wide outage is caught in <b>" + fmt(det[0].rate, 2) + "</b> of windows."
-    : "A single merchant holds a sixtieth of these mandates, so it sees <b>0.38 attempts</b> per " +
-      "24-hour window at 100 customers — against a floor of 8. <b>It never reaches the " +
+    ? "Pooling every merchant's outcomes gives the agent <b>" + ref.pooled.toFixed(1) +
+      " attempts</b> per 24-hour window at " + ref.n + " customers — comfortably above the " +
+      "floor of " + floorN + " below which the test cannot be evaluated. A rail-wide outage " +
+      "is caught in <b>" + fmt(det[0].rate, 2) + "</b> of windows."
+    : "A single merchant holds a sixtieth of these mandates, so it sees <b>" +
+      ref.single.toFixed(2) + " attempts</b> per 24-hour window at " + ref.n +
+      " customers — against a floor of " + floorN + ". <b>It never reaches the " +
       "threshold at any population size tested</b>, so this is not a harder version of the " +
       "problem for a single merchant. It is an unavailable one.";
 

@@ -49,28 +49,29 @@ import agent  # noqa: F401
 import w3
 from agent.tests._parallel import agent_job, run_jobs
 
-N, K_FIXED, DAYS, PE = 100, 5, 120, 7
+from agent.tests import _canonical as _CAN
+
+#: THE CANONICAL WORLD, IMPORTED rather than copied for the fourth time.
+_C = ["--canonical"]
+N, K_FIXED, DAYS, PE = _CAN.N, 5, 120, 7
 #: 100 populations. The canonical suite uses 700-719; this extends the same
 #: family rather than moving to a different one.
 POPS = list(range(700, 800))
-SPEND = 0.93
-K_SEED, BUF_SEED, BURN = 4242, 9182, 12
-CANONICAL = dict(k_mean=2.0, k_max=8, payday_mode="statutory",
-                 amount_mode="absolute", amount_median=855.0,
-                 buffer_median=0.25, buffer_sigma=1.0, irregular_frac=0.00)
-RUN_KW = dict(burn_cycles=BURN, mandate_outflow=True)
+SPEND = _CAN.SPEND
+BURN = _CAN.BURN
+RUN_KW = _CAN.run_kwargs(_C)
 V1_BAND, V3_BAND = (0.08, 0.15), (0.20, 0.40)
-#: The 20-population figures this is testing, from
-#: logs/w13_canonical_n100.txt / test_canonical_world.py --confirm.
-PRIOR_V1, PRIOR_V1_SE = 0.1058, 0.0
-PRIOR_V3, PRIOR_V3_SE = 0.2041, 0.0410
+#: The 20-population figures this is testing, from the SAME world and the same
+#: canonical n: `test_canonical_world.py --confirm` at pop_spend=0.93,
+#: logs/w30_canonical_n500.txt. Re-read them from that transcript whenever the
+#: canonical world moves -- a comparison against a 20-population number from a
+#: world that no longer exists reports a shrinkage that did not happen.
+PRIOR_V1, PRIOR_V1_SE = 0.1062, 0.0
+PRIOR_V3, PRIOR_V3_SE = 0.2028, 0.0204
 
 
 def percell(ps):
-    kw = dict(CANONICAL)
-    kw["k_seed"] = K_SEED + ps
-    kw["buffer_seed"] = BUF_SEED + ps
-    return kw
+    return _CAN.pop_kwargs(ps, _C)
 
 
 def mean_se(xs):
@@ -158,7 +159,7 @@ def main() -> int:
           "or if V3 is")
     print("  only in band at a calibration where V1 leaves ITS band (two "
           "dials fitted to")
-    print("  two targets, which is the trap docs/00_HANDOFF.md names).")
+    print("  two targets, which is the trap docs/architecture.md names).")
     print()
     print("  BIAS. Both bands are [REPORTED], vendor-sourced, and aggregate "
           "non-comparable")

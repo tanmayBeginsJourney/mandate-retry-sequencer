@@ -15,6 +15,7 @@ PKG = os.path.dirname(os.path.dirname(HERE))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
+# I2-EXEMPT: drives the pre-debit notification order through the live executor against a stub transport.
 from agent.execution.razorpay_executor import MandateBinding, RazorpayExecutor
 from agent.execution.razorpay_predelivery import (NOTIFICATION_DELIVERED,
                                                   ORDER_CREATED,

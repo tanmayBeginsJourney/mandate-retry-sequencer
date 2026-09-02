@@ -108,7 +108,7 @@ class OutageSchedule:
     while the affected eighth of customers is failing outright. India's 2026
     incidents were repeatedly bank-shaped while NPCI's own dashboard reported
     the system healthy [GUESS -- the read-across from public reporting is ours,
-    see docs/01_FACTS.md]. So a bank-scoped window is locally obvious and
+    see docs/results.md]. So a bank-scoped window is locally obvious and
     statistically invisible, and that gap is where a judgement call has room to
     beat a threshold test. It is the reason this parameter exists.
     """
@@ -502,7 +502,7 @@ class SimExecutor:
         WHY IT MATTERS. Before W2 this set was EMPTY at every calibration
         tested: every cycle was winnable on some day, the oracle scored 100% by
         construction, and the agent was solving a pure timing problem rather
-        than a collectability one. `06_MODEL_CARD.md` §3 item 11 flagged a
+        than a collectability one. `docs/results.md flagged a
         small oracle gap as suspicious for exactly this reason -- with nothing
         uncollectable, closeness to the oracle measures how well the filter
         matches the world, not how well it schedules.
@@ -537,7 +537,7 @@ class SimExecutor:
         WHY THIS EXISTS. `unwinnable_cycles` is documented as ignoring the
         four-attempt cap and the due-date rule, so "the oracle is 100%" was
         being read as "every cycle is winnable" -- error 35, retracted in
-        NOTES.md on 31 August 2026. This applies the constraints a real policy
+        the development log. This applies the constraints a real policy
         actually faces:
 
           * **it cannot present on the due date.** A mandate becomes actionable
@@ -617,8 +617,9 @@ class SimExecutor:
     def estimates(self, customer_id: int) -> tuple[float, int]:
         """(est_salary, est_payday). Never the true salary, payday or balance.
 
-        Error 2 in docs/03_ERRORS.md was a scheduler that could see the true
-        balance array. There is no accessor here that returns one."""
+        The clairvoyant-oracle error in docs/errors.md was a scheduler that
+        could see the true balance array. There is no accessor here that
+        returns one."""
         w = self.worlds[customer_id]
         return w.est_salary, w.est_payday
 

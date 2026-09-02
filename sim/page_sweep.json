@@ -1,0 +1,72 @@
+{
+ "days": 120,
+ "generated_by": "py -3.12 agent/tests/test_page_sweep.py",
+ "n": 500,
+ "pop_seeds": [
+  710,
+  711,
+  712,
+  713,
+  714,
+  715,
+  716,
+  717,
+  718,
+  719
+ ],
+ "pop_spend": 0.93,
+ "populations": 10,
+ "rows": [
+  {
+   "agent": 99.42,
+   "delta": -0.03,
+   "payday_err": 1,
+   "payday_wait": 99.45,
+   "two_se": 0.12,
+   "verdict": "tie"
+  },
+  {
+   "agent": 99.41,
+   "delta": 0.61,
+   "payday_err": 3,
+   "payday_wait": 98.8,
+   "two_se": 0.16,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 99.42,
+   "delta": 5.89,
+   "payday_err": 5,
+   "payday_wait": 93.53,
+   "two_se": 0.38,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 99.12,
+   "delta": 8.7,
+   "payday_err": 7,
+   "payday_wait": 90.41,
+   "two_se": 0.68,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 98.86,
+   "delta": 11.37,
+   "payday_err": 10,
+   "payday_wait": 87.49,
+   "two_se": 0.77,
+   "verdict": "agent wins"
+  },
+  {
+   "agent": 98.4,
+   "delta": 13.15,
+   "payday_err": 14,
+   "payday_wait": 85.25,
+   "two_se": 0.72,
+   "verdict": "agent wins"
+  }
+ ],
+ "run_seed": 7,
+ "world": "CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1) capped at 8, mean about 2, statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.",
+ "world_line": "n=500, k~1+Poisson(1) capped at 8, mean about 2, 10 populations 710-719, 120d, payday_err=+/-swept, pop_spend=0.93"
+}

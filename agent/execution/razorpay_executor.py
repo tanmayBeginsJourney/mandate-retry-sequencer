@@ -47,7 +47,7 @@ stored token and no authorised mandate exists. Specifically unverified:
   * whether `payment.downtime` is populated in test mode at all
 
 The shapes come from Razorpay's public documentation, read 29 August 2026, and
-are recorded in `docs/01_FACTS.md`. A doc-derived request body that has never
+are recorded in `docs/results.md`. A doc-derived request body that has never
 received a 200 is a hypothesis.
 
 ---------------------------------------------------------------------------
@@ -60,8 +60,9 @@ THREE DESIGN DECISIONS THAT ARE NOT OBVIOUS
    -- a socket timeout, a proxy hiccup, a process restart -- cannot become a
    second debit. This is not defensive habit: `deemed_transaction` and
    `duplicate_rrn_found` exist in Razorpay's error list precisely because lost
-   responses happen, and error 19 in `docs/03_ERRORS.md` is this project
-   already proposing a double debit once.
+   responses happen, and `docs/errors.md`, "Unknown outcomes documented as
+   never-retried, on a path that could retry them", is this project already
+   proposing a double debit once.
 
 2. **A TRANSPORT FAILURE IS `pending`, NEVER A DECLINE.** If the connection
    drops we do not know whether the debit landed. Returning `Z9` would tell the
@@ -117,7 +118,7 @@ API_BASE = "https://api.razorpay.com/v1"
 #:
 #: Recorded here rather than in a comment because it does two jobs. It is
 #: independent corroboration of the NPCI attempt cap -- 1 presentation plus 3
-#: retries -- which `docs/01_FACTS.md` had only from a secondary source. And it
+#: retries -- which `docs/results.md` had only from a secondary source. And it
 #: means `harness.baseline_doc`, the naive comparator this project has been
 #: measuring against all along, is a fair rendering of what the vendor actually
 #: does rather than a strawman we drew.
@@ -159,7 +160,7 @@ class MandateBinding:
     #: belief filter needs a starting salary and payday guess per customer, and
     #: a real integration has no oracle for either. The honest options are a
     #: population prior, or a wide prior that the first cycle's outcomes
-    #: sharpen. Neither is measured here. `docs/00_HANDOFF.md` open item 1.
+    #: sharpen. Neither is measured here. `docs/architecture.md.
     est_salary: float = 0.0
     est_payday: int = 0
     #: Explicit index into the simulated population, if this binding was
@@ -355,7 +356,7 @@ class RazorpayExecutor:
         It DOES raise `RazorpayError` for a configuration fault -- a refused
         credential -- which is that exception's declared job. See
         `_is_configuration_fault` for why that is not a decline, and error 28
-        in `docs/03_ERRORS.md` for what this code did before 30 August 2026.
+        in `docs/errors.md` for what this code did before 30 August 2026.
 
         `action_id` is optional so the signature still satisfies the `Executor`
         protocol. Stage 0 passes it, so the idempotency key is tied to the
@@ -470,7 +471,9 @@ class RazorpayExecutor:
         account was empty -- for every mandate, on every attempt, silently, and
         because one belief is shared by all `k` mandates of a customer, one bad
         response corrupts all `k`. It would also have burned all four legal
-        NPCI attempts and let the mandate die. `docs/03_ERRORS.md` error 28.
+        NPCI attempts and let the mandate die. `docs/errors.md`, "An
+        authentication failure recorded as a statement about the customer's
+        balance".
 
         Two signals, and the narrow one is the verified one.
 

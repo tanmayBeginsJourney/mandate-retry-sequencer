@@ -12,9 +12,9 @@ kind, including a second one in that same file's mandate-rule table.
 
 The pattern is not carelessness. It is structural: **a correction lands in the
 file the session is editing, and the same sentence survives in four others
-because nobody greps.** `sim/verify_brief.py` protects exactly one document
-against the code. Nothing protected any document against a claim this project
-had already withdrawn.
+because nobody greps.** `sim/verify_doc_contract.py` protects the constants
+and the decision rule the documents state. Nothing protected any document
+against a claim this project had already withdrawn.
 
 WHAT THIS IS AND IS NOT. It is a grep with a memory. It cannot tell whether a
 sentence is true; it only knows that a specific sentence was retracted on a
@@ -35,13 +35,18 @@ TWO MODES PER RULE.
     unmarked leaves a false statement in the repo. Marked is the third option
     and it is the one the house style asks for.
 
-`NOTES.md` is never scanned. It is an append-only log of what was believed at
-the time, and rewriting history there is forbidden by rule 8.
+EVERY LISTED FILE MUST EXIST. A rule whose target file has been renamed or
+deleted scans nothing and reports ok, which is the vacuous-gate shape this
+project has hit repeatedly. `check()` fails on a missing target instead.
 
 ADDING A RULE. When you retract a claim, add it here in the same commit. The
 `why` field is not decoration -- it is what the next reader needs in order to
 fix a hit rather than silence it. A rule with no `why` is a tripwire nobody can
 act on.
+
+WHAT THIS DOES NOT DO. It matches figures and phrases that were explicitly
+retracted. It cannot see a headline whose supporting sentence contradicts it.
+`sim/verify_claims.py` covers that class and runs beside this one.
 """
 from __future__ import annotations
 
@@ -70,11 +75,10 @@ MARKER_WINDOW = 8          # lines either side
 
 #: Judge-facing. A correction here is a rewrite, never a strike-through.
 PUBLIC = ("README.md", "docs/index.html")
-#: Everything else that carries claims. NOTES.md is deliberately absent.
-INTERNAL = ("CLAUDE.md", "docs/00_HANDOFF.md", "docs/01_FACTS.md",
-            "docs/02_RESULTS.md", "docs/03_ERRORS.md", "docs/04_BUILD_PLAN.md",
-            "docs/05_TEST_DESIGN.md", "docs/06_MODEL_CARD.md",
-            "docs/07_AGENT_BRIEF.md", "docs/08_ARCHITECTURE.md")
+#: The technical documents. A retracted claim may appear here only next to a
+#: retraction marker, because the record of what was believed is kept on
+#: purpose.
+INTERNAL = ("docs/architecture.md", "docs/results.md", "docs/errors.md")
 
 
 @dataclass
@@ -158,8 +162,8 @@ RETRACTIONS = [
         why="Coverage expanded 31 Aug 2026: S1_PD, T6_PD, S2a_PD, S4, and T9 "
             "(own/pooled/coordinated under FITTED_BELIEF) run the shipping "
             "filter. T1/T7/T8 include those policies. Do not restate the old "
-            "coverage number as current. Historical mentions in error 13 must "
-            "sit next to a retraction marker.",
+            "coverage number as current. Historical mentions must sit next "
+            "to a retraction marker.",
         retracted_on="2026-08-31",
     ),
     Retraction(
@@ -169,7 +173,7 @@ RETRACTIONS = [
                 r"|\+\s*1\.5\s*[-–]\s*2\.1\s*(pts|points)",
         why="CLAUDE.md rule 6. These came from a simulation with three vacuous "
             "gates and a broken oracle. Current numbers live only in "
-            "docs/02_RESULTS.md.",
+            "docs/results.md.",
         retracted_on="2026-08-27",
     ),
     Retraction(
@@ -198,7 +202,7 @@ RETRACTIONS = [
     # This is the one direction this file has to be able to move in. A
     # retraction list that can only grow eventually forbids the truth. The
     # protocol in this module's docstring was followed: the reasoning is in
-    # NOTES.md, 30 August 2026, in the same commit that removed the rule.
+    # the development log, in the same commit that removed the rule.
     Retraction(
         id="stale-error-count",
         # Every count this project has ever published, so a superseded one
@@ -210,7 +214,7 @@ RETRACTIONS = [
                 r"|(THE )?TWENTY-(SIX|SEVEN|EIGHT|NINE) ERRORS"
                 r"|(THE )?THIRTY ERRORS",
         why="The error count changes as errors are found, and every document "
-            "that states one goes stale together. docs/03_ERRORS.md is the "
+            "that states one goes stale together. docs/errors.md is the "
             "source of truth -- read the tally at the END of that file and "
             "propagate it everywhere in the same commit. A superseded count "
             "may stay as a marked record; it may not stay live.",
@@ -256,16 +260,61 @@ RETRACTIONS = [
             "Measured 30 Aug 2026.",
         retracted_on="2026-08-30",
     ),
+    # ---- superseded when the canonical n moved from 100 to 500, 2 Sep 2026.
+    # The n=100 world is optimistic on every headline at once, by more than
+    # the interval it reports: uplift +0.57, recovery of at-risk cycles +1.32,
+    # first-presentation failure -1.17, all measured against n=2000 in
+    # `agent/tests/test_scale_n.py`. These figures are not wrong-at-the-time;
+    # they are measurements of a sample too small for the world it was drawn
+    # from once the mandate count fell from five to about two.
+    Retraction(
+        id="n100-batch-headline",
+        pattern=r"99\.38|90\.29|\+?9\.08|7,511,500|7511500|8,702"
+                r"|30,538 events",
+        why="The canonical n is 500. The batch headline is 99.12% against "
+            "payday_wait's 90.41%, +8.70 pts (2 SE 0.68), Rs 37,164,850, over "
+            "44,271 executed money actions, on 10 held-out populations. The "
+            "n=100 figures overstate the uplift by 0.57 points and the "
+            "recovery rate by 1.32. Reproduce with `py -3.12 -m "
+            "agent.batch_report --pops 10 --canonical`; the run writes "
+            "sim/canonical_result.json and every document is checked against "
+            "it by sim/verify_claims.py.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="n100-validation-row",
+        pattern=r"95\.24|94\.43|22\.15|10\.50\s*%|42\.97|83\.4%|51\.5%",
+        why="V1, V3, V5 and V7 were re-measured at n=500 on 20 populations: "
+            "V1 10.62%, V3 20.28%, V5 94.19% (held-out 94.02%), V7 42.90% "
+            "against a ceiling of 51.9%, capture 82.6%. The selection/held-out "
+            "gap in V5 is now 0.35 points and inside both intervals, where at "
+            "n=100 it was 0.81. `py -3.12 agent/tests/test_canonical_world.py "
+            "--confirm`.",
+        retracted_on="2026-09-02",
+    ),
+    Retraction(
+        id="n100-steelman-margins",
+        pattern=r"(−|-)1\.16|(−|-)0\.33|\+1\.15|\+3\.55|\+23\.83"
+                r"|\+34\.41|99\.75%|98\.51%|96\.63%|90\.88%|66\.93%"
+                r"|55\.47%|23\.00%",
+        why="The [1,7] comparison was re-measured at n=500. The crossover is "
+            "still at +/-5 days, but the margins moved and the two negative "
+            "ones are no longer inside their paired interval. "
+            "`py -3.12 agent/tests/test_steelman_schedule.py`.",
+        retracted_on="2026-09-02",
+    ),
     Retraction(
         id="old-headline-4030",
         pattern=r"98\.01|57\.70|\+?40\.30|6,203,060",
-        why="The batch headline is 99.37% against payday_wait's 90.29%, "
-            "+9.08 pts (2 SE 2.01), Rs 7,496,430, over 10 held-out "
-            "populations on the canonical world. The 98.01/57.70/+40.30/"
-            "Rs 6,203,060 figures were measured on a world with no steady "
-            "state, mandate outflow missing and k fixed at an invented 5 "
-            "(NOTES.md errors 33-35, 1 Sep 2026). Reproduce the current one "
-            "with `py -3.12 -m agent.batch_report --pops 10 --canonical`.",
+        why="The 98.01/57.70/+40.30/Rs 6,203,060 figures were measured on a "
+            "world with no steady state, mandate outflow missing and k fixed "
+            "at an invented 5 (docs/errors.md, 'Simulation and model "
+            "errors'). The current headline is in sim/canonical_result.json "
+            "and is reproduced by `py -3.12 -m agent.batch_report --pops 10 "
+            "--canonical --emit`. This reason names no figure of its own on "
+            "purpose: a retraction whose `why` carries a literal goes stale "
+            "the next time the world is re-measured, and four of them in this "
+            "file had.",
         retracted_on="2026-09-01",
     ),
     Retraction(
@@ -299,14 +348,13 @@ RETRACTIONS = [
         pattern=r"(?<![0-9.])88[.]40[ ]?%|(?<![0-9.])42[.]64[ ]?%|(?<![0-9.])82[.]7[ ]?%|(?<![0-9.])90[.]58[ ]?%|(?<![0-9.])90[.]68[ ]?%|(?<![0-9.])90[.]49[ ]?%|(?<![0-9.])89[.]54[ ]?%|(?<![0-9.])87[.]66[ ]?%|(?<![0-9.])86[.]14[ ]?%",
         why="PRE-REPAIR FIGURES. These are the agent measured under the OLD "
             "belief constants (prior_w=9, prior_floor=0.5, no continuation "
-            "value). On the shipped defaults the same measurements are: V5 "
-            "95.24%, V7 42.97%, V7 capture 83.4%, and the steelman rows "
-            "98.59 / 98.18 / 97.78 / 94.43 / 90.76 / 89.88 across payday_err "
-            "1/3/5/7/10/14. Re-measured 1 September 2026 -- "
-            "logs/w24_canonical_repaired.txt and "
-            "agent/tests/test_steelman_schedule.py. A FIGURE is a current "
-            "claim even when the sentence around it carries no stale framing, "
-            "which is why this rule is separate from crossover-7-to-10: that "
+            "value), and on a smaller sample. The current V5, V7 and steelman "
+            "rows are in docs/results.md and are reproduced by "
+            "`py -3.12 agent/tests/test_canonical_world.py --confirm` and "
+            "`py -3.12 agent/tests/test_steelman_schedule.py`. A FIGURE is a "
+            "current claim even when the sentence around it carries no stale "
+            "framing, which is why this rule is separate from "
+            "crossover-7-to-10: that "
             "one caught the WORDS and every number beside them stayed live.",
         retracted_on="2026-09-01",
     ),
@@ -342,8 +390,9 @@ RETRACTIONS = [
         why="Those are the ALL-CYCLES figures, not the at-risk ones. On "
             "at-risk cycles the due-date-to-money gap averages 9.40 days and "
             "59.8% have money inside ten days. W6 was specified against the "
-            "wrong denominator. The measured V7 ceiling is 51.5% and the "
-            "agent reaches 42.64%, so it is BELOW the ceiling, not above it.",
+            "wrong denominator. The agent's V7 is below the constrained "
+            "oracle's ceiling, not above it; both are in docs/results.md, "
+            "'External validation'.",
         retracted_on="2026-09-01",
     ),
     Retraction(
@@ -432,7 +481,7 @@ RETRACTIONS = [
                 r"|prior_floor\s*=\s*0[.]25(?![0-9])",
         why="THE SHIPPING CONSTANTS ARE prior_w=5, prior_floor=0.1 since W24 "
             "on 1 September 2026, plus cycle_value=0.6 in the agent's "
-            "objective. docs/06_MODEL_CARD.md published prior_w=9, "
+            "objective. docs/results.md published prior_w=9, "
             "prior_floor=0.5 as the shipping block for a full day after the "
             "change -- a document stating constants the code had stopped "
             "carrying. Historical mentions are fine next to a marker; a live "
@@ -481,8 +530,16 @@ RETRACTIONS = [
         # NOT matched -- it collides with unrelated live figures -- so this
         # rule covers the pooled rate, the best single bank, the 3.5x ratio
         # and the wrong bank identity.
+        #
+        # 0.41 CARRIES A CONTEXT ANCHOR, added 2 September 2026. The original
+        # form matched a bare 0.41 at the end of a table cell and fired on the
+        # pooling-consent table's 2 SE column -- an accurate, current figure.
+        # A rule that can only be satisfied by writing something less true is
+        # worse than no rule, so the digit now has to appear on a line that is
+        # about banks or pooling. The rule was NOT relaxed for the other three
+        # alternatives and its canary still fires on all four.
         pattern=r"(?<![0-9.])0[.]78(?![0-9])"
-                r"|(?<![0-9.])0[.]41(?![0-9])\s*(\||$|<)"
+                r"|(bank|pooled)[^\n]{0,90}(?<![0-9.])0[.]41(?![0-9])"
                 r"|3\.5(x|\u00d7) less detectable"
                 r"|@upi.{0,30}worst single",
         why="RE-MEASURED on the shipped belief. The bank-shaped outage table "
@@ -513,12 +570,11 @@ RETRACTIONS = [
                 r"|\(2 SE 2\.01, SIG\)"
                 r"|(?<![0-9.])8,832(?![0-9])"
                 r"|COLLECTED\s+7535",
-        why="Stale copies of the headline batch's own transcript. "
-            "logs/w24_headline_repaired.txt: 2 SE is 1.84 (att/cyc 1.446), "
-            "the batch executes 8,702 money actions, and COLLECTED is 7548 "
-            "with CYCLE_CLOSED 307. The README's Quickstart block is a "
-            "verbatim paste of that run's stdout and had drifted from what "
-            "the command prints.",
+        why="Stale copies of the headline batch's own transcript. The "
+            "README's Quickstart block is a verbatim paste of that run's "
+            "stdout and had drifted from what the command prints. The current "
+            "run is logs/w30_headline_n500.txt and its figures are in "
+            "sim/canonical_result.json.",
         retracted_on="2026-09-02",
     ),
     Retraction(
@@ -555,6 +611,17 @@ def _marked(lines: list[str], i: int) -> bool:
     hi = min(len(lines), i + MARKER_WINDOW + 1)
     blob = "\n".join(lines[lo:hi]).lower()
     return any(m in blob for m in MARKERS)
+
+
+def missing_targets() -> list[str]:
+    """Files this gate claims to scan that are not on disk.
+
+    A renamed or deleted target makes every rule pointed at it scan nothing and
+    report ok. That is the failure mode this whole file exists to prevent, so
+    it is an error rather than a skip.
+    """
+    return [p for p in PUBLIC + INTERNAL
+            if not os.path.exists(os.path.join(ROOT, p))]
 
 
 def _scan(path: str, r: Retraction, require_marker: bool) -> list[tuple]:
@@ -616,6 +683,16 @@ def selftest() -> int:
         "nothing-to-diagnose": "The LLM does not move the money because there is nothing to diagnose.",
         "w7-moves-three-targets": "W7 is the only item that moves three validation targets.",
         "old-headline-4030": "The agent collects 98.01% against the baseline's 57.70%, +40.30 pts, Rs 6,203,060.",
+        # The n=500 re-baseline, 2 September 2026.
+        "n100-batch-headline":
+            "The agent collects 99.38% against payday_wait's 90.29%, "
+            "+9.08 pts, Rs 7,511,500, over 8,702 money actions.",
+        "n100-validation-row":
+            "Recovery under smart retry timing is 95.24%, the fixed schedule "
+            "recovers 22.15%, and 42.97% of recoveries land inside ten days.",
+        "n100-steelman-margins":
+            "The frozen schedule collects 99.75% at +/-1 day and the agent is "
+            "behind by -1.16 there and by -0.33 at +/-3.",
         "uplift-curve-3648": "The uplift runs +3.52 to +36.48 across the plausible range.",
         "crossover-1-to-3": "The crossover sits between +/-1 and +/-3 days.",
         "prerepair-agent-figures":
@@ -713,10 +790,19 @@ def main() -> int:
     print("DOC GATE -- retracted claims must not outlive their retraction")
     print("=" * 74)
     print(f"  {len(RETRACTIONS)} retractions, {len(PUBLIC)} judge-facing files "
-          f"(no strike-throughs allowed), {len(INTERNAL)} internal files "
+          f"(no strike-throughs allowed), {len(INTERNAL)} technical files "
           f"(marked record allowed).")
-    print("  NOTES.md is never scanned: it records what was believed at the time.")
     print()
+
+    gone = missing_targets()
+    if gone:
+        print("FAIL -- this gate names files that do not exist, so every rule")
+        print("        pointed at them scanned nothing and would report ok:")
+        for p in gone:
+            print(f"    {p}")
+        print("Update PUBLIC / INTERNAL in this file, or restore the document.")
+        return 1
+
     v = check()
     print()
     if not v:
@@ -741,7 +827,7 @@ def main() -> int:
             print("            SUPERSEDED within a few lines).")
     print()
     print("Do NOT silence a hit by deleting the rule. If the rule is genuinely")
-    print("wrong, say so in NOTES.md and change it there, in the same commit.")
+    print("wrong, say so in the commit message and change it there, in the same commit.")
     return 1
 
 

@@ -1,10 +1,14 @@
 """THE DETECTION BENCHMARK. Excess loss against an oracle that knows the true
 change points, decomposed, gated, and paired with four crippled oracles.
 
-WHY THIS EXISTS. The recovery channel is measured and it saturates: outage
-awareness is worth +0.256 pts at severity 0.80 (`suppress`, SIG) and pausing is
-significantly NEGATIVE at severity 0.40 (-0.529, SIG). A number with a ceiling
-that small cannot rank detectors -- every detector scores about the same,
+WHY THIS EXISTS. The recovery channel is measured and it saturates: on the
+shipped belief, acting on outage awareness is worth +0.000 / +0.000 / +0.017 /
++0.051 points across the four severities swept, every one of them inside its own
+2 SE (`logs/w27_abl_outage_repaired.txt`). The figures this paragraph carried
+before the belief repair -- +0.256 for `suppress` and a significant -0.529 for
+`pause` -- are retired; the conclusion they supported is unchanged and is now
+supported by intervals rather than by a sign. A number with a ceiling that small
+cannot rank detectors -- every detector scores about the same,
 because there is almost nothing to score. Detection can. So the scoreboard moves
 from recovery to detection, and detection needs an upper bound to be measured
 against.
@@ -19,7 +23,7 @@ the context layer. Their bound decomposes into exploration cost, detection
 delay, and false alarms / missed detections; the five-way partition below is
 ours. [VERIFIED] from that paper's abstract and HTML full text, 29 Aug 2026.
 
-WHAT IS PRE-REGISTERED, AND WHERE. NOTES.md, 29 August 2026, committed before
+WHAT IS PRE-REGISTERED, AND WHERE. The development log, written before
 this file existed, plus a same-day amendment splitting G-1. Predictions
 E-BEN-1..8 are scored at the bottom. Prior records on this project: 2/7, 3/7,
 6/8, 3/6.
@@ -142,7 +146,7 @@ GRACE_H = 24                     # evidence takes time; same as the TPR study
 T_HOURS = DAYS * w3.HOURS
 
 #: The statistical detector family. `min_attempts` is a [GUESS] flagged as the
-#: obvious sweep in docs/00_HANDOFF.md item 0c, and the non-monotone TPR result
+#: obvious sweep in docs/architecture.md, and the non-monotone TPR result
 #: sits right at its cliff, so it is what the family varies.
 DETECTORS = {
     "stat ma=4":  dict(min_attempts=4),
@@ -392,7 +396,8 @@ def _cache_fingerprint(jobs):
     That is worse than a stale number in a document. A stale document is
     visibly old; a cache that resumes is a measurement that LOOKS fresh, and
     the only thing standing between it and the reader was one line of stdout
-    nobody was reading. `NOTES.md`, error 36, records it.
+    nobody was reading. docs/errors.md, "A cache that resumed across a change to
+    the thing it measured", records it.
 
     The fingerprint is deliberately over-broad: any change to the belief, the
     grid, the detector family or the world knobs invalidates everything. A
@@ -419,7 +424,7 @@ def run_chunked(jobs, cache_path=CACHE):
     WHY THIS EXISTS AND WHY IT IS NOT "DROPPING A CRASHED RUN". The first
     attempt at this benchmark died after 14m38s: `BrokenProcessPool`, one
     worker gone, 384 runs lost. That is the unexplained 0xC0000005 recorded in
-    NOTES.md and docs/06_MODEL_CARD.md 6a -- contained, never fixed.
+    docs/results.md, test methodology -- contained, never fixed.
 
     `run_jobs` raises on a dead worker on purpose: a crashed run is a FAILED
     measurement, not a missing one, and silently skipping it would change the
@@ -477,7 +482,7 @@ def run_chunked(jobs, cache_path=CACHE):
 def main() -> int:
     jobs = build_jobs()
     print(f"{len(jobs)} runs, one process each "
-          f"(max_tasks_per_child=1 -- 06_MODEL_CARD.md 6a)")
+          f"(max_tasks_per_child=1 -- docs/results.md)")
     res, n_retries = run_chunked(jobs)
     print(f"  worker deaths absorbed by re-running the identical "
           f"deterministic job: {n_retries}")
@@ -709,7 +714,7 @@ def main() -> int:
     # -------------------------------------------------- pre-registered checks
     print()
     print("=" * 108)
-    print("PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before any run)")
+    print("PRE-REGISTERED CHECKS (29 Aug 2026, before any run)")
     print("=" * 108)
     v = []
 

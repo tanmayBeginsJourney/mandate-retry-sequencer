@@ -8,3 +8,7 @@ scratch/
 
 # Internal remediation ledger. Stays local by the maintainer's decision.
 REMEDIATION_STATUS.md
+
+# Internal AI-agent working instructions. Local only; not part of the
+# published project.
+CLAUDE.md

@@ -16,7 +16,7 @@ outside this one imports `agent.execution`.
 
 BOTH HALVES ARE KEPT. Enforcement here, independent recount in `auditor.py`.
 An enforcement layer with no independent check is exactly the vacuous-gate
-shape this project has now hit five times (docs/03_ERRORS.md).
+shape this project has now hit five times (docs/errors.md).
 """
 from __future__ import annotations
 

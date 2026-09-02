@@ -63,6 +63,6 @@ class MandateState:
 
         A dead mandate forfeits its remaining cycles, which prices mandate
         death directly and is why this project needs no invented LTV constant
-        (docs/01_FACTS.md, the retracted 6x multiplier). Mirrors
+        (docs/results.md, the retracted 6x multiplier). Mirrors
         `sim/harness.py:619`."""
         return max(0, (horizon_days - self.due_day) // self.cycle_days)

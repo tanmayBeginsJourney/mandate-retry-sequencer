@@ -17,7 +17,7 @@ is a STOP, no legal hour is a different STOP, and a non-RETRY intervention is
 the LLM layer's choice. Recomputing the reason afterwards would mean a second
 `forecast()`, which profiling puts at 53% of a run's cost.
 
-THE FIVE THINGS THAT ARE EASY TO GET WRONG (docs/07_AGENT_BRIEF.md §3):
+THE FIVE THINGS THAT ARE EASY TO GET WRONG (docs/architecture.md):
  1. `p_success(amount, P)` takes a posterior for a FUTURE day. Passing None
     silently asks "would this succeed today", which is a different question.
  2. `p_later` is ZERO on the last attempt -- with one attempt left there is no

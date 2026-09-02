@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""THE RECOVERY-RATE MEASUREMENT. docs/04_BUILD_PLAN.md W0.
+"""THE RECOVERY-RATE MEASUREMENT. docs/results.md.
 
 Reports the three quantities that can be compared to figures published outside
 this project, at two calibrations of the world:
@@ -13,7 +13,7 @@ this project, at two calibrations of the world:
   early share                       of what it recovered, how much landed
                                     inside 10 days. Validation target V7.
 
-PRE-REGISTERED IN NOTES.md, 30 August 2026, BEFORE THIS RAN. R-1 through R-6.
+PRE-REGISTERED 30 August 2026, BEFORE THIS RAN. R-1 through R-6.
 The predictions are printed beside the measurements and scored, because a
 prediction recorded and then not checked is worse than none.
 
@@ -26,7 +26,7 @@ without being fitted to it.
 NOT gate-protected in the `sim/gate.py --tier full` sense. Reproduce with
 `python agent/tests/test_recovery_rates.py` from the repo root.
 
-EVERY RUN IS ONE PROCESS (`_parallel.py`). See docs/06_MODEL_CARD.md 6a.
+EVERY RUN IS ONE PROCESS (`_parallel.py`). See docs/results.md.
 """
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def main() -> int:
     print("  every remaining billing cycle. Dunning harder costs the customer.")
 
     print()
-    print("PRE-REGISTERED PREDICTIONS (NOTES.md, 30 Aug 2026, before this ran)")
+    print("PRE-REGISTERED PREDICTIONS (30 Aug 2026, before this ran)")
     print("=" * 94)
     n_held = 0
     for rid, desc, (lo, hi), get in PREREG:
@@ -146,7 +146,7 @@ def main() -> int:
     print("VALIDATION TARGETS -- published figures the world was NOT fitted to")
     print("  All [REPORTED], all from vendors selling recovery software, all")
     print("  aggregating non-comparable customer bases. CORROBORATION, never")
-    print("  ground truth, and never quotable as a result. docs/01_FACTS.md.")
+    print("  ground truth, and never quotable as a result. docs/results.md.")
     print("=" * 94)
     REALISTIC = 0.80
     targets = [
@@ -186,7 +186,7 @@ def main() -> int:
     print("  and the agent being structurally blind to transient failures. It")
     print("  never presents on the due date, and w3.BeliefPD.observe takes no")
     print("  decline code, so it waits for payday on money already in the")
-    print("  account. docs/02_RESULTS.md, W7.")
+    print("  account. docs/results.md.")
     print("    python agent/tests/test_transient_sweep.py")
     print()
     print("  R-3 CORRECTED. It was registered against `payday_wait`, which")

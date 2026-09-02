@@ -1,7 +1,7 @@
 """THE DECLINE-MIX SWEEP. What does a richer decline taxonomy cost, and is a
 bank-shaped outage really invisible to the monitor?
 
-Pre-registered in `NOTES.md`, 29 August 2026, as E-MIX-1 and E-MIX-2, before
+Pre-registered 29 August 2026, as E-MIX-1 and E-MIX-2, before
 this file existed.
 
 WHY SWEPT AND NOT PICKED. No source found gives AutoPay-specific decline
@@ -25,7 +25,7 @@ outage lifts the pooled rate by about an eighth of its severity. Locally
 overwhelming, statistically invisible.
 
 EVERY RUN IS ONE PROCESS (`agent/tests/_parallel.py`,
-`max_tasks_per_child=1`). See `docs/06_MODEL_CARD.md` section 6a -- the machine
+`max_tasks_per_child=1`). See `docs/results.md -- the machine
 fault is contained, not fixed.
 """
 from __future__ import annotations
@@ -74,7 +74,7 @@ COMBOS = {
 #: about our rail. Churnkey, on failed CARD subscription payments in a mostly
 #: non-Indian base: roughly half insufficient funds, a quarter to a third
 #: risk-management hard flags, 10-15% card/instrument issues. `[REPORTED]`,
-#: read 30 August 2026, recorded in docs/01_FACTS.md.
+#: read 30 August 2026, recorded in docs/results.md.
 #:
 #: WHAT IT IS FOR. Until now every rate above was pure invention. This does not
 #: make them sourced -- it lets us ask whether the RANGE they are swept over
@@ -179,7 +179,7 @@ def _emix3(res):
     print("E-MIX-3 -- does the swept RANGE bracket a published decline shape?")
     print("=" * 100)
     print("  The published mix is CARD subscriptions in a mostly non-Indian")
-    print("  base (Churnkey, [REPORTED], docs/01_FACTS.md). UPI AutoPay has no")
+    print("  base (Churnkey, [REPORTED], docs/results.md). UPI AutoPay has no")
     print("  card network and no issuer risk engine, so this is NOT a target")
     print("  and nothing here is calibrated to it. The only question is whether")
     print("  the range these rates are swept over reaches a shape somebody has")
@@ -236,7 +236,7 @@ def _emix3(res):
     # ASCII on purpose: the default Windows console codec is cp1252 and a
     # gate that dies while printing its own findings reports nothing.
     print("  !! WHERE THE TWO PUBLISHED SOURCES DISAGREE, THE UPI ONE GOVERNS.")
-    print("  docs/01_FACTS.md carries a UPI-specific [REPORTED] claim that")
+    print("  docs/results.md carries a UPI-specific [REPORTED] claim that")
     print("  technical declines are UNDER 1% OF FAILURES. The card mix says")
     print("  10-15%. This world sits with the UPI source. A gap against the")
     print("  card figure on that row is therefore EXPECTED and is not evidence")
@@ -323,7 +323,7 @@ def main() -> int:
 
     print()
     print("=" * 100)
-    print("PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before this file)")
+    print("PRE-REGISTERED CHECKS (29 Aug 2026, before this file)")
     print("=" * 100)
     v = []
     shut = curves["shut"]

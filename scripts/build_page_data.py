@@ -16,23 +16,39 @@ labels them differently because they have different evidence behind them:
                  on the page are read out of that run's audit log. Reproducible
                  by re-running this script.
 
-  QUOTED         every aggregate percentage. Those come from `docs/02_RESULTS.md`
+  QUOTED         every aggregate percentage. Those come from `docs/results.md`
                  and are NOT recomputed here, because recomputing a published
                  number and quietly shipping whatever came out is how a page
                  ends up disagreeing with its own docs. They are transcribed
                  with their source and their gate status, and `--check`
                  re-derives the ones that are cheap to re-derive.
 
-THE HERO CUSTOMER IS CHOSEN, AND THE PAGE SAYS SO. `c45m3` was picked from
-population 700 because its month is legible: payday on day 9, a 550-rupee debit
-due on day 4, and a flat 215-rupee balance in between. It is not the average
-customer and it is not the best one either -- plenty of customers in the same
-population have months where the agent also fails, and two of them are listed
-in `ALTERNATIVES` below so a sceptical reader can pull one instead. The
-aggregate numbers sit next to the hero on the page for exactly this reason.
+EVERYTHING HERE RUNS THE CANONICAL WORLD. Population seed 710 is one of the ten
+held-out populations the batch headline is measured on, drawn with the canonical
+mandate-count, payday, amount and buffer settings and run with burn-in and
+mandate outflow at `pop_spend=0.93`. An earlier version of this script ran a
+pre-canonical population with the mandate count fixed at five, so the customer
+it walked through did not exist in the world every aggregate on the page came
+from.
 
-Run:  python scripts/build_page_data.py            # writes docs/data/scenarios.json
-      python scripts/build_page_data.py --check    # re-derive, diff, write nothing
+THE HERO CUSTOMER IS CHOSEN, AND THE PAGE SAYS SO. `c12m1` holds two mandates.
+Its month is legible: the account is empty from the due date on day 16 until the
+salary lands on day 33, and the 620-rupee debit is the second of the customer's
+two subscriptions. The agent spends three of its four attempts on it and
+collects on the third at every payday uncertainty tested. It is not the average
+customer, and at the canonical population size it is a case the agent handles
+well -- two customers in the same population where the agent collects nothing
+are listed in `ALTERNATIVES` below so a sceptical reader can pull one instead.
+
+THAT DESCRIPTION CHANGED WHEN THE CANONICAL n DID. At n=100 this customer missed
+the cycle entirely from payday_err=10 upward, and the sentence above said so. The
+population is drawn sequentially, so customer 12 is the identical customer at
+both sizes -- what changed is the run: the technical-decline stream and the rail
+monitor are drawn over the whole population. A walkthrough read out of a run is
+a property of that run, not only of the customer.
+
+Run:  py -3.12 scripts/build_page_data.py          # writes docs/data/scenarios.json
+      py -3.12 scripts/build_page_data.py --check  # re-derive, diff, write nothing
 """
 from __future__ import annotations
 
@@ -49,62 +65,114 @@ import agent  # noqa: F401  -- puts sim/ on the path
 import w3
 from agent.batch import make_pop
 from agent.execution.sim_executor import OutageSchedule, SimExecutor
+from agent.tests import _canonical
 from agent.tests._parallel import run_jobs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "docs", "data", "scenarios.json")
 HTML = os.path.join(ROOT, "docs", "index.html")
 
-POP_SEED = 700
+POP_SEED = 710                      # one of the ten held-out canonical pops
 RUN_SEED = 7
-N, K, DAYS = 100, 5, 120
-CI, MI = 45, 3                      # the hero customer and mandate
+# N comes from the canonical definition, not from a literal. The hero's month
+# is read out of a real run, and a run at a different population size is a
+# different run: the rail monitor is cross-customer and the technical-decline
+# stream is drawn over the whole population, so the customer the page walks
+# through has to come from the world every aggregate on the page comes from.
+N, K, DAYS = _canonical.N, 5, 120   # K is the fallback; the canonical world
+                                    # draws each customer's count instead
+CI, MI = 12, 1                      # the hero customer and mandate
 UID = f"c{CI}m{MI}"
 
+#: Canonical world settings, imported rather than copied. A second copy of a
+#: nine-key dict is a silent mis-measurement waiting to drift.
+POP_KW = _canonical.pop_kwargs(POP_SEED, argv=["--canonical"])
+RUN_KW = _canonical.run_kwargs(argv=["--canonical"])
+SPEND = _canonical.SPEND
+
+#: The outage panel runs the world the OUTAGE MEASUREMENTS are made in, which
+#: is not the canonical one: `agent/tests/test_outage_detection.py` uses five
+#: mandates per customer at `pop_spend=1.05`. That world is used because it has
+#: the attempt volume to locate the crossover the panel is about.
+#:
+#: THIS COMMENT USED TO SAY that the canonical world at 100 customers stays
+#: under the detector's eight-attempt floor, so a panel drawn on it would show
+#: a detector that never fires. That was an inference from a mean and it is
+#: wrong. Measured: the canonical world carries 7.6 attempts per 24-hour window
+#: at 100 customers and the detector fires in 0.70 of runs, and at the
+#: canonical 500 it carries 38.5 and catches everything at severity 0.40.
+#: `logs/w30_detect_canonical.txt`. The panel still runs the study's world; the
+#: page now states both.
+DET_POP_SEED, DET_N, DET_K, DET_SPEND = 700, 100, 5, 1.05
+
 #: Other customers in the same population whose month is worth looking at. Both
-#: are cases where the agent does NOT get a clean win, listed here so that
-#: "we picked a good one" is a checkable statement rather than an accusation.
+#: are cases where the agent collects nothing at `payday_err=7`, listed here so
+#: that "a good one was picked" is a checkable statement rather than an
+#: accusation.
+#: RE-DERIVED AT THE CANONICAL n. The previous two entries were chosen at
+#: n=100 and describe attempts that no longer happen: on the canonical run
+#: `c50m0` collects 3 of 10 and `c56m0` collects 4 of 5. The three below are
+#: every mandate in this population that the agent attempts at least three
+#: times and never collects, which is the property the entry is claiming.
 ALTERNATIVES = [
-    ("c34m1", "payday day 17, debit due day 6 -- the agent misses too, twice"),
-    ("c51m1", "the agent burns one attempt on day 13 before landing on day 31"),
+    ("c385m4", "holds five mandates, Rs 3,220 due on day 1 -- twelve attempts "
+               "across the horizon, none of them land"),
+    ("c485m1", "Rs 380 due on day 9 against a day-3 payday -- eleven attempts, "
+               "none of them land"),
+    ("c187m2", "holds six mandates, Rs 390 due on day 15 -- four attempts, "
+               "none of them land"),
 ]
 
 PAYDAY_ERRS = [1, 3, 5, 7, 10, 14]
 
 # --------------------------------------------------------------------------
-# QUOTED NUMBERS. Transcribed from docs/02_RESULTS.md. Not recomputed here.
-# Each carries the script that produces it and whether a gate protects it, so
-# the page can print that next to the figure instead of in a footnote nobody
+# QUOTED NUMBERS. Not recomputed here, and no longer typed here either: the
+# batch headline and the payday-error sweep are LOADED from the JSON the
+# measuring scripts write. What remains transcribed below carries the script
+# that produces it, its transcript, and whether a gate protects it, so the
+# page can print that next to the figure instead of in a footnote nobody
 # reads.
 # --------------------------------------------------------------------------
 
-#: THE CANONICAL WORLD, `logs/w27_page_sweep_repaired.txt`, produced by
-#: `py -3.12 agent/tests/test_page_sweep.py`. RE-MEASURED on the shipped belief
-#: 1 September 2026; the previous transcript
-#: (`logs/w23_page_sweep_canonical.txt`) was the pre-W24 agent and its +/-7 row
-#: had drifted a hundredth away from the re-run batch, which is the symptom of
-#: a transcribed table outliving its source. Until this pass the table had NO
-#: committed script behind it at all. Cycles collected,
-#: n=100, 10 held-out populations 710-719, 120d, pop_spend=0.93, run seed 7,
-#: mode=full, burn 12, mandate outflow ON, paired 2 SE. NOT gate-protected.
-#: Same configuration as `agent.batch_report --canonical`, so the +/-7 row IS
-#: the headline cell. Replaces the pre-canonical sweep, which ran on a world
-#: with no steady state and an invented mandate count (NOTES.md errors 33-35).
-SWEEP = [
-    # err, payday_wait, agent (fitted), the DOCUMENTED difference, 2 SE, verdict.
-    # The difference is transcribed, NOT computed as agent - payday_wait: the
-    # two columns are rounded to 2dp and subtracting them can disagree with the
-    # source by a hundredth. A page that disagrees with its own source by a
-    # hundredth invites the reader to check nothing else.
-    (1,  99.80, 99.81, +0.01, 0.18, "tie"),
-    (3,  99.25, 99.56, +0.31, 0.46, "tie"),
-    (5,  94.17, 99.58, +5.41, 1.59, "agent wins"),
-    (7,  90.29, 99.38, +9.08, 1.84, "agent wins"),
-    (10, 87.48, 99.25, +11.77, 1.45, "agent wins"),
-    (14, 86.13, 98.83, +12.71, 1.00, "agent wins"),
-]
+#: --------------------------------------------------------------------------
+#: GENERATED INPUTS. Two files, both written by the scripts that measure them,
+#: both committed. They replace two dicts that a human read off a printout and
+#: typed in here -- which is how a table outlives the run that produced it, and
+#: how the page's slider came to disagree with the batch by a hundredth.
+#:
+#:   sim/canonical_result.json   `py -3.12 -m agent.batch_report --pops 10
+#:                                --canonical --emit`
+#:   sim/page_sweep.json         `py -3.12 agent/tests/test_page_sweep.py`
+#:
+#: A missing file is an ERROR, not a fallback to a literal. A fallback is how
+#: a stale number survives the deletion of its source.
+#: --------------------------------------------------------------------------
+RESULT_JSON = os.path.join(ROOT, "sim", "canonical_result.json")
+SWEEP_JSON = os.path.join(ROOT, "sim", "page_sweep.json")
 
-#: docs/02_RESULTS.md, "A bank-shaped outage is 3.4x less detectable". Produced
+
+def _load(path: str, produced_by: str) -> dict:
+    if not os.path.exists(path):
+        raise SystemExit(
+            f"{os.path.relpath(path, ROOT)} is missing. It is generated, not "
+            f"written by hand:\n    {produced_by}\n"
+            f"The page is built from that file, so there is nothing to build "
+            f"from until it exists.")
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+CANON = _load(RESULT_JSON,
+              "py -3.12 -m agent.batch_report --pops 10 --canonical --emit")
+_SWEEP_DOC = _load(SWEEP_JSON, "py -3.12 agent/tests/test_page_sweep.py")
+
+#: The page's payday-error slider. Same shape as before, read rather than typed.
+#: (err, payday_wait, agent, difference, 2 SE, verdict). The difference is the
+#: paired difference as measured, NOT the two rounded columns subtracted.
+SWEEP = [(r["payday_err"], r["payday_wait"], r["agent"], r["delta"],
+          r["two_se"], r["verdict"]) for r in _SWEEP_DOC["rows"]]
+
+#: docs/results.md, "A bank-shaped outage is 3.4x less detectable". Produced
 #: by E-MIX-2 inside `py -3.12 agent/tests/test_decline_sweep.py`.
 #: n=200, severity 0.80, four 6h windows, 8 populations. NOT gate-protected.
 #:
@@ -121,11 +189,11 @@ POOLING_DETECTION = [
     ("@oksbi -- worst single bank", 13, 0.06),
 ]
 
-#: docs/02_RESULTS.md, "The moat's second dividend". Attempts available to a
+#: docs/results.md, "The moat's second dividend". Attempts available to a
 #: detector per 24h window. `min_attempts = 8` is the floor below which the
 #: monitor refuses to evaluate at all.
 #:
-#: RE-MEASURED on the shipped belief, `logs/w28_detection_power.txt`. The
+#: RE-MEASURED on the shipped belief, `logs/w30_detect_study.txt`. The
 #: superseded row read 11.4 / 22.5 / 44.5 and 0.74 at n=200. The volumes rose
 #: and the verdict did not move: one merchant stays below the floor of 8 at
 #: every n from 5 to 200, which is the claim the page draws.
@@ -133,36 +201,32 @@ POOLING_VOLUME = [
     (25, 5.6, 0.09), (50, 11.6, 0.19), (100, 23.1, 0.38), (200, 46.3, 0.77),
 ]
 
-#: docs/02_RESULTS.md, "What outage awareness is WORTH". Paired 2 SE against
-#: the monitor-off arm at the same severity. THE 0.40 ROW IS NEGATIVE AND
-#: SIGNIFICANT and the page is required to show it -- see the module docstring
-#: of docs/index.html.
-#: RE-MEASURED on the canonical world AND the shipped belief,
-#: `logs/w27_abl_outage_repaired.txt`. Nothing is significant at any severity.
-#: Two superseded readings: the pre-canonical -0.273 / -0.529 (SIG) / +0.199,
-#: and the pre-W24 exactly-zero row from `logs/w17_abl_outage_canonical.txt`.
-#: The conclusion never changed; the literal zeros did, so the page shows the
-#: intervals rather than a column of zeros a reader cannot argue with.
+#: docs/results.md, "What acting on detection is worth". Paired 2 SE against
+#: the monitor-off arm at the same severity. The page is required to show the
+#: interval beside the effect -- see the module docstring of docs/index.html.
+#:
+#: RE-MEASURED at the canonical n, `logs/w30_abl_outage_n500.txt`. Pausing is
+#: now SIGNIFICANT and positive at every severity above zero, where at n=100 it
+#: was 0.000 / 0.017 / 0.051 and nothing cleared its interval. That was a null
+#: result from insufficient power, not a zero. The effect is still a fifth of a
+#: point at the top of the range, and the pre-registered bar for shipping it
+#: was more than a point, so pausing stays off.
 OUTAGE_ABLATION = [
-    (0.15, 0.000, 0.000, False),
-    (0.40, 0.017, 0.035, False),
-    (0.80, 0.051, 0.074, False),
+    (0.15, 0.050, 0.037, True),
+    (0.40, 0.082, 0.065, True),
+    (0.80, 0.221, 0.056, True),
 ]
 
-#: docs/02_RESULTS.md, "THE BATCH NUMBER". 10 held-out populations on the
-#: canonical world: `py -3.12 -m agent.batch_report --pops 10 --canonical`,
-#: transcript `logs/w24_headline_repaired.txt`.
-#:
-#: RE-MEASURED 1 September 2026 after the belief repair (prior_w 9 -> 5,
-#: prior_floor 0.5 -> 0.1, cycle_value 0 -> 0.6). The uplift is unchanged at
-#: +9.08 because `payday_wait` runs through the harness and carries no belief;
-#: what moved is the agent's own collection (99.37 -> 99.38), the money
-#: (7,496,430 -> 7,511,500), the interval (2 SE 2.01 -> 1.84) and the executed
-#: money actions (8,721 -> 8,702). Previous transcript:
-#: `logs/w19_headline_canonical.txt`.
-BATCH = dict(agent=99.38, payday_wait=90.29, delta=9.08, two_se=1.84,
-             rupees=7511500, populations=10, money_actions=8702,
-             stage0_refusals=0, auditor_recount=0)
+#: The batch headline, read from the canonical run's own record. Every value
+#: below is a key of `sim/canonical_result.json`; nothing here is transcribed.
+BATCH = dict(agent=CANON["agent_cycle_rec"],
+             payday_wait=CANON["base_cycle_rec"],
+             delta=CANON["uplift"], two_se=CANON["uplift_2se"],
+             rupees=CANON["recovered_rupees"],
+             populations=CANON["populations"],
+             money_actions=CANON["money_actions"],
+             stage0_refusals=CANON["stage0_refusals"],
+             auditor_recount=CANON["auditor_violations"])
 
 
 def html_batch_errors() -> list[str]:
@@ -191,14 +255,67 @@ def html_batch_errors() -> list[str]:
         got = match.group(1).strip() if match else None
         if got != want:
             errors.append(f"{element_id}: expected {want!r}, found {got!r}")
+    errors.extend(_sweep_prose_errors(html))
+    errors.extend(_hero_prose_errors(html))
     return errors
+
+
+def _sweep_prose_errors(html: str) -> list[str]:
+    """Return stale sweep figures written into the page's prose.
+
+    The sweep table and the chart are hydrated from scenarios.json, but two
+    places restate its endpoints in hand-written text: the chart's <desc>,
+    which is what a screen reader gets, and the baseline card. Those went stale
+    when the sweep was re-measured and the table beside them did not, which is
+    the defect this function exists to catch. Every expected literal is
+    derived from SWEEP, never typed.
+    """
+    tight = min(SWEEP, key=lambda row: row[0])      # the smallest payday_err
+    wide = max(SWEEP, key=lambda row: row[0])
+    err_lo, pw_lo, ag_lo, _, _, _ = tight
+    _, pw_hi, ag_hi, _, _, _ = wide
+    wanted = {
+        "chart description, baseline at the tightest and widest error":
+            f"falls from {pw_lo:.2f}% at ±{err_lo:g} day to {pw_hi:.2f}%",
+        "chart description, agent across the same range":
+            f"between {ag_lo:.2f}% and {ag_hi:.2f}%",
+        "baseline card, collection at the tightest error":
+            f"it collects <b>{pw_lo:.2f}%</b>, level with the agent's "
+            f"{ag_lo:.2f}%",
+    }
+    return [f"{where}: {want!r} is not in docs/index.html"
+            for where, want in wanted.items() if want not in html]
+
+
+def _hero_prose_errors(html: str) -> list[str]:
+    """Return stale walkthrough figures written into the page's prose.
+
+    The timeline chart is drawn from the hero's balance series, but the beat
+    list and the chart's <desc> restate its peak in hand-written text. That
+    figure went stale when the walkthrough was regenerated at the canonical
+    population size and the sentences beside it were not, which is the defect
+    this function exists to catch. The expected literal is derived from the
+    generated data, never typed.
+    """
+    if not os.path.exists(OUT):
+        return []
+    with open(OUT, encoding="utf-8") as fh:
+        hero = json.load(fh)["hero"]
+    peak = max(hero["balance"], key=lambda row: row["bal"])
+    want = f"₹{peak['bal']:,.0f}"
+    places = {
+        "walkthrough beat, the peak balance": f"jumps to <b>{want}</b>",
+        "chart description, the peak balance": f"jumps to {want},",
+    }
+    return [f"{where}: {text!r} is not in docs/index.html"
+            for where, text in places.items() if text not in html]
 
 
 def _daily_balance(bal: np.ndarray, lo: int, hi: int) -> list[dict]:
     """Balance at the decision hour, one sample per day.
 
     Hour 8 and not a daily mean, because hour 8 is when every decision is taken
-    and 99.22% of all attempts land there (docs/02_RESULTS.md). A daily average
+    and 99.22% of all attempts land there (docs/results.md). A daily average
     would draw a curve no attempt was ever evaluated against.
     """
     return [{"day": d, "bal": round(float(bal[d * w3.HOURS + w3.DECISION_HOUR]), 2)}
@@ -257,7 +374,7 @@ def page_job(spec):
 
     ⚠️ THIS USED TO RUN EVERY ARM IN ONE PROCESS, AND THE REASONING WAS WRONG.
 
-    `docs/06_MODEL_CARD.md` 6a says every measurement must run one process per
+    `docs/results.md says every measurement must run one process per
     run, because long-lived processes that make many `run_once` calls crash on
     this machine (0xC0000005, a different point each time, root cause never
     found). The first version of this script argued its way out of that:
@@ -275,22 +392,44 @@ def page_job(spec):
     fresh interpreter each, which also raises if a worker dies rather than
     quietly returning fewer arms than were asked for.
 
-    spec = (key, payday_err, extra_run_kwargs, want_rows)
+    TWO WORLDS, AND THE PANEL SAYS WHICH IT IS SHOWING.
+
+    `world="canonical"` is the world every aggregate on the page is measured
+    on: held-out population 710, mandate counts drawn from 1 + Poisson(1),
+    burn-in, mandate outflow, `pop_spend=0.93`. The hero walkthrough uses it.
+
+    `world="detection"` is the world the OUTAGE measurements are made in --
+    five mandates per customer at `pop_spend=1.05`, the gate suite's harder
+    calibration, which is what `agent/tests/test_outage_detection.py` runs. The
+    outage panel has to use it, because the detector refuses to evaluate a
+    24-hour window holding fewer than eight attempts and the canonical world
+    at 100 customers does not reach that floor. Showing the panel on the
+    canonical world would draw an empty detector and imply the mechanism does
+    not exist, when what the measurement actually says is that it needs
+    volume -- which is the panel's own point.
+
+    spec = (key, payday_err, extra_run_kwargs, want_rows, world)
     """
     import os as _os
     import tempfile as _tf
-    key, payday_err, extra, want_rows = spec
+    key, payday_err, extra, want_rows, world = spec
     import agent  # noqa: F401
     import w3 as _w3
     from agent.audit.log import read_rows
     from agent.batch import make_pop as _mp, run_once as _ro
 
-    pop = _mp(N, K, POP_SEED)
+    if world == "canonical":
+        pop = _mp(N, K, POP_SEED, spend=SPEND, days=DAYS, **POP_KW)
+        spend, run_kw = SPEND, RUN_KW
+    else:
+        pop = _mp(DET_N, DET_K, DET_POP_SEED, spend=DET_SPEND, days=DAYS)
+        spend, run_kw = DET_SPEND, {}
     with _tf.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         log = _os.path.join(tmp, "a.jsonl")
-        res = _ro(pop, RUN_SEED, payday_err=payday_err, bcfg=_w3.FITTED_BELIEF,
+        res = _ro(pop, RUN_SEED, payday_err=payday_err, pop_spend=spend,
+                  bcfg=_w3.FITTED_BELIEF,
                   mode="full", log_path=log, log_ticks=want_rows,
-                  run_id=f"page-{key}", **extra)
+                  run_id=f"page-{key}", **run_kw, **extra)
         rows = ([r for r in read_rows(log)
                  if r.get("mandate_uid") == UID and r.get("cycle") == 0]
                 if want_rows else [])
@@ -304,7 +443,7 @@ def page_job(spec):
 
 def hero_arm(payday_err: int, job: dict) -> dict:
     """One arm's job result, reduced to what the page draws."""
-    pop = make_pop(N, K, POP_SEED)
+    pop = make_pop(N, K, POP_SEED, spend=SPEND, days=DAYS, **POP_KW)
     amount = float(pop[CI]["mandates"][MI]["amount"])
     lo = int(pop[CI]["mandates"][MI]["due_day"])
     hi = lo + int(pop[CI]["cycle_days"])
@@ -331,8 +470,8 @@ def hero_arm(payday_err: int, job: dict) -> dict:
 
 
 def build() -> dict:
-    pop = make_pop(N, K, POP_SEED)
-    ex = SimExecutor(pop, RUN_SEED, 7)
+    pop = make_pop(N, K, POP_SEED, spend=SPEND, days=DAYS, **POP_KW)
+    ex = SimExecutor(pop, RUN_SEED, 7, **RUN_KW)
     c, m = pop[CI], pop[CI]["mandates"][MI]
     amount = float(m["amount"])
     lo = int(m["due_day"])
@@ -343,7 +482,7 @@ def build() -> dict:
     #
     # THIS IS NOT A POLICY SIMULATION AND MUST NOT BE READ AS ONE. It is
     # Razorpay's OWN documented subscription retry schedule -- charge on T,
-    # retry T+1, T+2, T+3, then halt ([VERIFIED], docs/01_FACTS.md) --
+    # retry T+1, T+2, T+3, then halt ([VERIFIED], docs/results.md) --
     # evaluated against this one customer's true balance trace. Four fixed
     # days, one lookup each. It carries no recovery percentage anywhere on the
     # page, because four attempts against one trace is an anecdote and the
@@ -355,11 +494,11 @@ def build() -> dict:
     # EVERY ARM IN ITS OWN PROCESS. See `page_job`'s docstring for the
     # segfault this replaced, and do not re-derive the exemption.
     outage = OutageSchedule(days=[20, 50, 80, 110], duration_h=6, severity=0.40)
-    jobs = [(f"pe{pe}", pe, {}, True) for pe in PAYDAY_ERRS]
+    jobs = [(f"pe{pe}", pe, {}, True, "canonical") for pe in PAYDAY_ERRS]
     jobs += [(arm, 7, dict(outage_kw=dict(days=[20, 50, 80, 110], duration_h=6,
                                           severity=0.40),
                            monitor_enabled=True, pause_on_outage=pause,
-                           time_major=True), False)
+                           time_major=True), False, "detection")
              for arm, pause in (("detect_only", False),
                                 ("detect_and_pause", True))]
     done = run_jobs(page_job, jobs)
@@ -376,7 +515,7 @@ def build() -> dict:
     # run, and the page never lays its arrows over the hero timeline.
     #
     # BOTH RESPONSE ARMS ARE ON THE PAGE, because the difference between them
-    # is the finding. `docs/02_RESULTS.md` measures detection with the response
+    # is the finding. `docs/results.md` measures detection with the response
     # OFF, deliberately, "so that pausing does not suppress the evidence that
     # produces detection". Running it with the response ON shows why that
     # protocol note exists: pausing removes the attempts the binomial tail is
@@ -405,7 +544,10 @@ def build() -> dict:
     return dict(
         meta=dict(
             generated_by="scripts/build_page_data.py",
-            pop_seed=POP_SEED, run_seed=RUN_SEED, n=N, k=K, days=DAYS,
+            pop_seed=POP_SEED, run_seed=RUN_SEED, n=N, days=DAYS,
+            pop_spend=SPEND, world="canonical",
+            outage_world=dict(pop_seed=DET_POP_SEED, n=DET_N, k=DET_K,
+                              pop_spend=DET_SPEND),
             policy="solo_shared_pd", bcfg=dict(w3.FITTED_BELIEF),
             numpy=np.__version__, python=sys.version.split()[0],
         ),
@@ -452,9 +594,9 @@ def build() -> dict:
             #: no transcript in logs/ and was carried as an argument. The
             #: false-alarm figure HELD; the TPR did not. It was published as
             #: "1.00 at n>=100" and the re-run scores 0.75 at n=100, reaching
-            #: 1.00 only at n=200. `logs/w28_detection_power.txt`, produced by
+            #: 1.00 only at n=200. `logs/w30_detect_study.txt`, produced by
             #: `py -3.12 agent/tests/test_outage_detection.py`.
-            published_transcript="logs/w28_detection_power.txt",
+            published_transcript="logs/w30_detect_study.txt",
             published_false_alarm_runs="0 of 48 at severity 0",
             published_tpr_at_n100="0.75 at severity 0.40, response OFF; "
                                   "1.00 at n=200",

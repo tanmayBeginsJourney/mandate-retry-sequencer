@@ -372,7 +372,7 @@ def run_once(pop, seed: int, *, payday_err: int = 7, pop_spend: float = 1.05,
     res["exec_code_counts"] = dict(executor.code_counts)
     res["exec_terminal_attempts"] = executor.n_terminal_attempts
 
-    # ---- RECOVERY-RATE METRICS (docs/04_BUILD_PLAN.md W0)
+    # ---- RECOVERY-RATE METRICS (docs/results.md)
     # The composition root is the only module that holds both the world and the
     # policy's result, which is exactly why the join happens here: gate I2
     # forbids anything else under `agent/` from importing `agent.execution`,

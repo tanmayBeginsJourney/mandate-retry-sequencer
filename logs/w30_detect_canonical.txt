@@ -1,0 +1,80 @@
+================================================================================================
+OUTAGE DETECTION POWER -- true-positive rate vs population size
+CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1) capped at 8, mean about 2, statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.
+k~1+Poisson(1) capped at 8, mean about 2, 60d, payday_err=7, pop_spend=0.93, populations 710-719, FITTED_BELIEF, 6h outages on days [20, 40], worst-case placement (hour 8)
+Canonical world. Compare against the default run, which uses the detector study's higher-volume world.
+================================================================================================
+ severity  n cust  runs  att/day  att/24h win  detected    TPR  false alarms
+     0.00       5    10      0.3          0.3     0/10    0.00      0/10  runs
+     0.00      10    10      0.7          0.7     0/10    0.00      0/10  runs
+     0.00      25    10      1.9          1.9     0/10    0.00      0/10  runs
+     0.00      50    10      3.8          3.8     0/10    0.00      0/10  runs
+     0.00     100    10      7.5          7.5     0/10    0.00      0/10  runs
+     0.00     200    10     15.2         15.2     0/10    0.00      0/10  runs
+     0.00     500    10     37.9         37.9     0/10    0.00      0/10  runs
+
+     0.15       5    10      0.3          0.3     0/10    0.00      0/10  runs
+     0.15      10    10      0.7          0.7     0/10    0.00      0/10  runs
+     0.15      25    10      1.9          1.9     0/10    0.00      0/10  runs
+     0.15      50    10      3.8          3.8     2/10    0.20      0/10  runs
+     0.15     100    10      7.5          7.5     0/10    0.00      0/10  runs
+     0.15     200    10     15.2         15.2     4/10    0.40      0/10  runs
+     0.15     500    10     38.1         38.1     8/10    0.80      0/10  runs
+
+     0.40       5    10      0.3          0.3     0/10    0.00      0/10  runs
+     0.40      10    10      0.8          0.8     0/10    0.00      0/10  runs
+     0.40      25    10      1.9          1.9     1/10    0.10      0/10  runs
+     0.40      50    10      3.9          3.9     3/10    0.30      0/10  runs
+     0.40     100    10      7.6          7.6     7/10    0.70      0/10  runs
+     0.40     200    10     15.4         15.4    10/10    1.00      0/10  runs
+     0.40     500    10     38.5         38.5    10/10    1.00      0/10  runs
+
+================================================================================================
+WHAT FIRED IT -- evidence at each true detection (severity 0.40)
+================================================================================================
+ n cust   pop      t  window n  tech  P(>=k by chance)
+     25   719    992         8     3          2.78e-05
+     50   711    969        11     3          8.05e-05
+     50   713    969         8     3          2.78e-05
+     50   719    968         8     3          2.78e-05
+    100   710    969         9     3          4.15e-05
+    100   711    973         8     3          2.78e-05
+    100   713    969         8     5          1.80e-09
+    100   714    968        16     4          6.90e-06
+    100   715    974        14     4          3.85e-06
+    100   717    969        13     4          2.76e-06
+    100   718    512         8     3          2.78e-05
+    100   718    973        11     3          8.05e-05
+    200   710    968        37     5          1.15e-05
+    200   711    968        27     4          6.20e-05
+
+================================================================================================
+THE MOAT: what ONE MERCHANT would see
+================================================================================================
+Mandates are spread over 60 merchants, so one merchant holds n*k/60 of them.
+ n cust  aggregator att/24h  1 merchant att/24h   merchant reaches min_attempts=8?
+      5                 0.3                0.01        no  -- cannot even evaluate
+     10                 0.8                0.01        no  -- cannot even evaluate
+     25                 1.9                0.03        no  -- cannot even evaluate
+     50                 3.9                0.06        no  -- cannot even evaluate
+    100                 7.6                0.13        no  -- cannot even evaluate
+    200                15.4                0.26        no  -- cannot even evaluate
+    500                38.5                0.64        no  -- cannot even evaluate
+
+================================================================================================
+PRE-REGISTERED CHECKS
+================================================================================================
+  !! E-DET-1..5 were pre-registered against the DETECTOR STUDY's world
+     (k=5, pop_spend=1.05, populations 700-707). This run is the canonical
+     world, so the outcomes below are a re-measurement in a different world
+     and NOT a score against the original registration. Read the volumes.
+
+  HELD   E-DET-1 false-alarm rate at severity=0 is under 5% of runs   [0.0% of runs raised an alarm with no outage present]
+  BROKE  E-DET-2 TPR non-decreasing in n at severity 0.15   [0.00 -> 0.00 -> 0.00 -> 0.20 -> 0.00 -> 0.40 -> 0.80]
+  HELD   E-DET-2 TPR non-decreasing in n at severity 0.4   [0.00 -> 0.00 -> 0.10 -> 0.30 -> 0.70 -> 1.00 -> 1.00]
+  HELD   E-DET-3 TPR < 0.5 at n<=10 even at severity 0.40   [max TPR at n in (5,10) = 0.00]
+  BROKE  E-DET-4 TPR >= 0.8 at n=100, severity 0.40   [0.70]
+  HELD   (not registered) TPR at the canonical n=500, severity 0.40   [1.00]
+  HELD   E-DET-5 one merchant never reaches min_attempts at any n   [merchant volume stays below 8 attempts per 24h window]
+
+Pre-registration record for this measurement: 5/7

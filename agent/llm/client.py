@@ -51,7 +51,7 @@ number this transport produces:
 
 CALLS RUN IN A THREAD POOL. They are independent, network-bound HTTP requests;
 threads are the right tool and this is NOT the multiprocessing path that
-segfaults on this machine (`docs/06_MODEL_CARD.md` 6a) -- no numpy, no worker
+segfaults on this machine (`docs/results.md) -- no numpy, no worker
 processes, nothing shared but a lock-guarded cache dict.
 
 THE CACHE IS WRITTEN AS RESULTS ARRIVE, NOT AT THE END. The first live run
@@ -225,7 +225,7 @@ class ResponseCache:
         reasoning setting may well answer worse than the same model on high"*.
         Neither was in the key.
 
-        So a sweep of `reasoning_effort`, which `docs/00_HANDOFF.md` calls the
+        So a sweep of `reasoning_effort`, which `docs/architecture.md` calls the
         first thing to measure, would have:
 
           1. **hit the `low` cache and silently returned the `low` answers**,

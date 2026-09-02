@@ -5,7 +5,7 @@ this file -- see its docstring for why that separation is the whole point.
 
 WHAT IS SHARED WITH THE AUDITOR AND WHAT IS NOT. Both import the regulatory
 CONSTANTS from `w3` (PEAK hours, NPCI_MAX, HOURS). That is deliberate: those
-are one external fact each, sourced in docs/01_FACTS.md, and duplicating them
+are one external fact each, sourced in docs/results.md, and duplicating them
 would create a second place for the fact to go stale. Neither imports the
 other's LOGIC. What is being cross-checked here is whether the enforcement
 works, not whether NPCI's peak window is 10:00-13:00.
@@ -15,7 +15,7 @@ TWO OF THESE FIVE HAVE NO REFERENCE IMPLEMENTATION.
 (gate M4 passes by construction -- its mutant increments the counter itself,
 error 11) have never been shown to work. So they are not a spec that can be
 ported, and the tests behind them here are written from the rule text in
-docs/01_FACTS.md, not from the harness. See test_stage0_enforces.py.
+docs/results.md, not from the harness. See test_stage0_enforces.py.
 """
 from __future__ import annotations
 

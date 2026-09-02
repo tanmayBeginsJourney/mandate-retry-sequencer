@@ -48,31 +48,48 @@ import agent  # noqa: F401
 import w3
 from agent.tests._parallel import agent_job, harness_job, run_jobs
 
-N, K, DAYS, SPEND, RUN_SEED = 100, 5, 120, 0.93, 907
+from agent.tests import _canonical as _CAN
+
+#: THE CANONICAL WORLD, IMPORTED. This file used to carry its own copy of the
+#: nine-key population dict and the two seed offsets. Two copies of a world
+#: that must be identical is a silent mis-measurement waiting to happen, which
+#: is the reason `_canonical.py` exists.
+_C = ["--canonical"]
+N, K, DAYS, SPEND, RUN_SEED = _CAN.N, 5, 120, _CAN.SPEND, 907
 #: HELD OUT: 700-709 were used to select the offsets.
-POPS = list(range(710, 720))
+POPS = list(_CAN.POPS)
 ERRS = (1, 3, 5, 7, 10, 14)
 #: (label, run_once kwargs). `payday_wait` is not here -- it runs through the
 #: harness and is added separately.
 ARMS = (("agent", dict(mode="degenerate")),
         ("[1,7]", dict(mode="payday_offsets")),
         ("naive", dict(mode="doc_legal")))
-CAN = dict(k_mean=2.0, k_max=8, payday_mode="statutory",
-           amount_mode="absolute", amount_median=855.0,
-           buffer_median=0.25, buffer_sigma=1.0, irregular_frac=0.0)
-RK = dict(burn_cycles=12, mandate_outflow=True)
+RK = _CAN.run_kwargs(_C)
 
 
 def pc(ps):
-    kw = dict(CAN)
-    kw["k_seed"] = 4242 + ps
-    kw["buffer_seed"] = 9182 + ps
-    return kw
+    return _CAN.pop_kwargs(ps, _C)
 
 
 def ms(xs):
     a = np.asarray(xs, float)
     return a.mean(), 2 * a.std(ddof=1) / np.sqrt(len(a))
+
+
+def paired(xs, ys):
+    """Difference in points and its PAIRED 2 SE.
+
+    Both arms run the same populations with the same run seed, so a population
+    is a matched pair. The per-arm 2 SE printed beside each row is the spread
+    of that arm across populations and is the WRONG interval to judge a
+    difference against -- it throws the pairing away and is wide enough to
+    call a real gap a tie. Until 2 September 2026 the difference column here
+    had no interval of its own at all, and the two negative margins at the
+    bottom of the payday_err range were described as inside the measurement
+    error on the strength of the per-arm number.
+    """
+    d = (np.asarray(xs, float) - np.asarray(ys, float)) * 100
+    return float(d.mean()), float(2 * d.std(ddof=1) / np.sqrt(len(d)))
 
 
 def main() -> int:
@@ -101,11 +118,14 @@ def main() -> int:
     print("`payday_wait` runs through the harness, which computes no at-risk "
           "denominator: cycles only.")
     print(f"{'payday_err':>11}{'arm':>14}{'recovery':>11}{'2 SE':>8}"
-          f"{'cycles':>9}{'surv':>8}{'vs [1,7]':>11}")
-    G = {}
+          f"{'cycles':>9}{'surv':>8}{'vs [1,7]':>11}{'paired 2 SE':>13}"
+          f"{'sig':>6}")
+    G, PER, PAIRED = {}, {}, {}
     for pe in ERRS:
         for lbl in labels:
             rows = [res[f"{pe}|{ps}|{lbl}"] for ps in POPS]
+            PER[(pe, lbl)] = ([x["recovery"]["recovery_rate"] for x in rows]
+                              if "recovery" in rows[0] else None)
             # `harness.run` reports no recovery-of-at-risk rate. It is not a
             # missing field to paper over: the harness does not compute the
             # at-risk denominator, and inventing one here from a different
@@ -122,11 +142,18 @@ def main() -> int:
             r, se, c, sv = G[(pe, lbl)]
             if r != r:
                 print(f"{pe:>11}{lbl:>14}{'--':>11}{'--':>8}"
-                      f"{c*100:>8.2f}%{sv*100:>7.1f}%{'--':>11}")
+                      f"{c*100:>8.2f}%{sv*100:>7.1f}%{'--':>11}"
+                      f"{'--':>13}{'--':>6}")
                 continue
-            d = "" if lbl == "[1,7]" else f"{(r - base) * 100:>+11.2f}"
+            if lbl == "[1,7]":
+                print(f"{pe:>11}{lbl:>14}{r*100:>10.2f}%{se*100:>+8.2f}"
+                      f"{c*100:>8.2f}%{sv*100:>7.1f}%{'':>11}{'':>13}{'':>6}")
+                continue
+            m, pse = paired(PER[(pe, lbl)], PER[(pe, "[1,7]")])
+            PAIRED[(pe, lbl)] = (m, pse)
             print(f"{pe:>11}{lbl:>14}{r*100:>10.2f}%{se*100:>+8.2f}"
-                  f"{c*100:>8.2f}%{sv*100:>7.1f}%{d}")
+                  f"{c*100:>8.2f}%{sv*100:>7.1f}%{m:>+11.2f}{pse:>13.2f}"
+                  f"{('SIG' if abs(m) > pse else 'n.s.'):>6}")
         print("-" * 84)
 
     print()
@@ -136,11 +163,13 @@ def main() -> int:
     prev = None
     cross = None
     for pe in ERRS:
-        d = (G[(pe, "agent")][0] - G[(pe, "[1,7]")][0]) * 100
+        d, pse = PAIRED[(pe, "agent")]
         if prev is not None and prev < 0 <= d:
             cross = pe
         prev = d
-        print(f"  payday_err {pe:>2}: agent - [1,7] = {d:>+7.2f} pts")
+        print(f"  payday_err {pe:>2}: agent - [1,7] = {d:>+7.2f} pts "
+              f"(paired 2 SE {pse:.2f}, "
+              f"{'SIG' if abs(d) > pse else 'n.s.'})")
     print(f"  Sign change between the levels tested: "
           f"{'at payday_err=' + str(cross) if cross else 'none in range'}")
 

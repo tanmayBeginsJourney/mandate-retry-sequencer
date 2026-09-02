@@ -15,6 +15,7 @@ if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
 from agent.audit.jsonl_queue import read_jsonl  # noqa: E402
+# I2-EXEMPT: drives the reminder path through the executor and the SMTP delivery stub.
 from agent.execution.razorpay_executor import RazorpayExecutor  # noqa: E402
 from agent.execution.smtp_delivery import (SMTP_SENT, SMTP_SKIPPED,  # noqa: E402
                                          deliver_smtp)

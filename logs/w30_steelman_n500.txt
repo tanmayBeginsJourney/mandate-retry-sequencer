@@ -1,0 +1,58 @@
+THE AGENT vs THREE FIXED SCHEDULES, canonical world.
+240 runs: 6 payday_err levels x 10 held-out populations x 4 arms, n=500, 120d, pop_spend=0.93, run seed 907.
+
+====================================================================================
+RECOVERY of at-risk cycles. The difference column is against [1,7], the steelman.
+`payday_wait` runs through the harness, which computes no at-risk denominator: cycles only.
+ payday_err           arm   recovery    2 SE   cycles    surv   vs [1,7]  paired 2 SE   sig
+          1         agent     97.90%   +0.79   99.52%   99.5%      -2.00         0.73   SIG
+          1         [1,7]     99.89%   +0.21   99.53%  100.0%                              
+          1         naive     19.79%   +2.65   85.58%   84.3%     -80.10         2.55   SIG
+          1   payday_wait         --      --   99.56%   99.9%         --           --    --
+------------------------------------------------------------------------------------
+          3         agent     97.14%   +0.90   99.40%   99.4%      -1.62         1.02   SIG
+          3         [1,7]     98.76%   +0.46   99.16%  100.0%                              
+          3         naive     19.79%   +2.65   85.58%   84.3%     -78.97         2.59   SIG
+          3   payday_wait         --      --   99.15%   99.7%         --           --    --
+------------------------------------------------------------------------------------
+          5         agent     96.89%   +0.79   99.38%   99.4%      +0.91         0.96  n.s.
+          5         [1,7]     95.97%   +1.17   98.67%  100.0%                              
+          5         naive     19.79%   +2.65   85.58%   84.3%     -76.18         2.79   SIG
+          5   payday_wait         --      --   94.13%   94.3%         --           --    --
+------------------------------------------------------------------------------------
+          7         agent     94.02%   +1.17   99.01%   99.2%      +2.16         1.27   SIG
+          7         [1,7]     91.86%   +1.81   97.98%  100.0%                              
+          7         naive     19.79%   +2.65   85.58%   84.3%     -72.07         3.42   SIG
+          7   payday_wait         --      --   90.89%   91.0%         --           --    --
+------------------------------------------------------------------------------------
+         10         agent     91.40%   +1.08   98.62%   99.1%     +20.05         3.25   SIG
+         10         [1,7]     71.35%   +2.96   94.02%  100.0%                              
+         10         naive     19.79%   +2.65   85.58%   84.3%     -51.56         4.41   SIG
+         10   payday_wait         --      --   88.57%   88.6%         --           --    --
+------------------------------------------------------------------------------------
+         14         agent     89.59%   +1.05   98.35%   99.0%     +33.90         3.45   SIG
+         14         [1,7]     55.69%   +3.50   91.15%  100.0%                              
+         14         naive     19.79%   +2.65   85.58%   84.3%     -35.90         3.95   SIG
+         14   payday_wait         --      --   86.30%   86.3%         --           --    --
+------------------------------------------------------------------------------------
+
+THE CROSSOVER. Where the agent stops losing to the frozen schedule.
+====================================================================================
+  payday_err  1: agent - [1,7] =   -2.00 pts (paired 2 SE 0.73, SIG)
+  payday_err  3: agent - [1,7] =   -1.62 pts (paired 2 SE 1.02, SIG)
+  payday_err  5: agent - [1,7] =   +0.91 pts (paired 2 SE 0.96, n.s.)
+  payday_err  7: agent - [1,7] =   +2.16 pts (paired 2 SE 1.27, SIG)
+  payday_err 10: agent - [1,7] =  +20.05 pts (paired 2 SE 3.25, SIG)
+  payday_err 14: agent - [1,7] =  +33.90 pts (paired 2 SE 3.45, SIG)
+  Sign change between the levels tested: at payday_err=5
+
+AGAINST THE NAIVE SCHEDULE, which is what a merchant runs today.
+====================================================================================
+  payday_err  1: agent  +78.10   [1,7]  +80.10
+  payday_err  3: agent  +77.35   [1,7]  +78.97
+  payday_err  5: agent  +77.09   [1,7]  +76.18
+  payday_err  7: agent  +74.22   [1,7]  +72.07
+  payday_err 10: agent  +71.61   [1,7]  +51.56
+  payday_err 14: agent  +69.80   [1,7]  +35.90
+  A large margin over `naive` is not evidence for the belief filter. Two fixed
+  offsets take most of it, and take more of it than the agent does below +/-7.

@@ -20,7 +20,7 @@ has a hole in it.
 
 WHAT IT SHARES WITH THE ENFORCER. The regulatory constants only (peak window,
 attempt cap, notification lead), imported from `w3` so the external facts in
-docs/01_FACTS.md have one home. The LOGIC is written twice on purpose.
+docs/results.md have one home. The LOGIC is written twice on purpose.
 """
 from __future__ import annotations
 

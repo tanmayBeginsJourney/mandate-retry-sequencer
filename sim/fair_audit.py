@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 Audit the fair-fight filter before believing it. It reports ~95.6% against a
-100% oracle, and `03_ERRORS.md` says a near-zero oracle gap is a symptom, not
+100% oracle, and `docs/errors.md` says a near-zero oracle gap is a symptom, not
 an achievement -- error 5 in this project's own history was exactly that. That
 4.4-point gap IS now the near-zero-oracle-gap condition this project warns
-about, and docs/02_RESULTS.md's "+18.5 to +22.7 pts of headroom" is a stale
-figure from the unfitted filter. See error 13 in docs/03_ERRORS.md.
+about, and docs/results.md's "+18.5 to +22.7 pts of headroom" is a stale
+figure from the unfitted filter. See docs/errors.md, "A gate named after a
+concept rather than the object it measures".
 
 (This docstring said "97.53%" until 28 Aug 2026. That number is in
 ml_artifacts/belief_fit.json and NOTHING reproduces it -- the identical call

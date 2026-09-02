@@ -13,7 +13,7 @@
    "solo_shared_pd",
    "portfolio_pd"
   ],
-  "note": "Original cases captured before performance work; fitted shipping cases added 31 August 2026 and expanded the same week to own, pooled, and coordinated under FITTED_BELIEF. Recapture diffs in NOTES.md.",
+  "note": "Original cases captured before performance work; fitted shipping cases added 31 August 2026 and expanded the same week to own, pooled, and coordinated under FITTED_BELIEF. Recapture diffs in the development log.",
   "numpy": "2.4.2",
   "payday_errs": [
    1,

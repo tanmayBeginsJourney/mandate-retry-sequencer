@@ -41,7 +41,7 @@ WHY THE SETTING EXISTS, AND WHY IT IS NOT A HEDGE. Sharing one customer's
 outcomes across merchants is the moat, and it is also the part of this design
 with a real legal question attached: mandates are structurally per-merchant,
 and India's DPDP Rules 2025 -- notified 14 November 2025 -- operationalise the
-DPDP Act's consent and purpose-limitation provisions. `docs/01_FACTS.md` has
+DPDP Act's consent and purpose-limitation provisions. `docs/results.md` has
 the analysis and is explicit that it is `[GUESS]`, not settled law.
 
 A system that can ONLY run pooled cannot answer that question; one that treats
@@ -226,7 +226,7 @@ class BeliefBook:
         `posterior_summary()` returns expected balance as its third element.
         It is dropped here and never crosses into `agent/llm`. A narrative
         layer cannot disclose a balance it was never handed -- which is the
-        governance rule from docs/07_AGENT_BRIEF.md §2 made structural
+        governance rule from docs/architecture.md made structural
         instead of editorial."""
         b = self._b[self._key(customer_id, mandate_uid)]
         ent, topw, _expected_balance_dropped = b.posterior_summary()

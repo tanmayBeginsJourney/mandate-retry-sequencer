@@ -5,7 +5,7 @@ cycles due**, which counts cycles that never failed. Every published figure in
 the payments industry is a **recovery rate**: of the payments that *failed*,
 the fraction eventually collected. They are different quantities, and until
 this module existed nothing the project reported could be compared to anything
-outside it. `docs/04_BUILD_PLAN.md`, W0.
+outside it. `docs/results.md.
 
 THE TWO INPUTS COME FROM DIFFERENT PLACES ON PURPOSE.
 

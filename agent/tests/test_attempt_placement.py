@@ -3,10 +3,18 @@
 
     py -3.12 agent/tests/test_attempt_placement.py
 
-WHY THIS EXISTS. The agent loses to the fixed schedule `est_payday + [1, 7]` by
-9.17 points at `payday_err=1` and 7.83 at 3, and NOTES.md records that residual
-as UNEXPLAINED after five failed fixes. One architectural suspect survives from
-the W18 write-up and has never been measured:
+SUPERSEDED AS A PREMISE, KEPT AS THE RECORD. Every margin quoted below is the
+PRE-REPAIR agent. The residual this script was built to explain was later
+attributed to the payday prior and the objective, and both were repaired: on
+held-out populations the margin against `[1,7]` is now -1.16 at `payday_err=1`,
+-0.33 at 3, +1.15 at 5 and +3.55 at 7. See `sim/w3.py`'s was/now table and
+docs/results.md. This file still runs and still measures placement; it is the
+question that is answered, not the measurement that is wrong.
+
+WHY THIS EXISTS. The agent lost to the fixed schedule `est_payday + [1, 7]` by
+9.17 points at `payday_err=1` and 7.83 at 3, and the development log recorded
+that residual as UNEXPLAINED after five failed fixes. One architectural suspect
+survived from the W18 write-up and had never been measured:
 
   `agent.policy.timing.propose` only ever targets `ahead[0]` -- TOMORROW. The
   agent's action space is "attempt tomorrow, or wait"; it cannot commit an
@@ -83,23 +91,19 @@ PE = 7
 for _i, _a in enumerate(sys.argv):
     if _a == "--payday-err":
         PE = int(sys.argv[_i + 1])
+#: THE CANONICAL WORLD, IMPORTED rather than copied.
+from agent.tests import _canonical as _CAN  # noqa: E402
+_C = ["--canonical"]
 #: HELD OUT from every schedule selection, matching `logs/w17_coverage.txt`.
-POPS = list(range(710, 720))
-SPEND = 0.93
-K_SEED, BUF_SEED, BURN = 4242, 9182, 12
-CANONICAL = dict(k_mean=2.0, k_seed=K_SEED, k_max=8,
-                 payday_mode="statutory",
-                 amount_mode="absolute", amount_median=855.0,
-                 buffer_median=0.25, buffer_sigma=1.0, buffer_seed=BUF_SEED,
-                 irregular_frac=0.00)
-RUN_KW = dict(burn_cycles=BURN, mandate_outflow=True)
+POPS = list(_CAN.POPS)
+SPEND = _CAN.SPEND
+BURN = _CAN.BURN
+RUN_KW = _CAN.run_kwargs(_C)
 ARMS = (("agent", "degenerate"), ("[1,7]", "payday_offsets"))
 
 
 def percell(pop_seed):
-    kw = dict(CANONICAL)
-    kw["k_seed"] = K_SEED + pop_seed
-    kw["buffer_seed"] = BUF_SEED + pop_seed
+    kw = _CAN.pop_kwargs(pop_seed, _C)
     return kw
 
 

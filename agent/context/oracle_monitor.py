@@ -3,7 +3,7 @@ change points. The upper bound the statistical detector is measured against.
 
 WHY AN ORACLE AT ALL, AND WHY THIS ONE.
 The recovery channel saturates: outage awareness is worth +0.256 pts at
-severity 0.80 and is significantly NEGATIVE at 0.40 (docs/02_RESULTS.md). A
+severity 0.80 and is significantly NEGATIVE at 0.40 (docs/results.md). A
 number with a ceiling that small cannot rank detectors. Detection can -- but
 only against something. This is that something.
 
@@ -25,8 +25,9 @@ evidence requirement at all -- it reads the answer.
 
 WHAT IT MUST NEVER TOUCH. It gates dispatch and nothing else, exactly as
 `RailMonitor` does. It holds no balance, no customer identity, no target time,
-and it is never consulted by `agent/policy/`. Error 2 in docs/03_ERRORS.md was
-a scheduler that could see the future; this object can see part of the future
+and it is never consulted by `agent/policy/`. The clairvoyant-oracle error
+in docs/errors.md was a scheduler that could see the future; this object can
+see part of the future
 and is therefore confined to the same narrow contract, constructed only by
 `agent/batch.py`, and stamped into every run's provenance so no result can
 quote it by accident.

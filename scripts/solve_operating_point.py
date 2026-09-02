@@ -25,7 +25,7 @@ cannot be contaminated by the policy being measured on it.
 
 WHAT IT DOES NOT DO. It does not re-run any headline. Declaring the points is
 the deliverable; adopting one as the default is a separate decision with a
-re-run attached, and `docs/04_BUILD_PLAN.md` W1 says the stressed point stays so
+re-run attached, and `docs/results.md` W1 says the stressed point stays so
 every existing number stays comparable.
 """
 from __future__ import annotations
@@ -48,7 +48,7 @@ from agent.execution.sim_executor import SimExecutor
 N, K, DAYS, PE, SEED = 100, 5, 120, 7, 907
 POPS = list(range(700, 708))
 
-#: The two points to solve for. Targets come from `docs/01_FACTS.md`:
+#: The two points to solve for. Targets come from `docs/results.md`:
 #: published UPI AutoPay debit failure is 8-15% `[REPORTED]`. The stressed
 #: point is not a published figure -- it is where this repository has been
 #: operating all along, declared so it stops being accidental.
@@ -114,7 +114,7 @@ def main() -> int:
     print("  No policy is run here, so the declared point cannot be")
     print("  contaminated by the thing it will be used to measure.")
     print()
-    print("  Anchors already published in docs/02_RESULTS.md:")
+    print("  Anchors already published in docs/results.md:")
     for s in (0.80, 1.05):
         print(f"    pop_spend={s:.2f}  ->  {failure_rate(s)*100:6.2f}% "
               f"first-presentation failure")
@@ -140,8 +140,8 @@ def main() -> int:
     print()
     print("  WHAT THIS DOES NOT DO. It declares the points; it does not adopt")
     print("  one. Adopting `realistic` as the default re-runs every headline,")
-    print("  and 04_BUILD_PLAN.md W1 keeps `stressed` precisely so the existing")
-    print("  numbers stay comparable. The spend sweep in 02_RESULTS.md already")
+    print("  and docs/results.md keeps `stressed` precisely so the existing")
+    print("  numbers stay comparable. The spend sweep in docs/results.md already")
     print("  shows the shape, so nothing is waiting to surprise anyone.")
     print("=" * 78)
     return 0

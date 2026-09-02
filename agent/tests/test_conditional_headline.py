@@ -4,7 +4,7 @@
     py -3.12 agent/tests/test_conditional_headline.py
 
 WHY THIS FILE EXISTS AT ALL. The table it produces is quoted in `README.md`,
-`docs/02_RESULTS.md` and `docs/08_ARCHITECTURE.md`, and until now its only
+`docs/results.md` and `docs/architecture.md`, and until now its only
 provenance was `logs/w21_conditional_canonical.txt` — a scratchpad run with no
 committed script behind it. A number the repository quotes must have a command
 a reader can run; that was the rule the steelman table was promoted for, and
@@ -19,7 +19,8 @@ world carries a couple of at-risk cycles across a thousand customers, so the
 uplift there is arithmetic on almost nothing. The region has one informative
 end and that is a property of the world, not a result.
 
-CONDITIONS ARE THE HEADLINE'S: n=100, 10 held-out populations, 120 days,
+CONDITIONS ARE THE HEADLINE'S: the canonical n, 10 held-out populations,
+120 days,
 `payday_err=7`, `mode="full"`, canonical world, run seed matching
 `agent/batch_report.py` so the `pop_spend=0.93` cell reproduces the headline
 rather than sitting beside it at a different value.
@@ -43,7 +44,7 @@ import w3
 from agent.tests import _canonical as _CAN
 from agent.tests._parallel import agent_job, harness_job, run_jobs
 
-N, K, DAYS, PE = 100, 5, 120, 7
+N, K, DAYS, PE = _CAN.N, 5, 120, 7
 RUN_SEED = 7
 POPS = list(_CAN.POPS)
 REGION = (0.80, 0.85, 0.88, 0.90, 0.93)

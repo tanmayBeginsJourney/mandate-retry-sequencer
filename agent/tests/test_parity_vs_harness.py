@@ -23,7 +23,7 @@ PRE-REGISTERED, written before the first run (28 Aug 2026):
       exact on >= 6 of 8 populations. Confidence LOW -- this is the bonus
       gate, time-boxed to 2 hours, not the acceptance gate.
   E3  Zero Stage 0 refusals. The shipping policy reports zero violations in
-      every study in docs/06_MODEL_CARD.md, so an ENFORCING gate should never
+      every study in docs/results.md, so an ENFORCING gate should never
       have to refuse. If refusals > 0, the agent's number is NOT the gated
       number and the report must say so.
   E4  The auditor finds zero violations in the agent's own audit log.

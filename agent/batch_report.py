@@ -17,10 +17,11 @@ it, the whole chain for one recovered rupee, and optional `--demo-llm` routed
 LLM audit stats (not a second money column).
 
 WHY THIS IS NOT `agent/batch.py`. That module is the COMPOSITION ROOT -- the one
-place allowed to construct both an executor and a gate, named by hand in
-`agent/tests/test_layer_isolation.py`'s I2 exemption list. Overwriting it would
-break the import-graph gate and every measurement in the repo. This module uses
-it. The naming difference is flagged rather than silently resolved.
+place allowed to construct both an executor and a gate, and one of the two
+modules gate I2 in `agent/tests/test_layer_isolation.py` exempts. Overwriting
+it would break the import-graph gate and every measurement in the repo. This
+module uses it. The naming difference is flagged rather than silently
+resolved.
 
 THE DETERMINISTIC ARM PRODUCES THE NUMBER. The LLM is not on the money
 comparison: it is routed to merchant_note cases for diagnosis and to
@@ -33,7 +34,8 @@ second set of assumptions with no source, and the whole point of the moat
 argument is that these mandates ALREADY span merchants.
 
 EVERY RUN IS ONE PROCESS (`agent/tests/_parallel.py`, `max_tasks_per_child=1`).
-`docs/06_MODEL_CARD.md` section 6a -- the machine fault is contained, not fixed.
+See docs/results.md, "Test methodology" -- the machine fault is contained,
+not fixed.
 """
 from __future__ import annotations
 
@@ -63,7 +65,7 @@ from agent.tests._parallel import agent_job, harness_job, run_jobs
 from agent.tests import _canonical as _CAN
 
 POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
-N, K, DAYS, SPEND, PE, RUN_SEED = (100, 5, 120,
+N, K, DAYS, SPEND, PE, RUN_SEED = (_CAN.n(100), 5, 120,
                                    _CAN.spend(1.05), 7, 7)
 
 
@@ -79,7 +81,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--n", type=int, default=N, help="customers per population")
     ap.add_argument("--pops", type=int, default=len(POPS),
-                    help="how many held-out populations (max 8)")
+                    help=f"how many held-out populations "
+                         f"(max {len(POPS)} in this configuration)")
     ap.add_argument("--demo-llm", action="store_true",
                     help="one-pop routed-LLM audit (not a second money column)")
     ap.add_argument("--llm", action="store_true",
@@ -88,11 +91,12 @@ def main(argv=None) -> int:
     ap.add_argument("--llm-max-calls", type=int, default=150,
                     help="hard cap on NETWORK calls per run. Cache hits are "
                          "free and do not count. See the note this prints.")
-    # W5 / queue item 7. The headline batch runs the decline taxonomy at ZERO,
-    # so every failure is insufficient funds and there is nothing to diagnose --
-    # which is the standing explanation for why the LLM arm does not move the
-    # money. This turns it on so that explanation can be TESTED instead of
-    # repeated. Rates are the mid combined cell from
+    # The headline batch runs the decline taxonomy at ZERO, so every failure is
+    # insufficient funds. That was the standing explanation for why the LLM arm
+    # does not move the money; this flag exists so the explanation could be
+    # TESTED rather than repeated, and it was REFUTED -- with the taxonomy on
+    # and terminal codes everywhere, the LLM arm came back behind the
+    # deterministic one, not ahead. Rates are the mid combined cell from
     # agent/tests/test_decline_sweep.py; every one is a [GUESS] and is swept
     # there, never picked. It is OFF by default: turning it on changes the
     # headline, and that is a decision about the deliverable, not a flag.
@@ -104,7 +108,24 @@ def main(argv=None) -> int:
                     help="run with the richer decline taxonomy on. NOT the "
                          "published configuration -- the headline is measured "
                          "with every rate at zero.")
+    # THE CHAIN FROM CODE TO DOCUMENT. Until 2 September 2026 every headline
+    # figure reached README.md, docs/results.md and the page by being READ OFF
+    # THIS PRINTOUT AND TYPED IN, and the three documentation checkers held
+    # their own copies of the same literals -- so editing 99.38% to 99.99% in
+    # results.md passed all three. `--emit` writes the run's own numbers to
+    # sim/canonical_result.json, `sim/verify_claims.py` checks the documents
+    # against that file, and `scripts/build_page_data.py` reads it instead of
+    # a transcribed dict.
+    ap.add_argument("--emit", action="store_true",
+                    help="write the headline figures to "
+                         "sim/canonical_result.json for the documentation "
+                         "checkers and the page builder to read")
     a = ap.parse_args(argv)
+    if a.emit and not (a.canonical and not a.declines and not a.llm):
+        ap.error("--emit records THE canonical headline, so it requires "
+                 "--canonical and refuses --declines and --llm. A file called "
+                 "canonical_result.json holding a non-canonical run is worse "
+                 "than no file.")
     pops = POPS[:max(1, min(a.pops, len(POPS)))]
 
     base = dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
@@ -144,12 +165,10 @@ def main(argv=None) -> int:
     # `K` is the CAP on mandates per customer, and under --canonical the count
     # is drawn from 1 + Poisson(1) rather than fixed at K. Printing "x 5
     # mandates" there would state a condition the run does not have, which is
-    # the shape of defect the whole canonical pass exists to remove.
-    _k = ("~2 mandates (1 + Poisson(1), capped at 8)" if _CAN.enabled()
-          else f"{K} mandates")
-    print(f"THE BATCH -- {a.n} customers x {_k} over "
-          f"{len(pops)} held-out populations, {a.days} days, payday_err=+/-{PE}"
-          f", pop_spend={SPEND}")
+    # the shape of defect the whole canonical pass exists to remove. The
+    # description lives in `_canonical.py` so the three ablations and this
+    # module cannot disagree about what ran.
+    print("THE BATCH -- " + _CAN.world_line(a.n, K, pops, a.days, PE, SPEND))
     print("=" * 104)
     print(_CAN.banner())
     n_merch = len({m["merchant"] for s in pops[:1]
@@ -192,7 +211,7 @@ def main(argv=None) -> int:
     print("  the five-line heuristic a good rival builds in an afternoon, and at")
     print("  payday_err of about 1 day it BEATS us. The headline is conditional")
     print("  on that parameter, on how poor the world is, and on nothing else")
-    print("  -- docs/06_MODEL_CARD.md 2 and the spend sweep in 02_RESULTS.md.")
+    print("  -- docs/results.md.")
 
     # ------------------------------------------------- the comparable number
     print()
@@ -203,7 +222,7 @@ def main(argv=None) -> int:
     print("  Cycles collected / cycles due is THIS project's metric and it counts")
     print("  cycles that never failed. Every published industry figure is a")
     print("  RECOVERY RATE: of the payments that failed, the share collected.")
-    print("  They are different quantities. docs/04_BUILD_PLAN.md W0.")
+    print("  They are different quantities. docs/results.md.")
     print()
     print("  REVENUE AT RISK is defined by the WORLD, not by any policy: the")
     print("  mandate-cycles a debit on the due date would not have covered.")
@@ -227,7 +246,7 @@ def main(argv=None) -> int:
         print()
         print(f"  First-presentation failure rate: {_pct(fp)}. A property of the")
         print("  WORLD -- no policy moves it. Published figures put real UPI")
-        print("  AutoPay failure at 8-15% (docs/01_FACTS.md, all [REPORTED],")
+        print("  AutoPay failure at 8-15% (docs/results.md, all [REPORTED],")
         print("  all from vendors selling recovery software).")
         print()
         print("  THE AT-RISK SET EXCLUDES technical declines and the decline")
@@ -259,7 +278,7 @@ def main(argv=None) -> int:
     print("  The recount shares no code with the enforcer: `auditor.py` may not")
     print("  import `constraints/rules.py` or `stage0.py` and gate I3 fails if")
     print("  it ever does. If the two columns disagree, believe the auditor --")
-    print("  it was right the one time they did (docs/03_ERRORS.md).")
+    print("  it was right the one time they did (docs/errors.md).")
     print("  These columns are not expected to agree: the gate counts actions it")
     print("  stopped; the auditor counts illegal actions that still executed.")
     print("  A clean run has zero in both columns for different reasons.")
@@ -330,20 +349,105 @@ def main(argv=None) -> int:
         print("    With p_limit swept 0.00/0.05/0.15 the cost is")
         print("    0.00 / -2.87 / -13.46 pts and every rate is a [GUESS].")
     print(f"  * {len(pops)} populations, one run seed each. Not a large study.")
+
+    if a.emit:
+        _emit(a, pops, res, hres, arms)
     return 0
 
 
+#: Where the canonical run records itself. Committed, and read by
+#: `sim/verify_claims.py` and `scripts/build_page_data.py`.
+RESULT_JSON = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "sim", "canonical_result.json")
+
+
+def _emit(a, pops, res, hres, arms) -> None:
+    """Write the run's own figures. Nothing here is recomputed or rounded to
+    taste: every value is the same expression the table above prints."""
+    name = "agent, deterministic"
+    cr = np.array([res[(name, s)]["cycle_rec"] for s in pops], float)
+    hcr = np.array([hres[("payday_wait", s)]["cycle_rec"] for s in pops], float)
+    d = (cr - hcr) * 100
+    rr = [res[(name, s)]["recovery"] for s in pops]
+    stops = collections.Counter()
+    for s in pops:
+        stops.update(res[(name, s)]["stops"])
+    out = dict(
+        generated_by="python -m agent.batch_report --pops "
+                     f"{len(pops)} --canonical --emit",
+        world=_CAN.banner(),
+        world_line=_CAN.world_line(a.n, K, pops, a.days, PE, SPEND),
+        n=a.n, populations=len(pops), pop_seeds=list(pops), days=a.days,
+        payday_err=PE, pop_spend=SPEND, run_seed=RUN_SEED,
+        k_mean=_CAN.K_MEAN, k_max=_CAN.K_MAX,
+        agent_cycle_rec=round(float(cr.mean()) * 100, 2),
+        base_cycle_rec=round(float(hcr.mean()) * 100, 2),
+        uplift=round(float(d.mean()), 2),
+        uplift_2se=round(float(2 * d.std(ddof=1) / np.sqrt(len(d))), 2),
+        recovered_paise=int(sum(res[(name, s)]["recovered_paise"]
+                                for s in pops)),
+        agent_survival=round(float(np.mean(
+            [res[(name, s)]["survival"] for s in pops])) * 100, 2),
+        base_survival=round(float(np.mean(
+            [hres[("payday_wait", s)]["survival"] for s in pops])) * 100, 2),
+        agent_att_per_cycle=round(float(np.mean(
+            [res[(name, s)]["att_per_cycle"] for s in pops])), 3),
+        base_att_per_cycle=round(float(np.mean(
+            [hres[("payday_wait", s)]["att_per_cycle"] for s in pops])), 3),
+        cycles_due=int(sum(res[(name, s)]["cycles_due"] for s in pops)),
+        at_risk=int(sum(r["at_risk"] for r in rr)),
+        recovered=int(sum(r["recovered"] for r in rr)),
+        recovery_rate=round(float(np.mean(
+            [r["recovery_rate"] for r in rr])) * 100, 2),
+        early_share=round(float(np.mean(
+            [r["early_share"] for r in rr])) * 100, 2),
+        median_days=round(float(np.mean(
+            [r["median_days_to_recovery"] for r in rr])), 1),
+        first_presentation_failure_rate=round(float(np.mean(
+            [r["first_presentation_failure_rate"] for r in rr])) * 100, 2),
+        money_actions=int(sum(res[(name, s)]["audit_executed"] for s in pops)),
+        stage0_refusals=int(sum(sum(res[(name, s)]["gate_refusals"].values())
+                                for s in pops)),
+        auditor_violations=int(sum(res[(name, s)]["audit_violations"]
+                                   for s in pops)),
+        stops={k: int(v) for k, v in sorted(stops.items()) if v},
+    )
+    out["recovered_rupees"] = out["recovered_paise"] // 100
+    with open(RESULT_JSON, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    print()
+    print(f"wrote {os.path.relpath(RESULT_JSON, os.path.dirname(os.path.dirname(RESULT_JSON)))}"
+          f" -- the documents and the page are checked against this file.")
+
+
+#: The chain demo keeps every decision tick, which is most of its rows, so it
+#: runs a SMALL population rather than the batch's. It is one run, not the
+#: batch, and the printed event count is that run's.
+CHAIN_N = 40
+
+
 def _one_chain(a, pop_seed: int) -> None:
-    """Re-run ONE population with a full log kept, and print one action's chain."""
+    """Re-run ONE population with a full log kept, and print one action's chain.
+
+    IT RUNS THE SAME WORLD THE BATCH DID. Until 2 September 2026 this call
+    omitted `_CAN.pop_kwargs`/`_CAN.run_kwargs`, so the chain a reader was
+    shown came from a population with the mandate count fixed at five, no
+    burn-in and no mandate outflow -- a different world from every figure
+    above it, on the same page of output.
+    """
     from agent.batch import make_pop, run_once
     log_path = os.path.join(agent._PKG_ROOT, "agent", "runs",
                             "batch_report_chain.jsonl")
     if os.path.exists(log_path):
         os.remove(log_path)          # one log file is one run -- log.py enforces
-    pop = make_pop(min(a.n, 40), K, pop_seed, spend=SPEND, days=a.days)
+    n_chain = min(a.n, CHAIN_N)
+    pop = make_pop(n_chain, K, pop_seed, spend=SPEND, days=a.days,
+                   **_CAN.pop_kwargs(pop_seed))
     r = run_once(pop, RUN_SEED, payday_err=PE, pop_spend=SPEND,
                  bcfg=w3.FITTED_BELIEF, mode="full", time_major=True,
-                 log_ticks=True, log_path=log_path)
+                 log_ticks=True, log_path=log_path, **_CAN.run_kwargs())
     rows = list(read_rows(log_path))
     by_action = collections.defaultdict(list)
     for row in rows:
@@ -400,6 +504,8 @@ def _one_chain(a, pop_seed: int) -> None:
             print(f"     {x.get('outcome_code')}  success={x.get('success')}  "
                   f"recovered Rs {x.get('recovered_paise', 0)/100:,.2f}")
     print(f"  full trail: {log_path}  ({len(rows)} events)")
+    print(f"  That trail is ONE population of {n_chain} customers run with "
+          f"every decision tick kept, not the batch above.")
 
 
 def _llm_demo(a, pop_seed: int) -> None:

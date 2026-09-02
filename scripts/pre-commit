@@ -2,23 +2,34 @@
 #
 # pre-commit hook for the Razorpay recovery agent.
 #
-# Three jobs:
+# Four jobs:
 #   1. Run the FAST test gate. New FAIL or VACUOUS gates block the commit.
 #      Fast = every gate that tests whether the CODE is correct (M1-M8,
-#      T1-T9, S1). About 35 seconds. The statistical gates (S2a/b/c,
-#      S2_LEGACY, S3) run on push instead -- see scripts/pre-push -- because
-#      they need 8 populations at n=100 and are never shrunk to fit a time
-#      budget. T9 is what makes that split safe: it compares every policy's
-#      output byte for byte against sim/t9_reference.json, so a change to the
-#      belief arithmetic cannot slip past the fast tier.
-#   2. Run the DOC GATE (sim/verify_docs.py). Retracted claims must not
-#      outlive their retraction. Pure text, under a second.
-#   3. Trip a wire if this commit edits the test suite or the known-failures
-#      list, because that is precisely how a real defect gets hidden.
+#      T1-T9, S1, S1_PD). About 35 seconds. The statistical gates (S2a/b/c,
+#      S2_LEGACY, S3, S4) run on push instead -- see scripts/pre-push --
+#      because they need 8 populations at n=100 and are never shrunk to fit a
+#      time budget. T9 is what makes that split safe: it compares every
+#      policy's output byte for byte against sim/t9_reference.json, so a
+#      change to the belief arithmetic cannot slip past the fast tier.
+#   2. Run the THREE DOCUMENTATION GATES. All are pure text and take under a
+#      second between them:
+#        sim/verify_docs.py           a retracted claim must not outlive its
+#                                     retraction
+#        sim/verify_claims.py         the public documents must not contradict
+#                                     the current state
+#        sim/verify_doc_contract.py   the constants and the decision rule the
+#                                     documents state must equal the code
+#      plus each checker's --selftest, and the import-graph gates in
+#      agent/tests/test_layer_isolation.py.
+#   3. Trip a wire if this commit edits the MEASURING APPARATUS -- the gate
+#      suite, the known-failures list, the gate wrapper, the documentation
+#      checkers, the T9 reference, the import-graph gates, the canonical world
+#      definition, or these hooks -- because that is precisely how a real
+#      defect gets hidden.
 #
 # Install with: scripts/install-hooks.sh
-# Emergency bypass is `git commit --no-verify`. If you use it, say so in
-# NOTES.md. That file is a judged deliverable and the mess is the point.
+# Emergency bypass is `git commit --no-verify`. If you use it, say so in the
+# commit message: the bypass then travels with the change in git history.
 
 set -u
 
@@ -57,32 +68,46 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# --- 2. the doc gate --------------------------------------------------------
-# Stops a retracted claim from outliving its retraction. Pure text, <1s. This
-# exists because on 30 August 2026 a session corrected several claims, recorded
-# that it had swept every copy, and had missed three -- one of them on the
-# public page. The session after it found five more. No numeric gate in
-# sim/tests.py can see that class of defect.
-echo "pre-commit: running the doc gate ($PYBIN sim/verify_docs.py)..."
-$PYBIN sim/verify_docs.py
-if [ $? -ne 0 ]; then
-    echo ""
-    echo "pre-commit: a retracted claim is live in a document. Commit aborted."
-    echo "pre-commit: fix the document. Do NOT delete the rule to silence it --"
-    echo "pre-commit: if the rule is genuinely wrong, say so in NOTES.md and"
-    echo "pre-commit: change it there, in the same commit."
-    exit 1
-fi
+# --- 2. the documentation gates --------------------------------------------
+# These exist because on 30 August 2026 a session corrected several claims,
+# recorded that it had swept every copy, and had missed three -- one of them on
+# the public page. The session after it found five more. No numeric gate in
+# sim/tests.py can see that class of defect, and number-matching alone cannot
+# see a headline whose supporting sentence contradicts it, which is why there
+# are three checks and not one.
+# The --selftest runs are here for the same reason the mutants are in
+# sim/tests.py: a checker that has quietly lost its ability to fail reports
+# exactly what a clean tree reports. Both take under a second.
+for CHECK in     "sim/verify_docs.py"     "sim/verify_docs.py --selftest"     "sim/verify_claims.py"     "sim/verify_claims.py --selftest"     "sim/verify_doc_contract.py"     "agent/tests/test_layer_isolation.py"
+do
+    echo "pre-commit: running $CHECK..."
+    $PYBIN $CHECK >/dev/null
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "pre-commit: $CHECK failed. Commit aborted."
+        echo "pre-commit: run it directly to see what it found."
+        echo "pre-commit: fix the document. Do NOT delete the rule to silence"
+        echo "pre-commit: it -- if the rule is genuinely wrong, change the rule"
+        echo "pre-commit: and its canary together and say why in the commit"
+        echo "pre-commit: message."
+        exit 1
+    fi
+done
 
 # --- 3. the test-suite tripwire --------------------------------------------
 # Staged paths only. --diff-filter excludes nothing: adding, editing or
 # deleting any of these counts.
-TOUCHED=$(git diff --cached --name-only | grep -E '^sim/(tests\.py|known_failures\.txt)$')
+# THE TRIPWIRE COVERS THE WHOLE MEASURING APPARATUS, not just the simulation
+# suite. Until 2 September 2026 it named two files, so a commit could delete a
+# documentation rule, widen a layer-isolation exemption, or change which gates
+# the wrapper tolerates, and no hook said anything. Those are the same offence
+# as loosening a threshold in sim/tests.py; the wire is now the same wire.
+TOUCHED=$(git diff --cached --name-only | grep -E     '^(sim/(tests|gate|verify_docs|verify_claims|verify_doc_contract)\.py|sim/known_failures\.txt|sim/t9_reference\.json|agent/tests/(test_layer_isolation|_canonical)\.py|scripts/(pre-commit|pre-push))$')
 
 if [ -n "$TOUCHED" ]; then
     echo ""
     echo "##############################################################################"
-    echo "COMMIT BLOCKED: this commit edits the test suite itself."
+    echo "COMMIT BLOCKED: this commit edits the measuring apparatus itself."
     echo "##############################################################################"
     echo ""
     echo "Staged files that trip this wire:"
@@ -92,21 +117,31 @@ if [ -n "$TOUCHED" ]; then
     echo ""
     echo "This is exactly how a real defect gets hidden: the code stays broken,"
     echo "the test stops saying so, and the suite goes green. This project has"
-    echo "already found six errors in its own work and every one of them made"
-    echo "the project look BETTER than it was. Do not add a seventh this way."
+    echo "already found defects in its own work whose common shape is a"
+    echo "guardrail that reported green while measuring nothing. Do not add"
+    echo "another one this way."
     echo ""
-    echo "Before committing a change to these files, write down in NOTES.md:"
-    echo "    - which gate changed, and to what"
+    echo "The files on this wire are: the gate suite and its known-failures"
+    echo "list, the gate wrapper, the three documentation checkers, the T9"
+    echo "byte-lock reference, the import-graph gates, the canonical world"
+    echo "definition, and these hooks. Each of them can turn a red result"
+    echo "green without touching a single line of the thing being measured."
+    echo ""
+    echo "THE RECORD GOES IN THE COMMIT MESSAGE, where git keeps it with the"
+    echo "change forever. Write down, in the body:"
+    echo "    - which gate, rule or constant changed, and to what"
     echo "    - the number it used to produce and the number it produces now"
     echo "    - why the OLD test was wrong, not why the new one is convenient"
     echo "    - if you added a line to known_failures.txt: who is fixing it"
+    echo "    - if you changed agent/tests/_canonical.py: which measurements"
+    echo "      are now stale, and when they will be re-run"
     echo ""
-    echo "Then commit with --no-verify and reference the NOTES.md entry in the"
-    echo "commit message, so the bypass is on the record."
+    echo "Then commit with --no-verify. The bypass and the reasoning land in"
+    echo "the same commit, so the record cannot drift away from the change."
     echo ""
     echo "##############################################################################"
     exit 1
 fi
 
-echo "pre-commit: gate passed, test suite untouched. Proceeding."
+echo "pre-commit: gates passed, test suite untouched. Proceeding."
 exit 0

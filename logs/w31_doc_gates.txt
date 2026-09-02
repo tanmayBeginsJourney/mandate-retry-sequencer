@@ -1,0 +1,17 @@
+### verify_docs
+==========================================================================
+PASS -- no retracted claim is live anywhere it should not be.
+==========================================================================
+### verify_docs --selftest
+==========================================================================
+38/38 selftest checks passed
+### verify_claims
+==========================================================================
+PASS -- no document contradicts the current state.
+==========================================================================
+### verify_claims --selftest
+==========================================================================
+46/46 selftest checks passed
+### verify_doc_contract
+
+docs/architecture.md and docs/results.md match the code.

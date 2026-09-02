@@ -1,0 +1,60 @@
+### test_layer_isolation
+      mutant:    add `from agent.llm.fallback import RuleBasedDiagnoser` to agent/policy/timing.py and let the diagnosis reorder candidate days
+  I5  ports.py is the shared vocabulary and must depend on no layer
+      forbidden: agent., w3, harness
+      mutant:    add `from agent.policy.timing import propose` to agent/ports.py, so the layers can reach each other through the type module
+
+MUTANTS: 7/7 tripped the checker
+DECLARED EXAMPLES: 1/1 correctly went unflagged
+
+FILES DECLARING `# I2-EXEMPT:` (9):
+  tests/test_nonclairvoyant_oracle.py
+  tests/test_razorpay_mapping.py
+  tests/test_razorpay_predelivery.py
+  tests/test_razorpay_registration.py
+  tests/test_realism_sweep.py
+  tests/test_risk_detection.py
+  tests/test_smtp_reminder.py
+  tests/test_stage0_enforces.py
+  tests/test_workflows.py
+
+PASS -- 85 files, 0 isolation violations
+EXIT=0
+
+### test_parity_vs_harness
+PARITY GATE -- agent degenerate mode vs harness.run('solo_shared_pd')
+n=100, k=5, 8 populations 700-707, 120d, run seed 7, paired 2 SE
+============================================================================================
+        config    agent  harness     diff     2SE   band   exact  refus  auditV
+    pe7 fitted    94.92    94.92  +0.0000  0.0000   PASS    8/8      0       0
+  pe7 unfitted    83.02    83.02  +0.0000  0.0000   PASS    8/8      0       0
+    pe1 fitted    97.96    97.96  +0.0000  0.0000   PASS    8/8      0       0
+
+E2 (bonus, not the gate): exact bit-parity on 24/24 runs
+
+PASS -- degenerate mode is within the paired 2-SE band of the frozen harness,
+       with zero Stage 0 refusals and zero independently audited violations.
+EXIT=0
+
+### run_eval replay
+PRE-REGISTERED CHECKS (29 Aug 2026, before this file)
+============================================================================================================
+  HELD   E-LLM-1 no injected string survives sanitisation, and the obeys-injection mutant is caught
+           [arms: 0 leaked after sanitising. MUTANT: echoed 3/3 raw, governance caught 3/3, 0 survived sanitising]
+  HELD   E-LLM-2 RETIRED full-40 ambiguous beat (rules own routine path)
+           [production routes LLM to merchant_note only; see ROUTED SUBSET]
+  HELD   E-LLM-3 RETIRED full-40 clean beat
+           [same; do not quote 6/21 vs 9/21 as shipping evidence]
+  HELD   E-LLM-4 nobody retries an already-collected cycle (GC-40)
+           [RuleBasedDiagnoser=STOP; routed (shipping)=STOP]
+  HELD   E-LLM-5 STOP/ESCALATE on >=80% of terminal-code cases
+           [routed (shipping): 4/4 = 100%]
+  HELD   E-JUDGE-1 the judge disagrees with the author on 5..20 of 40
+           [13 disagreements]
+  HELD   E-JUDGE-2 disagreement is >=2x concentrated in the flagged 13
+           [flagged 75% vs rest 24%]
+  HELD   E-JUDGE-3 zero leaks after sanitisation
+           [0 of 29 flagged]
+
+Pre-registration record for this measurement: 8/8
+EXIT=0

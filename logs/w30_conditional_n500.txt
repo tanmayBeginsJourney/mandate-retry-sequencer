@@ -1,0 +1,22 @@
+THE CONDITIONAL HEADLINE ON THE CANONICAL WORLD.
+100 runs: 5 pop_spend levels x 10 held-out populations x 2 arms, n=500, 120d, payday_err=+/-7, run seed 7, mode=full.
+pop_spend = 1 - the RBI household saving rate. The region is [0.80, 0.93]; no point in it is declared.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+_parallel: process pool broke (BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.).
+_parallel: retrying the ENTIRE job set once. Partial results are discarded.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+========================================================================================
+ pop_spend  payday_wait     agent    uplift    2 SE   at risk  agent surv  rival surv
+      0.80       99.06%    99.96%     +0.89    0.24        49      100.0%       99.0%
+      0.85       97.40%    99.78%     +2.38    0.57       493      100.0%       97.3%
+      0.88       95.77%    99.64%     +3.88    0.74      1133      100.0%       95.7%
+      0.90       94.21%    99.42%     +5.21    0.74      1766      100.0%       94.2%
+      0.93       90.41%    99.12%     +8.70    0.68      3160       99.9%       90.7%
+========================================================================================
+  The 0.93 cell is the headline cell and must reproduce `agent.batch_report --pops 10 --canonical`.
+  BIAS: `payday_wait` is the harness's own baseline and is weaker than the
+  frozen `[1,7]` schedule. Read this table beside `test_steelman_schedule.py`,
+  never instead of it.

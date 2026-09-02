@@ -2,7 +2,7 @@
 """THE CANONICAL WORLD, scored as a REGION across pop_spend [0.80, 0.93].
 
     py -3.12 agent/tests/test_canonical_world.py            # n=40, whole region
-    py -3.12 agent/tests/test_canonical_world.py --confirm  # n=100, key cells
+    py -3.12 agent/tests/test_canonical_world.py --confirm  # canonical n, key cells
 
 ONE SCORING AXIS. `pop_spend` is the only quantity left free, and it is scored
 across its externally derived range rather than pinned. Everything else is fixed
@@ -50,12 +50,13 @@ also the top edge of the declared range at a swept `n_credits` sweet spot, which
 is the shape of a curve fit and was refused on the same grounds as the
 (0.70, 0.08) and W7 refined-grid traps.
 
-WHAT THIS WORLD FIXED, all measured and all in NOTES.md, 31 August 2026:
-error 33 (no steady state -- V1 ran 27.67% at 60d to 4.24% at 360d and its
-agreement with the published band was the horizon cutting a transient), error 34
-(collected mandates were handed back at every payday, gifting 22.5% of a salary
-per cycle at k=5), and error 35 (retracted: "the oracle is 100%, therefore this
-is a pure timing problem" -- `unwinnable_cycles` ignores the four-attempt cap by
+WHAT THIS WORLD FIXED, all measured and all recorded in docs/errors.md under
+"Simulation and model errors" and "Evaluation and experimental-design errors":
+the world had no steady state (V1 ran 27.67% at 60d to 4.24% at 360d and its
+agreement with the published band was the horizon cutting a transient);
+collected mandates were handed back at every payday, gifting 22.5% of a salary
+per cycle at k=5; and an unconstrained oracle justified a modelling decision
+(retracted: "the oracle is 100%, therefore this is a pure timing problem" -- `unwinnable_cycles` ignores the four-attempt cap by
 design, and W2 was built on that inference).
 
 NOT gate-protected. EVERY RUN IS ONE PROCESS (`_parallel.py`).
@@ -78,27 +79,28 @@ import w3
 from agent.batch import at_risk_cycles, constrained_oracle, make_pop
 from agent.tests._parallel import agent_job, run_jobs
 
-CONFIRM = "--confirm" in sys.argv
-N = 100 if CONFIRM else 40
-K_FIXED, DAYS, PE = 5, 120, 7
-POPS = list(range(700, 720))
-BURN = 12
-K_SEED, BUF_SEED = 4242, 9182
-ARMS = (("agent", "degenerate"), ("fixed schedule", "doc_legal"))
+from agent.tests import _canonical as _CAN
 
-#: THE CANONICAL WORLD. Every entry has a named external anchor; see the
-#: module docstring. `pop_spend` is deliberately absent -- it is the axis.
-CANONICAL = dict(k_mean=2.0, k_seed=K_SEED, k_max=8,
-                 payday_mode="statutory",
-                 amount_mode="absolute", amount_median=855.0,
-                 buffer_median=0.25, buffer_sigma=1.0, buffer_seed=BUF_SEED,
-                 irregular_frac=0.00)
-RUN_KW = dict(burn_cycles=BURN, mandate_outflow=True)
+#: THE CANONICAL WORLD, IMPORTED rather than copied. `pop_spend` is
+#: deliberately not taken from `_canonical` here: it is this file's axis.
+_C = ["--canonical"]
+CONFIRM = "--confirm" in sys.argv
+N = _CAN.N if CONFIRM else 40
+K_FIXED, DAYS, PE = 5, 120, 7
+#: 700-719: BOTH the selection populations and the held-out ones. The split is
+#: reported separately in the V5 row, because half of this sample selected the
+#: belief prior.
+POPS = list(range(700, 720))
+HELD_OUT = list(_CAN.POPS)
+BURN = _CAN.BURN
+ARMS = (("agent", "degenerate"), ("fixed schedule", "doc_legal"))
+RUN_KW = _CAN.run_kwargs(_C)
 
 #: The externally derived range. 0.80 / 0.88 / 0.93 are the three published RBI
 #: readings; 0.85 and 0.90 fill in the shape.
 REGION = (0.80, 0.85, 0.88, 0.90, 0.93)
-#: --confirm runs the V1-in-band end and one midpoint at n=100.
+#: --confirm runs the V1-in-band end and one midpoint at the canonical n
+#: (agent/tests/_canonical.py); without it, an n=40 region scan.
 KEY = (0.88, 0.93)
 
 V1_BAND, V3_BAND = (0.08, 0.15), (0.20, 0.40)
@@ -106,10 +108,7 @@ V5_BAND, V7_BAND = (0.70, 0.85), (0.85, 0.95)
 
 
 def percell(pop_seed):
-    kw = dict(CANONICAL)
-    kw["k_seed"] = K_SEED + pop_seed
-    kw["buffer_seed"] = BUF_SEED + pop_seed
-    return kw
+    return _CAN.pop_kwargs(pop_seed, _C)
 
 
 def mean_se(xs):
@@ -144,7 +143,11 @@ def main() -> int:
     print("THE CANONICAL WORLD -- scored as a REGION, not at a point.")
     print(f"{len(jobs)} runs: {len(spends)} spend levels x {len(POPS)} "
           f"populations x {len(ARMS)} arms, n={N} {DAYS}d payday_err=+/-{PE}")
-    print(f"  {'CONFIRMATION n=100' if CONFIRM else 'region scan n=40'}; "
+    # The label is DERIVED from N. It read "CONFIRMATION n=100" as a literal
+    # and kept reading it after the canonical n moved -- the same defect the
+    # three ablations carried, in the script that produces the validation
+    # table.
+    print(f"  {'CONFIRMATION' if CONFIRM else 'region scan'} at n={N}; "
           f"burn {BURN}, mandate outflow ON, irregular_frac 0.00 "
           f"(tested, immaterial)")
     print("  pop_spend = 1 - household savings rate. 0.80 total / 0.88 gross "
@@ -172,6 +175,30 @@ def main() -> int:
                   f"{se*100:>+8.2f}{early*100:>7.1f}%{surv*100:>7.1f}%"
                   f"{cyc*100:>8.2f}%{ar:>9}")
         print("-" * 108)
+
+    # ---- THE SELECTION HALF OF THE SAMPLE, REPORTED SEPARATELY.
+    # 700-709 selected the belief prior and the [1,7] offsets, so V5 measured
+    # over all twenty populations is measured half on its own selection set.
+    # Both figures are printed here, from the same runs, so the document does
+    # not have to state which is which from memory.
+    print()
+    print("V5 ON THE SELECTION SET AND ON THE HELD-OUT SET")
+    print("=" * 108)
+    print("  700-709 were used to select the belief prior and the [1,7] "
+          "offsets. Quote the held-out figure.")
+    print(f"{'spend':>7}{'all 20 pops':>14}{'2 SE':>8}"
+          f"{'held-out 710-719':>19}{'2 SE':>8}"
+          f"{'selection 700-709':>20}{'2 SE':>8}")
+    sel = [p_ for p_ in POPS if p_ not in HELD_OUT]
+    for sp in spends:
+        cells = []
+        for grp in (POPS, HELD_OUT, sel):
+            m, e = mean_se([res[f"{sp}|{ps}|agent"]["recovery"]["recovery_rate"]
+                            for ps in grp])
+            cells += [m * 100, e * 100]
+        print(f"{sp:>7.2f}{cells[0]:>13.2f}%{cells[1]:>8.2f}"
+              f"{cells[2]:>18.2f}%{cells[3]:>8.2f}"
+              f"{cells[4]:>19.2f}%{cells[5]:>8.2f}")
 
     print()
     print("THE REGION. Which targets hold in which sub-range.")

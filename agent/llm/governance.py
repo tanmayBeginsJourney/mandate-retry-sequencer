@@ -1,6 +1,6 @@
 """Merchant-facing text checks.
 
-THE RULE (docs/07_AGENT_BRIEF.md §2): merchant-facing explanations must not
+THE RULE (docs/architecture.md): merchant-facing explanations must not
 disclose the customer's financial state. Say "our model scores this window
 highest", never "their balance has never recovered before the 3rd".
 

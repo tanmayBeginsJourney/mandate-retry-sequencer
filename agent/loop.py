@@ -402,7 +402,7 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
         # path. The pending notification is DROPPED rather than reused later:
         # holding a notification open across a pause and firing it hours later
         # is a re-presentation whose legality nobody here has established, and
-        # docs/01_FACTS.md does not cover it. Cancelling costs a day and is
+        # docs/results.md does not cover it. Cancelling costs a day and is
         # unambiguously legal.
         #
         # DETECTION IS ASSESSED WHETHER OR NOT WE ACT ON IT. These were once
@@ -481,7 +481,7 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             m.got_cycles += 1
             ctx.counters["recovered_paise"] += to_paise(m.amount)
             # WHICH cycle was collected, and on what day. Needed for the
-            # recovery-rate metric (docs/04_BUILD_PLAN.md W0) and for nothing
+            # recovery-rate metric (docs/results.md) and for nothing
             # else -- it records an outcome, it does not influence one, so
             # degenerate-mode parity with `harness.run` is untouched. The same
             # facts are independently recoverable from the OUTCOME rows of the
@@ -551,7 +551,7 @@ def _phase_dispatch(rt: CustomerRuntime, t: int, ctx: LoopContext) -> None:
             _issue_backup(ctx, rt, m, t)
 
         # A technical decline may auto-represent under the SAME notification.
-        # A Z9 may not. (docs/01_FACTS.md)
+        # A Z9 may not. (docs/results.md)
         if outcome.code == TECH and m.alive and m.attempts_used < CAP and not m.backup_status:
             nt = harness.earliest_legal(day, t + 1)
             if nt is not None and nt < m.cycle_close * HOURS:

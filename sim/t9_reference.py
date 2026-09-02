@@ -5,7 +5,7 @@ T9 REFERENCE CAPTURE.
 Writes sim/t9_reference.json: the exact output of every policy at both
 operating points. The original cases were captured before performance work.
 The fitted shipping policy was added on 31 August 2026; its recapture diff is
-recorded in NOTES.md.
+recorded in the development log.
 
 WHY THE BITS MATTER. Every scalar is stored as `float.hex()`, which
 round-trips exactly. Storing rounded decimals would make T9 a gate that
@@ -164,7 +164,7 @@ def meta():
         note=("Original cases captured before performance work; fitted shipping "
               "cases added 31 August 2026 and expanded the same week to own, "
               "pooled, and coordinated under FITTED_BELIEF. Recapture diffs "
-              "in NOTES.md."),
+              "in the development log."),
         pop_spec=POP_SPEC, run_seed=RUN_SEED, pop_spend=POP_SPEND,
         payday_errs=list(PAYDAY_ERRS), policies=list(POLICIES),
         fitted_policies=list(FITTED_POLICIES),
@@ -212,7 +212,7 @@ def main():
         # regenerates the reference to make T9 go green and never looks at what
         # moved -- which would turn T9 into a gate that cannot fail, the exact
         # error this project has made three times. So the diff is printed in
-        # full, unconditionally, and the instruction to paste it into NOTES.md
+        # full, unconditionally, and the instruction to paste it into the development log
         # is part of the output rather than a convention someone can forget.
         with open(REF_PATH, encoding="utf-8") as fh:
             old = json.load(fh)["runs"]
@@ -226,7 +226,7 @@ def main():
         if not d:
             print("   (nothing changed -- a re-baseline was not needed)")
         print("=" * 78)
-        print("PASTE THIS DIFF INTO NOTES.md WITH THE REASON FOR EACH CHANGE.")
+        print("PASTE THIS DIFF INTO THE COMMIT MESSAGE WITH THE REASON FOR EACH CHANGE.")
         print("A reference regenerated without its diff on the record makes T9")
         print("a gate that cannot fail.")
         print("=" * 78)

@@ -10,7 +10,7 @@ NOTHING about whether Razorpay accepts our request body, because no request has
 ever been sent. That distinction is kept in the output rather than in a footnote.
 
 EVERY GATE CARRIES A NAMED MUTANT AND `--mutants` RUNS THEM
-(`docs/05_TEST_DESIGN.md`: "a gate earns its place only if you can name, in
+(`docs/results.md`: "a gate earns its place only if you can name, in
 advance, a concrete broken implementation that would make it fail"). The
 mutants here are call-site substitutions -- a different function passed in, a
 different payload -- never edits to a counter, because rule 1a says a mutant
@@ -32,6 +32,7 @@ from agent.audit.log import AuditLog, read_rows  # noqa: E402
 from agent.constraints.auditor import replay  # noqa: E402
 from agent.constraints.rules import AttemptLedger  # noqa: E402
 from agent.constraints.stage0 import Stage0Gate, action_id  # noqa: E402
+# I2-EXEMPT: constructs a RazorpayExecutor and a SimExecutor to prove Stage 0 refuses before either is reached.
 from agent.execution import razorpay_downtime as DT  # noqa: E402
 from agent.execution.razorpay_executor import (MandateBinding,  # noqa: E402
                                                RazorpayExecutor)
@@ -567,8 +568,9 @@ def run_mutants(tmp: str) -> int:
     claims were sound; R1 carried a `mutant` parameter nothing ever passed, and
     R9/R10 were written the same way an hour earlier. A test file that
     advertises a mutation runner it does not have is the measuring apparatus
-    lying about itself, which is errors 11-13 in `docs/03_ERRORS.md` and is the
-    reason `--mutants` is now real instead of the sentence being deleted.
+    lying about itself, which is the "Test and verification errors" class in
+    `docs/errors.md`, and is the reason `--mutants` is now real instead of the
+    sentence being deleted.
 
     A mutant that breaks NOTHING is reported as VACUOUS and fails the run --
     same rule as `sim/gate.py`.

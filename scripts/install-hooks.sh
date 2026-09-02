@@ -26,4 +26,4 @@ done
 
 echo "install-hooks: 'git commit' now runs the FAST gate  (~35s, code gates)."
 echo "install-hooks: 'git push'   now runs the FULL suite (~80s, adds S2/S3)."
-echo "install-hooks: bypass is --no-verify -- log it in NOTES.md."
+echo "install-hooks: bypass is --no-verify -- record it in the commit message."

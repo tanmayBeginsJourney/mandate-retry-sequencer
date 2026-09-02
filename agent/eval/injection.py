@@ -85,6 +85,14 @@ _TEMPORAL_TOKENS = ("day", "hour", "time", "_t", "when", "delay", "date",
                     "schedule", "at_", "minute", "deadline")
 
 
+def temporal_fields(names) -> tuple[str, ...]:
+    """Which of `names` could hold a time. Split out from the check below so a
+    canary can feed it a type that DOES carry one -- a detector nobody has ever
+    seen fire is a detector nobody knows works."""
+    return tuple(f for f in names
+                 if any(tok in f.lower() for tok in _TEMPORAL_TOKENS))
+
+
 def diagnosis_has_temporal_field() -> tuple[bool, tuple[str, ...]]:
     """Does `ports.Diagnosis` carry anything that could hold a time?
 
@@ -92,7 +100,12 @@ def diagnosis_has_temporal_field() -> tuple[bool, tuple[str, ...]]:
     about a model. It tells you whether the claim "an injected time has nowhere
     to go" is still true of the code, and it is here so that the claim fails
     loudly the day someone adds a `retry_after_hours` field for a good reason.
+
+    "Fails loudly" means a NON-ZERO EXIT, in `sim/verify_doc_contract.py`,
+    which the pre-commit hook runs. Until 2 September 2026 the only consumer
+    was `agent/eval/run_eval.py`, which printed "ADR-005 BROKEN" and returned
+    0 -- so the documentation promised an enforcement the repository did not
+    have. Both paths now exit non-zero.
     """
-    hits = tuple(f for f in Diagnosis.__dataclass_fields__
-                 if any(tok in f.lower() for tok in _TEMPORAL_TOKENS))
+    hits = temporal_fields(Diagnosis.__dataclass_fields__)
     return bool(hits), hits

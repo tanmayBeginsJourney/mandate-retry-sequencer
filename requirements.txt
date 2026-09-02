@@ -5,4 +5,4 @@ scikit-learn==1.8.0   # same
 
 # Verified on CPython 3.12.0, Windows. `python sim/gate.py --tier full` imports
 # nothing below the first line. Notes on rebuilding the ML artifacts:
-# docs/06_MODEL_CARD.md section 4b.
+# docs/results.md.

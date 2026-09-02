@@ -82,7 +82,7 @@ FAMILY_AMBIGUOUS = "AMBIGUOUS"            # U30 -- names nothing
 # --- TWO FAMILIES ADDED 29 AUGUST 2026, FROM RAZORPAY'S OWN ERROR VOCABULARY.
 # Both come from `payments_error_reasons.xlsx`, downloaded from razorpay.com --
 # 114 rows, 110 distinct reasons, [VERIFIED] primary source, listed in
-# docs/01_FACTS.md. Neither was invented to fill a gap we imagined; both were
+# docs/results.md. Neither was invented to fill a gap we imagined; both were
 # found by mapping their list onto ours and finding cells with nowhere to go.
 #
 # NEITHER IS SIMULATED AND NEITHER HAS A RATE. `sim/w3.py` is frozen and models
@@ -166,7 +166,7 @@ TERMINAL_CODES = frozenset(FAMILY_CODES[FAMILY_ACCOUNT_SHUT]
 LIMIT_CODES = frozenset(FAMILY_CODES[FAMILY_LIMIT])
 
 #: May be re-presented under the SAME pre-debit notification. Only a technical
-#: decline may; every business decline needs a fresh one. docs/01_FACTS.md.
+#: decline may; every business decline needs a fresh one. docs/results.md.
 REPRESENTABLE_CODES = frozenset({TECH})
 
 #: NO RETRY MAY EVER BE ISSUED AGAINST ONE OF THESE, and the reason is the
@@ -176,7 +176,7 @@ REPRESENTABLE_CODES = frozenset({TECH})
 #:
 #: `RETRY` is refused on these by the diagnosis layer, not by Stage 0. That
 #: split is deliberate and worth stating: Stage 0's five rules are the five
-#: external regulatory constraints in docs/01_FACTS.md, and this is not one of
+#: external regulatory constraints in docs/results.md, and this is not one of
 #: them -- it is OUR judgement about OUR exposure. Smuggling a sixth rule into
 #: a layer whose whole claim is "these five are NPCI's" would make the
 #: compliance claim harder to check, not easier.
@@ -266,10 +266,10 @@ def bank_of(customer_id: int, n_banks: int = N_BANKS) -> str:
 # SOURCE: `payments_error_reasons.xlsx`, downloaded from razorpay.com on
 # 29 August 2026, 110 distinct reasons, committed verbatim as
 # `agent/execution/razorpay_reasons.txt`. [VERIFIED], primary source, recorded
-# in docs/01_FACTS.md.
+# in docs/results.md.
 #
 # THIS ASSIGNS NO FREQUENCY TO ANYTHING. Which reasons are common in AutoPay
-# traffic is unknown, no public source gives it, and docs/02_RESULTS.md sweeps
+# traffic is unknown, no public source gives it, and docs/results.md sweeps
 # every rate rather than picking one. A mapping is vocabulary; a rate would be
 # an invented constant (rule 5).
 
@@ -278,8 +278,9 @@ def bank_of(customer_id: int, n_banks: int = N_BANKS) -> str:
 # written reason -- an unmapped code falls to AMBIGUOUS, which is exactly the
 # U30 situation and is the safe default, but a SILENT default would hide the
 # fact that their vocabulary is richer than ours. That silence is the shape of
-# error 9 in docs/03_ERRORS.md: a thing named after a concept, never re-checked
-# against the object it stands for.
+# `docs/errors.md`, "A gate named after a concept rather than the object it
+# measures": a thing named after a concept, never re-checked against the object
+# it stands for.
 # ---------------------------------------------------------------------------
 
 REASON_FAMILY: dict[str, str] = {}
@@ -545,7 +546,7 @@ class InterventionKind(Enum):
     the frozen index doing its job, not a diagnosis.
 
     PARTIAL is deliberately absent. Whether a partial debit is permitted under
-    one UPI AutoPay mandate is not established in docs/01_FACTS.md, and a
+    one UPI AutoPay mandate is not established in docs/results.md, and a
     merchant-acceptance rate for it would be an invented constant (rule 5).
     It survives as a RECOMMENDATION only -- see `Recommendation` below -- which
     credits zero money and never reaches the gate.
@@ -614,7 +615,7 @@ class AttemptOutcome:
     FEATURE. Real UPI has three answers, not two: it succeeded, it failed, or
     the response was lost and NOBODY KNOWS WHICH. Razorpay's own published
     reason list carries `deemed_transaction` and `duplicate_rrn_found` for
-    exactly that state ([VERIFIED], docs/01_FACTS.md). A `bool` cannot say it,
+    exactly that state ([VERIFIED], docs/results.md). A `bool` cannot say it,
     so until today this codebase could only round an unknown down to "failed" --
     and "failed" is the one reading that licenses a retry, which is the reading
     that double-debits a customer who was already charged.

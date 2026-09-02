@@ -1,8 +1,18 @@
 """WHY DOES STOP HELP? Rule 3: treat a large improvement as a bug until proven.
 
+EVERY FIGURE IN THIS FILE IS THE PRE-CANONICAL ABLATION, AND THE THRESHOLDS
+STAY AT THOSE VALUES ON PURPOSE. The action space has been re-measured twice
+since -- on the canonical world and again on the repaired belief, where the
+whole space is worth +0.136 points against a 2 SE of 0.205, which is no
+measured effect (`logs/w27_abl_action_repaired.txt`, docs/results.md). A
+pre-registered threshold is not moved to match a later measurement: doing that
+is indistinguishable from choosing the threshold after seeing the answer. So
+this file still scores against the number the prediction was registered
+against, and the current figure is the one to quote.
+
 The ablation broke two pre-registered predictions, both in the direction that
-flatters the agent -- which is the signature of all thirteen errors in
-docs/03_ERRORS.md. Predicted ESCALATE in [-0.3, 0.0], measured +0.759 SIG.
+flatters the agent -- which is the signature of nearly every defect in
+docs/errors.md. Predicted ESCALATE in [-0.3, 0.0], measured +0.759 SIG.
 Predicted STOP in [-1.0, +0.5], measured +1.371 SIG.
 
 THE PROPOSED MECHANISM, from the ablation's own usage table: both actions halt
@@ -48,7 +58,7 @@ import sys
 # why: multiprocessing re-imports the main module in each spawned child, and
 # that import pulls in numpy -- so setting these inside a worker is too late.
 # 16 workers each spinning up a 16-thread BLAS pool is ~256 threads, which this
-# machine has been observed to fall over under (NOTES.md, the intermittent
+# machine has been observed to fall over under (the development log, the intermittent
 # 0xC0000005 / BrokenProcessPool).
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
            "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
@@ -64,7 +74,7 @@ import numpy as np
 from agent.tests import _canonical as _CAN
 
 POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
-N, K, SPEND, PE, RUN_SEED = 100, 5, _CAN.spend(1.05), 7, 7
+N, K, SPEND, PE, RUN_SEED = _CAN.n(100), 5, _CAN.spend(1.05), 7, 7
 HORIZONS = [60, 120, 180]
 
 
@@ -104,8 +114,12 @@ def main() -> int:
     print("=" * 88)
     print("STOP MECHANISM -- is the gain really preserved mandates collecting "
           "in later cycles?")
-    print(f"n={N}, k={K}, 8 populations, payday_err={PE}, FITTED_BELIEF, "
-          f"paired 2 SE")
+    # Derived from what this run executed: under `--canonical` the scalar K is
+    # dead (`k_mean` takes over) and POPS is the ten held-out seeds. This
+    # script sweeps the horizon, so no single `days` belongs on the line.
+    print(_CAN.banner())
+    print(_CAN.world_line(N, K, POPS, f"horizons {HORIZONS}", PE, SPEND)
+          + ", FITTED_BELIEF, paired 2 SE")
     print("=" * 88)
     print(f"{'horizon':>8s} {'cycles':>7s} {'degen':>8s} {'+STOP':>8s} "
           f"{'gain':>8s} {'2SE':>7s} {'sig':>5s} {'dead d':>7s} {'dead s':>7s} "
@@ -152,7 +166,15 @@ def main() -> int:
     v.append(("E-MECH-1 STOP's gain grows monotonically with horizon",
               gains[0] < gains[1] < gains[2],
               f"60d {gains[0]:+.3f} -> 120d {gains[1]:+.3f} -> 180d {gains[2]:+.3f}"))
-    v.append(("E-MECH-1b 60d below and 180d above the 120d figure",
+    # +1.371 is the figure the prediction was REGISTERED against, measured on
+    # the pre-canonical world at n=100. It is kept because a pre-registration
+    # that moves with the measurement is not a pre-registration -- but the
+    # world it came from no longer exists, so a break here says the reference
+    # is stale, not that the mechanism story is wrong. E-MECH-1, which is
+    # scored entirely within this run, is the check that still carries weight.
+    v.append(("E-MECH-1b 60d below and 180d above the REGISTERED 120d figure "
+              "(+1.371, measured on the pre-canonical world -- a break here "
+              "is about the reference, not the mechanism)",
               gains[0] < 1.371 < gains[2],
               f"{gains[0]:+.3f} < 1.371 < {gains[2]:+.3f}"))
     v.append(("E-MECH-2 gain tracks deaths avoided (r > 0.5)", r > 0.5,

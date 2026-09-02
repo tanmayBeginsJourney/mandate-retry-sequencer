@@ -1,0 +1,9 @@
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+_parallel: process pool broke (BrokenProcessPool: A process in the process pool was terminated abruptly while the future was running or pending.).
+_parallel: retrying the ENTIRE job set once. Partial results are discarded.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+PASS  regenerated data matches the committed docs\data\scenarios.json
+PASS  docs/index.html batch figures match scenarios.json
+EXIT=0

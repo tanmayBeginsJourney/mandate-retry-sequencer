@@ -10,11 +10,10 @@ THIS IS THE ENTRY POINT. Everything else in `agent/` is a library or a gate.
 off. It is the five-line heuristic a good rival team builds in an afternoon
 (wait for the estimated payday, then one attempt per day), and at `payday_err`
 of about 1 day it BEATS us. Showing our number alone would be dishonest by
-omission -- see docs/06_MODEL_CARD.md section 2.
+omission -- see docs/results.md.
 
 ONE RUN PER PROCESS. This runs a handful of configurations in a single process,
-which is exactly the pattern that crashes on this machine (docs/06_MODEL_CARD.md
-section 6a). A demo is small enough to get away with it; a MEASUREMENT is not.
+which is exactly the pattern that crashes on this machine (docs/results.md). A demo is small enough to get away with it; a MEASUREMENT is not.
 Anything that sweeps must go through `agent/tests/_parallel.py`.
 """
 from __future__ import annotations
@@ -112,7 +111,7 @@ def main(argv=None) -> int:
     print()
     print("  Single run, single seed -- NO error bar, so do not quote these as")
     print("  results. The measured figures with paired 2 SE are in")
-    print("  docs/02_RESULTS.md. The headline is conditional on payday_err:")
+    print("  docs/results.md. The headline is conditional on payday_err:")
     print("  at +/-1 day payday_wait BEATS the agent.")
 
     # ---- compliance and stopping, from the audit log alone

@@ -30,7 +30,7 @@ Three things are shown, in order:
 
 The third is the one that matters. An enforcement layer with no independent
 check is the vacuous-gate shape this project has now hit seven times
-(`docs/03_ERRORS.md`), and the auditor has already caught one real hole that
+(`docs/errors.md`), and the auditor has already caught one real hole that
 the gate's own counter missed.
 """
 from __future__ import annotations

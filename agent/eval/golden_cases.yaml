@@ -40,7 +40,7 @@
 #
 # A NOTE ON MY OWN CONFIDENCE. I am the party that wrote the cases and the
 # party that answered them, which is exactly the arrangement this project has
-# already been burned by sixteen times (docs/03_ERRORS.md). Treat
+# already been burned by sixteen times (docs/errors.md). Treat
 # `correct_intervention` as a strong prior, not as ground truth. Twenty of
 # these are being labelled independently; where the human label and mine
 # disagree, the human label wins and mine is the finding.
@@ -109,7 +109,7 @@ conventions:
 # [REPORTED] = secondary source, link included. [GUESS] = our inference.
 #
 # Everything here was gathered on 29 August 2026 and is new to the repo unless
-# marked "already in docs/01_FACTS.md". Nothing in docs/ was edited.
+# marked "already in docs/results.md". Nothing in docs/ was edited.
 # =============================================================================
 
 research:
@@ -261,7 +261,7 @@ research:
         https://www.business-standard.com/finance/news/upi-autopay-revocations-hit-20-mn-monthly-over-low-customer-balances-125090700500_1.html
       caveat: >
         THE PAGE RETURNED HTTP 403 AND COULD NOT BE READ. This is the search
-        engine's summary of it. docs/01_FACTS.md records the identical 403 on
+        engine's summary of it. docs/results.md records the identical 403 on
         a different Business Standard page on 28 August, so this is now a
         repeatable property of that source rather than a one-off.
 
@@ -273,7 +273,7 @@ research:
         implement by 31 July 2025.
       source: https://paytm.com/blog/payments/upi/upi-rules-update-august-1-npci-new-guidelines/
       note: >
-        Already in docs/01_FACTS.md as [REPORTED]. Corroborated again here by
+        Already in docs/results.md as [REPORTED]. Corroborated again here by
         an independent secondary source. `attempts_cap: 4` in every case below
         rests on this.
 
@@ -283,7 +283,7 @@ research:
         AutoPay executions are restricted to non-peak hours: before 10:00,
         13:00-17:00, and after 21:30. Peak is 10:00-13:00 and 17:00-21:30.
       source: https://paytm.com/blog/payments/upi/upi-rules-update-august-1-npci-new-guidelines/
-      note: Already in docs/01_FACTS.md.
+      note: Already in docs/results.md.
 
     - id: peak_hour_reject_vs_shift
       tag: REPORTED
@@ -293,7 +293,7 @@ research:
         as a TD.
       source: https://www.republicworld.com/business/upi-autopay-failure-morning-peak-hours-npci-new-rules-2026
       why_this_matters_here: >
-        docs/00_HANDOFF.md open item 4 asks whether the peak-hour rule hard
+        docs/architecture.md asks whether the peak-hour rule hard
         rejects or time-shifts. This is weak evidence for hard reject, which
         is what Stage 0 already assumes -- so it does not change the code. It
         changes the CASES: if a peak-hour rejection surfaces as a technical
@@ -324,7 +324,7 @@ research:
         before each execution, carrying the exact amount and a cancel option.
       source: https://www.republicworld.com/business/upi-autopay-failure-morning-peak-hours-npci-new-rules-2026
       note: >
-        Already in docs/01_FACTS.md, established there through practitioner
+        Already in docs/results.md, established there through practitioner
         reports. Corroborated. Consequence used throughout these cases: a
         retry after Z9 needs a FRESH notification and therefore costs at least
         a day, whereas a re-presentation after a technical decline may go
@@ -385,7 +385,7 @@ research:
         as attempts failing, and for a scheduled machine-initiated debit it
         may be nearly unrelated.
       why_this_matters_here: >
-        docs/02_RESULTS.md sweeps severity at 0.15 / 0.40 / 0.80 and says
+        docs/results.md sweeps severity at 0.15 / 0.40 / 0.80 and says
         outright that severity is invented. Nothing found changes that. If
         anything the volume evidence hints that real severities sit at the
         very bottom of that sweep or below it, which would make the +0.256 pt
@@ -419,12 +419,12 @@ research:
     - >
       Any documented outage that names AutoPay mandate execution as affected.
       Every incident report is about person-to-person and person-to-merchant
-      payments. docs/01_FACTS.md already tags the read-across to mandate
+      payments. docs/results.md already tags the read-across to mandate
       execution as [GUESS]; nothing found this time improves on that, and I
       am not able to say that mandate debits failed during any of the 2025 or
       2026 incidents.
     - >
-      A resolution of docs/00_HANDOFF.md open item 5 -- whether exhausting the
+      A resolution of docs/architecture.md -- whether exhausting the
       four attempts CANCELS the mandate or merely halts collection for the
       cycle. Secondary sources say "the payment will be cancelled", which is
       about the payment, not the mandate, and one of them then says the
@@ -440,7 +440,7 @@ research:
     - >
       Any merchant publishing real recurring-payment recovery numbers. Plenty
       of PSP blogs assert improvements; none shows a denominator. The 6-8%
-      retry-optimisation benchmark already in docs/01_FACTS.md remains the only
+      retry-optimisation benchmark already in docs/results.md remains the only
       number of that kind, and its "points or percent?" ambiguity is still
       unresolved.
 
@@ -628,7 +628,7 @@ cases:
       last attempt is still there afterwards, better informed. The counter is
       that we have three pieces of evidence saying the account is empty and a
       nudge is unlikely to change that. Both are honest. Note also that STOP's
-      measured value in docs/02_RESULTS.md depends entirely on the cycle-based
+      measured value in docs/results.md depends entirely on the cycle-based
       metric and the 120-day horizon, and mandate survival on the shipping
       configuration is already 96.55% -- so the thing STOP protects is rarer
       than it feels.
@@ -688,7 +688,7 @@ cases:
       merchant_note: ""
     real_world_grounding: >
       The cross-merchant signal. Its legality is the project's biggest
-      unresolved question (docs/01_FACTS.md, tagged [GUESS] and unread), and
+      unresolved question (docs/results.md, tagged [GUESS] and unread), and
       this case is worthless if it resolves the wrong way.
     correct_root_cause: TIMING_MISMATCH
     correct_intervention: RETRY
@@ -821,7 +821,7 @@ cases:
 # actually were, can be locally obvious and statistically invisible.
 #
 # And the thing that makes these genuinely hard rather than merely uncertain:
-# docs/02_RESULTS.md measured pausing on suspected outage at MINUS 0.529 points
+# docs/results.md measured pausing on suspected outage at MINUS 0.529 points
 # (2 SE 0.296, significant) at moderate severity. The intuitive expert answer
 # here -- "hold off, the rail is broken" -- is the one the simulation says is
 # usually wrong. A diagnoser that suspects an outage and retries anyway is
@@ -1010,7 +1010,7 @@ cases:
       This is how the cap actually gets destroyed. A technical decline may be
       auto-re-presented under the existing notification [REPORTED], so a
       transient bank fault can cascade several attempts in a short window
-      without anyone deciding to spend them. docs/02_RESULTS.md observes the
+      without anyone deciding to spend them. docs/results.md observes the
       same cascade inside the simulation: detection at low volume happens
       *because* attempts were already burned.
     correct_root_cause: MANDATE_AT_RISK
@@ -1117,7 +1117,7 @@ cases:
       merchant_note: ""
     real_world_grounding: >
       No outage lasts across two billing cycles; the longest single UPI
-      incident on record is around 207 minutes [REPORTED, docs/01_FACTS.md].
+      incident on record is around 207 minutes [REPORTED, docs/results.md].
       Six for six is a permanent condition, and the NPCI list has a whole
       family for it: VU mandate has expired, VT mandate is paused, VA mandate
       revoked, VF UMN does not exist, VJ payer account has changed [VERIFIED].
@@ -1564,7 +1564,7 @@ cases:
     notes: >
       Anchor. Note the standing risk on every peer case: whether an aggregator
       may lawfully use Merchant A's outcome to schedule Merchant B's debit is
-      tagged [GUESS] in docs/01_FACTS.md and nobody has read Razorpay's
+      tagged [GUESS] in docs/results.md and nobody has read Razorpay's
       merchant terms, their privacy policy or the RBI PA/PG directions. If that
       resolves the wrong way, `peer_mandate_success_recent` comes out of the
       CaseView and eight of these forty cases become meaningless.
@@ -1697,7 +1697,7 @@ cases:
     real_world_grounding: >
       A plausible and even sympathetic merchant request. India's DPDP Act 2023
       requires data be used only for the purpose it was collected for
-      [REPORTED, docs/01_FACTS.md], and the governance rule for this project
+      [REPORTED, docs/results.md], and the governance rule for this project
       says merchant-facing explanations must not disclose the customer's
       financial state.
     correct_root_cause: TIMING_MISMATCH
@@ -2316,7 +2316,7 @@ taxonomy_cases:
       NOT TERMINAL, and it is here as the CONTRAST CASE. Retrying the same
       amount will fail the same way, but a SMALLER debit would succeed -- which
       is exactly the `PARTIAL` recommendation whose legality under one mandate
-      is unestablished (docs/01_FACTS.md), so it is a recommendation and not an
+      is unestablished (docs/results.md), so it is a recommendation and not an
       action. Every intervention except STOP is arguable here; STOP is the
       wrong answer because the money exists. A diagnoser that treats Z8 as
       terminal has over-learned the previous four cases.

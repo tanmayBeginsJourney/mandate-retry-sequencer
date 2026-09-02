@@ -7,13 +7,13 @@ project's central architectural claim and the reason it argues for running at
 an aggregator rather than a merchant. It is also the part of the design with a
 live legal question attached: mandates are structurally per-merchant, and
 India's DPDP Rules 2025 operationalise consent and purpose limitation.
-`docs/01_FACTS.md` has the analysis and marks it `[GUESS]`.
+`docs/results.md` has the analysis and marks it `[GUESS]`.
 
 Gate S2a measures pooling in the HARNESS (+9.53 pts, +/-1.81). This measures it
 in the AGENT, and it measures the thing a product actually has to decide:
 **what does it cost to pool only for the customers who agreed?**
 
-PRE-REGISTERED IN NOTES.md, 30 August 2026, BEFORE THIS RAN. W9-1 to W9-5,
+PRE-REGISTERED 30 August 2026, BEFORE THIS RAN. W9-1 to W9-5,
 printed and scored below. W9-4 is registered AGAINST the convenient answer: it
 predicts consent-gating is NOT free, because "it costs nothing" would be
 pleasant and would also mean the moat is not reproducible in the agent.
@@ -23,7 +23,7 @@ bit-identical to `pooling="all"`, and consent at 0% bit-identical to
 `pooling="none"`. Two routes to one state that disagree is a defect.
 
 NOT gate-protected. `python agent/tests/test_pooling_consent.py` from the root.
-EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/06_MODEL_CARD.md 6a.
+EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/results.md.
 """
 from __future__ import annotations
 
@@ -42,14 +42,35 @@ import w3
 
 from agent.tests._parallel import agent_job, harness_job, run_jobs
 
-N, K, DAYS, PE = 100, 5, 120, 7
-POPS = list(range(700, 708))
+from agent.tests import _canonical as _CAN
+
+#: WHICH WORLD. Without `--canonical` this reproduces the measurement as it has
+#: always run: the GATE SUITE's world, five mandates per customer, at
+#: `pop_spend` 1.05 and 0.80, on populations 700-707.
+#:
+#: `--canonical` runs it on the world the headline is measured on instead:
+#: `k~1+Poisson(1)`, `pop_spend=0.93`, statutory payday, salary-independent
+#: amounts, burn-in and mandate outflow, on the ten held-out populations.
+#:
+#: IT EXISTS BECAUSE POOLING WAS ONLY EVER MEASURED IN A WORLD THE HEADLINE
+#: DOES NOT USE. Pooling is the central architectural claim, and "one belief
+#: shared by a customer's mandates" is worth more the more mandates a customer
+#: holds. At a fixed five it is worth a lot by construction. In the canonical
+#: world the mean is 1.99 and 63.5% of customers hold more than one, so the
+#: mechanism is present but thinner -- and how much thinner is a measurement,
+#: not an inference.
+CANON = _CAN.enabled()
+_C = ["--canonical"]
+N, K, DAYS, PE = _CAN.n(100), 5, 120, 7
+POPS = _CAN.pops(list(range(700, 708)))
 SEED = 907
 #: Both calibrations, reported together. 1.05 is the repository default and the
 #: hard world; 0.80 is where the due-date failure rate matches the published
 #: record. Every effect in this project is larger at 1.05, so reporting only
-#: that one would overstate what pooling is worth.
-SPENDS = (1.05, 0.80)
+#: that one would overstate what pooling is worth. Under `--canonical` there is
+#: one calibration, the canonical 0.93, because that is the world being asked
+#: about.
+SPENDS = (_CAN.SPEND,) if CANON else (1.05, 0.80)
 CONSENT = (1.00, 0.75, 0.50, 0.25, 0.00)
 
 
@@ -68,15 +89,21 @@ def paired_gap(rows_a, rows_b):
 
 def _kw(spend, **extra):
     return dict(payday_err=PE, pop_spend=spend, bcfg=w3.FITTED_BELIEF,
-                mode="degenerate", **extra)
+                mode="degenerate", **_CAN.run_kwargs(), **extra)
+
+
+def _spec(ps, spend):
+    """The population spec. Carries the canonical draw keywords when the flag
+    is set, and nothing extra otherwise -- so an unflagged run is byte-for-byte
+    the measurement this file has always made."""
+    return (N, K, ps, spend, DAYS, _CAN.pop_kwargs(ps))
 
 
 def main() -> int:
     jobs = []
     for spend in SPENDS:
-        spec = (N, K, None, spend, DAYS)
         for ps in POPS:
-            s = (N, K, ps, spend, DAYS)
+            s = _spec(ps, spend)
             jobs.append((f"{spend}|{ps}|all", s, SEED,
                          _kw(spend, pooling="all"), False))
             jobs.append((f"{spend}|{ps}|none", s, SEED,
@@ -85,18 +112,20 @@ def main() -> int:
                 jobs.append((f"{spend}|{ps}|c{c:.2f}", s, SEED,
                              _kw(spend, pooling="consented", consent_frac=c),
                              False))
-        del spec
 
     # payday_wait is a permanent comparator and comes from the frozen harness,
     # not from the agent. It has no belief and therefore no pooling, so it is
     # the same row in every arm.
-    hjobs = [((spend, ps), "payday_wait", (N, K, ps, spend, DAYS), SEED,
-              dict(payday_err=PE, pop_spend=spend))
+    hjobs = [((spend, ps), "payday_wait", _spec(ps, spend), SEED,
+              dict(payday_err=PE, pop_spend=spend, **_CAN.run_kwargs()))
              for spend in SPENDS for ps in POPS]
 
+    print(_CAN.banner())
     print(f"{len(jobs)} runs: {len(SPENDS)} calibrations x {len(POPS)} "
-          f"populations x {2 + len(CONSENT)} arms, n={N} k={K} {DAYS}d "
-          f"payday_err=+/-{PE}, degenerate mode, FITTED_BELIEF")
+          f"populations x {2 + len(CONSENT)} arms, degenerate mode, "
+          f"FITTED_BELIEF")
+    print("  " + _CAN.world_line(N, K, POPS, DAYS, PE,
+                                 None if len(SPENDS) > 1 else SPENDS[0]))
     print("Degenerate mode on purpose: this measures the BELIEF architecture,")
     print("not the action space. See the pre-registration's bias note.")
     res = run_jobs(agent_job, jobs)
@@ -158,7 +187,7 @@ def main() -> int:
         else float("nan")
 
     print()
-    print("PRE-REGISTERED (NOTES.md, 30 Aug 2026, before this ran)")
+    print("PRE-REGISTERED (30 Aug 2026, before this ran)")
     print("=" * 96)
     checks = [
         ("W9-1", f"not pooling costs 4-14 pts at pop_spend={HARD}",
@@ -191,11 +220,14 @@ def main() -> int:
     print("  * pop_spend=1.05 is the hard world and every effect in this")
     print("    project is larger there. Both calibrations are printed above so")
     print("    the smaller number is not hidden.")
-    print("  * 8 populations, one seed each. Not a large study.")
+    print(f"  * {len(POPS)} populations, one seed each. Not a large study.")
     print("  * The consenting set is drawn from its OWN generator, seeded off")
-    print("    the run seed and never touching the money path -- error 27's")
-    print("    rule. If it shared the stream, each consent rate would be a")
-    print("    different world PLUS consent.")
+    print("    the run seed and never touching the money path -- the")
+    print("    stream-isolation rule this project adopted after an enrichment")
+    print("    parameter perturbed the stream it was meant to leave alone")
+    print("    (docs/errors.md). If it shared the stream, each consent rate")
+    print("    would be a different world PLUS consent, and the difference")
+    print("    would be neither.")
     return 0 if n_held == len(checks) else 1
 
 

@@ -1,8 +1,8 @@
 """
 WORLD v3.
 
-Changes from sim4, each made because a test in TEST_DESIGN.md could not
-otherwise be written:
+Changes from sim4, each made because a test in the pre-harness test design
+could not otherwise be written:
 
   SLOTS_PER_DAY 3 -> 24. Peak windows (10:00-13:00, 17:00-21:30) are now
       representable, so M2 can actually trip. At 3 slots/day the peak-hour
@@ -47,7 +47,7 @@ Z9, TECH, OK = "Z9", "TECH", "OK"
 # there as former_shipping. They scored slightly higher on held-out
 # evaluation populations and slightly lower on the training objective.
 # Shipping the train winner rather than the eval winner is the point of
-# the split. See NOTES.md, 31 August 2026.
+# the split. See the development log.
 #
 # The values replaced three hand-set defaults:
 #
@@ -88,7 +88,8 @@ FITTED_BELIEF = dict(stride=1, prior_w=5, prior_day0=8.0,
 #    mandate outflow. The canonical world is `pop_spend=0.93`, k ~ 1+Poisson(1),
 #    salary-independent amounts, a STATUTORY payday confined to days 0-7, 12
 #    burn-in cycles and mandate outflow on. The prior was never refitted after
-#    errors 33-35 rebuilt the world.
+#    the canonical-world rebuild (docs/errors.md, "Simulation and model
+#    errors").
 #
 # 2. THE SEARCH COULD NOT HAVE FOUND IT. `sweep_prior` iterates
 #    `w in (5, 7, 9, 12, 15)`. The canonical optimum is at or below the grid's
@@ -127,7 +128,7 @@ FITTED_BELIEF = dict(stride=1, prior_w=5, prior_day0=8.0,
 # it, so the prior alone loses 2.88 points at payday_err=10 and 2.20 at 14.
 # Those are bought back by the continuation value and then some. The
 # configuration is therefore only defensible as a PAIR, and the payday_err
-# range it is valid over is stated in NOTES.md, 1 September 2026.
+# range it is valid over is stated in the development log.
 # ---------------------------------------------------------------------------
 
 
@@ -139,14 +140,14 @@ def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
              amount_sigma=0.55,
              buffer=None, buffer_median=None, buffer_sigma=1.0,
              buffer_seed=None):
-    """Draw a population. W10 (docs/04_BUILD_PLAN.md) adds three guarded knobs.
+    """Draw a population. W10 (docs/results.md) adds three guarded knobs.
 
     Every W10 argument defaults to the behaviour this function has had since
     27 August 2026, so an unchanged call draws the identical population and
     gate T9 is untouched. The three of them exist because `k`,
     `payday_day0_frac` and `amt_frac` were invented constants with no source,
-    and between them they were setting the world's difficulty. NOTES.md,
-    31 August 2026, carries the external evidence and the plausible range
+    and between them they were setting the world's difficulty. The
+    development log carries the external evidence and the plausible range
     declared for each BEFORE anything was measured.
 
     R1 -- `k_mean` / `k_max` / `k_seed`. How many mandates a customer holds.
@@ -206,7 +207,7 @@ def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
 
     The published UPI AutoPay ticket range is 149-2,499 rupees with a 15,000
     regulatory cap; the clip retains it. Sources and the declared plausible
-    range for every swept value are in NOTES.md, 31 August 2026.
+    range for every swept value are in the development log.
     """
     if buffer is not None and buffer_median is not None:
         raise ValueError("pass buffer (a scalar, for the sweep) or "
@@ -230,8 +231,8 @@ def make_pop(n, k, rng, days=120, cycle_days=30, spend=0.80, amt_frac=0.045,
     # W11-S2. The per-customer carry-over buffer, in multiples of ONE MONTHLY
     # SALARY. `buffer` is a scalar for the sweep; `buffer_median` selects the
     # canonical lognormal. Its median is fixed by the published "75% of Indians
-    # have no emergency fund" figure at sigma=1.0, not chosen -- see NOTES.md,
-    # 31 August 2026, B3. Drawn from its own generator so the two forms are
+    # have no emergency fund" figure at sigma=1.0, not chosen -- see the
+    # development log. Drawn from its own generator so the two forms are
     # comparable on one population.
     if buffer_median is not None:
         brng = np.random.default_rng(buffer_seed)
@@ -314,7 +315,7 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
     None means "unchanged", and every existing caller passes nothing, so this
     is inert by default -- gate T9 confirms it.
 
-    `p_missed_credit` is W2 (docs/04_BUILD_PLAN.md): the per-customer,
+    `p_missed_credit` is W2 (docs/results.md): the per-customer,
     per-cycle probability that the salary credit does not arrive at all. It is
     what makes a billing cycle genuinely UNCOLLECTABLE, and until it existed
     every cycle in this world was winnable on some day -- the oracle scored
@@ -326,7 +327,7 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
     instead of changing all later spend draws. Passing a positive rate without
     the separate generator raises. At 0.0 no missed-credit draw is made.
 
-    `p_transient` is W7 (docs/04_BUILD_PLAN.md): a TEMPORARY HOLD on the
+    `p_transient` is W7 (docs/results.md): a TEMPORARY HOLD on the
     account. With probability `p_transient`, on any given day, the balance
     cannot be reached for `transient_h` hours from hour 0 -- and afterwards it
     is exactly what it would have been. It is the third class of decline, the
@@ -388,8 +389,8 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
     # savings accumulator: at pop_spend=0.80 the balance grows by a fifth of a
     # salary every cycle without bound, the at-risk rate decays 29.80% -> 0.75%
     # across four cycles, and the due-date failure rate becomes a function of
-    # how long the run is (27.67% at 60d, 4.24% at 360d). See NOTES.md,
-    # 31 August 2026, and candidate error 33.
+    # how long the run is (27.67% at 60d, 4.24% at 360d). See
+    # docs/errors.md, "The world had no steady state".
     #
     # It is applied BEFORE the credit, on last cycle's leftovers, not after.
     # Capping after the credit would take away the money the month is meant to
@@ -435,7 +436,8 @@ def balance_trace(c, rng, decay=None, p_missed_credit=0.0, missed_rng=None,
     # after the trace was built; the cap then removed the very surplus the
     # subscriptions were meant to come out of, the cumulative subtraction grew
     # without bound against a capped balance, and V1 went to 99.4% with the
-    # oracle ceiling at 0.4%. Caught by rule 3. NOTES.md, 31 August 2026.
+    # oracle ceiling at 0.4%. Caught by treating a large improvement as a
+    # defect until proven otherwise.
     mand = None
     if mandate_outflow:
         mand = np.zeros(burn + days)
@@ -648,7 +650,7 @@ def index_score(p_now, p_later, amount, discount=0.92):
     THE 6x LTV MULTIPLIER WAS REMOVED 28 August 2026, after being swept.
     It used to read
         value = amount * (1 + ltv_mult * (1 if attempts_left == 1 else 0))
-    and `01_FACTS.md` and `02_RESULTS.md` both already described it as "no
+    and the documentation already described it as "no
     longer used" while it was still live -- an invented constant sitting on the
     index with no sensitivity analysis, breaking rules 5 and 6.
 
@@ -667,7 +669,7 @@ def index_score(p_now, p_later, amount, discount=0.92):
     its remaining cycles because they still count in `cyc_due`.
 
     `discount` is a DIFFERENT matter and is NOT dead -- see the sweep in
-    NOTES.md, 28 August. It changes the sign, so it is live on every index
+    the development log. It changes the sign, so it is live on every index
     policy. It sits on a broad plateau (0.90-0.96) rather than a tuned peak,
     and the argmax moves between population sets, but it remains a
     hand-chosen constant and every headline is reported as a range over it.
@@ -758,7 +760,7 @@ class BeliefPD:
                    uniform even a few days away.
 
         These are fitted on TRAINING populations by outcome only -- never from
-        c["payday"], c["salary"] or c["spend"]. See NOTES.md, 28 August.
+        c["payday"], c["salary"] or c["spend"]. See the development log.
         """
         self.cyc, self.days = cycle_days, days
         self.hi = 2.5 * est_salary
@@ -776,7 +778,7 @@ class BeliefPD:
             # the window is effectively hard, which is why a prior fitted at
             # payday_err=7 goes actively harmful at payday_err=14: the true
             # payday falls outside and can never be recovered. A soft floor
-            # lets evidence pull it back. See NOTES.md, 28 August.
+            # lets evidence pull it back. See the development log.
             self.w = np.where(d <= prior_w, 1.0, prior_floor)
             if prior_day0 != 1.0:
                 self.w = self.w * np.where(np.asarray(self.hyp) == 0,

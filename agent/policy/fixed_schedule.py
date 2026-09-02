@@ -7,7 +7,7 @@ per-cycle record, so its recovery rate could not be computed and the project
 had nothing to put beside the published 20-40% band. Running the same schedule
 as an agent arm produces an audit log, passes the same Stage 0 gate, and
 therefore lands in the same recovery-rate metric as everything else.
-`docs/04_BUILD_PLAN.md`, the validation suite.
+`docs/results.md`, the validation suite.
 
 **IT SCHEDULES, IT DOES NOT THINK.** No belief, no forecast, no index. It
 attempts on the earliest legal day, every day, until the cycle closes or the
@@ -20,7 +20,7 @@ machinery.
 THE DOCUMENTED SCHEDULE CANNOT BE EXECUTED COMPLIANTLY, AND THAT IS A FINDING.
 
 Razorpay documents charge on day T, then retry on T+1, T+2, T+3
-(`docs/01_FACTS.md`, [VERIFIED]). NPCI requires at least 24 hours between the
+(`docs/results.md`, [VERIFIED]). NPCI requires at least 24 hours between the
 pre-debit notification and the debit, and a mandate does not become actionable
 until its cycle opens on day T -- `agent/loop.py` selects
 `m.cycle_open <= day < m.cycle_close`. So the earliest notification is hour 8 of

@@ -1,0 +1,50 @@
+CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1) capped at 8, mean about 2, statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.
+70 runs: 1 calibrations x 10 populations x 7 arms, degenerate mode, FITTED_BELIEF
+  n=500, k~1+Poisson(1) capped at 8, mean about 2, 10 populations 710-719, 120d, payday_err=+/-7, pop_spend=0.93
+Degenerate mode on purpose: this measures the BELIEF architecture,
+not the action space. See the pre-registration's bias note.
+
+================================================================================================
+pop_spend = 0.93
+================================================================================================
+                   arm   cycle_rec     2 SE   vs pooled     2 SE   survival
+          pooled (all)      99.01%    0.18          --               99.2%
+     not pooled (none)      98.85%    0.28      -0.16     0.16      98.8%
+          consent 100%      99.01%    0.18      +0.00     0.00      99.2%
+           consent 75%      99.04%    0.15      +0.02     0.05      99.2%
+           consent 50%      98.94%    0.20      -0.07     0.08      99.0%
+           consent 25%      98.86%    0.23      -0.16     0.10      98.9%
+            consent 0%      98.85%    0.28      -0.16     0.16      98.8%
+   payday_wait (rival)      90.89%
+
+PRE-REGISTERED (30 Aug 2026, before this ran)
+================================================================================================
+  BROKE  W9-1  not pooling costs 4-14 pts at pop_spend=0.93
+           measured +0.16 pts
+  HELD   W9-2  consent 100% == pooled, and consent 0% == not pooled, exactly
+           measured 10/10 and 10/10 identical
+  HELD   W9-3  the loss grows monotonically as consent falls
+           measured largest rise between adjacent cells +0.02 pts, 2 SE 0.20
+  BROKE  W9-4  consent-gating is NOT free: 3-7 pts at 50% consent
+           measured +0.07 pts
+  BROKE  W9-5  the non-pooled agent still beats payday_wait by > 20 pts
+           measured +7.96 pts
+
+  Pre-registration record: 2/5
+
+HOW THIS COULD BE WRONG
+================================================================================================
+  * Degenerate mode isolates the belief architecture and is also the
+    flattering choice for W9-1: the action space cannot compensate
+    for a weaker belief here because it is switched off.
+  * pop_spend=1.05 is the hard world and every effect in this
+    project is larger there. Both calibrations are printed above so
+    the smaller number is not hidden.
+  * 10 populations, one seed each. Not a large study.
+  * The consenting set is drawn from its OWN generator, seeded off
+    the run seed and never touching the money path -- the
+    stream-isolation rule this project adopted after an enrichment
+    parameter perturbed the stream it was meant to leave alone
+    (docs/errors.md). If it shared the stream, each consent rate
+    would be a different world PLUS consent, and the difference
+    would be neither.

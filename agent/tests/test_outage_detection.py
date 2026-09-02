@@ -53,11 +53,34 @@ import w3
 
 from agent.tests._parallel import agent_job, run_jobs
 
-K, DAYS, SPEND, PE, RUN_SEED = 5, 60, 1.05, 7, 7
+from agent.tests import _canonical as _CAN
+
+#: WHICH WORLD. Without `--canonical` this is the DETECTOR STUDY's own world:
+#: five mandates per customer at `pop_spend=1.05`, chosen because detection is
+#: a function of attempt volume and that world has the most of it. It is NOT
+#: the world the headline is measured on, and the page must say so wherever it
+#: shows this table.
+#:
+#: `--canonical` runs the same design on the canonical world instead --
+#: `k~1+Poisson(1)`, `pop_spend=0.93`, statutory payday, salary-independent
+#: amounts, burn-in and mandate outflow, on the ten held-out populations. It
+#: exists because the public page asserted that a hundred-customer book at
+#: about two mandates per customer does not reach the detector's eight-attempt
+#: floor. That was an inference from the k=5 volumes, not a measurement, and
+#: this flag is how it gets measured.
+CANON = _CAN.enabled()
+K, DAYS, PE, RUN_SEED = 5, 60, 7, 7
+SPEND = _CAN.spend(1.05)
+#: The population grid. Under `--canonical` the canonical n is appended, so the
+#: study covers the world the headline is actually measured on and not only the
+#: range that locates the crossover. Without it the largest cell is 200 and a
+#: reader has to extrapolate to the world every other table uses.
 N_VALUES = [5, 10, 25, 50, 100, 200]
+if CANON and _CAN.N not in N_VALUES:
+    N_VALUES = sorted(N_VALUES + [_CAN.N])
 SEVERITIES = [0.0, 0.15, 0.40]
-POPS_SIG = [700, 701, 702, 703, 704, 705, 706, 707]
-POPS_NULL = [700, 701, 702, 703, 704, 705, 706, 707]
+POPS_SIG = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
+POPS_NULL = list(POPS_SIG)
 OUTAGE_DAYS = [20, 40]
 DURATION_H = 6
 N_MERCHANTS = 60            # w3.make_pop draws merchants from range(60)
@@ -92,7 +115,8 @@ def main() -> int:
         for n in N_VALUES:
             for s in pops:
                 jobs.append((
-                    (sev, n, s), (n, K, s, SPEND, DAYS), RUN_SEED,
+                    (sev, n, s), (n, K, s, SPEND, DAYS, _CAN.pop_kwargs(s)),
+                    RUN_SEED,
                     dict(payday_err=PE, pop_spend=SPEND, bcfg=w3.FITTED_BELIEF,
                          mode="degenerate", time_major=True,
                          monitor_enabled=True, pause_on_outage=False,
@@ -100,14 +124,21 @@ def main() -> int:
                          outage_kw=(None if sev == 0.0 else
                                     dict(days=OUTAGE_DAYS,
                                          duration_h=DURATION_H,
-                                         severity=sev))),
+                                         severity=sev)),
+                         **_CAN.run_kwargs()),
                     False))
     res = run_jobs(agent_job, jobs)
 
     print("=" * 96)
     print("OUTAGE DETECTION POWER -- true-positive rate vs population size")
-    print(f"k={K}, {DAYS}d, payday_err={PE}, FITTED_BELIEF, {DURATION_H}h "
-          f"outages on days {OUTAGE_DAYS}, worst-case placement (hour 8)")
+    print(_CAN.banner())
+    print(f"{_CAN.mandates(K)}, {DAYS}d, payday_err={PE}, pop_spend={SPEND}, "
+          f"populations {POPS_SIG[0]}-{POPS_SIG[-1]}, FITTED_BELIEF, "
+          f"{DURATION_H}h outages on days {OUTAGE_DAYS}, worst-case "
+          f"placement (hour 8)")
+    print("THIS IS A DETECTION STUDY, NOT THE HEADLINE WORLD." if not CANON
+          else "Canonical world. Compare against the default run, which uses "
+               "the detector study's higher-volume world.")
     print("=" * 96)
     print(f"{'severity':>9s} {'n cust':>7s} {'runs':>5s} {'att/day':>8s} "
           f"{'att/24h win':>12s} {'detected':>9s} {'TPR':>6s} "
@@ -185,6 +216,16 @@ def main() -> int:
     print("=" * 96)
     print("PRE-REGISTERED CHECKS")
     print("=" * 96)
+    if CANON:
+        print("  !! E-DET-1..5 were pre-registered against the DETECTOR "
+              "STUDY's world")
+        print("     (k=5, pop_spend=1.05, populations 700-707). This run is "
+              "the canonical")
+        print("     world, so the outcomes below are a re-measurement in a "
+              "different world")
+        print("     and NOT a score against the original registration. Read "
+              "the volumes.")
+        print()
     v = []
     v.append(("E-DET-1 false-alarm rate at severity=0 is under 5% of runs",
               fpr_null is not None and fpr_null < 0.05,
@@ -210,6 +251,13 @@ def main() -> int:
               + ("" if big > 0 else "   VACUOUS: detector never fired anywhere")))
     v.append(("E-DET-4 TPR >= 0.8 at n=100, severity 0.40",
               tpr[(0.40, 100)] >= 0.8, f"{tpr[(0.40, 100)]:.2f}"))
+    # Not part of the original registration. It reports where the world the
+    # headline is measured on actually sits, which the 5-200 grid alone does
+    # not answer.
+    if CANON:
+        v.append((f"(not registered) TPR at the canonical n={_CAN.N}, "
+                  f"severity 0.40",
+                  True, f"{tpr[(0.40, _CAN.N)]:.2f}"))
     v.append(("E-DET-5 one merchant never reaches min_attempts at any n",
               not any(merchant_ok),
               "merchant volume stays below 8 attempts per 24h window"))

@@ -15,7 +15,7 @@ available with test keys, and its `instrument` object is scoped:
 Razorpay publishes bank-shaped downtime already, `GET /v1/payments/downtimes`
 and `GET /v1/payments/downtimes/:id`, with webhooks `payment.downtime.started`,
 `.updated` and `.resolved`. Read from their docs on 29 August 2026,
-`[VERIFIED]`, recorded in `docs/01_FACTS.md`.
+`[VERIFIED]`, recorded in `docs/results.md`.
 
 So the moat argument does NOT get to be "they cannot see bank-level incidents".
 They can, and they say so.
@@ -32,7 +32,7 @@ do not":
    enumerates `collect`, `intent` and `in_app`. Nothing in their documentation
    says AutoPay *mandate execution* is what is being measured, and mandate
    debits are a small, differently-timed slice: 99.22% of ours land in a single
-   hour of the day (`docs/02_RESULTS.md`). A feed healthy for checkout at
+   hour of the day (`docs/results.md`). A feed healthy for checkout at
    14:00 says little about mandates at 08:00.
 
 2. **A label, not a rate.** `severity` is `high` / `medium` / `low`, defined by
@@ -197,7 +197,7 @@ def agrees_with(vendor_says_down: bool, ours_says_down: bool) -> str:
     stream degraded while their system-level feed stayed quiet. That is the
     case the moat argument rests on, and it is the case 2026's bank-shaped
     incidents would produce -- but it is also what a false alarm produces, and
-    from one run you cannot tell which. `docs/02_RESULTS.md` records one such
+    from one run you cannot tell which. `docs/results.md` records one such
     firing, outside every injected window, rather than assuming it was real.
     """
     if vendor_says_down and ours_says_down:
@@ -214,10 +214,13 @@ class DowntimeFeed:
 
     NOT WIRED INTO THE AGENT LOOP, and that is a decision rather than an
     omission. `RailMonitor` already produces a verdict the loop consults, and
-    the measured value of pausing on that verdict is NEGATIVE at moderate
-    severity (-0.529 pts, SIG -- `docs/02_RESULTS.md`). Adding a second,
-    unmeasured input to a response that does not pay for itself would be
-    shipping a feature because it is available. It is built so the comparison
+    the measured value of pausing on that verdict is INDISTINGUISHABLE FROM
+    ZERO at every severity swept: +0.000 / +0.000 / +0.017 / +0.051, each
+    inside its own 2 SE (`docs/results.md`, `logs/w27_abl_outage_repaired.txt`).
+    An earlier measurement on the pre-repair belief read -0.529 and significant;
+    that figure is retired. Adding a second, unmeasured input to a response that
+    does not pay for itself would be shipping a feature because it is available.
+    It is built so the comparison
     can be run; the comparison has to come first.
     """
 

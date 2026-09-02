@@ -1,0 +1,37 @@
+========================================================================================
+STOP MECHANISM -- is the gain really preserved mandates collecting in later cycles?
+CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1) capped at 8, mean about 2, statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.
+n=500, k~1+Poisson(1) capped at 8, mean about 2, 10 populations 710-719, horizons [60, 120, 180], payday_err=+/-7, pop_spend=0.93, FITTED_BELIEF, paired 2 SE
+========================================================================================
+ horizon  cycles    degen    +STOP     gain     2SE   sig  dead d  dead s  att/cyc d  att/cyc s
+      60       2    98.21    97.95   -0.253   0.280  n.s.     160       2      2.214      2.216
+     120       4    99.03    99.10   +0.068   0.099  n.s.      76       4      1.460      1.462
+     180       6    99.45    99.53   +0.079   0.051   SIG      60       4      1.298      1.300
+
+Per-population, 120d:
+    pop  gain pts  deaths avoided
+    710    +0.361               8
+    711    +0.033               8
+    712    +0.162               7
+    713    -0.101               5
+    714    +0.065               8
+    715    +0.000               6
+    716    +0.292               7
+    717    -0.033               6
+    718    +0.000               9
+    719    -0.100               8
+  Pearson r(gain, deaths avoided) = +0.263
+
+========================================================================================
+PRE-REGISTERED CHECKS
+========================================================================================
+  HELD   E-MECH-1 STOP's gain grows monotonically with horizon   [60d -0.253 -> 120d +0.068 -> 180d +0.079]
+  BROKE  E-MECH-1b 60d below and 180d above the 120d figure   [-0.253 < 1.371 < +0.079]
+  BROKE  E-MECH-2 gain tracks deaths avoided (r > 0.5)   [r = +0.263]
+  HELD   E-MECH-3 STOP does not buy survival by not billing   [att/cyc 1.460 -> 1.462 (+0.1%)]
+
+Pre-registration record for this measurement: 2/4
+
+A BROKEN prediction here means the mechanism story is wrong and
+the +1.371 has an unidentified cause. Do not quote it until the
+cause is named.

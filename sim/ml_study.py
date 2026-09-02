@@ -2,7 +2,7 @@
 """
 THE ML BASELINE, AND THE MISSPECIFICATION STUDY.
 
-Read docs/01_FACTS.md and the pre-registration in NOTES.md before the numbers.
+Read docs/results.md and the pre-registration in the development log before the numbers.
 The one thing that has to stay in front of every result on this page:
 
     w3.Belief and w3.BeliefPD are hand-built to match w3.balance_trace -- same

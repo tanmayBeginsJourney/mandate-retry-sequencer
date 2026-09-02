@@ -10,7 +10,7 @@ They are **not** tests and are not gate-protected. Run with `py -3.12`.
 
 | script | what it answers | transcript |
 |---|---|---|
-| `horizon.py` | Is V1 a property of the world rather than of the run length? Sweeps the horizon at three spend levels. | (printed to stdout; the finding is quoted in `NOTES.md` W11) |
+| `horizon.py` | Is V1 a property of the world rather than of the run length? Sweeps the horizon at three spend levels. | (printed to stdout; the finding is quoted in the development log W11) |
 | `w11_ceiling_script.py` | The **constrained oracle** — the policy-free ceiling for V5 and V7 at each cell. This is where "V5's ceiling is 100%" comes from, which is the evidence behind X2's reclassification. | `logs/w11_constrained_oracle.txt` |
 | `w11_coupling_script.py` | What the due-date/payday coupling fix does, measured policy-free. | `logs/w11_canon_out.txt` and neighbours |
 

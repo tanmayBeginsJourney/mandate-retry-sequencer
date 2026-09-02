@@ -1,0 +1,15 @@
+PAGE SWEEP -- agent vs payday_wait, canonical world, batch_report config.
+120 runs: 6 levels x 10 held-out pops x 2 arms, n=500, 120d, pop_spend=0.93, run seed 7, mode=full.
+
+ payday_err  payday_wait     agent    delta    2 SE   at risk  verdict
+          1       99.45%    99.42%    -0.03    0.12      3160  tie
+          3       98.80%    99.41%    +0.61    0.16      3160  agent wins
+          5       93.53%    99.42%    +5.89    0.38      3160  agent wins
+          7       90.41%    99.12%    +8.70    0.68      3160  agent wins
+         10       87.49%    98.86%   +11.37    0.77      3160  agent wins
+         14       85.25%    98.40%   +13.15    0.72      3160  agent wins
+
+wrote sim\page_sweep.json -- scripts/build_page_data.py reads it.
+
+  The +/-7 row is the headline cell and must reproduce `agent.batch_report --pops 10 --canonical`.
+  BIAS: `payday_wait` is the harness's own baseline and is weaker than the frozen `[1,7]` schedule. Read this beside `test_steelman_schedule.py`, never instead of it.

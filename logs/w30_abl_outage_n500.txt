@@ -1,0 +1,38 @@
+========================================================================================================
+OUTAGE ABLATION -- what the context layer is worth, by severity
+CANONICAL WORLD: pop_spend=0.93, burn 12, mandate outflow ON, k~1+Poisson(1) capped at 8, mean about 2, statutory payday, salary-independent amounts, buffer lognormal(0.25, 1.0). Held-out pops 710-719.
+n=500, k~1+Poisson(1) capped at 8, mean about 2, 10 populations 710-719, 120d, payday_err=+/-7, pop_spend=0.93, FITTED_BELIEF, 6h outages on days [20, 50, 80, 110]
+paired 2 SE vs the `none` arm at the same severity. Worst-case window placement (hour 8).
+========================================================================================================
+  sev       arm  cycle_rec   vs none    2SE   sig    surv  tech att  suppr  paused     ECE  mono  auditV
+ 0.00      none      99.04    +0.000  0.000  n.s.   99.23       300      0       0  0.0706  True       0
+ 0.00     pause      99.04    +0.000  0.000  n.s.   99.23       300      0       0  0.0706  True       0
+ 0.00  suppress      99.04    +0.000  0.000  n.s.   99.23       300      0       0  0.0706  True       0
+ 0.00      both      99.04    +0.000  0.000  n.s.   99.23       300      0       0  0.0706  True       0
+
+ 0.15      none      99.02    +0.000  0.000  n.s.   99.13       415      0       0  0.0734  True       0
+ 0.15     pause      99.07    +0.050  0.037   SIG   99.35       401      0     188  0.0731  True       0
+ 0.15  suppress      99.02    +0.000  0.000  n.s.   99.13       415     12       0  0.0733  True       0
+ 0.15      both      99.07    +0.050  0.037   SIG   99.35       401      0     188  0.0731  True       0
+
+ 0.40      none      98.99    +0.000  0.000  n.s.   98.98       662      0       0  0.0773  True       0
+ 0.40     pause      99.07    +0.082  0.065   SIG   99.38       448      0     432  0.0729 False       0
+ 0.40  suppress      98.99    +0.000  0.000  n.s.   98.98       671    223       0  0.0767  True       0
+ 0.40      both      99.07    +0.082  0.065   SIG   99.38       448      0     432  0.0729 False       0
+
+ 0.80      none      98.85    +0.000  0.000  n.s.   98.71      1331      0       0  0.0819 False       0
+ 0.80     pause      99.07    +0.221  0.056   SIG   99.31       451      0     521  0.0725 False       0
+ 0.80  suppress      98.86    +0.010  0.020  n.s.   98.69      1434    992       0  0.0858 False       0
+ 0.80      both      99.07    +0.221  0.056   SIG   99.31       451      0     521  0.0725 False       0
+
+========================================================================================================
+PRE-REGISTERED CHECKS
+========================================================================================================
+  HELD   E-OUT-1 severity 0: detection changes nothing (<0.2 pts)   [largest |change| = 0.000 pts]
+  HELD   E-OUT-2 best-arm gain grows with severity   [+0.000 -> +0.050 -> +0.082 -> +0.221]
+  BROKE  E-OUT-3 suppression ALONE improves ECE at severity 0.80   [none 0.0819 -> suppress 0.0858]
+  BROKE  E-OUT-6 pause and suppress compose (both != pause)   [`both` is identical to `pause` at every severity]
+  HELD   E-OUT-4 pausing reduces attempts wasted on technical declines   [checked at every severity > 0]
+  BROKE  E-OUT-5 best arm beats `none` by >1 pt at severity 0.80   [+0.221 pts]
+
+Pre-registration record for this measurement: 3/6

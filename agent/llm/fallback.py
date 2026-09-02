@@ -5,7 +5,7 @@ The batch result must never depend on a network call -- a headline number that
 needs an API key is not reproducible, and docs/CLAUDE.md's numbers rule would
 forbid quoting it. So the LLM is an overlay measured against this, not a
 dependency of this. Build the failure path first, then the happy path
-(docs/04_BUILD_PLAN.md, Day 5).
+(docs/results.md).
 
 TWO DIAGNOSERS:
 
@@ -90,7 +90,7 @@ class RuleBasedDiagnoser:
         if cause is RootCause.INSUFFICIENT_FUNDS and view.n_recent_z9 >= 2:
             # PARTIAL is a RECOMMENDATION only. It credits zero money and never
             # reaches the gate: whether a partial debit is permitted under one
-            # UPI AutoPay mandate is not established in docs/01_FACTS.md, and a
+            # UPI AutoPay mandate is not established in docs/results.md, and a
             # merchant-acceptance rate for it would be an invented constant.
             recs = ("PARTIAL",)
         return Diagnosis(
@@ -116,7 +116,7 @@ class RuleBasedDiagnoser:
         # It was harmless only because `agent/loop.py` filters `not m.collected`
         # out of `live` before it ever calls a diagnoser. THAT IS A CORRECTNESS
         # PROPERTY LIVING IN THE CALLER, NOT IN THE COMPONENT, which is the same
-        # shape as every vacuous gate in docs/03_ERRORS.md -- the check and the
+        # shape as every vacuous gate in docs/errors.md -- the check and the
         # thing checked sharing an assumption that nothing states. A diagnoser
         # is a component with a Protocol; it does not get to assume its only
         # current caller.

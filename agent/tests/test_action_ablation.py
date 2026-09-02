@@ -16,14 +16,14 @@ WAIT      costs one day of the cycle. Credits nothing directly; it buys the
           option on a better day. Already inside the frozen policy as
           `index_score <= 0` -- it is not an agent action and is not ablated.
           Source: w3.index_score. Its 0.92 discount is hand-chosen and every
-          number here inherits that ~7-point band (docs/06_MODEL_CARD.md §3).
+          number here inherits that ~7-point band (docs/results.md).
 
 NUDGE     costs one decision day: no attempt is scheduled that day. Credits,
           with probability `nudge_p`, amount x1.15 available for 48h from t+2.
           Source: `harness.run`'s `topup_p` mechanism, made CONDITIONAL on the
           agent acting. NO VALUE IS PICKED -- `nudge_p` is swept and the result
           is a curve, because there is no measured Indian UPI nudge take-up
-          rate in docs/01_FACTS.md and inventing one would break rule 5.
+          rate in docs/results.md and inventing one would break rule 5.
 
 ESCALATE  costs every remaining attempt in the cycle. Credits NOTHING that is
           modelled anywhere in this world. It is pure cost here, and that is a
@@ -39,9 +39,17 @@ STOP      costs every remaining attempt in the cycle. Credits the mandate's
 
 PRE-REGISTERED, written before the first run (28 August 2026)
 -------------------------------------------------------------
-E-ABL-1  `rules_none` (RuleBasedDiagnoser, every action disabled) equals
+E-ABL-1  `workflows_off` (RuleBasedDiagnoser, every action disabled AND the
+         two workflows the mode flag also switches turned off) equals
          `degenerate` EXACTLY on every metric. This is the consistency check:
          if it fails, the ablation is not isolating what it claims to.
+
+         REGISTERED AGAINST `rules_none` UNTIL 2 SEPTEMBER 2026, and it could
+         not hold there. `mode="full"` also turns on the backup checkout and
+         the fail-path reminders, so `rules_none` was never `degenerate` plus
+         nothing. The check was recording a break whose cause had not been
+         found, and every `vs degen` row was carrying those two workflows
+         inside what it called the action space. See the note above `ARMS`.
 
 E-ABL-2  NUDGE is worth approximately ZERO and is not significant at any
          `nudge_p`. Predicted |effect| < 0.6 pts at 0.10, 0.25 and 0.50, and
@@ -86,12 +94,30 @@ import numpy as np
 from agent.tests import _canonical as _CAN
 
 POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
-N, K, DAYS, SPEND, PE = 100, 5, 120, _CAN.spend(1.05), 7
+N, K, DAYS, SPEND, PE = _CAN.n(100), 5, 120, _CAN.spend(1.05), 7
 RUN_SEED = 7
 
 # (arm label, kwargs to run_once)
+# WHY THERE ARE TWO "EVERY ACTION OFF" ARMS.
+#
+# `mode="full"` does not only open the action space. `agent/batch.run_once`
+# reads it twice more, for `last_attempt_backup` and `remind_on_fail`, both of
+# which default to `mode == "full"`. So `rules_none` -- full mode with every
+# action disabled -- is degenerate PLUS the backup checkout PLUS the fail-path
+# reminders, and E-ABL-1 ("rules_none equals degenerate exactly") could never
+# hold. It had been recorded as a break for that reason without the reason
+# being found.
+#
+# `rules_none` is kept unchanged, so the arm the earlier measurements used is
+# still there. `workflows_off` turns the two workflows off as well and is what
+# E-ABL-1 now tests. The difference between them is what the backup checkout
+# and the reminders are worth, which was previously being read as the value of
+# the action space.
 ARMS = [
     ("degenerate",     dict(mode="degenerate")),
+    ("workflows_off",  dict(mode="full", allow_nudge=False,
+                            allow_escalate=False, allow_stop=False,
+                            last_attempt_backup=False, remind_on_fail=False)),
     ("rules_none",     dict(mode="full", allow_nudge=False,
                             allow_escalate=False, allow_stop=False)),
     ("+NUDGE p=0.10",  dict(mode="full", allow_nudge=True, allow_escalate=False,
@@ -173,8 +199,11 @@ def main() -> int:
 
     print("=" * 100)
     print("ACTION ABLATION -- degenerate -> each action added -> full")
-    print(f"n={N}, k={K}, 8 populations {POPS[0]}-{POPS[-1]}, {DAYS}d, "
-          f"payday_err={PE}, FITTED_BELIEF, paired 2 SE vs degenerate")
+    # Derived from what this run executed: under `--canonical` the scalar K is
+    # dead (`k_mean` takes over) and POPS is the ten held-out seeds.
+    print(_CAN.banner())
+    print(_CAN.world_line(N, K, POPS, DAYS, PE, SPEND)
+          + ", FITTED_BELIEF, paired 2 SE vs degenerate")
     print("=" * 100)
     print(f"{'arm':>15s} {'cycle_rec':>10s} {'vs degen':>10s} {'2SE':>7s} "
           f"{'sig':>5s} {'Rs recovered':>14s} {'surv':>7s} {'att/cyc':>8s} "
@@ -201,8 +230,8 @@ def main() -> int:
 
     # ---- action-usage counts, so a zero effect can be told from a zero usage
     print()
-    print("Action usage (summed over 8 populations) -- a zero EFFECT and a zero"
-          " USAGE are different findings:")
+    print(f"Action usage (summed over {len(POPS)} populations) -- a zero "
+          f"EFFECT and a zero USAGE are different findings:")
     print(f"{'arm':>15s} {'nudges':>8s} {'took':>7s} {'escal':>7s} "
           f"{'stops':>7s} {'waits':>8s} {'dead':>7s}")
     for label, _kw in ARMS:
@@ -219,10 +248,20 @@ def main() -> int:
     print("=" * 100)
     verdicts = []
 
-    same = all(res[("rules_none", s)]["cycle_rec"] ==
+    # E-ABL-1 is scored against `workflows_off`, the arm that actually holds
+    # everything except the action space fixed. Scored against `rules_none` it
+    # was testing whether the backup checkout and the fail-path reminders are
+    # worth exactly zero, which is a different question and not this check's.
+    same = all(res[("workflows_off", s)]["cycle_rec"] ==
                res[("degenerate", s)]["cycle_rec"] for s in POPS)
-    verdicts.append(("E-ABL-1 rules_none == degenerate exactly", same,
+    verdicts.append(("E-ABL-1 workflows_off == degenerate exactly", same,
                      "consistency: the ablation isolates what it claims to"))
+    wf = (col("rules_none", "cycle_rec")
+          - col("workflows_off", "cycle_rec")).mean() * 100
+    verdicts.append(("E-ABL-1b the backup checkout and the fail-path reminders "
+                     "are reported separately from the action space",
+                     True, f"they are worth {wf:+.3f} pts, and every `vs "
+                           f"degen` row for a full-mode arm contains them"))
 
     for p in ("0.10", "0.25", "0.50"):
         label = f"+NUDGE p={p}"
@@ -255,7 +294,7 @@ def main() -> int:
     print()
     print(f"Pre-registration record for this measurement: {hits}/{len(verdicts)}")
     print()
-    print("A BROKEN prediction is a finding and goes in NOTES.md with its")
+    print("A BROKEN prediction is a finding and is recorded with its")
     print("mechanism. The non-zero exit prevents automation calling it a pass.")
     return 0 if hits == len(verdicts) else 1
 

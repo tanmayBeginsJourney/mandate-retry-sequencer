@@ -19,6 +19,7 @@ import agent  # noqa: F401,E402
 import w3  # noqa: E402
 from agent.audit.log import EventKind, read_rows  # noqa: E402
 from agent.batch import run_once  # noqa: E402
+# I2-EXEMPT: wraps SimExecutor to inject unknown and terminal outcomes the world does not produce.
 from agent.execution.sim_executor import SimExecutor  # noqa: E402
 from agent.ports import AttemptOutcome  # noqa: E402
 from agent.recovery import (  # noqa: E402

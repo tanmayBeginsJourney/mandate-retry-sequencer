@@ -12,8 +12,8 @@
 # contact with a build week, and a hook people bypass protects nothing.
 #
 # Install with: scripts/install-hooks.sh
-# Emergency bypass is `git push --no-verify`. If you use it, say so in
-# NOTES.md. That file is a judged deliverable and the mess is the point.
+# Emergency bypass is `git push --no-verify`. If you use it, say so in the
+# commit message, so the bypass travels with the change in git history.
 
 set -u
 

@@ -12,13 +12,13 @@ credit does not arrive. It is SWEPT, never picked: no source gives a rate for
 how often an Indian salaried account simply has no inflow in a month, so a
 chosen value would be an invented constant (CLAUDE.md rule 5).
 
-PRE-REGISTERED IN NOTES.md, 30 August 2026, BEFORE THIS RAN. W2-1 to W2-5,
+PRE-REGISTERED 30 August 2026, BEFORE THIS RAN. W2-1 to W2-5,
 printed and scored below. W2-3 is the one that matters: it predicts the early
 share does NOT move, because V7's cause is the due-date/payday offset (W6) and
 not insolvency. If W2-3 breaks, that diagnosis was wrong.
 
 NOT gate-protected. `python agent/tests/test_insolvency_sweep.py` from the root.
-EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/06_MODEL_CARD.md 6a.
+EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/results.md.
 """
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def main() -> int:
     gap_hi = (a_hi["rec"] - f_hi["rec"]) * 100
 
     print()
-    print("PRE-REGISTERED (NOTES.md, 30 Aug 2026, before this ran)")
+    print("PRE-REGISTERED (30 Aug 2026, before this ran)")
     print("=" * 100)
     checks = [
         ("W2-1", "the oracle stops being 100% at p=0.08", (0.90, 0.995),
@@ -185,7 +185,7 @@ def main() -> int:
     print("  transient failures -- and V7 did not move for those either")
     print("  (41.84% -> 42.78% at best). Its two live causes are the")
     print("  due-date/payday offset (W6) and the agent's blindness to")
-    print("  transients. docs/04_BUILD_PLAN.md.")
+    print("  transients. docs/results.md.")
     return 0 if n_held == len(checks) else 1
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GATE: the recovery-rate metric. docs/04_BUILD_PLAN.md W0.
+"""GATE: the recovery-rate metric. docs/results.md.
 
 The project's own metric is cycles collected / cycles due. Every published
 figure in the payments industry is a RECOVERY RATE -- of the payments that
@@ -10,7 +10,7 @@ test behind it is how error 5 happened.
 FIVE CHECKS, EACH WITH A NAMED MUTANT THAT MUST TRIP IT. A check whose mutant
 does not trip is reported VACUOUS and treated as a failure, exactly as
 `sim/gate.py` does -- that rule exists because three gates in this project once
-passed by construction (docs/03_ERRORS.md, "Three vacuous gates").
+passed by construction (docs/errors.md, "Three vacuous gates").
 
   W-1  the loop's record of which cycles it collected agrees EXACTLY with an
        independent replay of the same facts from the audit log. Two authors,
@@ -180,7 +180,7 @@ def main() -> int:
                     empty.recovered == 0))
 
     # ---- report ----------------------------------------------------------
-    print("RECOVERY-METRIC GATE -- docs/04_BUILD_PLAN.md W0")
+    print("RECOVERY-METRIC GATE -- docs/results.md")
     print(f"n={N} k={K} {DAYS}d pop seed {POP_SEED} run seed {SEED} "
           f"payday_err=+/-{PE} pop_spend={SPEND}")
     print("=" * 88)

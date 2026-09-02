@@ -9,7 +9,7 @@ different SKU, and three injection cases.
 Production routes the diagnoser to the model only when `merchant_note` is
 non-empty. The full 40-case table is historical; see ROUTED SUBSET in output.
 
-PRE-REGISTERED IN `NOTES.md`, 29 August 2026, before this file existed.
+PRE-REGISTERED 29 August 2026, before this file existed.
 Predictions E-LLM-1..5 and E-JUDGE-1..3 are scored at the bottom.
 
 --------------------------------------------------------------------------
@@ -189,7 +189,9 @@ def main(argv=None) -> int:
     # THE DIAGNOSER'S REASONING SETTING, and the reason it is a flag.
     # Every LLM score in this repository was produced at `low` with a
     # 2000-token cap, and `agent/llm/client.py` says in capitals that this is a
-    # DIFFERENT MODEL CONFIGURATION from the default -- "10/21 may be a floor".
+    # DIFFERENT MODEL CONFIGURATION from the default. The setting was swept:
+    # `low` is the BEST of the three permitted values on the ambiguous set, not
+    # a floor, and at `high` the model loses to the rule engine.
     # Thinking cannot be disabled on these SKUs; the API answers code 1210 and
     # names the permitted values, which is why `medium` is not one of them.
     #
@@ -514,7 +516,7 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
                        tax_rows, model_diag, mutant_rows) -> int:
     print()
     print("=" * 108)
-    print("PRE-REGISTERED CHECKS (NOTES.md, 29 Aug 2026, before this file)")
+    print("PRE-REGISTERED CHECKS (29 Aug 2026, before this file)")
     print("=" * 108)
     v = []
     llm_name = "routed (shipping)" if "routed (shipping)" in summaries else None
@@ -601,7 +603,33 @@ def _score_predictions(cases, summaries, results, inj_rows, judge_rows,
         print(f"           [{detail}]")
     print()
     print(f"Pre-registration record for this measurement: {hits}/{len(v)}")
-    return 0
+
+    # EXIT CODES. Every other measurement script under agent/tests/ ends with
+    # `return 0 if hits == len(v) else 1`, and docs/errors.md lists "release-
+    # path scripts exit non-zero on a broken prediction" as a control. This
+    # one returned 0 unconditionally, so the control was true of eleven
+    # scripts and false of the twelfth -- and the twelfth is the one the
+    # README tells a reader to run.
+    #
+    #   0  every pre-registered check held
+    #   1  at least one broke. The record above is still the deliverable; the
+    #      exit code is there so automation cannot report a break as a pass.
+    #   3  ADR-005 is broken by construction: `ports.Diagnosis` has grown a
+    #      field that could hold a time, which makes a claim in README.md and
+    #      docs/architecture.md false. Until 2 September 2026 this printed
+    #      "ADR-005 BROKEN" and returned 0. `sim/verify_doc_contract.py`
+    #      carries the same check with a canary and runs in the pre-commit
+    #      hook; this is the second door on the same room.
+    has_t, hit_fields = diagnosis_has_temporal_field()
+    if has_t:
+        print()
+        print("!" * 78)
+        print(f"ADR-005 BROKEN: ports.Diagnosis carries {list(hit_fields)}.")
+        print("The claim that a language model cannot express a debit time is "
+              "false while that field exists.")
+        print("!" * 78)
+        return 3
+    return 0 if hits == len(v) else 1
 
 
 if __name__ == "__main__":

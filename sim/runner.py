@@ -125,7 +125,7 @@ def run_jobs(jobs, workers=None, shared_seed_mutant=False, serial=False):
     # Two reasons. It is free: every array here is 90 elements with a 3-tap
     # kernel, far below any threshold where a threaded BLAS helps. And 32
     # workers each spinning up a 32-thread pool is ~1000 threads, which this
-    # machine has been observed to fall over under -- see NOTES.md, the
+    # machine has been observed to fall over under -- see the development log, the
     # intermittent 0xC0000005.
     for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
                 "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
@@ -155,7 +155,7 @@ def run_jobs(jobs, workers=None, shared_seed_mutant=False, serial=False):
               f"the remaining {len(left)} SERIALLY.")
         print("RUNNER: results are unaffected -- every run is deterministic in "
               "its seed, which T9 checks -- but this crash is real and is "
-              "logged in NOTES.md as unresolved.")
+              "logged in the development log as unresolved.")
         print("!" * 78 + "\n", flush=True)
         for j in left:
             key, res = _one(j)

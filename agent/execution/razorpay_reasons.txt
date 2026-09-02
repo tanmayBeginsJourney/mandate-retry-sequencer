@@ -1,7 +1,7 @@
 # Razorpay `error_reason` values, verbatim.
 #
 # SOURCE: payments_error_reasons.xlsx, downloaded from razorpay.com on
-# 29 August 2026. [VERIFIED], primary source. Recorded in docs/01_FACTS.md.
+# 29 August 2026. [VERIFIED], primary source. Recorded in docs/results.md.
 #
 # THIS FILE IS A FIXTURE, NOT A CONFIGURATION. Nothing reads it at runtime.
 # `agent/tests/test_razorpay_mapping.py` checks that every reason here has a

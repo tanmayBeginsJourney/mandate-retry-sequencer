@@ -59,7 +59,7 @@ WHAT WOULD MAKE ALL OF THIS AN OVERSTATEMENT, said before the numbers:
     ~17 incidents Mar 2020-Mar 2025; longest ~207 min), none of which is about
     AutoPay specifically.
   * The oracle is not a tight bound here: it reads `bal[tt] - drained` with no
-    topups (docs/06_MODEL_CARD.md §3 item 11), and it has no notion of the rail
+    topups (docs/results.md), and it has no notion of the rail
     at all, so no oracle row is quoted in this table.
 """
 from __future__ import annotations
@@ -88,7 +88,8 @@ from agent.tests._parallel import agent_job, run_jobs
 from agent.tests import _canonical as _CAN
 
 POPS = _CAN.pops([700, 701, 702, 703, 704, 705, 706, 707])
-N, K, DAYS, SPEND, PE, RUN_SEED = 100, 5, 120, _CAN.spend(1.05), 7, 7
+N, K, DAYS, SPEND, PE, RUN_SEED = (_CAN.n(100), 5, 120,
+                                   _CAN.spend(1.05), 7, 7)
 SEVERITIES = [0.0, 0.15, 0.40, 0.80]
 OUTAGE_DAYS = [20, 50, 80, 110]
 DURATION_H = 6
@@ -139,8 +140,13 @@ def main() -> int:
 
     print("=" * 104)
     print("OUTAGE ABLATION -- what the context layer is worth, by severity")
-    print(f"n={N}, k={K}, 8 populations, {DAYS}d, payday_err={PE}, "
-          f"FITTED_BELIEF, {DURATION_H}h outages on days {OUTAGE_DAYS}")
+    # The world line is DERIVED from what this run executed. Under
+    # `--canonical` the scalar K is dead (`k_mean` takes over) and POPS is the
+    # ten held-out seeds, so a hand-written "k=5, 8 populations" printed a
+    # world the run did not have.
+    print(_CAN.banner())
+    print(_CAN.world_line(N, K, POPS, DAYS, PE, SPEND)
+          + f", FITTED_BELIEF, {DURATION_H}h outages on days {OUTAGE_DAYS}")
     print("paired 2 SE vs the `none` arm at the same severity. Worst-case "
           "window placement (hour 8).")
     print("=" * 104)

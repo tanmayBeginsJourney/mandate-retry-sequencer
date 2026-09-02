@@ -41,7 +41,7 @@ INFORMATION CONDITIONS (all use identical index maths; only information moves)
                  so the control is hostile rather than neutral. A
                  posterior-predictive draw and a label-shuffle of real
                  outcomes were both measured on the T9 population and
-                 both damaged it the same way (NOTES.md, 31 August).
+                 both damaged it the same way (the development log).
                  Neutrality versus own is the wrong property for any
                  control that calls observe() with a non-true outcome.
   solo_shared    Own + other mandates' real observations. Governance Tier 1.
@@ -599,7 +599,7 @@ def run(policy, pop, seed, topup_p=0.0, topup_lag=2,
                     # max|diff| = 0.94). Those two were scoring mandates 2..k
                     # off mandate 1's belief. Fixed 28 Aug 2026; it moves the
                     # placebo arms, which is why S2b and S2c change.
-                    # See NOTES.md.
+                    # See the development log.
                     if fc_days is None or not collapse:
                         fc_days = b.forecast(day, LOOKAHEAD_DAYS)
                     p_now_l = [(dd, p) for dd, p in fc_days if dd >= day + 1]

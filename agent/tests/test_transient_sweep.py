@@ -23,13 +23,13 @@ is not: it takes a Z9 at T+1, `observe(amount, False)` censors its posterior
 above `amount`, and from there it waits for payday -- while the fixed schedule,
 which does not think, knocks again at T+2 and gets paid.
 
-PRE-REGISTERED IN NOTES.md, 30 August 2026, BEFORE THIS RAN. W7-0 to W7-7,
+PRE-REGISTERED 30 August 2026, BEFORE THIS RAN. W7-0 to W7-7,
 printed and scored below. **W7-7 is the one registered against our own
 interest**: it predicts that buying V3 costs V1, the one target this world hit
 without being fitted to it.
 
 NOT gate-protected. `python agent/tests/test_transient_sweep.py` from the root.
-EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/06_MODEL_CARD.md 6a.
+EVERY RUN IS ONE PROCESS (`_parallel.py`). docs/results.md.
 """
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ SPEND = 0.80          # the calibration whose failure rate matches the record
 # 30 August; the duration is irrelevant there and is not swept twice.
 CELLS = [(0.00, 24)] + [(r, h) for r in (0.05, 0.10, 0.20) for h in (24, 48)]
 # Both readings of the registered V5 clause need a calibration to be scored at.
-# See NOTES.md, 30 August: at 0.00 V5 is out of band already, so "do not move
+# See the development log: at 0.00 V5 is out of band already, so "do not move
 # it out" is only literally scorable at 0.08.
 MISSED = (0.00, 0.08)
 ARMS = (("agent", "degenerate"), ("fixed schedule", "doc_legal"))
@@ -186,7 +186,7 @@ def main() -> int:
     w7_7_v1 = A(w7_7_cell)["fpfr"] if w7_7_cell else float("nan")
 
     print()
-    print("PRE-REGISTERED (NOTES.md, 30 Aug 2026, before this was built)")
+    print("PRE-REGISTERED (30 Aug 2026, before this was built)")
     print("=" * 104)
     # (id, text, band, value shown, scale, unit, held). `held` is passed
     # explicitly rather than derived, because two of these are quantified over
@@ -262,7 +262,7 @@ def main() -> int:
           f", hold={best[2]}h, p_missed={best[3]:.2f}")
     print()
     print("  NO TRANSIENT RATE IS ADOPTED ON THE STRENGTH OF THIS RUN, and that")
-    print("  was decided before it ran (NOTES.md). `p_transient` ships at 0.0")
+    print("  was decided before it ran (the development log). `p_transient` ships at 0.0")
     print("  and inert, like `p_missed_credit`. Choosing the rate that puts V3")
     print("  in band would FIT V3, and V3 would stop being the independent")
     print("  corroboration that makes it worth quoting at all. W7's deliverable")

@@ -1,0 +1,9 @@
+wrote docs\data\scenarios.json  (57,144 bytes)
+  hero c12m1: payday day 3, Rs 620 due day 16
+  naive: 0/4 landed
+  agent pe= 1: 1/3 landed, days [17, 29, 34], run cycle_rec 99.38%
+  agent pe= 3: 1/3 landed, days [17, 29, 34], run cycle_rec 99.64%
+  agent pe= 5: 1/3 landed, days [17, 29, 33], run cycle_rec 99.44%
+  agent pe= 7: 1/3 landed, days [17, 29, 33], run cycle_rec 99.01%
+  agent pe=10: 1/3 landed, days [17, 29, 33], run cycle_rec 98.65%
+  agent pe=14: 1/3 landed, days [17, 29, 33], run cycle_rec 98.52%

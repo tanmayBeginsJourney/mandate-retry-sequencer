@@ -31,9 +31,9 @@ days, so V1 at 0.80 is unfitted. `scripts/solve_operating_point.py` bisects
 `pop_spend` against a target of 0.12 -- the midpoint of V1's published band --
 so its `realistic = 0.7850` IS fitted to V1 and must never be scored on.
 Re-deriving the operating point at the new k would buy back a V1 hit by
-converting V1 into a fitted target. Not done. NOTES.md, 31 August 2026, A1.
+converting V1 into a fitted target. Not done.
 
-PRE-REGISTERED IN NOTES.md, 31 August 2026, BEFORE THIS RAN. W10-1 to W10-13,
+PRE-REGISTERED 31 August 2026, BEFORE THIS RAN. W10-1 to W10-13,
 printed and scored below. The external evidence and the plausible range
 declared for every swept value are in the same entry, written before any
 result was in view.
@@ -42,7 +42,7 @@ W10-2, W10-3, W10-9 and W10-11 all predict these fixes FAIL to move V5 and V7.
 They are registered against the hope that realism fixes the scoreboard.
 
 NOT gate-protected. EVERY RUN IS ONE PROCESS (`_parallel.py`).
-docs/06_MODEL_CARD.md 6a.
+docs/results.md.
 """
 from __future__ import annotations
 
@@ -60,6 +60,7 @@ import agent  # noqa: F401
 import w3
 
 from agent.batch import make_pop
+# I2-EXEMPT: reads the world's at-risk set straight off the balance trace, policy-free.
 from agent.execution.sim_executor import SimExecutor
 from agent.tests._parallel import agent_job, run_jobs
 
@@ -98,7 +99,7 @@ def _percell(pop_kw, pop_seed):
     the IDENTICAL vector of mandate counts, so the k mixture was one draw
     reused twenty times and V1 came out non-monotone in mean k. Same failure
     mode as error 27 and the W7 hold generator: per-unit randomness has to be
-    drawn per unit. NOTES.md, 31 August 2026."""
+    drawn per unit."""
     kw = dict(pop_kw)
     if "k_seed" in kw:
         kw["k_seed"] = kw["k_seed"] + pop_seed
@@ -138,7 +139,7 @@ def main() -> int:
                              dict(payday_err=PE, pop_spend=SPEND,
                                   bcfg=w3.FITTED_BELIEF, mode=mode),
                              False))
-    print("W10 -- POPULATION REALISM. Pre-registered in NOTES.md, 31 Aug 2026.")
+    print("W10 -- POPULATION REALISM. pre-registered 31 Aug 2026.")
     print(f"{len(jobs)} runs: {len(CELLS)} cells x {len(POPS)} populations x "
           f"{len(ARMS)} arms, n={N} {DAYS}d payday_err=+/-{PE} "
           f"pop_spend={SPEND} (PINNED, not re-derived)")
@@ -192,7 +193,7 @@ def main() -> int:
         print(f"{label:>16}" + "".join(f"{c:>18}" for c in cells) + f"{n_hit:>6}/4")
 
     print()
-    print("PRE-REGISTERED PREDICTIONS (NOTES.md, 31 Aug 2026, before this ran)")
+    print("PRE-REGISTERED PREDICTIONS (31 Aug 2026, before this ran)")
     print("=" * 104)
     conc_base = salary_concentration(dict())
     conc_r3 = salary_concentration(dict(amount_mode="absolute"))

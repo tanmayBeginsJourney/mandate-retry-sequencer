@@ -9,6 +9,7 @@ PKG = os.path.dirname(os.path.dirname(HERE))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
+# I2-EXEMPT: drives the mandate-registration payload through the live executor against a stub transport.
 from agent.execution.razorpay_registration import (AUTH_AMOUNT_PAISE,
                                                    build_auth_order_body,
                                                    build_customer_body,

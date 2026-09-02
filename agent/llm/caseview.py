@@ -6,7 +6,7 @@ model-backed -- can leak it, because it never had it.
 
 WHAT DOES NOT CROSS. The expected balance, the raw payday posterior, the
 customer's salary, the true payday, and every `p_success`. The governance rule
-in docs/07_AGENT_BRIEF.md §2 says merchant-facing explanations must not
+in docs/architecture.md says merchant-facing explanations must not
 disclose the customer's financial state ("our model scores this window
 highest", never "their balance has never recovered before the 3rd"). Enforcing
 that by reviewing prose is a losing game; enforcing it by never handing the
@@ -25,7 +25,7 @@ WHAT DOES CROSS, and why each is defensible to show a merchant:
                       names no merchant and no amount. This is the moat made
                       visible to the narrative layer without disclosing a
                       balance, and it is the one field to re-examine if the
-                      legal question in docs/01_FACTS.md ("may an aggregator
+                      legal question in docs/results.md ("may an aggregator
                       use Merchant A's outcomes for Merchant B") resolves the
                       wrong way. That question is tagged [GUESS] and unread.
 

@@ -18,6 +18,7 @@ from agent.audit.log import AuditLog, read_rows  # noqa: E402
 from agent.audit.jsonl_queue import read_jsonl  # noqa: E402
 from agent.constraints.rules import AttemptLedger  # noqa: E402
 from agent.constraints.stage0 import Stage0Gate  # noqa: E402
+# I2-EXEMPT: drives the test-mode Razorpay workflows through the executor.
 from agent.execution.razorpay_executor import (MandateBinding,  # noqa: E402
                                                RazorpayExecutor)
 from agent.ports import MandateRef, WorkflowResult  # noqa: E402

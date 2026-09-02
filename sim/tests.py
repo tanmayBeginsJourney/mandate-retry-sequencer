@@ -1,5 +1,6 @@
 """
-TEST SUITE. Implements TEST_DESIGN.md, which was written before the harness.
+TEST SUITE. Implements the test design written before the harness; its
+reasoning survives in the project's development log, in git history.
 
 Every gate is paired with a mutant that must trip it. A gate no mutant can trip
 is reported as VACUOUS and counts as a failure of the suite, not a pass.
@@ -8,7 +9,7 @@ Operating point matters. Gates that only bind under contention (M1, S2, T5, T7)
 run at payday_err=7. At the harness default of +/-1 day the world is
 uncontended -- policies hit payday nearly every time, recovery is ~97%, and a
 constraint that is never reached cannot be tested. Everything else stays at the
-default. See NOTES.md, 27 August 2026.
+default. See the development log.
 
 -----------------------------------------------------------------------------
 RESTRUCTURED 28 August 2026. Three changes, none of them to a gate's logic or
@@ -180,7 +181,7 @@ def paired(a, b):
 # specific value 4 is enforced. That is strictly more than it proved before
 # (nothing) and strictly less than the NPCI-specific claim, so read it as
 # "the mechanism works at whatever cap it is given". w3.NPCI_MAX = 4 is
-# asserted separately by sim/verify_brief.py.
+# asserted separately by sim/verify_doc_contract.py.
 MUTANTS = [
     ("M1", "cap", "cap", "attempt past the cap", PE_CONT, dict(cap_override=2)),
     ("M2", "peak", "peak", "dispatch inside a peak hour", PE_FLAT, {}),
@@ -279,7 +280,7 @@ def tier1():
     # M6/M7: leakage. A belief fed the true balance must change the outcome;
     # if it does not, the leakage test could never detect real leakage.
     # M7 (forecast reads the real future array) is specified in
-    # 05_TEST_DESIGN.md and is still NOT implemented. T2 covers the same
+    # docs/results.md and is still NOT implemented. T2 covers the same
     # property structurally.
     base = R("portfolio", "P", 7)["cycle_rec"]
     leak = R("portfolio", "P", 7, mutate="leak_bal")["cycle_rec"]
@@ -345,7 +346,7 @@ def gate_m4b():
     That is evidence ONLY if the mutant creates an illegal STATE and a
     different piece of code notices. If the mutation branch increments
     V.<field> itself, the gate passes by construction -- the same shape as the
-    three vacuous gates in docs/03_ERRORS.md, and one level worse, because the
+    three vacuous gates in docs/errors.md, and one level worse, because the
     mutant is the thing that is supposed to be adversarial.
 
     Measured 28 August 2026 on an instrumented copy of the harness:
@@ -429,7 +430,7 @@ def tier2():
     print("\n--- Tier 2: correctness invariants ---")
 
     # T1 ORACLE DOMINANCE - the single most load-bearing test in the suite.
-    # 05_TEST_DESIGN.md requires dominance "at every contention level", so it
+    # docs/results.md requires dominance "at every contention level", so it
     # runs at both. The gate is paired with the weak_oracle mutant: with the
     # oracle crippled, some policy MUST beat it, otherwise this gate is not
     # binding.
@@ -489,7 +490,7 @@ def tier2():
     # T3 NO TRUE-BALANCE BACK-CHANNEL.
     # Previously this ran solo_pop twice and compared - a determinism check that
     # T4 already performs, testing nothing about leakage despite its name.
-    # Rewritten to the property 05_TEST_DESIGN.md actually specifies: a belief's
+    # Rewritten to the property docs/results.md actually specifies: a belief's
     # predictions must depend only on the observations it is given, never on the
     # world's balance array.
     probe_cust = get_pop("PROBE")[0]
@@ -542,7 +543,7 @@ def tier2():
     # population-wide, so a single mandate taking a 5th attempt was invisible to
     # it. It now reads vdetail["cap"], which counts every individual dispatch
     # that was a (cap+1)th or later attempt within one mandate-cycle.
-    # NOTE: the conservation identity 05_TEST_DESIGN.md specifies
+    # NOTE: the conservation identity docs/results.md specifies
     # (recovered + dead + unresolved + lapsed == 1.0 by count) is still NOT
     # implemented. harness.run does not return the counts it needs. Do not read
     # T7 as covering it.
@@ -668,7 +669,7 @@ def gate_s1():
 
 def reliability(cal, label, extra=""):
     """S1's binning and S1's threshold, factored out so S1_PD cannot drift
-    from it. ECE < 0.10 AND monotone, both declared in 05_TEST_DESIGN.md
+    from it. ECE < 0.10 AND monotone, both declared in docs/results.md
     before any result was seen."""
     cal = np.array(cal, dtype=float)
     edges = np.linspace(0, 1, 11)

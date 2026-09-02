@@ -4,7 +4,7 @@ THE CONDITIONAL HEADLINE: does the sophisticated system beat the 5-line
 heuristic, and at what payday uncertainty does that flip?
 
 This is the number that decides whether the project is worth building. The
-version in docs/02_RESULTS.md before 28 August 2026 was measured at n=30 with
+version in docs/results.md before 28 August 2026 was measured at n=30 with
 4 seeds on the UNFITTED belief, and reported a crossover between +/-3 and +/-7
 days. This regenerates it at n=100 across 8 held-out populations on the fitted
 filter.

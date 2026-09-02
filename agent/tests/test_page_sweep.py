@@ -18,7 +18,8 @@ disagreed with `agent.batch_report --canonical` by a hundredth -- the exact
 symptom of a transcribed table outliving its source.
 
 CONDITIONS ARE THE HEADLINE'S, and identical to
-`test_conditional_headline.py`'s: n=100, 10 held-out populations, 120 days,
+`test_conditional_headline.py`'s: the canonical n, 10 held-out populations,
+120 days,
 `pop_spend=0.93`, `mode="full"`, canonical world, run seed matching
 `agent/batch_report.py`, `time_major=True`. The +/-7 row must reproduce
 `py -3.12 -m agent.batch_report --pops 10 --canonical` rather than sitting
@@ -40,6 +41,8 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import json
+
 import numpy as np
 
 import agent  # noqa: F401
@@ -47,10 +50,12 @@ import w3
 from agent.tests import _canonical as _CAN
 from agent.tests._parallel import agent_job, harness_job, run_jobs
 
-N, K, DAYS, SPEND = 100, 5, 120, 0.93
+N, K, DAYS, SPEND = _CAN.N, 5, 120, _CAN.SPEND
 RUN_SEED = 7
 POPS = list(_CAN.POPS)
 LEVELS = (1, 3, 5, 7, 10, 14)
+#: Read by `scripts/build_page_data.py`. Committed.
+OUT = os.path.join(ROOT, "sim", "page_sweep.json")
 
 #: The page prints a word, not a number, wherever the interval covers zero.
 #: Transcribing "agent wins" onto a tie is the failure this column prevents.
@@ -105,17 +110,29 @@ def main() -> int:
         print(f"{pe:>11}{hm*100:>12.2f}%{am*100:>9.2f}%{d*100:>+9.2f}"
               f"{dse*100:>8.2f}{ar:>10}  {v}")
 
+    # THE SWEEP IS WRITTEN, NOT TRANSCRIBED. `scripts/build_page_data.py` used
+    # to carry this table as a literal that a human copied off this printout.
+    # It now reads the file below, so the page's slider cannot outlive the run
+    # that produced it. The delta is the paired difference, NOT the two rounded
+    # columns subtracted; those can disagree by a hundredth, and a page that
+    # disagrees with its own source invites the reader to check nothing else.
+    payload = dict(
+        generated_by="py -3.12 agent/tests/test_page_sweep.py",
+        world=_CAN.banner(argv=["--canonical"]),
+        world_line=_CAN.world_line(N, K, POPS, DAYS, "swept", SPEND,
+                                   argv=["--canonical"]),
+        n=N, populations=len(POPS), pop_seeds=list(POPS), days=DAYS,
+        pop_spend=SPEND, run_seed=RUN_SEED,
+        rows=[dict(payday_err=pe, payday_wait=round(hm, 2),
+                   agent=round(am, 2), delta=round(d, 2),
+                   two_se=round(dse, 2), verdict=v)
+              for pe, hm, am, d, dse, v in rows])
+    with open(OUT, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=1, sort_keys=True)
+        fh.write(chr(10))
     print()
-    print("SWEEP for scripts/build_page_data.py -- transcribe, do not compute.")
-    print("The delta is printed from the paired difference, NOT from")
-    print("subtracting the two rounded columns; those can disagree by a")
-    print("hundredth and a page that disagrees with its own source invites")
-    print("the reader to check nothing else.")
-    print("SWEEP = [")
-    for pe, hm, am, d, dse, v in rows:
-        print(f"    ({pe:<2d} {hm:.2f}, {am:.2f}, {d:+.2f}, {dse:.2f}, "
-              f'"{v}"),'.rjust(0))
-    print("]")
+    print(f"wrote {os.path.relpath(OUT, ROOT)} -- "
+          f"scripts/build_page_data.py reads it.")
     print()
     print("  The +/-7 row is the headline cell and must reproduce "
           "`agent.batch_report --pops 10 --canonical`.")

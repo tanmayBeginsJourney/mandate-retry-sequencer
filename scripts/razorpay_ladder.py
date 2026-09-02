@@ -3,7 +3,7 @@
 WHY A LADDER. `agent/execution/razorpay_executor.py` was written on 29 August
 2026 against Razorpay's published documentation and, until this script ran, had
 never sent a byte. A request body derived from a doc page and never given a
-response is a hypothesis, and `docs/06_MODEL_CARD.md` §6b-2 says so. The cheap
+response is a hypothesis, and `docs/results.md-2 says so. The cheap
 mistake would be to treat "we have no API key" as "nothing can be tested", when
 in fact the bottom of the ladder needs no account at all: an unauthenticated
 request still produces a REAL status line and a REAL error envelope from

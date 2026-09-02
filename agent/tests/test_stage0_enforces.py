@@ -12,7 +12,7 @@ TWO HALVES, AND THEY MUST BOTH BE HERE.
 Half A on its own is worthless. A gate that refuses everything the test feeds
 it proves nothing about whether the AUDITOR would notice if the gate had a
 hole -- and an enforcement layer whose only check is its own predicates is the
-vacuous-gate shape this project has shipped five times (docs/03_ERRORS.md).
+vacuous-gate shape this project has shipped five times (docs/errors.md).
 Half B is what makes the enforcement claim falsifiable.
 
 THE INJECTION TOUCHES NO COUNTER. It calls the executor and writes log rows.
@@ -26,7 +26,7 @@ CAP AND PENDING HAVE NO REFERENCE IMPLEMENTATION. `sim/harness.py`'s counters
 for those two have never been shown to work -- M1 is VACUOUS (the cap is never
 the binding constraint at either operating point) and M4's mutant increments
 `V.pending` itself. So the two cases below are written from the rule text in
-docs/01_FACTS.md, not ported from the harness, and they are the only working
+docs/results.md, not ported from the harness, and they are the only working
 test either rule has anywhere in this repo.
 """
 from __future__ import annotations
@@ -47,6 +47,7 @@ from agent.audit.log import AuditLog, EventKind, read_rows
 from agent.constraints.auditor import replay
 from agent.constraints.rules import AttemptLedger
 from agent.constraints.stage0 import Stage0Gate
+# I2-EXEMPT: builds an executor in order to prove the gate refuses before it is reached.
 from agent.execution.sim_executor import SimExecutor
 from agent.ports import (TECH, Z9, InterventionKind, MandateRef, MoneyAction,
                          Refused, to_paise)
