@@ -198,7 +198,7 @@ why they are swept rather than set.
 - **`naive`** — Razorpay's documented schedule made legal: T+1 to T+4. It never
   uses a payday estimate.
 - **`payday_wait`** — estimates the payday, waits for it, then attempts once a
-  day. The five-line heuristic a rival builds in an afternoon. It targets the
+  day. A simple 5 line heuristic. It targets the
   estimate on its first attempt only and then retries daily, so after one miss
   it burns the NPCI cap in three days.
 - **`[1,7]`** — two attempts at frozen offsets from the same noisy payday
