@@ -3,28 +3,24 @@
 WHY IT MUST NOT BE A HAPPY PATH. A mock that always answers `captured` proves
 the code can parse a success. The interesting half of this system is what
 happens when the rail declines, loses a response, delivers the same webhook
-twice, delivers two webhooks in the wrong order, or answers a debit for a
-mandate the customer paused ten minutes ago. Those faults are part of the
-model here, not a switch somebody has to remember.
+twice, delivers two in the wrong order, or answers a debit for a mandate the
+customer paused ten minutes ago. Those faults are in the model, not behind a
+switch somebody has to remember.
 
-WHAT IT MODELS
-  * customers, registration orders, token issuance and confirmation
-  * a token that can be rejected, cancelled, paused or resumed
-  * the receipt-uniqueness rule the real API enforces on orders
-  * one payment per order, including the refusal of a second one
-  * a subsequent debit that captures, declines with a real Razorpay reason, or
-    disappears without an answer
-  * the webhook stream that follows, with duplicates, reordering and drops
+WHAT IT MODELS: customers, registration orders, token issuance and
+confirmation; a token that can be rejected, cancelled, paused or resumed; the
+receipt-uniqueness rule; one payment per paid order, including the refusal of a
+second; a debit that captures, declines with a real Razorpay `error_reason`, or
+disappears without an answer; and the webhook stream that follows, with
+duplicates, reordering and drops.
 
-WHAT IT DOES NOT MODEL: money, settlement, NPCI, or the UPI app. It answers
-the way Razorpay's documentation says Razorpay answers, and nothing more. It
-is not evidence about the live rail and no result in this repository treats it
-as any.
+WHAT IT DOES NOT MODEL: money, settlement, NPCI, or the UPI app. It answers the
+way Razorpay's documentation says Razorpay answers, and nothing more. IT IS NOT
+EVIDENCE ABOUT THE LIVE RAIL and no result here treats it as any.
 
 DETERMINISM. Every choice comes from a seeded `random.Random`, so a failing
-test is a reproducible test. `MockPlan` overrides the seed entirely when one
-exact sequence is what is under test, so a gate never has to search for a seed
-that happens to produce the case it wants.
+test is reproducible. `MockPlan` overrides the seed entirely when one exact
+sequence is under test, so a gate never has to search for a lucky seed.
 """
 from __future__ import annotations
 
@@ -125,11 +121,10 @@ class MockRazorpayApi:
     def url(self, key: str, **kw) -> str:
         """The URL the real client would have used.
 
-        The executor records it in its proof transcript, so the mock has to be
-        able to answer. `live/tests/test_flow.py` asserts that this class
-        implements every public method of `RazorpayApi`, because a mock missing
-        one fails as an AttributeError inside a `try` somewhere and looks like
-        a business rule refusing.
+        The executor records it in its proof transcript. `live/tests/
+        test_flow.py` gate F1 asserts this class implements every public method
+        of `RazorpayApi`, because a missing one fails as an AttributeError
+        inside a `try` somewhere and looks like a business rule refusing.
         """
         from agent.execution.razorpay_api import PATHS
         return self.api_base + PATHS[key].format(**kw)
@@ -263,21 +258,14 @@ class MockRazorpayApi:
                         "delivered_at": self._clock()})
         return r
 
-    def fetch_order(self, order_id: str) -> ApiResponse:
-        o = self._orders.get(order_id)
-        if o is None:
-            return self._rejected("BAD_REQUEST_ERROR", "Order does not exist",
-                                  400)
-        return self._ok({"id": o.id, "entity": "order", "amount": o.amount,
-                         "receipt": o.receipt, "status": o.status,
-                         "currency": "INR"})
-
     def find_order_by_receipt(self, receipt: str) -> ApiResponse:
-        oid = self._receipts.get(receipt)
-        if oid is None:
+        o = self._orders.get(self._receipts.get(receipt, ""))
+        if o is None:
             return self._ok({"entity": "collection", "count": 0, "items": []})
         return self._ok({"entity": "collection", "count": 1,
-                         "items": [self.fetch_order(oid).body]})
+                         "items": [{"id": o.id, "entity": "order",
+                                    "amount": o.amount, "receipt": o.receipt,
+                                    "status": o.status, "currency": "INR"}]})
 
     def fetch_order_payments(self, order_id: str) -> ApiResponse:
         o = self._orders.get(order_id)
@@ -366,9 +354,12 @@ class MockRazorpayApi:
         if o is None:
             return self._rejected("BAD_REQUEST_ERROR", "Order does not exist")
         if o.status == "paid":
-            # THE PROPERTY THE CRASH ARGUMENT RESTS ON: one payment per order,
-            # enforced by the provider. A submission retried after a lost
-            # response gets this, not a second debit.
+            # THE PROPERTY THE CRASH ARGUMENT RESTS ON, and it is the only one
+            # Razorpay documents: "No further payment requests are permitted
+            # once the order moves to the `paid` state." A submission retried
+            # after a lost response gets this, not a second debit. An order
+            # left `attempted` is NOT modelled as closed, because the docs do
+            # not say it is -- see `razorpay_api.py`.
             return self._rejected("BAD_REQUEST_ERROR", "Order already paid")
         tok = self._tokens.get(token_id)
         if tok is None:

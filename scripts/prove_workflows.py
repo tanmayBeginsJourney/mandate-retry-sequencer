@@ -80,8 +80,7 @@ def main() -> int:
     os.environ["RECOVERY_OUTBOX"] = outbox
     os.environ["RECOVERY_QUEUE"] = queue
 
-    ex = RazorpayExecutor(bindings={}, max_live_nudges=3,
-                          max_live_escalations=3)
+    ex = RazorpayExecutor(bindings={}, max_live_nudges=3)
     ex.outbox_path = outbox
     ex.queue_path = queue
     log_path = os.path.join(tmp, "wf.jsonl")

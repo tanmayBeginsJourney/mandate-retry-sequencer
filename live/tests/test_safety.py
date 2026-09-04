@@ -120,13 +120,21 @@ def main() -> int:
     r.section("X4  the executor is reachable from exactly one object")
     src = open(os.path.join(_PKG, "live", "service.py"), encoding="utf-8").read()
     tree = ast.parse(src)
-    holders = [n.targets[0].attr for n in ast.walk(tree)
-               if isinstance(n, ast.Assign)
-               and isinstance(n.targets[0], ast.Attribute)
-               and isinstance(n.value, ast.Call)
-               and getattr(n.value.func, "id", "") == "RazorpayExecutor"]
+    built = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Assign)
+             and isinstance(n.targets[0], ast.Attribute)
+             and isinstance(n.value, ast.Call)
+             and getattr(n.value.func, "id", "") == "RazorpayExecutor"]
     r.ok("X4a  the service constructs exactly one executor",
-         holders == ["executor"], str(holders))
+         [n.targets[0].attr for n in built] == ["executor"],
+         str([n.targets[0].attr for n in built]))
+    # AND HANDS IT A CLIENT. Given neither `api` nor `transport`,
+    # `RazorpayExecutor.__init__` falls back to reading RAZORPAY_KEY_ID out of
+    # the process environment -- which would put credentials into the live rail
+    # by a route that never passes `config.load()` and its fail-closed checks.
+    r.ok("X4a2 and passes it an explicit client, never the environment",
+         all(any(k.arg == "api" for k in n.value.keywords) for n in built),
+         str([[k.arg for k in n.value.keywords] for n in built]))
     gate_src = inspect.getsource(service_module.LiveService)
     r.ok("X4b  every money action goes through the gate",
          "self.gate.submit(" in gate_src
@@ -158,25 +166,16 @@ def main() -> int:
     api_src = inspect.getsource(api_module.Api)
     r.ok("X5a  there is no /charge route",
          "/charge" not in api_src)
-    # `decide` is the only route that can move money. It must read NOTHING
-    # from the request body -- the amount is the mandate's, the time is the
-    # scheduler's. A body parameter here would be an injection point.
-    decide_block = api_src.split('if path.endswith("/decide")')[1].split(
-        'if path.endswith("/cancel")')[0]
-    # Comments are stripped first: this block explains WHY it reads no amount,
-    # and a text search that could not tell the explanation from the code
-    # would go red on its own docstring.
-    code = " ".join(line.split("#", 1)[0]
-                    for line in decide_block.splitlines())
-    r.ok("X5b  the decide route reads nothing from the request body",
-         "body" not in code, code.strip()[:80])
-    r.ok("X5c  and it passes no amount to the service",
-         "amount" not in code)
     # Registration DOES take an amount -- that is the subscription price the
     # customer authorises -- but it can never charge, and it is capped.
-    r.ok("X5d  only registration accepts an amount, and it cannot charge",
+    r.ok("X5b  only registration accepts an amount, and it cannot charge",
          "charge_amount_paise" in api_src
          and "start_registration" in api_src)
+    # THE BEHAVIOURAL FORM OF THIS PROPERTY IS GATE A6, over a real socket:
+    # a POST to /decide carrying an amount, a target hour and a token, with
+    # the attempt asserted to have taken none of them. Two earlier gates here
+    # searched the route's SOURCE for the word "body", which went red the
+    # first time the routing was refactored without the property changing.
 
     # ------------------------------------------------------------------ X6
     r.section("X6  the amount charged comes from the mandate, not the caller")
@@ -301,8 +300,7 @@ def main() -> int:
         a = api_module.Api(b.svc)
         headers = {"X-Operator-Token": "s" * 32}
         blob = ""
-        for route in ("/api/state", "/api/mandates", "/api/events",
-                      "/api/decisions", f"/api/mandates/{m.id}"):
+        for route in ("/api/state", f"/api/mandates/{m.id}"):
             blob += str(a.get(route, {}, headers)[1])
         r.ok("X10a the webhook secret never appears",
              "whsec_offline_gate_secret" not in blob)
@@ -312,7 +310,8 @@ def main() -> int:
              "payloads carry the customer's email and phone number")
         r.ok("X10d provider ids are shortened by default",
              "…" in blob, "full ids need ?reveal=1 and a token")
-        revealed = str(a.get("/api/mandates", {"reveal": "1"}, headers)[1])
+        revealed = str(a.get(f"/api/mandates/{m.id}", {"reveal": "1"},
+                             headers)[1])
         r.ok("X10e and are legible when an operator asks",
              m.rzp_token_id in revealed)
     finally:

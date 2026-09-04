@@ -1,48 +1,30 @@
 """The HTTP surface: one webhook endpoint, a small operator API, the console.
 
-WHAT IS DELIBERATELY ABSENT, AND IT IS THE MOST IMPORTANT THING ON THIS PAGE.
-
-There is no `POST /charge`. There is no endpoint that takes an amount, and no
-endpoint that takes a token id. The only route that can move money is
-`POST /api/mandates/{id}/decide`, which runs the whole chain -- scheduler,
-diagnosis, Stage 0, executor -- and takes no body at all. The amount comes from
-the mandate row the customer authorised; the timing comes from the belief
-filter; the legality comes from Stage 0. A caller can ask the system to think.
-It cannot tell the system what to do.
+WHAT IS DELIBERATELY ABSENT IS THE MOST IMPORTANT THING ON THIS PAGE. There is
+no `POST /charge`, no endpoint that takes an amount, and none that takes a
+token id. The only route that can move money is
+`POST /api/mandates/{id}/decide`, which runs the whole chain and READS NO BODY:
+the amount is the mandate's, the timing is the belief filter's, the legality is
+Stage 0's. A caller can ask the system to think; it cannot tell it what to do.
 
 That is not defensive habit. A generic charge endpoint would make every
-guarantee in this repository conditional on nobody calling it, including the
-guarantee that an LLM cannot pick a debit amount -- because an LLM with an HTTP
-client and a generic endpoint has picked one.
+guarantee here conditional on nobody calling it -- including the guarantee that
+an LLM cannot pick a debit amount, because an LLM with an HTTP client and a
+generic endpoint has picked one.
 
----------------------------------------------------------------------------
-THE WEBHOOK ENDPOINT
----------------------------------------------------------------------------
+THE WEBHOOK ENDPOINT is the only unauthenticated write route, because Razorpay
+cannot present an operator token. Its authentication IS the signature. It
+answers in two phases: verify, record, return -- then interpret. Razorpay
+allows five seconds and resends anything it does not see acknowledged, so a
+handler that updated beliefs inline would earn a duplicate for every slow tick.
 
-`POST /webhooks/razorpay` is the only unauthenticated write route, because
-Razorpay cannot present an operator token. Its authentication IS the signature:
-HMAC-SHA256 over the raw body, checked before the body is parsed for anything
-but its event name.
+IDENTIFIERS COME BACK SHORTENED (`pay_…8f2a`) unless the caller both
+authenticates and asks for `reveal=1`. A console gets screenshotted; a real
+customer's payment id has no reason to be legible by default, and the full
+value is one query parameter away.
 
-It answers in two phases. The request handler verifies, records and returns;
-interpretation runs after the response. Razorpay allows five seconds and
-resends anything it does not see acknowledged, so a handler that updated
-beliefs inline would earn itself a duplicate delivery for every slow tick.
-
----------------------------------------------------------------------------
-IDENTIFIER REDACTION
----------------------------------------------------------------------------
-
-Provider identifiers come back shortened -- `pay_…8f2a` -- unless the caller
-both authenticates and asks for `reveal=1`. An operator console gets
-screenshotted and demonstrated; a payment id in a screenshot is not a
-catastrophe, but it is a real customer's transaction and there is no reason for
-it to be legible by default. The full value is one query parameter away for
-somebody who needs to find the row on Razorpay's dashboard.
-
-Webhook payloads are NEVER returned. They carry the customer's email and phone
-number, they are stored only so a signature dispute can be settled, and no
-console needs them.
+WEBHOOK PAYLOADS ARE NEVER RETURNED. They carry the customer's email and phone
+number and are stored only so a signature dispute can be settled.
 """
 from __future__ import annotations
 
@@ -66,13 +48,9 @@ CONSOLE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 MAX_API_BODY = 64 * 1024
 
 #: How much of an over-long body to read and throw away before answering 413.
-#:
-#: A server that refuses without draining leaves the client mid-write, and the
-#: client sees a connection reset rather than the status it was sent -- which
-#: is exactly what a webhook sender would report as an outage. So the body is
-#: consumed in bounded chunks and discarded, up to this ceiling. Past it the
-#: connection is closed instead, because at that point the sender is either
-#: broken or hostile and neither deserves eight more megabytes of reading.
+#: A server that refuses without draining leaves the client mid-write and it
+#: sees a connection reset rather than the status -- which a webhook sender
+#: reports as an outage. Past this ceiling the connection is closed instead.
 DRAIN_CEILING = 8 * 1024 * 1024
 _DRAIN_CHUNK = 64 * 1024
 
@@ -107,10 +85,9 @@ class Api:
     def authenticated(self, headers) -> bool:
         """True when the caller may use the operator API.
 
-        With no `RECOVERY_OPERATOR_TOKEN` configured the API is open, which is
-        right for `localhost` and wrong for anything reachable. `server.py`
-        refuses to bind a non-loopback address without one, so the two halves
-        of that decision cannot drift apart.
+        With no `RECOVERY_OPERATOR_TOKEN` the API is open, which is right for
+        loopback and wrong for anything reachable -- so `server.py` refuses to
+        bind a non-loopback address without one.
         """
         if not self.config.operator_token:
             return True
@@ -127,10 +104,9 @@ class Api:
         if path == "/health":
             return 200, self.svc.health()
         if path == "/ready":
-            # Readiness is about THIS process being able to serve, not about
-            # Razorpay being up. A provider outage must not make a running
-            # service look dead to a load balancer -- it is reported on the
-            # console instead, where a human can act on it.
+            # Readiness is about THIS process serving, not about Razorpay being
+            # up: a provider outage must not make a running service look dead
+            # to a load balancer. It is shown on the console instead.
             counts = self.svc.store.summary()
             return 200, {"ready": True,
                          "unprocessed_events": counts["events_unprocessed"],
@@ -140,25 +116,21 @@ class Api:
             return 401, {"error": "operator token required"}
         reveal = query.get("reveal") == "1"
 
+        # TWO READ ROUTES, NOT SIX. `/api/state` is everything the console
+        # renders in one request and `/api/mandates/{id}` is the detail behind
+        # a selection; separate list routes for mandates, events and decisions
+        # were strict subsets of the first with no caller.
         if path == "/api/state":
             return 200, self._maybe(self._state(), reveal)
-        if path == "/api/mandates":
-            return 200, self._maybe(
-                {"mandates": [self._mandate(m) for m in
-                              self.svc.store.mandates()]}, reveal)
         if path.startswith("/api/mandates/"):
-            mid = path.rsplit("/", 1)[-1]
-            m = self.svc.store.mandate(mid)
+            m = self.svc.store.mandate(path.rsplit("/", 1)[-1])
             if m is None:
                 return 404, {"error": "no such mandate"}
             return 200, self._maybe(self._mandate_detail(m), reveal)
-        if path == "/api/events":
-            return 200, self._maybe({"events": self._events()}, reveal)
-        if path == "/api/decisions":
-            return 200, self._maybe(
-                {"decisions": [d.as_dict() for d in
-                               reversed(self.svc.decisions[-50:])]}, reveal)
         if path == "/api/connectivity":
+            # The one read-only provider call. Charges nothing, creates
+            # nothing, and is how an operator checks a live credential without
+            # spending money to find out.
             return 200, self.svc.connectivity()
         return 404, {"error": "no such route"}
 
@@ -184,42 +156,38 @@ class Api:
                     cycle_days=int(body.get("cycle_days") or 30))
                 return 201, {"mandate": self._mandate(m)}
 
-            if path.endswith("/confirm") and path.startswith("/api/mandates/"):
-                mid = path.split("/")[3]
-                m = self.svc.confirm_registration(
-                    mid, str(body.get("payment_id") or ""))
-                return 200, {"mandate": self._mandate(m)}
+            if path.startswith("/api/mandates/"):
+                mid, _, action = path[len("/api/mandates/"):].partition("/")
 
-            if (path.endswith("/mock-authorize")
-                    and path.startswith("/api/mandates/")):
-                mid = path.split("/")[3]
-                m = self.svc.mock_authorize(mid)
-                self.svc.deliver_mock_webhooks()
-                return 200, {"mandate": self._mandate(m)}
+                if action == "confirm":
+                    m = self.svc.confirm_registration(
+                        mid, str(body.get("payment_id") or ""))
+                    return 200, {"mandate": self._mandate(m)}
 
-            if path.endswith("/decide") and path.startswith("/api/mandates/"):
-                mid = path.split("/")[3]
-                # NO BODY IS READ. The amount is the mandate's, the time is the
-                # scheduler's, the legality is Stage 0's. There is nothing for
-                # a caller to supply and therefore nothing to inject.
-                d = self.svc.decide(mid)
-                # The mock rail queues the webhooks a real one would send. They
-                # go through the same verification and ingestion code here, so
-                # the offline demonstration exercises that path rather than
-                # skipping it.
-                self.svc.deliver_mock_webhooks()
-                return 200, {"decision": redact(d.as_dict())}
+                if action == "mock-authorize":
+                    m = self.svc.mock_authorize(mid)
+                    self.svc.deliver_mock_webhooks()
+                    return 200, {"mandate": self._mandate(m)}
 
-            if path.endswith("/cancel") and path.startswith("/api/mandates/"):
-                mid = path.split("/")[3]
-                m = self.svc.cancel_mandate(mid)
-                self.svc.deliver_mock_webhooks()
-                return 200, {"mandate": self._mandate(m)}
+                if action == "decide":
+                    # NO BODY IS READ. The amount is the mandate's, the time is
+                    # the scheduler's, the legality is Stage 0's. There is
+                    # nothing for a caller to supply and nothing to inject.
+                    d = self.svc.decide(mid)
+                    # The mock rail queues the webhooks a real one would send,
+                    # and they go through the same verification and ingestion
+                    # code here rather than being applied directly.
+                    self.svc.deliver_mock_webhooks()
+                    return 200, {"decision": redact(d.as_dict())}
+
+                if action == "cancel":
+                    m = self.svc.cancel_mandate(mid)
+                    self.svc.deliver_mock_webhooks()
+                    return 200, {"mandate": self._mandate(m)}
 
             if path == "/api/demo/advance":
-                # OFFLINE ONLY. `advance_clock` refuses in live mode; the route
-                # exists so a demonstration can watch a scheduler that reasons
-                # in days do so in under a minute.
+                # OFFLINE ONLY -- `advance_clock` refuses in live mode. It lets
+                # a demonstration watch a scheduler that reasons in days.
                 hours = int(body.get("hours") or 6)
                 offset = self.svc.advance_clock(hours)
                 decisions = []
@@ -321,9 +289,9 @@ class Api:
     def _events(self, limit: int = 30) -> list[dict]:
         """Webhook rows WITHOUT their payloads.
 
-        The payload is the raw body Razorpay sent. It carries the customer's
-        email and contact, it exists only so a signature dispute can be
-        settled, and nothing on a console needs it.
+        The payload is the raw body Razorpay sent; it carries the customer's
+        email and contact and exists only so a signature dispute can be
+        settled.
         """
         return [{"event_id": e.event_id, "event_type": e.event_type,
                  "received_at": e.received_at, "processed_at": e.processed_at,
@@ -337,9 +305,9 @@ def make_handler(api: Api):
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "recovery-agent"
-        #: Suppress the default stderr access log: it prints the request line,
-        #: and a request line can carry an operator token in a query string if
-        #: somebody ever puts one there.
+
+        #: No stderr access log: it prints the request line, and a request line
+        #: can carry an operator token if somebody ever puts one in a query.
         def log_message(self, fmt, *args):
             pass
 
@@ -373,9 +341,8 @@ def make_handler(api: Api):
             self.send_response(200)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
-            # The console renders provider state and calls the operator API on
-            # the same origin. It loads no third-party script and no remote
-            # font, so the policy can be this tight.
+            # The console loads no third-party script and no remote font, so
+            # the policy can be this tight.
             self.send_header(
                 "Content-Security-Policy",
                 "default-src 'none'; script-src 'self'; style-src 'self'; "
@@ -440,17 +407,17 @@ def make_handler(api: Api):
                 status, payload = api.webhook(raw, self.headers)
                 self._json(status, payload)
                 # AFTER the response. Razorpay allows five seconds and resends
-                # anything it does not see acknowledged, so interpretation --
-                # which can touch the belief filter -- must not be inside the
-                # request. The event is already durable, so a crash here is
-                # recovered by replaying `unprocessed_events` at startup.
+                # anything unacknowledged, so interpretation -- which touches
+                # the belief filter -- must not be inside the request. The
+                # event is durable, so a crash here is recovered by replaying
+                # `unprocessed_events` at startup.
                 if status == 200:
                     try:
                         api.svc.process_webhooks()
                     except Exception:               # noqa: BLE001
-                        # The event stays unprocessed and is retried at the
-                        # next ingest or restart. Razorpay has its 200 and must
-                        # not be made to resend for our bug.
+                        # It stays unprocessed and is retried at the next
+                        # ingest or restart. Razorpay has its 200 and must not
+                        # be made to resend for our bug.
                         pass
                 return
 
@@ -487,9 +454,7 @@ class Server:
     def start_background(self) -> "Server":
         self._thread = threading.Thread(target=self.serve_forever, daemon=True)
         self._thread.start()
-        # Give the listener a moment to accept, so a caller that connects
-        # immediately does not race the bind.
-        time.sleep(0.05)
+        time.sleep(0.05)        # so an immediate caller does not race the bind
         return self
 
     def stop(self) -> None:

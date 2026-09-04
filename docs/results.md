@@ -853,23 +853,68 @@ the boundary where money would move.
 
 ### The offline gates
 
-`py -3.12 -m live.tests.run_all` — seven gate files, 218 checks, about four
+`py -3.12 -m live.tests.run_all` — seven gate files, 225 checks, about four
 seconds. Each file runs in its own process. None needs a key, opens a socket to
 Razorpay, or can move money.
 
 | Gate file | Checks | What it establishes |
 |---|---|---|
-| `test_config` | 24 | The mode switch fails closed in both directions. Live mode with a missing credential raises rather than demoting to the mock; the debit flag in offline mode raises rather than being ignored; only the literal word `yes` enables real debits; no secret appears in what the console is shown |
+| `test_config` | 22 | The mode switch fails closed in both directions. Live mode with a missing credential raises rather than demoting to the mock; the debit flag in offline mode raises rather than being ignored; only the literal word `yes` enables real debits; no secret appears in what the console is shown |
 | `test_state_machine` | 22 | Every ordered pair of attempt states, exhaustively. No transition walks backwards, terminal states are final, two different terminals are recorded as a conflict rather than resolved, and a deemed transaction reads as unknown rather than failed |
 | `test_webhooks` | 32 | Signature over raw bytes; a re-serialised body fails, which is why the verifier takes bytes. A duplicate delivery adds no row. A late `payment.authorized` cannot displace a `payment.captured`. A forged signature is rejected **and recorded**. An unhandled event type is acknowledged rather than 4xx'd |
-| `test_flow` | 45 | The lifecycle end to end, and seven crash boundaries: a lost response stays unknown and blocks a second debit, an order lost to a crash is recovered by its receipt rather than created twice, an accepted-but-uninterpreted webhook is replayed at startup and replaying it again is a no-op, a restart mid-debit finishes the debit without creating a second attempt |
-| `test_safety` | 42 | `Diagnosis` has no temporal, monetary or identity field. A prompt injection in the merchant note produces a diagnosis and nothing else. Stage 0 refuses a peak-hour debit with zero provider calls. No route accepts an amount. The demonstration clock cannot move in live mode |
+| `test_flow` | 51 | The lifecycle end to end, and eight crash boundaries: a lost response stays unknown and blocks a second debit; an order lost to a crash is recovered by its receipt rather than created twice; a request the provider took but never acknowledged is recorded `UNKNOWN`, refused a second time by the provider, and resolved to `SUCCEEDED` by reconciliation with the money counted once; an accepted-but-uninterpreted webhook is replayed at startup and replaying it again is a no-op |
+| `test_safety` | 41 | `Diagnosis` has no temporal, monetary or identity field. A prompt injection in the merchant note produces a diagnosis and nothing else. Stage 0 refuses a peak-hour debit with zero provider calls. The service is handed a provider client rather than scavenging one from the environment. The demonstration clock cannot move in live mode |
 | `test_parity` | 15 | The live service and the batch run reach the **same objects** — `timing.propose`, `BeliefBook`, `Stage0Gate` — checked by identity. `live/service.py` defines no decision function of its own, and nothing under `agent/` imports `live/` |
-| `test_api` | 38 | The served surface over a real socket: content security policy, path traversal, body limits, the header names Razorpay sends, and that loading the console makes no provider call and creates no attempt |
+| `test_api` | 42 | The served surface over a real socket: content security policy, path traversal, body limits, the header names Razorpay sends, that a `POST /decide` carrying an amount, an hour and a token takes none of the three, that the webhook route is exempt from the operator token while every other route is not, and that loading the console makes no provider call and creates no attempt |
 
 The import-graph gates in `agent/tests/test_layer_isolation.py` gained two rules
 for the new package and now run **nine named mutants, nine tripped**, over 87
 files under `agent/` and 18 under `live/`, with zero violations.
+
+### The Razorpay contract, re-verified independently
+
+Every provider-specific claim in the code was re-read against Razorpay's current
+public documentation on **3 September 2026**, without reference to the earlier
+research. What follows is what that pass found. Six claims were confirmed
+verbatim, one was **corrected**, and three facts were **added**.
+
+| Claim in the code | Status |
+|---|---|
+| Webhook signature is HMAC-SHA256 over the raw body in `X-Razorpay-Signature`, and the body must not be parsed or cast first | [VERIFIED] — the documentation says "Do not parse or cast the webhook request body" in as many words |
+| `x-razorpay-event-id` is unique per event and identifies duplicates; delivery is at-least-once | [VERIFIED] |
+| Events may arrive out of order — `payment.authorized` after `payment.captured` | [VERIFIED], stated with that exact example |
+| The endpoint must answer 2xx within **five seconds**, else the event is resent; 24 hours of failures disable the webhook | [VERIFIED] |
+| `token.recurring_details.status` is one of `initiated`, `confirmed`, `rejected`, `cancelled`, `paused` | [VERIFIED] — all five, and no sixth |
+| Payment `status` is one of `created`, `authorized`, `captured`, `refunded`, `failed` | [VERIFIED] |
+| `POST /payments/create/recurring` answers `{"razorpay_payment_id": "pay_..."}` and nothing else — no `status`, no `error_reason` | [VERIFIED] against the create-subsequent-payments reference. This is the single most load-bearing claim in the executor |
+| No idempotency header is documented for the recurring charge | [VERIFIED] — idempotency is documented for RazorpayX payouts (`X-Payout-Idempotency`) and for refunds, and for nothing on this path |
+| `receipt` is unique per account and a second create with the same value is rejected | [VERIFIED] — "has to be unique", maximum 40 characters |
+| `token.max_amount` accepts 500–100,000,000 paise, default 9,999,900 | [VERIFIED] |
+| The minimum mandate amount across every merchant category is Rs 1 | [VERIFIED] |
+| API authentication is HTTP Basic with the key id and secret | [VERIFIED] |
+| An order can be paid once, **"or `attempted` with an authorised payment"** | **CORRECTED.** Only the first half is documented: "No further payment requests are permitted once the order moves to the `paid` state." An order in `attempted` — a previous payment authorised but not captured — is **not** documented as closed to a second payment. The second half was inference presented as fact and has been removed from the code |
+
+Three facts were added.
+
+**Razorpay does not retry a debit that used a pre-debit notification.** "We will
+not attempt any retry if the debit fails for tokens with the notification object
+in the created order." [VERIFIED] Sending the `notification` object moves the
+retry schedule from the provider to the agent. Without it, Razorpay debits on
+its own 36 hours 5 minutes after the order is created, and the timing rule has
+no effect on when a charge is presented.
+
+**A UPI AutoPay debit over Rs 15,000 requires the customer's UPI PIN** and
+therefore cannot complete unattended. [VERIFIED] The configured ceiling defaults
+to 500 paise, so it does not bite; it is recorded at `config.DEFAULT_MAX_DEBIT_PAISE`
+so an operator raising the ceiling past 1,500,000 paise knows what to expect.
+
+**Razorpay's own turnaround for a notified debit is 36 hours 5 minutes**, and the
+documentation states no constraint on how soon after the notification
+`payment_after` may fall. [VERIFIED] that the number exists; **[GUESS]** that a
+`payment_after` 24 hours out — which is what `LEAD_HOURS` schedules, and what the
+regulatory notice period requires — is honoured. This is the largest remaining
+unknown on the money path and it cannot be closed from documentation. It needs a
+real mandate or an answer from Razorpay Support.
 
 ### What the mock does, and what that is worth
 
@@ -885,6 +930,11 @@ one exercises the branches that matter. It is still a mock: it is a reading of a
 document, and the document could be wrong, incomplete, or describe an endpoint
 that behaves differently on a particular account. Every request shape in this
 repository is a hypothesis with a citation.
+
+**It refuses a second payment only against an order that is `paid`**, which is
+the only closure Razorpay documents. It deliberately does not model `attempted`
+as closed, because that was the inference this review removed from the code, and
+a mock that encoded it would have made the correction invisible.
 
 ## Gate status
 

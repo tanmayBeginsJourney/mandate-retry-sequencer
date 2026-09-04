@@ -40,10 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", type=int, default=8730)
     args = ap.parse_args(argv)
 
-    # Credentials live in `.env` at the repository root, which is gitignored.
-    # Reuse the loader every other entry point here uses, so there is one place
-    # that reads it and one rule about precedence: an environment variable set
-    # by the caller always wins. It never prints a key.
+    # Credentials live in `.env` at the repository root, gitignored. One
+    # loader, one precedence rule: an environment variable set by the caller
+    # always wins. It never prints a key.
     _load_dotenv()
 
     try:
@@ -54,9 +53,9 @@ def main(argv: list[str] | None = None) -> int:
 
     loopback = args.host in ("127.0.0.1", "localhost", "::1")
     if not loopback and not config.operator_token:
-        # The operator API is open when no token is set, which is the right
-        # default for a machine only its owner can reach and the wrong one for
-        # anything else. Refusing here is what keeps that from being a comment.
+        # The operator API is open with no token set -- right for a machine
+        # only its owner can reach, wrong for anything else. Refusing here is
+        # what keeps that from being a comment.
         print("REFUSED: binding a non-loopback address without "
               "RECOVERY_OPERATOR_TOKEN would expose the operator API.",
               file=sys.stderr)
@@ -64,10 +63,9 @@ def main(argv: list[str] | None = None) -> int:
 
     service = LiveService(config)
 
-    # CRASH RECOVERY, and it runs before the first request. Any webhook that
-    # was accepted and acknowledged but not interpreted -- the process died in
-    # between -- is replayed now. Every transition is monotonic, so replaying
-    # one that did land is a no-op.
+    # CRASH RECOVERY, before the first request. Any webhook accepted and
+    # acknowledged but not interpreted is replayed now; every transition is
+    # monotonic, so replaying one that did land is a no-op.
     replayed = process_pending(service.store)
     if replayed:
         print(f"replayed {len(replayed)} unprocessed webhook event(s)")

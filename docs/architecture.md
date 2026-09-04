@@ -364,20 +364,28 @@ timestamp in 1970. `scripts/prove_stage0_refuses.py` drives the constraint layer
 end to end through the executor against a transport that raises if an illegal
 action ever reaches it.
 
-**Idempotency, and a header that used to be here.** This executor previously
-sent `X-Razorpay-Idempotency-Key` on the recurring charge. Razorpay documents no
-idempotency header for that endpoint — the documented one is for RazorpayX
-Payouts and a small set of explicitly idempotent Route and Refund endpoints — so
-the header was invented, and a header the provider ignores reads like a
-guarantee. It is gone.
+**Idempotency.** No idempotency header is sent on the recurring charge, because
+Razorpay documents none for that endpoint. The headers they do document —
+`X-Payout-Idempotency` for RazorpayX payouts and composite APIs,
+`X-Refund-Idempotency` for instant refunds — cover neither this path nor
+anything on it. A header the provider ignores reads, in the code and in a
+review, like a guarantee that is not there.
 
-Two documented properties replace it. An order's `receipt` is unique per
-account, so a deterministic receipt makes order creation idempotent and
-`GET /v1/orders?receipt=` recovers an order whose id a crash lost. An order can
-be paid once. One order per debit attempt therefore makes the debit at-most-once
-at the provider. That is weaker than an idempotency key — a retried submission
-gets a rejection rather than a replayed result, so the caller still has to go
-and look — and this repository does not claim otherwise.
+Two documented properties stand in its place. An order's `receipt` "has to be
+unique" and is treated as an idempotency key, so a deterministic receipt makes
+order creation idempotent and `GET /v1/orders?receipt=` recovers an order whose
+id a crash lost. And "no further payment requests are permitted once the order
+moves to the `paid` state", so one order per debit attempt makes a *collected*
+debit at-most-once at the provider.
+
+That is weaker than an idempotency key in two ways, both stated rather than
+glossed. A retried submission gets a rejection rather than a replayed result,
+so the caller still has to go and look. And the closure is documented only for
+`paid`: an order whose payment failed stays `attempted`, and the documentation
+does not say a further payment against it is refused. The client sets
+`payment_capture: true` so authorisation and capture are not two windows, and
+the service never resubmits against an unresolved attempt. This is not
+exactly-once and is not claimed to be.
 
 ---
 
@@ -483,7 +491,8 @@ twenty-four hours and then disable the webhook.
 | after the intent, before the order | an `INTENT` row, no provider state | reconciliation reports that no request was made |
 | after the order, before recording it | an order at Razorpay whose id we lost | `GET /v1/orders?receipt=` finds it; the receipt is deterministic |
 | after the order, before the debit | a scheduled attempt | the next tick submits it; the gate's ledger is rebuilt from the store |
-| during the debit | `UNKNOWN` — the money may have moved | never retried; the order is asked which payments it has |
+| during the debit, response lost | `UNKNOWN` — the money may have moved | never retried; the order is asked which payments it has |
+| during the debit, request re-sent after a restart | the provider refuses it (`Order already paid`) and the attempt is recorded `UNKNOWN`, **not** `FAILED` | reconciliation reads the order and finds the payment that did collect |
 | after the debit, before the webhook | `SUBMITTED` | `GET /v1/payments/:id` |
 | after the webhook, before interpreting it | a durable event, unprocessed | replayed at startup; every write is monotonic, so a replay is a no-op |
 
@@ -491,6 +500,20 @@ The property this rests on is that a debit is at-most-once at the provider, and
 the property it does not have is exactly-once. A retried submission after a lost
 response gets a rejection, not a replayed success, so the client still has to
 reconcile. Nothing here claims otherwise.
+
+**And a provider refusal is never read as a decline.** `Order already paid` is
+exactly what a resubmission after a crash mid-request receives, and the order it
+names may hold a captured payment. Recording that as `FAILED` would report a
+collected cycle as uncollected and spend an NPCI attempt on it, so the service
+records `UNKNOWN` — non-terminal, never auto-retried, resolved by asking the
+order what it holds. Gate `F4b` drives that boundary and fails if the attempt
+comes out `FAILED` or if the money is counted anywhere but once.
+
+The executor's own precondition is the second line of that defence. Its journal
+is rebuilt from the attempt row on every load, so a row past `SUBMITTED` must
+report a phase `attempt()` refuses; the state-to-phase table is total over
+`AttemptState` and asserted to be, because a state missing from it would default
+to `ORDER_CREATED` and let a restart resubmit a debit that had already run.
 
 ### The HTTP surface
 

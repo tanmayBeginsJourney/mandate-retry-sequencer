@@ -1,14 +1,17 @@
-"""Test Mode UPI AutoPay mandate registration helpers.
+"""UPI AutoPay mandate registration: the half a server cannot do alone.
 
-Official flow (Razorpay PG recurring / UPI Autopay, read 31 August 2026):
-  1. POST /v1/customers  -> customer_id
-  2. POST /v1/orders with method=upi, customer_id, token{max_amount,expire_at,frequency}
-     -> order_id  (UPI auth amount is Rs 1 / 100 paise per recurring docs)
-  3. Razorpay Standard Checkout (recurring: 1) -> authorisation payment
-  4. GET /v1/payments/:id  -> payment_id, token_id
+Steps 1, 2 and 4 are ordinary API calls and belong to `razorpay_api.py`, which
+owns every request body this repository sends. What lives here is the part
+that has no endpoint: the Checkout session a HUMAN completes on a phone, the
+signature that proves they did, and the mapping from the result to a
+`MandateBinding`.
 
-Output fields map directly to MandateBinding:
-  rzp_customer_id, rzp_token_id, rzp_email, rzp_contact, charge_amount
+  1. POST /v1/customers                 RazorpayApi.create_customer
+  2. POST /v1/orders (method=upi)       RazorpayApi.create_authorization_order
+  3. Razorpay Standard Checkout         a person, on a phone      <- here
+  4. GET /v1/payments/:id               RazorpayApi.fetch_payment
+
+`scripts/razorpay_autopay_register.py` serves step 3.
 """
 from __future__ import annotations
 
@@ -18,17 +21,12 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from agent.execution.razorpay_api import MIN_AMOUNT_PAISE
 from agent.execution.razorpay_predelivery import sanitize_envelope
 
-API_BASE = "https://api.razorpay.com/v1"
-
-#: UPI mandate registration auth amount. [REPORTED] recurring-payments API:
-#: "The order amount for UPI is Rs 1."
-AUTH_AMOUNT_PAISE = 100
-
-VALID_FREQUENCIES = frozenset({
-    "daily", "weekly", "monthly", "quarterly", "yearly", "as_presented",
-})
+#: UPI mandate registration auth amount -- Rs 1, which is also Razorpay's
+#: documented minimum. One constant, in the module that owns provider facts.
+AUTH_AMOUNT_PAISE = MIN_AMOUNT_PAISE
 
 
 @dataclass(frozen=True)
@@ -62,59 +60,6 @@ class RegistrationResult:
 
 def default_expire_at(*, years: int = 10) -> int:
     return int(time.time()) + years * 365 * 24 * 3600
-
-
-def build_customer_body(*, name: str, email: str, contact: str,
-                        notes: dict | None = None) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "name": name,
-        "email": email,
-        "contact": contact,
-        "fail_existing": "0",
-    }
-    if notes:
-        body["notes"] = notes
-    return body
-
-
-def build_auth_order_body(*, customer_id: str, max_amount_paise: int,
-                          expire_at: int, frequency: str = "as_presented",
-                          receipt: str = "",
-                          auth_amount_paise: int = AUTH_AMOUNT_PAISE,
-                          notes: dict | None = None) -> dict[str, Any]:
-    """POST /v1/orders body for UPI AutoPay mandate registration.
-
-    Shape from Razorpay recurring UPI examples:
-    method=upi, customer_id, token{max_amount, expire_at, frequency}.
-    """
-    if frequency not in VALID_FREQUENCIES:
-        raise ValueError(f"invalid frequency {frequency!r}")
-    if max_amount_paise < auth_amount_paise:
-        raise ValueError("max_amount_paise must be >= auth_amount_paise")
-    body: dict[str, Any] = {
-        "amount": auth_amount_paise,
-        "currency": "INR",
-        "payment_capture": True,
-        "method": "upi",
-        "customer_id": customer_id,
-        "receipt": receipt[:40],
-        "token": {
-            "max_amount": max_amount_paise,
-            "expire_at": expire_at,
-            "frequency": frequency,
-        },
-    }
-    if notes:
-        body["notes"] = notes
-    return body
-
-
-def parse_customer_id(payload: dict) -> str:
-    return str(payload.get("id") or "")
-
-
-def parse_order_id(payload: dict) -> str:
-    return str(payload.get("id") or "")
 
 
 def parse_payment_token(payload: dict) -> tuple[str, str, str]:

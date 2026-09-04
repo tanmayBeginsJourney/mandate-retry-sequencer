@@ -12,7 +12,9 @@ Crash boundaries, and what each one leaves behind:
   C  after the order, before recording   an order at Razorpay we have no id
                                          for. Recovered by receipt.
   D  after the order, before the debit   a scheduled attempt. Resumes.
-  E  during the debit                    UNKNOWN. May have taken the money.
+  E  during the debit, response lost     UNKNOWN. May have taken the money.
+  E' during the debit, request re-sent   the provider refuses it; UNKNOWN, never
+                                         FAILED, resolved from the order.
   F  after the debit, before the webhook SUBMITTED. Resolved by polling.
   G  after the webhook, before applying  a durable event, replayed at startup.
 """
@@ -21,6 +23,7 @@ from __future__ import annotations
 import live.tests  # noqa: F401
 from agent.execution.razorpay_api import RazorpayApi
 from agent.execution.razorpay_mock import MockPlan, MockRazorpayApi
+from agent.execution.razorpay_executor import RazorpayError
 from live.domain import AttemptState, MandateState
 from live.service import LiveService
 from live.tests._harness import Bench, Results
@@ -206,6 +209,81 @@ def main() -> int:
                  settled.state is AttemptState.SUCCEEDED, settled.state.value)
             r.ok("F4g  and the money is counted exactly once",
                  b.svc.store.summary()["recovered_paise"] == a.amount_paise)
+    finally:
+        b.close()
+
+    # ----------------------------------------------------------------- F4b
+    r.section("F4b crash boundary D/E: the request went out, the process died "
+              "before the row moved")
+    # The worst boundary on the money path. `create_recurring_payment` reached
+    # Razorpay and the process stopped before the acknowledgement was written,
+    # so the local row still says NOTIFIED and the debit may already have
+    # collected. Resuming re-submits against the same order, the provider
+    # refuses it because the order is `paid`, and the only correct reading of
+    # that refusal is "we do not know", never "it failed".
+    b = Bench(plan=MockPlan(debits=["captured"]), seed=11)
+    try:
+        c, m = b.registered()
+        base = b.svc.epoch_origin
+        target = None
+        for hour in range(0, 24 * 20, 4):
+            b.svc.decide(m.id, now=base + hour * 3600)
+            b.deliver()
+            sched = [a for a in b.svc.store.attempts_for(m.id)
+                     if a.state in (AttemptState.ORDER_CREATED,
+                                    AttemptState.NOTIFIED)]
+            if sched:
+                target = sched[0]
+                break
+        if target is None:
+            r.ok("F4b  SKIPPED -- nothing was scheduled", False)
+        else:
+            # The provider hears the debit; we never do.
+            b.api.create_recurring_payment(
+                email=c.email, contact=c.contact,
+                amount_paise=target.amount_paise, order_id=target.order_id,
+                customer_id=m.rzp_customer_id, token_id=m.rzp_token_id,
+                description="crash")
+            b.api.drain_webhooks()          # the acknowledgement is lost too
+            debits_before = sum(1 for p in b.api._payments.values()
+                                if p.get("order_id") == target.order_id)
+            svc2 = LiveService(b.config, api=b.api,
+                               log_path=b.svc.log.path + ".crashD")
+            d = svc2.decide(m.id, now=base + (target.target_t + 1) * 3600)
+            after = svc2.store.attempt(target.id)
+            debits_after = sum(1 for p in b.api._payments.values()
+                               if p.get("order_id") == target.order_id)
+            r.ok("F4b1 the provider refused the second debit on the same order",
+                 debits_after == debits_before,
+                 f"{debits_after - debits_before} extra payments")
+            r.ok("F4b2 the attempt is UNKNOWN, never FAILED",
+                 after.state is AttemptState.UNKNOWN, after.state.value)
+            r.ok("F4b3 so the cycle is not reported as uncollected",
+                 not after.resolved and d.acted is False, d.reason[:60])
+            svc2.reconcile()
+            settled = svc2.store.attempt(target.id)
+            r.ok("F4b4 reconciliation finds the payment that did collect",
+                 settled.state is AttemptState.SUCCEEDED, settled.state.value)
+            r.ok("F4b5 and the money is counted exactly once",
+                 svc2.store.summary()["recovered_paise"] == target.amount_paise,
+                 str(svc2.store.summary()["recovered_paise"]))
+            # THE EXECUTOR'S OWN PRECONDITION, not the service's. The journal
+            # is rebuilt from the row, so a row past SUBMITTED must report a
+            # phase `attempt()` refuses -- otherwise the last line of defence
+            # is disarmed by a restart.
+            from agent.ports import MandateRef
+            ref = MandateRef(c.seq, m.index_no, m.merchant_id)
+            try:
+                raw = svc2.executor.attempt(ref, settled.amount_paise / 100.0,
+                                            settled.target_t,
+                                            action_id="f4b").raw_code
+            except RazorpayError as e:
+                # It reached the network. The journal reported a phase that
+                # `attempt()` accepts for a row that is already resolved.
+                raw = f"REACHED THE PROVIDER: {type(e).__name__}"
+            r.ok("F4b6 MUTANT: the executor itself refuses a resolved attempt",
+                 raw.startswith("invalid_predelivery_phase"), raw[:70])
+            svc2.store.close()
     finally:
         b.close()
 

@@ -1,35 +1,33 @@
 """Durable state. SQLite, one file, one node.
 
-WHY SQLITE AND NOT SOMETHING LARGER. The requirement is that a crash cannot
-lose a payment intent and cannot replay one, and that a redelivered webhook is
-a no-op. Those are transaction and unique-constraint problems, not scale
-problems. A single-node demonstration that reached for a networked database
-would add an operational dependency, a second failure mode and a migration
-story, and would answer none of the three questions above any better.
+WHY SQLITE. The requirement is that a crash cannot lose a payment intent or
+replay one, and that a redelivered webhook is a no-op. Those are transaction
+and unique-constraint problems, not scale problems.
 
 WHAT THE SCHEMA ENFORCES, RATHER THAN THE CODE:
 
-  * `webhook_events.event_id` is the PRIMARY KEY. Duplicate delivery is
-    rejected by the database, not by a check-then-insert in Python that two
-    concurrent requests can both pass.
-  * `attempts.receipt` is UNIQUE. Two attempts cannot claim one provider
-    order, so a bug in id derivation surfaces as an integrity error here
-    rather than as a second debit at Razorpay.
-  * `attempts.id` is Stage 0's `action_id`, so re-deriving an attempt after a
+  * `webhook_events.event_id` is the PRIMARY KEY, so duplicate delivery is
+    rejected by the database and not by a check-then-insert two concurrent
+    requests can both pass.
+  * `attempts.receipt` is UNIQUE, so two attempts cannot claim one provider
+    order -- a bug in id derivation surfaces as an integrity error here rather
+    than as a second debit at Razorpay.
+  * `attempts.id` IS Stage 0's `action_id`, so re-deriving an attempt after a
     restart collides with the existing row instead of creating a twin.
 
-NO SECRET IS EVER STORED. Not the API key, not the webhook secret, not a UPI
-credential. The webhook *payload* is stored verbatim because signature
-verification and dispute resolution both need the exact bytes, and Razorpay's
-payment entities carry an email and a contact -- so `payload` is treated as
-sensitive: it is never returned by the operator API. See `api.py`.
+NO SECRET IS EVER STORED. The webhook *payload* is stored verbatim because
+signature verification and dispute resolution both need the exact bytes, and
+Razorpay's payment entities carry an email and a contact -- so it is treated as
+sensitive and is never returned by the operator API. See `api.py`.
 """
 from __future__ import annotations
 
 import contextlib
 import os
 import sqlite3
+import threading
 import time
+from dataclasses import fields
 from typing import Iterator
 
 from live.domain import (AttemptState, Customer, Mandate, MandateState,
@@ -136,6 +134,71 @@ CREATE INDEX IF NOT EXISTS idx_transitions_entity
     ON transitions(entity, entity_id);
 """
 
+#: Columns a second write must NEVER overwrite, per entity. Stated, rather than
+#: implied by omission from a hand-written UPDATE list. `receipt` and
+#: `amount_paise` fix an attempt's identity at the provider; `created_at` fixes
+#: it in time; the cold-start estimates and the mandate index are what the
+#: belief book and the audit trail key on. Moving any of them would silently
+#: redefine a row a decision has already been made against.
+#: `WebhookEvent` is deliberately absent: a delivery is INSERT-ONLY, because
+#: the whole of deduplication is that a second insert of one event id fails.
+#: `_upsert(WebhookEvent)` raises here rather than quietly writing one.
+IMMUTABLE = {
+    Customer: {"id", "seq", "created_at"},
+    Mandate: {"id", "customer_id", "index_no", "merchant_id", "est_salary",
+              "est_payday", "cycle_days", "created_at"},
+    PaymentAttempt: {"id", "mandate_id", "mandate_uid", "amount_paise",
+                     "receipt", "target_t", "cycle", "created_at"},
+}
+
+#: SQLite gives back ints and strings; these put them back into the domain's
+#: own types. A field not named here round-trips unchanged.
+_COERCE = {"state": {Mandate: MandateState, PaymentAttempt: AttemptState},
+           "conflicted": {PaymentAttempt: bool},
+           "signature_valid": {WebhookEvent: bool}}
+
+#: The one place a dataclass is bound to a table.
+TABLES = {Customer: ("customers", "id"), Mandate: ("mandates", "id"),
+          PaymentAttempt: ("attempts", "id"),
+          WebhookEvent: ("webhook_events", "event_id")}
+
+
+def _cols(cls) -> list[str]:
+    return [f.name for f in fields(cls)]
+
+
+def _upsert(cls) -> str:
+    """INSERT ... ON CONFLICT DO UPDATE over every mutable column.
+
+    Generated from the dataclass, so a field added to the domain and forgotten
+    in the SQL is impossible rather than silent -- which is the failure mode a
+    hand-written statement has and does not announce.
+    """
+    table, key = TABLES[cls]
+    cols = _cols(cls)
+    updates = [f"{c}=excluded.{c}" for c in cols if c not in IMMUTABLE[cls]]
+    return (f"INSERT INTO {table}({', '.join(cols)})"
+            f" VALUES({', '.join('?' * len(cols))})"
+            f" ON CONFLICT({key}) DO UPDATE SET {', '.join(updates)}")
+
+
+def _values(obj) -> tuple:
+    out = []
+    for name in _cols(type(obj)):
+        v = getattr(obj, name)
+        out.append(v.value if hasattr(v, "value") else
+                   int(v) if isinstance(v, bool) else v)
+    return tuple(out)
+
+
+def _read(cls, row: sqlite3.Row):
+    kw = {}
+    for name in _cols(cls):
+        v = row[name]
+        cast = _COERCE.get(name, {}).get(cls)
+        kw[name] = cast(v) if cast is not None else v
+    return cls(**kw)
+
 
 class Store:
     """One SQLite file, one node.
@@ -150,22 +213,27 @@ class Store:
         parent = os.path.dirname(os.path.abspath(path))
         if parent:
             os.makedirs(parent, exist_ok=True)
-        # `check_same_thread=False` with an explicit lock rather than a
-        # connection pool: the HTTP server is threaded, and one serialised
-        # writer is both correct and fast enough for a single-node service.
         self._db = sqlite3.connect(path, check_same_thread=False,
                                    isolation_level=None, timeout=10.0)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA foreign_keys=ON")
+        # A committed transaction has reached the disk, which is what makes
+        # "the intent is durable before the request leaves" true rather than
+        # intended.
         self._db.execute("PRAGMA synchronous=FULL")
         self._db.executescript(SCHEMA)
-        import threading
+        # The statements above are generated from the dataclasses, so a field
+        # that has no column would fail at the first write with a message about
+        # SQL rather than about the schema. Checked once, at open.
+        for cls, (table, _) in TABLES.items():
+            cols = {r["name"] for r in
+                    self._db.execute(f"PRAGMA table_info({table})")}
+            missing = set(_cols(cls)) - cols
+            assert not missing, f"{table} has no column for {sorted(missing)}"
         self._lock = threading.RLock()
         #: Nesting depth of `tx()`. SQLite has no nested transactions, so an
         #: inner `tx()` joins the outer one instead of trying to BEGIN again.
-        #: Without this, any method that calls two writing methods would either
-        #: raise or silently commit half its work.
         self._depth = 0
 
     def close(self) -> None:
@@ -175,15 +243,9 @@ class Store:
     def tx(self) -> Iterator[sqlite3.Connection]:
         """One atomic unit. Everything that must not half-happen goes in one.
 
-        `synchronous=FULL` above means a committed transaction has reached the
-        disk, which is what makes "the intent is durable before the request
-        leaves" a true statement rather than an intention.
-
         REENTRANT. A caller that records a transition and then writes the row
-        it describes wants both or neither, and it gets that by wrapping the
-        pair in its own `tx()`: the inner ones join it rather than committing
-        early. SQLite has no nested transactions, so the depth counter is what
-        makes that work.
+        it describes wants both or neither, and gets it by wrapping the pair in
+        its own `tx()`: the inner ones join rather than committing early.
         """
         with self._lock:
             outermost = self._depth == 0
@@ -201,6 +263,13 @@ class Store:
             if outermost:
                 self._db.execute("COMMIT")
 
+    def _one(self, cls, sql: str, *args):
+        row = self._db.execute(sql, args).fetchone()
+        return _read(cls, row) if row else None
+
+    def _many(self, cls, sql: str, *args) -> list:
+        return [_read(cls, r) for r in self._db.execute(sql, args)]
+
     # ----------------------------------------------------------------- meta
     def meta_get(self, key: str, default: str = "") -> str:
         row = self._db.execute("SELECT value FROM meta WHERE key=?",
@@ -210,10 +279,9 @@ class Store:
     def meta_set_once(self, key: str, value: str) -> str:
         """Write only if absent, and return whatever is stored afterwards.
 
-        Used for the clock origin, which must be decided exactly once for the
-        life of a database. A plain upsert would let a restart move it, and
-        every `target_t` already on disk would quietly start meaning a
-        different wall-clock moment.
+        The clock origin must be decided exactly once for the life of a
+        database. A plain upsert would let a restart move it, and every
+        `target_t` on disk would quietly start meaning a different moment.
         """
         with self.tx() as db:
             db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES(?,?)",
@@ -221,143 +289,81 @@ class Store:
         return self.meta_get(key, value)
 
     def next_customer_seq(self) -> int:
-        row = self._db.execute(
-            "SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM customers").fetchone()
-        return int(row["n"])
+        return int(self._db.execute(
+            "SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM customers"
+        ).fetchone()["n"])
 
     def next_mandate_index(self, customer_id: str) -> int:
         """Mandate index WITHIN a customer, which is what `MandateRef` means.
 
-        A global counter here would make `c3m7` the seventh mandate in the
-        database rather than this customer's seventh, and the uid is what the
-        belief book and the audit trail key on.
+        A global counter would make `c3m7` the seventh mandate in the database
+        rather than this customer's seventh, and the uid is what the belief
+        book and the audit trail key on.
         """
-        row = self._db.execute(
+        return int(self._db.execute(
             "SELECT COALESCE(MAX(index_no), -1) + 1 AS n FROM mandates"
-            " WHERE customer_id=?", (customer_id,)).fetchone()
-        return int(row["n"])
+            " WHERE customer_id=?", (customer_id,)).fetchone()["n"])
 
     # ------------------------------------------------------------ customers
     def put_customer(self, c: Customer) -> None:
         with self.tx() as db:
-            db.execute(
-                "INSERT INTO customers(id, rzp_customer_id, email, contact,"
-                " name, seq, created_at) VALUES(?,?,?,?,?,?,?)"
-                " ON CONFLICT(id) DO UPDATE SET"
-                " rzp_customer_id=excluded.rzp_customer_id,"
-                " email=excluded.email, contact=excluded.contact,"
-                " name=excluded.name",
-                (c.id, c.rzp_customer_id, c.email, c.contact, c.name, c.seq,
-                 c.created_at))
+            db.execute(_upsert(Customer), _values(c))
 
     def customer(self, cid: str) -> Customer | None:
-        row = self._db.execute("SELECT * FROM customers WHERE id=?",
-                               (cid,)).fetchone()
-        return _customer(row) if row else None
+        return self._one(Customer, "SELECT * FROM customers WHERE id=?", cid)
 
     def customers(self) -> list[Customer]:
-        return [_customer(r) for r in
-                self._db.execute("SELECT * FROM customers ORDER BY created_at")]
+        return self._many(Customer,
+                          "SELECT * FROM customers ORDER BY created_at")
 
     # ------------------------------------------------------------- mandates
     def put_mandate(self, m: Mandate) -> None:
         m.updated_at = int(time.time())
         with self.tx() as db:
-            db.execute(
-                "INSERT INTO mandates(id, customer_id, state, rzp_token_id,"
-                " rzp_customer_id, registration_order_id,"
-                " registration_payment_id, token_status, max_amount_paise,"
-                " charge_amount_paise, frequency, expire_at, index_no,"
-                " merchant_id, est_salary, est_payday, cycle_days, cycle,"
-                " cycle_start_t, created_at, updated_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-                " ON CONFLICT(id) DO UPDATE SET"
-                " state=excluded.state, rzp_token_id=excluded.rzp_token_id,"
-                " rzp_customer_id=excluded.rzp_customer_id,"
-                " registration_order_id=excluded.registration_order_id,"
-                " registration_payment_id=excluded.registration_payment_id,"
-                " token_status=excluded.token_status,"
-                " max_amount_paise=excluded.max_amount_paise,"
-                " charge_amount_paise=excluded.charge_amount_paise,"
-                " frequency=excluded.frequency, expire_at=excluded.expire_at,"
-                " cycle=excluded.cycle,"
-                " cycle_start_t=excluded.cycle_start_t,"
-                " updated_at=excluded.updated_at",
-                (m.id, m.customer_id, m.state.value, m.rzp_token_id,
-                 m.rzp_customer_id, m.registration_order_id,
-                 m.registration_payment_id, m.token_status, m.max_amount_paise,
-                 m.charge_amount_paise, m.frequency, m.expire_at, m.index_no,
-                 m.merchant_id, m.est_salary, m.est_payday, m.cycle_days,
-                 m.cycle, m.cycle_start_t, m.created_at, m.updated_at))
+            db.execute(_upsert(Mandate), _values(m))
 
     def mandate(self, mid: str) -> Mandate | None:
-        row = self._db.execute("SELECT * FROM mandates WHERE id=?",
-                               (mid,)).fetchone()
-        return _mandate(row) if row else None
+        return self._one(Mandate, "SELECT * FROM mandates WHERE id=?", mid)
 
     def mandate_by_token(self, token_id: str) -> Mandate | None:
         if not token_id:
             return None
-        row = self._db.execute("SELECT * FROM mandates WHERE rzp_token_id=?",
-                               (token_id,)).fetchone()
-        return _mandate(row) if row else None
+        return self._one(Mandate, "SELECT * FROM mandates WHERE rzp_token_id=?",
+                         token_id)
 
     def mandates(self) -> list[Mandate]:
-        return [_mandate(r) for r in
-                self._db.execute("SELECT * FROM mandates ORDER BY created_at")]
+        return self._many(Mandate,
+                          "SELECT * FROM mandates ORDER BY created_at")
 
     # ------------------------------------------------------------- attempts
     def put_attempt(self, a: PaymentAttempt) -> None:
         a.updated_at = int(time.time())
         with self.tx() as db:
-            db.execute(
-                "INSERT INTO attempts(id, mandate_id, mandate_uid,"
-                " amount_paise, state, order_id, payment_id, receipt,"
-                " outcome_code, raw_reason, target_t, payment_after,"
-                " submitted_at, resolved_at, conflicted, cycle, created_at,"
-                " updated_at)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-                " ON CONFLICT(id) DO UPDATE SET"
-                " state=excluded.state, order_id=excluded.order_id,"
-                " payment_id=excluded.payment_id,"
-                " outcome_code=excluded.outcome_code,"
-                " raw_reason=excluded.raw_reason,"
-                " payment_after=excluded.payment_after,"
-                " submitted_at=excluded.submitted_at,"
-                " resolved_at=excluded.resolved_at,"
-                " conflicted=excluded.conflicted,"
-                " updated_at=excluded.updated_at",
-                (a.id, a.mandate_id, a.mandate_uid, a.amount_paise,
-                 a.state.value, a.order_id, a.payment_id, a.receipt,
-                 a.outcome_code, a.raw_reason, a.target_t, a.payment_after,
-                 a.submitted_at, a.resolved_at, int(a.conflicted), a.cycle,
-                 a.created_at, a.updated_at))
+            db.execute(_upsert(PaymentAttempt), _values(a))
 
     def attempt(self, aid: str) -> PaymentAttempt | None:
-        row = self._db.execute("SELECT * FROM attempts WHERE id=?",
-                               (aid,)).fetchone()
-        return _attempt(row) if row else None
+        return self._one(PaymentAttempt, "SELECT * FROM attempts WHERE id=?",
+                         aid)
 
     def attempt_for_target(self, mandate_uid: str,
                            target_t: int) -> PaymentAttempt | None:
         """The attempt a pre-debit order belongs to.
 
-        The executor's journal is keyed on `(mandate_uid, target_t)` because
-        that is the identity Stage 0 works in; the store is keyed on the
-        internal mandate id. This is the join between them.
+        The executor works in `(mandate_uid, target_t)` because that is Stage
+        0's identity; the store keys on the internal mandate id. This is the
+        join between them.
         """
-        row = self._db.execute(
+        return self._one(
+            PaymentAttempt,
             "SELECT * FROM attempts WHERE mandate_uid=? AND target_t=?"
-            " ORDER BY created_at DESC LIMIT 1",
-            (mandate_uid, target_t)).fetchone()
-        return _attempt(row) if row else None
+            " ORDER BY created_at DESC LIMIT 1", mandate_uid, target_t)
 
     def attempt_by_payment(self, payment_id: str) -> PaymentAttempt | None:
         if not payment_id:
             return None
-        row = self._db.execute("SELECT * FROM attempts WHERE payment_id=?",
-                               (payment_id,)).fetchone()
-        return _attempt(row) if row else None
+        return self._one(PaymentAttempt,
+                         "SELECT * FROM attempts WHERE payment_id=?",
+                         payment_id)
 
     def attempt_by_order(self, order_id: str) -> PaymentAttempt | None:
         """Correlate a webhook that names an order but not our attempt.
@@ -367,21 +373,22 @@ class Store:
         """
         if not order_id:
             return None
-        row = self._db.execute(
+        return self._one(
+            PaymentAttempt,
             "SELECT * FROM attempts WHERE order_id=? ORDER BY created_at DESC"
-            " LIMIT 1", (order_id,)).fetchone()
-        return _attempt(row) if row else None
+            " LIMIT 1", order_id)
 
-    def attempts_for(self, mandate_id: str, limit: int = 50
-                     ) -> list[PaymentAttempt]:
-        return [_attempt(r) for r in self._db.execute(
+    def attempts_for(self, mandate_id: str,
+                     limit: int = 50) -> list[PaymentAttempt]:
+        return self._many(
+            PaymentAttempt,
             "SELECT * FROM attempts WHERE mandate_id=?"
-            " ORDER BY created_at DESC LIMIT ?", (mandate_id, limit))]
+            " ORDER BY created_at DESC LIMIT ?", mandate_id, limit)
 
     def recent_attempts(self, limit: int = 50) -> list[PaymentAttempt]:
-        return [_attempt(r) for r in self._db.execute(
-            "SELECT * FROM attempts ORDER BY created_at DESC LIMIT ?",
-            (limit,))]
+        return self._many(
+            PaymentAttempt,
+            "SELECT * FROM attempts ORDER BY created_at DESC LIMIT ?", limit)
 
     def unresolved_attempts(self, states: frozenset[AttemptState],
                             limit: int = 100) -> list[PaymentAttempt]:
@@ -391,36 +398,33 @@ class Store:
         where the process stopped between deciding and knowing.
         """
         marks = ",".join("?" * len(states))
-        return [_attempt(r) for r in self._db.execute(
+        return self._many(
+            PaymentAttempt,
             f"SELECT * FROM attempts WHERE state IN ({marks})"
-            " ORDER BY created_at LIMIT ?",
-            (*[s.value for s in states], limit))]
+            " ORDER BY created_at LIMIT ?", *[s.value for s in states], limit)
 
     # ------------------------------------------------------ webhook events
     def record_event(self, ev: WebhookEvent) -> bool:
         """Persist a delivery. Returns False if this event id is already known.
 
-        The uniqueness check IS the insert. Doing it as a SELECT followed by an
-        INSERT would let two concurrent deliveries of the same event both see
-        an empty table and both proceed, which is precisely the duplicate the
-        `x-razorpay-event-id` header exists to prevent.
+        THE UNIQUENESS CHECK IS THE INSERT. A SELECT followed by an INSERT
+        would let two concurrent deliveries of one event both see an empty
+        table and both proceed, which is the duplicate `x-razorpay-event-id`
+        exists to prevent.
         """
+        cols = _cols(WebhookEvent)
         try:
             with self.tx() as db:
-                db.execute(
-                    "INSERT INTO webhook_events(event_id, event_type,"
-                    " received_at, signature_valid, payload, processed_at,"
-                    " result, mandate_id, attempt_id)"
-                    " VALUES(?,?,?,?,?,?,?,?,?)",
-                    (ev.event_id, ev.event_type, ev.received_at,
-                     int(ev.signature_valid), ev.payload, ev.processed_at,
-                     ev.result, ev.mandate_id, ev.attempt_id))
+                db.execute(f"INSERT INTO webhook_events({', '.join(cols)})"
+                           f" VALUES({', '.join('?' * len(cols))})",
+                           _values(ev))
             return True
         except sqlite3.IntegrityError:
             return False
 
     def mark_event_processed(self, event_id: str, result: str,
-                             mandate_id: str = "", attempt_id: str = "") -> None:
+                             mandate_id: str = "",
+                             attempt_id: str = "") -> None:
         with self.tx() as db:
             db.execute(
                 "UPDATE webhook_events SET processed_at=?, result=?,"
@@ -428,21 +432,22 @@ class Store:
                 (int(time.time()), result, mandate_id, attempt_id, event_id))
 
     def event(self, event_id: str) -> WebhookEvent | None:
-        row = self._db.execute(
-            "SELECT * FROM webhook_events WHERE event_id=?",
-            (event_id,)).fetchone()
-        return _event(row) if row else None
+        return self._one(WebhookEvent,
+                         "SELECT * FROM webhook_events WHERE event_id=?",
+                         event_id)
 
     def recent_events(self, limit: int = 50) -> list[WebhookEvent]:
-        return [_event(r) for r in self._db.execute(
+        return self._many(
+            WebhookEvent,
             "SELECT * FROM webhook_events ORDER BY received_at DESC, rowid DESC"
-            " LIMIT ?", (limit,))]
+            " LIMIT ?", limit)
 
     def unprocessed_events(self, limit: int = 100) -> list[WebhookEvent]:
         """Accepted, signature-valid, never processed. The restart queue."""
-        return [_event(r) for r in self._db.execute(
+        return self._many(
+            WebhookEvent,
             "SELECT * FROM webhook_events WHERE processed_at=0"
-            " AND signature_valid=1 ORDER BY received_at LIMIT ?", (limit,))]
+            " AND signature_valid=1 ORDER BY received_at LIMIT ?", limit)
 
     # --------------------------------------------------------- transitions
     def record_transition(self, entity: str, entity_id: str, from_state: str,
@@ -492,50 +497,3 @@ class Store:
                 "SELECT COALESCE(SUM(amount_paise),0) FROM attempts"
                 " WHERE state=?", AttemptState.SUCCEEDED.value),
         }
-
-
-# ---------------------------------------------------------------- row -> obj
-def _customer(r: sqlite3.Row) -> Customer:
-    return Customer(id=r["id"], rzp_customer_id=r["rzp_customer_id"],
-                    email=r["email"], contact=r["contact"], name=r["name"],
-                    seq=r["seq"], created_at=r["created_at"])
-
-
-def _mandate(r: sqlite3.Row) -> Mandate:
-    return Mandate(
-        id=r["id"], customer_id=r["customer_id"],
-        state=MandateState(r["state"]), rzp_token_id=r["rzp_token_id"],
-        rzp_customer_id=r["rzp_customer_id"],
-        registration_order_id=r["registration_order_id"],
-        registration_payment_id=r["registration_payment_id"],
-        token_status=r["token_status"],
-        max_amount_paise=r["max_amount_paise"],
-        charge_amount_paise=r["charge_amount_paise"],
-        frequency=r["frequency"], expire_at=r["expire_at"],
-        index_no=r["index_no"], merchant_id=r["merchant_id"],
-        est_salary=r["est_salary"], est_payday=r["est_payday"],
-        cycle_days=r["cycle_days"], cycle=r["cycle"],
-        cycle_start_t=r["cycle_start_t"],
-        created_at=r["created_at"], updated_at=r["updated_at"])
-
-
-def _attempt(r: sqlite3.Row) -> PaymentAttempt:
-    return PaymentAttempt(
-        id=r["id"], mandate_id=r["mandate_id"], mandate_uid=r["mandate_uid"],
-        amount_paise=r["amount_paise"], state=AttemptState(r["state"]),
-        order_id=r["order_id"], payment_id=r["payment_id"],
-        receipt=r["receipt"], outcome_code=r["outcome_code"],
-        raw_reason=r["raw_reason"], target_t=r["target_t"],
-        payment_after=r["payment_after"], submitted_at=r["submitted_at"],
-        resolved_at=r["resolved_at"], conflicted=bool(r["conflicted"]),
-        cycle=r["cycle"], created_at=r["created_at"],
-        updated_at=r["updated_at"])
-
-
-def _event(r: sqlite3.Row) -> WebhookEvent:
-    return WebhookEvent(
-        event_id=r["event_id"], event_type=r["event_type"],
-        received_at=r["received_at"],
-        signature_valid=bool(r["signature_valid"]), payload=r["payload"],
-        processed_at=r["processed_at"], result=r["result"],
-        mandate_id=r["mandate_id"], attempt_id=r["attempt_id"])

@@ -24,16 +24,13 @@ if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
 from agent.execution.razorpay_api import (API_BASE, RazorpayApi,
-                                          Transport, parse_token_status)
+                                          Transport, parse_order_id,
+                                          parse_token_status)
 from agent.execution.razorpay_registration import (AUTH_AMOUNT_PAISE,
                                                    RegistrationResult,
                                                    RegistrationSession,
-                                                   build_auth_order_body,
-                                                   build_customer_body,
                                                    default_expire_at,
                                                    env_snippet,
-                                                   parse_customer_id,
-                                                   parse_order_id,
                                                    parse_payment_token,
                                                    registration_to_binding_fields,
                                                    transcript_record,
@@ -72,43 +69,39 @@ def create_registration_session(api: RazorpayApi, *, kid: str,
                                 charge_amount_paise: int,
                                 frequency: str) -> tuple[RegistrationSession, list]:
     """Create customer + auth order. Returns session and transcript rows."""
+    # THE BODIES ARE THE ADAPTER'S, NOT THIS SCRIPT'S. Both calls go through
+    # `RazorpayApi`, so the requests that reach a real key are the same ones
+    # every offline gate exercises. `api.last_request` gives the transcript the
+    # exact bytes without a second builder to keep in step.
     log: list[dict] = []
     receipt = f"rcv_reg_{int(time.time())}"[:40]
-    cust_body = build_customer_body(
+
+    def record(phase: str, r) -> dict:
+        log.append(transcript_record(
+            phase=phase, http_method=api.last_request.get("method", ""),
+            url=api.last_request.get("url", ""),
+            request_body=api.last_request.get("body"),
+            http_status=r.status, response_body=r.body))
+        if not r.ok:
+            raise RuntimeError(f"{phase} failed HTTP {r.status}: "
+                               f"{r.error_description or r.outcome.value}")
+        return r.body
+
+    cust_payload = record("CUSTOMER_CREATED", api.create_customer(
         name=name, email=email, contact=contact,
-        notes={"purpose": "autopay_registration_harness"})
-    r = api.call("POST", f"{API_BASE}/customers", cust_body)
-    st, cust_payload = r.status, r.body
-    log.append(transcript_record(
-        phase="CUSTOMER_CREATED", http_method="POST",
-        url=f"{API_BASE}/customers", request_body=cust_body,
-        http_status=st, response_body=cust_payload))
-    if st is None or st >= 400:
-        err = (cust_payload.get("error") or {})
-        raise RuntimeError(
-            f"customer create failed HTTP {st}: {err.get('description')}")
-    customer_id = parse_customer_id(cust_payload)
+        notes={"purpose": "autopay_registration_harness"}))
+    customer_id = parse_order_id(cust_payload)
     if not customer_id:
         raise RuntimeError("customer create response missing id")
 
-    order_body = build_auth_order_body(
-        customer_id=customer_id,
-        max_amount_paise=max_amount_paise,
-        expire_at=default_expire_at(),
-        frequency=frequency,
-        receipt=receipt,
-        notes={"purpose": "autopay_registration_harness",
-               "charge_amount_paise": charge_amount_paise})
-    r = api.call("POST", f"{API_BASE}/orders", order_body)
-    st, order_payload = r.status, r.body
-    log.append(transcript_record(
-        phase="AUTH_ORDER_CREATED", http_method="POST",
-        url=f"{API_BASE}/orders", request_body=order_body,
-        http_status=st, response_body=order_payload))
-    if st is None or st >= 400:
-        err = (order_payload.get("error") or {})
-        raise RuntimeError(
-            f"order create failed HTTP {st}: {err.get('description')}")
+    order_payload = record("AUTH_ORDER_CREATED",
+                           api.create_authorization_order(
+                               customer_id=customer_id,
+                               max_amount_paise=max_amount_paise,
+                               expire_at=default_expire_at(),
+                               frequency=frequency, receipt=receipt,
+                               notes={"purpose": "autopay_registration_harness",
+                                      "charge_amount_paise": charge_amount_paise}))
     order_id = parse_order_id(order_payload)
     if not order_id:
         raise RuntimeError("order create response missing id")

@@ -123,24 +123,34 @@ repository is produced with the deterministic path.
 
 ## What is implemented
 
-Every layer is built and measured. The Razorpay executor is implemented and its
-test-mode connectivity and workflow calls have been exercised against the live
-API. Each row states the evidence behind it, because "implemented", "exercised
-against the live test API" and "demonstrated on an authorised mandate" are three
-different claims.
+Every layer is built and measured. Each row below states its evidence level,
+because "the code exists", "a mock exercises it", "it would work against a real
+key" and "it has run against a real key" are four different claims and only the
+last one is a live integration.
 
-| | Evidence |
+| Level | Means |
 |---|---|
-| Belief filter, timing rule, constraint layer, audit trail, independent auditor | implemented and measured |
-| Simulation executor | implemented; reproduces the simulation harness bit-exactly, 24 of 24 runs |
-| Live service: durable state, webhook ingestion, reconciliation, operator console | implemented; **exercised against a mock rail only** — 7 gate files, 218 checks, `py -3.12 -m live.tests.run_all` |
-| Razorpay test-mode API authentication | exercised — HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
-| Funding reminders over SMTP | exercised — delivered through a live test relay, transcript `logs/smtp_reminder_proof.json` |
-| Razorpay test-mode Customer and Payment Link create / fetch / cancel | implemented and runnable against `rzp_test_` keys via `scripts/prove_workflows.py`; no transcript is committed |
-| Pre-debit notification order (`POST /v1/orders`) | implemented; not demonstrated against an authorised mandate |
-| `order.notification.delivered` webhook | not observed from Razorpay |
-| Webhook signature verification, deduplication, out-of-order handling | implemented; exercised against signed payloads the mock rail produces, never against one Razorpay sent |
-| Recurring charge on an authorised mandate | implemented; **never submitted**, so not demonstrated |
+| **IMPLEMENTED** | the code exists and is reachable; nothing exercises it end to end |
+| **MOCK-VERIFIED** | a gate drives it against `MockRazorpayApi`, which answers the way Razorpay's documentation says Razorpay answers |
+| **LIVE-READY** | the request shape is [VERIFIED] against current Razorpay documentation and the path has been driven with a real client against a stub transport; no live call has been made |
+| **LIVE-DEMONSTRATED** | it has run against `api.razorpay.com` and a transcript is committed |
+
+| | Level | Evidence |
+|---|---|---|
+| Belief filter, timing rule, constraint layer, audit trail, independent auditor | IMPLEMENTED | and measured — `sim/gate.py --tier full` |
+| Simulation executor | IMPLEMENTED | reproduces the simulation harness bit-exactly, 24 of 24 runs |
+| Live service: durable state, webhook ingestion, reconciliation, crash recovery, operator console | MOCK-VERIFIED | 7 gate files, 225 checks, `py -3.12 -m live.tests.run_all` |
+| Razorpay test-mode API authentication | LIVE-DEMONSTRATED | HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
+| Funding reminders over SMTP | LIVE-DEMONSTRATED | delivered through a live test relay, transcript `logs/smtp_reminder_proof.json` |
+| Razorpay test-mode Customer and Payment Link create / fetch / cancel | LIVE-READY | runnable against `rzp_test_` keys via `scripts/prove_workflows.py`; no transcript is committed |
+| Mandate registration order (`POST /v1/orders`, `method: upi`) | LIVE-READY | body [VERIFIED] against Razorpay's authorisation-transaction reference and asserted by `agent/tests/test_razorpay_registration.py` on the request the client actually builds |
+| Pre-debit notification order (`notification.token_id` / `payment_after`) | LIVE-READY | body [VERIFIED] against create-subsequent-payments; never accepted by Razorpay for a real mandate |
+| `order.notification.delivered` webhook | IMPLEMENTED | never observed from Razorpay |
+| Webhook signature verification, deduplication, out-of-order handling | MOCK-VERIFIED | signed payloads the mock rail produces, never one Razorpay sent |
+| Recurring charge on an authorised mandate | IMPLEMENTED | **never submitted.** No mandate token exists to charge |
+
+**Nothing in this repository is LIVE-DEMONSTRATED for the money path.** The two
+rows that are demonstrated are an authentication probe and an email.
 
 The last rows are limited by an account capability rather than by the client.
 UPI AutoPay mandate registration is not available on the test account used here:
@@ -440,7 +450,7 @@ needs `RECOVERY_LIVE_DEBIT=yes` as well. Binding anything but loopback needs
 py -3.12 -m live.tests.run_all
 ```
 
-Seven gate files, 218 checks, about four seconds. Configuration, the state
+Seven gate files, 225 checks, about four seconds. Configuration, the state
 machine, webhooks, the full lifecycle across seven crash boundaries, the safety
 boundaries, simulation/live parity, and the HTTP surface over a real socket.
 Every one runs offline and none can move money.

@@ -117,10 +117,36 @@ def main() -> int:
         r.ok("A4h  and so does an oversized operator request", status == 413,
              str(status))
 
-        # A webhook must never require authentication -- Razorpay cannot send
-        # an operator token, and a 401 would make it retry for 24 hours.
-        r.ok("A4g  the webhook route needs no operator token", True,
-             "verified by signature, which is its authentication")
+        # A WEBHOOK MUST NEVER REQUIRE AUTHENTICATION. Razorpay cannot send an
+        # operator token, and a 401 would make it retry for 24 hours and then
+        # disable the endpoint. Asserted on a server that DOES require a token
+        # everywhere else, so the gate is about the exemption and not about a
+        # service that happens to have auth switched off.
+        guarded = Bench(seed=12, env={"RECOVERY_OPERATOR_TOKEN": "g" * 32})
+        gserver = Server(guarded.svc, host="127.0.0.1", port=0).start_background()
+        gbase = f"http://127.0.0.1:{gserver.port}"
+        try:
+            status, _, _ = call(f"{gbase}/api/state")
+            r.ok("A4g  the operator API on that server does need one",
+                 status == 401, str(status))
+            gev = payment_event("payment.captured", payment_id="pay_noauth",
+                                order_id="order_noauth", status="captured")
+            graw, gsig = signed(gev)
+            status, gbody, _ = call(f"{gbase}/webhooks/razorpay", method="POST",
+                                    body=graw,
+                                    headers={"X-Razorpay-Signature": gsig,
+                                             "X-Razorpay-Event-Id": "evt_noauth"})
+            r.ok("A4i  and the webhook route does not",
+                 status == 200, f"{status} {gbody}")
+            status, _, _ = call(f"{gbase}/webhooks/razorpay", method="POST",
+                                body=graw,
+                                headers={"X-Razorpay-Signature": "0" * 64,
+                                         "X-Razorpay-Event-Id": "evt_noauth2"})
+            r.ok("A4j  the signature is still what authenticates it",
+                 status == 400, str(status))
+        finally:
+            gserver.stop()
+            guarded.close()
 
         # -------------------------------------------------------------- A5
         r.section("A5  the operator API validates its input")
@@ -159,6 +185,9 @@ def main() -> int:
 
         # -------------------------------------------------------------- A6
         r.section("A6  the only money route takes no parameters")
+        # THE AUTHORITATIVE TEST OF THE INJECTION BOUNDARY. The body names an
+        # amount, an hour inside the NPCI peak window, and somebody else's
+        # token. None of the three may reach the attempt.
         status, body, _ = call(
             f"{base}/api/mandates/{m.id}/decide", method="POST",
             body=json.dumps({"amount_paise": 9_999_999,
@@ -170,7 +199,13 @@ def main() -> int:
         r.ok("A6b  and ignores the amount in the body",
              all(a.amount_paise == m.charge_amount_paise for a in attempts),
              str([a.amount_paise for a in attempts]))
-        r.ok("A6c  the decision reports the scheduler's own reason",
+        r.ok("A6c  and the hour in the body",
+             all(a.target_t != 11 for a in attempts),
+             str([a.target_t for a in attempts]))
+        r.ok("A6d  and the token in the body",
+             all(a.mandate_id == m.id for a in attempts)
+             and "token_attacker" not in str(body))
+        r.ok("A6e  the decision reports the scheduler's own reason",
              bool(decision.get("reason")), str(decision.get("reason"))[:60])
 
         # -------------------------------------------------------------- A7
@@ -184,11 +219,12 @@ def main() -> int:
              redact("insufficient_funds") == "insufficient_funds")
         r.ok("A7d  a short value that only looks like an id is untouched",
              redact("pay_x") == "pay_x")
-        status, body, _ = call(f"{base}/api/mandates")
-        r.ok("A7e  the list route redacts by default",
-             m.rzp_token_id not in str(body))
-        status, body, _ = call(f"{base}/api/mandates?reveal=1")
-        r.ok("A7f  and reveals on request", m.rzp_token_id in str(body))
+        status, body, _ = call(f"{base}/api/mandates/{m.id}")
+        r.ok("A7e  a served route redacts by default", status == 200
+             and m.rzp_token_id not in str(body))
+        status, body, _ = call(f"{base}/api/mandates/{m.id}?reveal=1")
+        r.ok("A7f  and reveals on request", status == 200
+             and m.rzp_token_id in str(body))
 
         # -------------------------------------------------------------- A8
         r.section("A8  loading the console cannot move money")

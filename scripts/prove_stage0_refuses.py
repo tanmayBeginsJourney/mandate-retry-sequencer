@@ -108,13 +108,11 @@ def build(transport, log_path: str):
     # come from `charge_amount` on the binding; email and contact are required
     # by `POST /v1/payments/create/recurring`.
     #
-    # WITHOUT THEM THIS SCRIPT PROVED NOTHING AND SAID IT PASSED. `notify()`
-    # returned `ORDER_CREATE_FAILED` ("invalid amount: 0 paise"), the gate
-    # swallowed it into a log line, `execute()` never reached the transport,
-    # and step 1 printed ALLOWED with `network calls 0` before crashing on the
-    # missing record. That is the shape this repository calls a vacuous gate.
-    # Found and fixed 1 September 2026; the predelivery path shipped in commit
-    # 91b1fc1 and this script was not updated with it.
+    # WITHOUT THEM THIS SCRIPT PROVES NOTHING AND SAYS IT PASSED. `notify()`
+    # returns `ORDER_CREATE_FAILED` ("invalid amount: 0 paise"), the gate
+    # swallows it into a log line, `execute()` never reaches the transport, and
+    # step 1 prints ALLOWED with `network calls 0`. That is a vacuous gate, so
+    # the assertion below counts the calls rather than trusting the verdict.
     ex = RazorpayExecutor(
         bindings={REF.uid: MandateBinding(rzp_customer_id="cust_demo:45",
                                           rzp_token_id="token_demo",

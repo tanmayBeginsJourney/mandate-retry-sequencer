@@ -59,13 +59,16 @@ def main() -> int:
     cfg2 = load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": "yes"})
     r.ok("C3b  live plus the explicit flag permits one",
          cfg2.may_debit()[0] is True)
-    for truthy in ("1", "true", "on", "YES ", "y"):
-        c = load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": truthy})
-        if truthy.strip().lower() == "yes":
-            continue
-        r.ok(f"C3c  {truthy!r} does not enable live debits",
-             c.may_debit()[0] is False,
-             "only the literal word 'yes' counts")
+    # ONLY THE LITERAL WORD `yes`. `1`, `true` and `on` all arrive by
+    # accident; `yes` is a word somebody typed on purpose. Checked over the
+    # whole set at once so the failure names the spelling that got through.
+    accidental = [v for v in ("1", "true", "on", "y", "Y", "enabled", "sure")
+                  if load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": v}).may_debit()[0]]
+    r.ok("C3c  no truthy-looking value but 'yes' enables live debits",
+         not accidental, f"these did: {accidental}")
+    r.ok("C3c2 and surrounding whitespace and case do not defeat it",
+         load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": " YES "}).may_debit()[0]
+         is True)
     err = _raises(lambda: load({**LIVE_ENV,
                                 "RAZORPAY_KEY_ID": "rzp_test_XXXXXXXXXXXX",
                                 "RECOVERY_LIVE_DEBIT": "yes"}))

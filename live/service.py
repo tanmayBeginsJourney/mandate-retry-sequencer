@@ -1,43 +1,30 @@
-"""THE LIVE COMPOSITION ROOT. It wires; it does not decide.
+"""The live composition root. It wires; it does not decide.
 
-`agent/batch.py` is the same shape for the simulation: the one module allowed
-to construct an executor and hand it to `Stage0Gate`. This is that module for
-the live rail, and gate **L1** in `agent/tests/test_layer_isolation.py` keeps
-it the only one in `live/`.
+`agent/batch.py` is the same module for the simulation. Gate L1 in
+`agent/tests/test_layer_isolation.py` keeps this the only module in `live/`
+that may hold an executor.
 
-WHAT IS SHARED WITH THE SIMULATION, OBJECT FOR OBJECT, NOT "IN SPIRIT":
+Shared with the simulation by identity, not by resemblance -- `BeliefBook`,
+`timing.propose`, `RuleBasedDiagnoser`, `Stage0Gate`, `AuditLog`. The executor
+and durable state are the only differences. `live/tests/test_parity.py`
+asserts that with `is`.
 
-    agent.policy.belief_book.BeliefBook      the belief
-    agent.policy.timing.propose              the timing rule
-    agent.llm.fallback.RuleBasedDiagnoser    the diagnosis, LLM overlay optional
-    agent.constraints.stage0.Stage0Gate      the five NPCI rules
-    agent.audit.log.AuditLog                 the trail
+THE ORDER ON THE MONEY PATH, AND WHY IT IS THAT ORDER:
 
-Not a re-implementation, not a subclass, not a copy with the live bits added.
-The same imports the batch run uses. `live/tests/test_parity.py` asserts that
-by identity rather than by inspection.
+    1. timing.propose            picks the hour
+    2. Diagnoser                 picks the intervention
+    3. store.put_attempt         the intent is durable
+    4. Stage0Gate.issue_notification / .submit
+    5. RazorpayExecutor          submits
+    6. store.put_attempt         the acknowledgement
+    7. webhook or reconcile      the authoritative outcome
+    8. BeliefBook.record_outcome the belief
 
-WHAT IS DIFFERENT: the executor, and durable state. That is the entire claim.
-
----------------------------------------------------------------------------
-THE ORDER OF OPERATIONS ON THE MONEY PATH, AND WHY IT IS THAT ORDER
----------------------------------------------------------------------------
-
-    1. the deterministic scheduler picks a time      timing.propose
-    2. the diagnosis layer picks an intervention     Diagnoser
-    3. the intent is written to disk                 store.put_attempt
-    4. Stage 0 adjudicates                           Stage0Gate.submit
-    5. the executor submits                          RazorpayExecutor.attempt
-    6. the acknowledgement is written                store.put_attempt
-    7. the authoritative outcome arrives             webhook, or reconcile
-    8. the belief updates                            BeliefBook.record_outcome
-
-Step 1 happens before step 2 and cannot be reordered: the LLM never sees a
-candidate time and `Diagnosis` has no field to put one in. Step 3 happens
-before step 5 so that a crash between them leaves a row saying "we may have
-asked" rather than nothing at all. Step 8 happens at 7, not at 5, because a
-submission is not an outcome -- and reading it as one is how an accepted debit
-gets recorded as an empty account.
+Step 1 precedes step 2 and cannot be reordered: `Diagnosis` has no field for a
+time. Step 3 precedes step 5 so a crash between them leaves a row saying "we
+may have asked" rather than nothing. Step 8 happens at 7, not at 5: a
+submission is not an outcome, and reading it as one records an accepted debit
+as an empty account.
 """
 from __future__ import annotations
 
@@ -79,14 +66,12 @@ from live import webhooks
 #: The database key holding the clock origin. See `LiveService.now_t`.
 EPOCH_ORIGIN_KEY = "epoch_origin"
 
-#: Attempts per cycle. NPCI permits one presentation plus three retries, which
-#: is the same cap `agent/constraints/rules.py` enforces; it is named here only
-#: so the scheduler can be told how many are left.
+#: One presentation plus three retries. `agent/constraints/rules.py` enforces
+#: it; this is named here only so the scheduler can be told how many are left.
 CAP = 4
 
-#: Hours the customer must be notified before an AutoPay debit. Stage 0's
-#: `lead` rule owns the enforcement; this is here so the execute tick can
-#: reconstruct the notification time of an attempt it is resuming.
+#: NPCI's pre-debit notice. Stage 0's `lead` rule enforces it; this is here so
+#: the execute tick can reconstruct the notify time of an attempt it resumes.
 LEAD_HOURS = 24
 
 
@@ -115,28 +100,55 @@ class Decision:
     gate_verdict: str = ""
     refused_rule: str = ""
     outcome_code: str = ""
-    #: The provider's own word, or ours for a submission whose outcome is not
-    #: yet known. Carried beside `outcome_code` because the code for "we have
-    #: not been told" is the INDETERMINATE family's canonical member, and
-    #: showing an operator `deemed_transaction` for a debit that was merely
-    #: submitted reads as a fault when nothing has gone wrong.
+    #: Carried beside `outcome_code` because the code for "not yet told" is the
+    #: INDETERMINATE family's canonical member, and showing an operator
+    #: `deemed_transaction` for a plain submission reads as a fault.
     outcome_raw: str = ""
     attempt_state: str = ""
     provider: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
-        d = dict(self.__dict__)
-        return d
+        return dict(self.__dict__)
+
+
+#: The executor's pre-debit phase and the durable attempt state are the same
+#: fact in two vocabularies: `PredeliveryOrder` is the executor port, shared
+#: with the batch root, and `AttemptState` is what survives a restart. This is
+#: the only place they are translated.
+#:
+#: EVERY ATTEMPT STATE MUST APPEAR HERE. A state left out would default to
+#: ORDER_CREATED, and `RazorpayExecutor.attempt` accepts ORDER_CREATED -- so a
+#: row already SUBMITTED would be resubmitted after a restart. That is the
+#: executor's own last-line precondition, and a partial table disarms it.
+_PHASE_STATE: dict[PredeliveryPhase, AttemptState] = {
+    PredeliveryPhase.ORDER_CREATED: AttemptState.ORDER_CREATED,
+    PredeliveryPhase.NOTIFICATION_DELIVERED: AttemptState.NOTIFIED,
+    PredeliveryPhase.DEBIT_ATTEMPTED: AttemptState.SUBMITTED,
+}
+_STATE_PHASE: dict[AttemptState, PredeliveryPhase] = {
+    AttemptState.INTENT: PredeliveryPhase.NONE,
+    AttemptState.ORDER_CREATED: PredeliveryPhase.ORDER_CREATED,
+    AttemptState.NOTIFIED: PredeliveryPhase.NOTIFICATION_DELIVERED,
+    AttemptState.SUBMITTED: PredeliveryPhase.DEBIT_ATTEMPTED,
+    AttemptState.UNKNOWN: PredeliveryPhase.DEBIT_ATTEMPTED,
+    AttemptState.AUTHORIZED: PredeliveryPhase.DEBIT_ATTEMPTED,
+    AttemptState.SUCCEEDED: PredeliveryPhase.DEBIT_ATTEMPTED,
+    AttemptState.FAILED: PredeliveryPhase.DEBIT_ATTEMPTED,
+}
+assert set(_STATE_PHASE) == set(AttemptState)
 
 
 class SqliteJournal(PredeliveryJournal):
-    """The executor's pre-debit orders, kept in the attempts table.
+    """The executor's pre-debit orders, read from and written to the attempts
+    table.
 
-    The executor's default journal is a dict, which is right for a batch run
-    that begins and ends in one process. A service that forgets it created an
-    order will try to create a second one; the provider refuses it on the
-    receipt, which is safe but leaves the debit stuck behind an unexpected
-    rejection. The order id belongs on the attempt row that already exists.
+    The base class keeps them in a dict, which is right for a batch run that
+    begins and ends in one process. A service that forgets it created an order
+    creates a second one; the provider refuses it on the receipt, which is safe
+    but leaves the debit behind an unexpected rejection.
+
+    NO IN-MEMORY COPY. The row is the only record, so a restart and a running
+    process cannot disagree about what phase an order is in.
     """
 
     def __init__(self, store: Store):
@@ -144,21 +156,15 @@ class SqliteJournal(PredeliveryJournal):
         self._store = store
 
     def load(self, mandate_uid: str, target_t: int) -> PredeliveryOrder | None:
-        rec = super().load(mandate_uid, target_t)
-        if rec is not None:
-            return rec
         row = self._store.attempt_for_target(mandate_uid, target_t)
         if row is None or not row.order_id:
             return None
-        rec = PredeliveryOrder(
+        return PredeliveryOrder(
             mandate_uid=mandate_uid, target_t=target_t, order_id=row.order_id,
             amount_paise=row.amount_paise, payment_after=row.payment_after,
-            phase=_phase_for(row.state))
-        super().save(rec)
-        return rec
+            phase=_STATE_PHASE[row.state])
 
     def save(self, rec: PredeliveryOrder) -> None:
-        super().save(rec)
         row = self._store.attempt_for_target(rec.mandate_uid, rec.target_t)
         if row is None:
             return
@@ -167,7 +173,7 @@ class SqliteJournal(PredeliveryJournal):
             row.order_id, changed = rec.order_id, True
         if rec.payment_after and row.payment_after != rec.payment_after:
             row.payment_after, changed = rec.payment_after, True
-        target = _state_for(rec.phase)
+        target = _PHASE_STATE.get(rec.phase)
         if target is not None and advance(row.state, target) is Transition.APPLIED:
             self._store.record_transition(
                 "attempt", row.id, row.state.value, target.value,
@@ -176,20 +182,10 @@ class SqliteJournal(PredeliveryJournal):
         if changed:
             self._store.put_attempt(row)
 
-
-def _phase_for(state: AttemptState) -> PredeliveryPhase:
-    return {
-        AttemptState.ORDER_CREATED: PredeliveryPhase.ORDER_CREATED,
-        AttemptState.NOTIFIED: PredeliveryPhase.NOTIFICATION_DELIVERED,
-    }.get(state, PredeliveryPhase.ORDER_CREATED)
-
-
-def _state_for(phase: PredeliveryPhase) -> AttemptState | None:
-    return {
-        PredeliveryPhase.ORDER_CREATED: AttemptState.ORDER_CREATED,
-        PredeliveryPhase.NOTIFICATION_DELIVERED: AttemptState.NOTIFIED,
-        PredeliveryPhase.DEBIT_ATTEMPTED: AttemptState.SUBMITTED,
-    }.get(phase)
+    def all(self) -> list[PredeliveryOrder]:
+        raise NotImplementedError(
+            "the live journal is keyed by (mandate_uid, target_t) in SQLite; "
+            "enumerate attempts through the store instead")
 
 
 class LiveService:
@@ -202,10 +198,9 @@ class LiveService:
         self.api = api if api is not None else self._build_api(config)
         self.started_at = int(time.time())
 
-        # THE CLOCK ORIGIN IS DECIDED ONCE PER DATABASE. `target_t` is a
-        # simulated hour and Stage 0's peak rule is `target_t % 24`; the origin
-        # is what turns that back into a wall-clock second. Moving it between
-        # restarts would silently redefine every hour already on disk.
+        # DECIDED ONCE PER DATABASE. The origin is what turns a simulated
+        # `target_t` back into a wall-clock second; moving it between restarts
+        # would silently redefine every hour already on disk.
         self.epoch_origin = int(self.store.meta_set_once(
             EPOCH_ORIGIN_KEY, str(self._midnight(self.started_at))))
 
@@ -223,18 +218,17 @@ class LiveService:
         self.diagnoser = diagnoser or RuleBasedDiagnoser()
         self.book = BeliefBook(cycle_days=30, days=365, pop_spend=0.93)
         #: OFFLINE ONLY. Hours added to wall-clock time so a demonstration can
-        #: watch a month of scheduling in a minute. `advance_clock` refuses in
-        #: live mode, where the only clock is the real one.
+        #: watch a month of scheduling in a minute. See `advance_clock`.
         self.clock_offset_h = 0
         self._known_customers: set[int] = set()
         #: customer seq -> the last day its belief has been advanced to.
         self._advanced: dict[int, int] = {}
         self.decisions: list[Decision] = []
-        #: One lock per mandate around the money path. The HTTP server is
-        #: threaded, and two concurrent ticks on one mandate would both see no
-        #: open attempt, both schedule, and both submit against the same
-        #: order -- the provider refuses the second, which this service would
-        #: then record as a failure of a debit that actually succeeded.
+        #: One lock per mandate around the money path. Two concurrent ticks
+        #: would both see no open attempt, both schedule, and both submit
+        #: against one order. In-process only; across processes the attempt
+        #: PRIMARY KEY, the receipt UNIQUE index and Razorpay's own
+        #: one-payment-per-order rule are what bound it.
         self._mandate_locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
         self.refresh()
@@ -251,9 +245,8 @@ class LiveService:
     def _build_api(config: LiveConfig):
         """Mock or real, decided by configuration and by nothing else.
 
-        There is no fallback in either direction. `load()` has already refused
-        to produce a LIVE config without credentials, so reaching here in LIVE
-        mode means they exist.
+        No fallback in either direction: `load()` has already refused a LIVE
+        config without credentials.
         """
         if config.mode is Mode.OFFLINE:
             return MockRazorpayApi(seed=7)
@@ -264,32 +257,24 @@ class LiveService:
     def _midnight(ts: int) -> int:
         """Local midnight at or before `ts`.
 
-        Anchoring hour 0 to a midnight makes `target_t % 24` the actual hour of
-        the day, which is what the NPCI peak-window rule is about. An arbitrary
-        origin would make the peak windows fall at meaningless clock times.
+        Anchoring hour 0 to midnight makes `target_t % 24` the real hour of the
+        day, which is what the NPCI peak-window rule is about.
         """
         lt = time.localtime(ts)
         return int(time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0,
                                 lt.tm_wday, lt.tm_yday, lt.tm_isdst)))
 
     def now_t(self, now: int | None = None) -> int:
-        """Wall clock -> simulated hour. The inverse of the executor's `_epoch`.
-
-        `clock_offset_h` is zero unless an operator has advanced the offline
-        demonstration clock, and cannot be anything else in live mode.
-        """
+        """Wall clock -> simulated hour. The inverse of the executor's `_epoch`."""
         base = max(0, ((now or int(time.time())) - self.epoch_origin) // 3600)
         return base + self.clock_offset_h
 
     def advance_clock(self, hours: int) -> int:
         """Move the offline demonstration clock forward. Never backwards.
 
-        REFUSED IN LIVE MODE, and the refusal is the point. A service that
-        could be told what time it is could be told to debit a customer
-        outside the window they were notified for, and Stage 0's peak and lead
-        rules both read that clock. Offline there is no customer and no money,
-        and watching a month of scheduling take a minute is the only way to
-        demonstrate a scheduler that thinks in days.
+        REFUSED IN LIVE MODE. Stage 0's peak and lead rules read this clock, so
+        a service that could be told the time could be told to debit outside
+        the window the customer was notified for.
         """
         if self.config.is_live:
             raise LiveError(
@@ -302,11 +287,11 @@ class LiveService:
         return self.clock_offset_h
 
     def refresh(self) -> None:
-        """Rebuild the executor's bindings and the belief book from the store.
+        """Rebuild the bindings and the belief book from the store.
 
-        Called at startup and after any mandate change. The executor holds the
-        SAME dict object throughout, so mutating it in place is what makes a
-        newly-authorised mandate chargeable without rebuilding the gate.
+        The executor holds the SAME dict object throughout, so mutating it in
+        place is what makes a newly-authorised mandate chargeable without
+        rebuilding the gate.
         """
         self.bindings.clear()
         for m in self.store.mandates():
@@ -330,19 +315,16 @@ class LiveService:
     def _rehydrate_ledger(self) -> None:
         """REBUILD the gate's ledger from durable state. Not top it up.
 
-        `AttemptLedger` lives in memory, and the two ticks of a debit can be a
-        day apart. A restart between them would leave the gate with no record
-        of the outstanding notification, and `check_pending` would refuse the
-        debit the service had already told Razorpay to expect. The ledger is
-        the regulator's bookkeeping, so it is rebuilt from the same rows the
-        auditor would read rather than from the policy's memory.
+        `AttemptLedger` is in memory and the two ticks of a debit can be a day
+        apart, so a restart between them would leave the gate with no record of
+        the outstanding notification and `check_pending` would refuse a debit
+        Razorpay has already been told to expect.
 
-        IT STARTS BY RESETTING EACH CYCLE, and that is the whole correctness of
-        it. `refresh()` runs on every mandate change, and an earlier version
-        replayed the attempts each time without clearing first: one real
-        attempt read as four after three refreshes, which is the NPCI cap, so
-        the mandate became unchargeable for the rest of its cycle. Replaying a
-        log into a counter is only idempotent if the counter is zeroed first.
+        `open_cycle` RESETS THE COUNTER FIRST, and that is the correctness of
+        it: `refresh()` runs on every mandate change, and replaying a log into
+        a counter is idempotent only if the counter is zeroed. Without it one
+        attempt reads as four after three refreshes -- the NPCI cap -- and the
+        mandate silently stops being chargeable.
         """
         for m in self.store.mandates():
             c = self.store.customer(m.customer_id)
@@ -388,9 +370,8 @@ class LiveService:
                            cycle_days: int = 30) -> Mandate:
         """Create the mandate row and the authorisation order.
 
-        The mandate is PENDING and stays PENDING until the provider says the
-        token is `confirmed`. An order existing, or this call returning, is not
-        authorisation -- the customer has not approved anything yet.
+        It stays PENDING until the provider says the token is `confirmed`. An
+        order existing is not authorisation.
         """
         c = self.store.customer(customer_id)
         if c is None:
@@ -432,9 +413,7 @@ class LiveService:
         """Read the authoritative token state after the customer authorised.
 
         A MANDATE IS NOT ACTIVE BECAUSE THIS CALL SUCCEEDED. It is active when
-        `recurring_details.status` reads `confirmed`, and nothing else counts:
-        not a 200, not a token id existing, not the customer saying they
-        approved it.
+        `recurring_details.status` reads `confirmed` and on nothing else.
         """
         m = self.store.mandate(mandate_id)
         if m is None:
@@ -483,12 +462,9 @@ class LiveService:
     def mock_authorize(self, mandate_id: str) -> Mandate:
         """Stand in for the customer approving the mandate in their UPI app.
 
-        OFFLINE ONLY, AND IT RAISES IN LIVE MODE. There is no Razorpay endpoint
-        that authorises a mandate: a human does it on a phone, through
-        Checkout. `scripts/razorpay_autopay_register.py` serves that flow for
-        real keys. This exists so the console can demonstrate the full chain
-        against the mock rail without a phone, and it is named so it cannot be
-        mistaken for part of the provider's API.
+        OFFLINE ONLY, AND IT RAISES IN LIVE MODE. No Razorpay endpoint
+        authorises a mandate -- a human does it on a phone, through Checkout,
+        which `scripts/razorpay_autopay_register.py` serves for real keys.
         """
         if self.config.is_live:
             raise LiveError(
@@ -549,9 +525,9 @@ class LiveService:
     def decide(self, mandate_id: str, *, now: int | None = None) -> Decision:
         """One tick for one mandate. Schedules, charges, or explains why not.
 
-        Serialised per mandate: everything below reads state, decides on it and
-        writes it back, and two threads interleaving there is how one debit
-        becomes two requests against one order.
+        Serialised per mandate: the body reads state, decides on it and writes
+        it back, and two threads interleaving there is how one debit becomes
+        two requests against one order. See `_mandate_lock`.
         """
         with self._mandate_lock(mandate_id):
             return self._decide(mandate_id, now=now)
@@ -586,10 +562,9 @@ class LiveService:
                 return self._record(d)
             return self._execute(m, c, scheduled, now_t, d)
 
-        # An unresolved attempt that is not merely scheduled means a debit is
-        # in flight or its outcome is unknown. Razorpay's own guidance is not
-        # to create another subsequent payment until the previous one's status
-        # is known, and charging twice is the worst thing this system can do.
+        # A debit is in flight or its outcome is unknown. Razorpay's guidance
+        # is not to create another subsequent payment until the previous one's
+        # status is known, and charging twice is the worst thing this can do.
         open_now = [a for a in self.store.attempts_for(m.id, limit=20)
                     if a.cycle == m.cycle and a.state in ATTEMPT_UNRESOLVED]
         if open_now:
@@ -611,10 +586,9 @@ class LiveService:
         if not allowed:
             return why
         if m.charge_amount_paise > self.config.max_debit_paise:
-            # OUR ceiling, not Razorpay's. Theirs is the mandate's max_amount
-            # and the provider enforces it; this exists so a bug in the amount
-            # path cannot spend more of a real balance than the operator agreed
-            # to expose.
+            # OUR ceiling, not Razorpay's -- theirs is the mandate's max_amount
+            # and they enforce it. This bounds what a bug in the amount path
+            # can spend of a real balance.
             return (f"amount {m.charge_amount_paise} paise is above the "
                     f"configured ceiling of {self.config.max_debit_paise}")
         if m.max_amount_paise and m.charge_amount_paise > m.max_amount_paise:
@@ -711,11 +685,10 @@ class LiveService:
 
         pred = self.executor.predelivery_state(ref, prop.target_t)
         if pred is None or not pred.order_id:
-            # `Stage0Gate.issue_notification` calls the executor and does not
-            # return what it said, so the reason is read back off the executor
-            # rather than reported as a bare "no order". Dropping the pending
-            # notification here matters: the auditor rebuilds pendency from the
-            # log, and one left outstanding reads as a second concurrent notice.
+            # `issue_notification` calls the executor and does not return what
+            # it said, so the reason is read back off it. Clearing the pending
+            # notice matters: the auditor rebuilds pendency from the log, and
+            # one left outstanding reads as a second concurrent notice.
             why = self.executor.last_notify.get(ref.uid, {})
             d.reason = ("the pre-debit order was not created, so nothing was "
                         f"scheduled: {why.get('detail', 'reason unrecorded')}")
@@ -749,18 +722,28 @@ class LiveService:
         try:
             verdict = self.gate.submit(action)
         except RazorpayError as e:
-            # The provider refused the REQUEST. No payment exists, so this is
-            # not evidence about the customer and must not touch the belief.
+            # THE PROVIDER REFUSED THE REQUEST, WHICH IS NOT THE SAME AS
+            # REFUSING THE PAYMENT. It is never evidence about the customer, so
+            # the belief is not touched -- `apply_outcome` runs only on a
+            # terminal state and UNKNOWN is not one.
+            #
+            # UNKNOWN, NOT FAILED, AND THAT IS THE WHOLE POINT. "Order already
+            # paid" is exactly what a resubmission after a crash mid-request
+            # gets, and the order it names may hold a captured payment.
+            # Recording FAILED there would report a collected cycle as
+            # uncollected and spend an NPCI attempt on it. UNKNOWN is
+            # non-terminal, is never retried automatically, and is what
+            # `reconcile` resolves by asking the order what it holds.
             d.reason = f"the provider refused the request: {e}"
             d.gate_verdict = "ALLOWED"
-            self.store.record_transition("attempt", attempt.id,
-                                         attempt.state.value,
-                                         AttemptState.FAILED.value,
-                                         Transition.APPLIED.value, "submit",
-                                         "request refused")
-            attempt.state = AttemptState.FAILED
+            if advance(attempt.state, AttemptState.UNKNOWN) is Transition.APPLIED:
+                self.store.record_transition("attempt", attempt.id,
+                                             attempt.state.value,
+                                             AttemptState.UNKNOWN.value,
+                                             Transition.APPLIED.value, "submit",
+                                             "request refused")
+                attempt.state = AttemptState.UNKNOWN
             attempt.raw_reason = "request_refused"
-            attempt.resolved_at = int(time.time())
             self.store.put_attempt(attempt)
             d.attempt_state = attempt.state.value
             return self._record(d)
@@ -802,9 +785,9 @@ class LiveService:
                    day: int) -> CaseView:
         """The only thing the diagnosis layer ever sees about this mandate.
 
-        No balance, no salary, no payday, no posterior, no provider id. The
-        band is a coarse label derived from the belief; `PaydayUncertainty`
-        drops the expected balance before it can be read here.
+        No balance, no salary, no payday, no posterior, no provider id -- the
+        band is a coarse label and `PaydayUncertainty` drops the expected
+        balance before it can be read here.
         """
         history = tuple(a.outcome_code for a
                         in reversed(self.store.attempts_for(m.id, limit=10))
@@ -825,11 +808,10 @@ class LiveService:
     def _advance_to(self, customer_seq: int, day: int) -> None:
         """Age this customer's belief to `day`, exactly once per day.
 
-        `BeliefBook.advance_day` raises on a second call for the same day, on
-        purpose: a filter advanced twice is aged twice and is silently wrong.
-        A live service ticks whenever it is asked to, several times a day and
-        sometimes not for two, so the day counter is kept here and the belief
-        is walked forward one day at a time -- never skipped, never repeated.
+        `BeliefBook.advance_day` raises on a second call for the same day: a
+        filter aged twice is silently wrong. A live service ticks whenever it
+        is asked, so the belief is walked forward one day at a time -- never
+        skipped, never repeated.
         """
         last = self._advanced.get(customer_seq, -1)
         if day <= last:
@@ -847,13 +829,12 @@ class LiveService:
     def reconcile(self, limit: int = 50) -> list[dict]:
         """Ask the provider what happened to everything we are unsure about.
 
-        THIS IS THE CRASH-RECOVERY PATH, and it is the same code either way:
-        a process that died between submitting and hearing back leaves exactly
+        THIS IS THE CRASH-RECOVERY PATH, and it is the same code either way: a
+        process that died between submitting and hearing back leaves exactly
         the rows this query returns, and so does a webhook that never arrived.
 
-        Two joins, in order of strength. If the payment id is known, fetch the
-        payment. If only the order id is known -- which is what a lost
-        submission leaves -- ask the order which payments it has.
+        Two joins, in order of strength: the payment id if we have it, else the
+        order -- which is all a lost submission leaves.
         """
         out: list[dict] = []
         for a in self.store.unresolved_attempts(ATTEMPT_UNRESOLVED, limit):
@@ -872,12 +853,10 @@ class LiveService:
                 continue
             view = from_payment_entity(entity)
 
-            # LEARNING AN IDENTIFIER IS NOT A STATE TRANSITION. A submission
-            # whose response was lost has no payment id, and the only way to
-            # get one is to ask the order. That id must be recorded even when
-            # the provider's answer does not advance the state -- otherwise
-            # every future poll has to go the long way round, and the strong
-            # join is never available.
+            # LEARNING AN IDENTIFIER IS NOT A STATE TRANSITION. A lost
+            # submission has no payment id; it must be recorded even when the
+            # answer does not advance the state, or the strong join is never
+            # available and every later poll goes the long way round.
             learned = False
             if view.payment_id and not a.payment_id:
                 a.payment_id, learned = view.payment_id, True
@@ -927,13 +906,12 @@ class LiveService:
         return item or None
 
     def apply_outcome(self, a: PaymentAttempt) -> None:
-        """Fold a RESOLVED attempt into the belief. Idempotent by state.
+        """Fold a RESOLVED attempt into the belief.
 
-        Called from reconciliation and from webhook processing. It runs only on
-        a terminal state, so a submission never updates the belief and an
-        unknown outcome never does either -- `w3.BeliefPD.observe(amount,
-        False)` hard-zeroes every balance bin at or above the amount, and doing
-        that on an outcome nobody knows teaches the filter something false.
+        TERMINAL STATES ONLY, so neither a submission nor an unknown outcome
+        reaches the filter: `w3.BeliefPD.observe(amount, False)` hard-zeroes
+        every balance bin at or above the amount, and doing that on an outcome
+        nobody knows teaches it something false.
         """
         if a.state not in (AttemptState.SUCCEEDED, AttemptState.FAILED):
             return
@@ -950,12 +928,10 @@ class LiveService:
     def deliver_mock_webhooks(self) -> int:
         """Post the mock rail's queued webhooks through the REAL ingest path.
 
-        OFFLINE ONLY -- a live rail delivers its own, over the internet, to a
-        public HTTPS endpoint. The point of routing the mock's through
-        `handle_webhook` rather than applying them directly is that the offline
-        demonstration then exercises the same signature verification, the same
-        deduplication and the same monotonic state machine the live one does.
-        A mock that bypassed all three would be demonstrating nothing.
+        OFFLINE ONLY. Routing them through `handle_webhook` rather than
+        applying them directly is what makes the offline demonstration exercise
+        the same signature check, deduplication and monotonic state machine the
+        live one does.
         """
         drain = getattr(self.api, "drain_webhooks", None)
         if drain is None or self.config.is_live:
@@ -967,9 +943,8 @@ class LiveService:
                 self.handle_webhook(raw.encode(), signature, event_id)
                 sent += 1
             except webhooks.WebhookRejected:
-                # Cannot happen with a correctly signed body, and is swallowed
-                # rather than raised because a demonstration must not die on
-                # its own scaffolding.
+                # Cannot happen with a correctly signed body; swallowed so a
+                # demonstration cannot die on its own scaffolding.
                 pass
         if sent:
             self.process_webhooks()
@@ -979,8 +954,8 @@ class LiveService:
                        event_id: str) -> webhooks.Ingested:
         """Verify and record. Interpretation happens after the response.
 
-        Razorpay resends any event it does not see acknowledged within five
-        seconds, so this does the smallest durable thing and returns.
+        Razorpay resends any event not acknowledged 2xx within five seconds,
+        so this does the smallest durable thing and returns.
         """
         return webhooks.ingest(self.store, raw_body=raw_body,
                                signature=signature, event_id=event_id,
@@ -989,8 +964,7 @@ class LiveService:
     def process_webhooks(self, limit: int = 100) -> list[dict]:
         """Interpret recorded events, then fold any resolved attempt in.
 
-        Safe to call repeatedly and safe after a crash: every state change goes
-        through a monotonic transition, so a replayed event is a no-op.
+        Safe to replay: every state change goes through a monotonic transition.
         """
         results = webhooks.process_pending(self.store, limit=limit)
         out = []

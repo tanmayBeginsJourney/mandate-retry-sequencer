@@ -82,28 +82,6 @@ def effective_amount_paise(notify_amount: float, binding_amount: float) -> int:
     return int(round(rupees * 100))
 
 
-def build_order_body(*, amount_paise: int, currency: str, receipt: str,
-                     token_id: str, payment_after: int) -> dict[str, Any]:
-    """POST /v1/orders body per UPI AutoPay subsequent-payments guide."""
-    return {
-        "amount": amount_paise,
-        "currency": currency,
-        "payment_capture": True,
-        "receipt": receipt,
-        "notification": {
-            "token_id": token_id,
-            "payment_after": payment_after,
-        },
-    }
-
-
-def parse_order_id(payload: dict) -> str:
-    if not isinstance(payload, dict):
-        return ""
-    oid = payload.get("id")
-    return str(oid) if oid else ""
-
-
 def parse_notification_webhook(payload: dict) -> NotificationWebhook | None:
     """Parse order.notification.delivered / order.notification.failed."""
     if not isinstance(payload, dict):

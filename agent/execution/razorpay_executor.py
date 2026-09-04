@@ -1,78 +1,49 @@
 """`RazorpayExecutor` -- the same port, a different world.
 
 THE POINT OF THIS FILE IS THAT NOTHING ELSE CHANGES. `agent/ports.py` declares
-the executor port. `attempt()` is the money path. `remind()` writes a funding
-notice (never a Payment Link). `backup_checkout()` is the last-attempt Payment
-Link. `escalate()` appends a merchant-queue file. `SimExecutor` implements the
-same methods against the simulation. `agent/loop.py`, `agent/policy/`,
-`agent/constraints/` and `agent/audit/` are byte-identical either way, because
-gate **I2** already forbids anything but `constraints/stage0.py` and a
-composition root from holding an executor at all.
+the executor port; `SimExecutor` implements the same methods against the
+simulation. `agent/loop.py`, `agent/policy/`, `agent/constraints/` and
+`agent/audit/` are byte-identical either way, because gate I2 forbids anything
+but `constraints/stage0.py` and a composition root from holding an executor.
 
-Stage 0 adjudicates before `_api` is ever reached, so a peak-hour debit is
-refused with **zero network traffic** against either backend.
-`scripts/prove_stage0_refuses.py` demonstrates that end to end with no API key.
+Stage 0 adjudicates before `_api` is reached, so a peak-hour debit is refused
+with ZERO network traffic against either backend.
+`scripts/prove_stage0_refuses.py` shows that end to end with no API key.
 
-WHERE THE HTTP LIVES. Not here. `agent/execution/razorpay_api.py` owns URLs,
-authentication, request bodies and the four outcomes a payment API can return;
-`agent/execution/razorpay_mock.py` implements the same surface without a
-socket. This file turns those answers into `agent.ports` vocabulary and does
-nothing else with the network.
+THE HTTP LIVES IN `razorpay_api.py`, not here. This file turns provider answers
+into `agent.ports` vocabulary and does nothing else with the network.
 
----------------------------------------------------------------------------
-THE TWO THINGS THIS EXECUTOR GETS RIGHT THAT A NAIVE ONE DOES NOT
----------------------------------------------------------------------------
+TWO THINGS THIS EXECUTOR GETS RIGHT THAT A NAIVE ONE DOES NOT:
 
-1. **AN ACCEPTED SUBMISSION IS NOT A COLLECTED PAYMENT, AND IT IS NOT A
-   DECLINE EITHER.** `POST /v1/payments/create/recurring` answers
+1. AN ACCEPTED SUBMISSION IS NOT A COLLECTED PAYMENT, AND NOT A DECLINE
+   EITHER. `POST /v1/payments/create/recurring` answers
    `{"razorpay_payment_id": "pay_..."}` -- no `status`, no `error_reason`.
-   [VERIFIED] against Razorpay's create-subsequent-payments reference, read
-   3 September 2026. A client that reads that as a payment entity finds no
-   status, concludes "declined", and hands `success=False` to the belief
-   filter, which hard-zeroes every balance bin at or above the amount
-   (`w3.py:432`) for every mandate that customer holds. So a successful
-   submission returns `pending=True`: the provider has the request and has not
-   said what happened. The answer arrives on `payment.captured` or
-   `payment.failed`, or from `GET /v1/payments/:id`.
+   [VERIFIED] razorpay.com create-subsequent-payments, read 3 September 2026.
+   A client that reads it as a payment entity finds no status, concludes
+   "declined", and hands `success=False` to the belief filter, which
+   hard-zeroes every balance bin at or above the amount (`w3.py:432`) for
+   every mandate that customer holds. So a successful submission returns
+   `pending=True` and the answer arrives by webhook or by fetching the payment.
 
-2. **A TRANSPORT FAILURE IS `pending`, NEVER A DECLINE.** If the connection
-   drops we do not know whether the debit landed. `Z9` would be a lie about
-   the customer derived from a fact about our network.
+2. A TRANSPORT FAILURE IS `pending`, NEVER A DECLINE. If the connection drops
+   we do not know whether the debit landed, and `Z9` would be a lie about the
+   customer derived from a fact about our network.
 
----------------------------------------------------------------------------
-IDEMPOTENCY, AND A HEADER THAT USED TO BE HERE
----------------------------------------------------------------------------
+IDEMPOTENCY. Razorpay documents no idempotency header for the recurring charge
+(see `razorpay_api.py`), so none is sent. `receipt_for` derives the order
+receipt from the `action_id` Stage 0 already computed -- itself a hash of
+`(run_id, mandate, cycle, target_t, attempt_no)` -- so the same logical debit
+produces the same receipt after a crash and the provider refuses the second
+order. That is at-most-once for a COLLECTED debit, not exactly-once: a retry
+gets a rejection rather than a replayed result and the caller must reconcile.
+`live/service.py` does, and records the rejection as UNKNOWN.
 
-This executor previously sent `X-Razorpay-Idempotency-Key` on the recurring
-charge. **Razorpay documents no idempotency header for that endpoint** -- the
-documented one, `X-Payout-Idempotency`, is for RazorpayX Payouts and a small
-set of explicitly idempotent Route and Refund endpoints. [VERIFIED]
-3 September 2026. A header the provider ignores reads like a guarantee, so it
-is gone.
-
-What replaces it is documented and real: the order `receipt` is unique per
-account, and an order can be paid once. `receipt_for` derives the receipt from
-the `action_id` Stage 0 already computed -- itself a hash of
-`(run_id, mandate, cycle, target_t, attempt_no)` -- so the SAME logical debit
-produces the SAME receipt after a crash, and the provider refuses the second
-order. One order per attempt makes the debit at-most-once at Razorpay. It does
-NOT make it exactly-once: a retry gets a rejection rather than a replayed
-result, so the caller still has to reconcile. `live/service.py` does.
-
----------------------------------------------------------------------------
-TWO CLOCKS, RECONCILED AT ONE LINE
----------------------------------------------------------------------------
-
-Stage 0 counts time in simulated hours -- its peak rule is `target_t % 24`.
-Razorpay wants `payment_after` as a Unix epoch second. No single integer is
-both, and this executor used to receive one field and read it as the other,
-which is why it could never be driven end to end by the constraint layer.
-
-`epoch_origin` is the wall-clock second that simulated hour 0 corresponds to,
-and `_epoch` is the only place the conversion happens. It defaults to 0, and
-at 0 the executor REFUSES to create an order rather than sending a
-`payment_after` in 1970. An unset clock is a configuration error, not a
-default.
+TWO CLOCKS, RECONCILED AT ONE LINE. Stage 0 counts simulated hours (its peak
+rule is `target_t % 24`); Razorpay wants `payment_after` as a Unix second. No
+integer is both. `epoch_origin` is the wall-clock second simulated hour 0
+corresponds to and `_epoch` is the only place the conversion happens. It
+defaults to 0, and at 0 the executor REFUSES to create an order rather than
+sending a `payment_after` in 1970: an unset clock is a configuration error.
 """
 from __future__ import annotations
 
@@ -104,43 +75,31 @@ from agent.execution.smtp_delivery import SMTP_SENT, deliver_smtp
 from agent.ports import (OK, AttemptOutcome, MandateRef, Rupees, WorkflowResult,
                          bank_of, code_for_reason, is_pending, to_paise)
 
-#: Razorpay's OWN documented retry schedule for a failed subscription charge:
-#: attempt on T, then T+1, T+2, T+3, after which the subscription moves to
-#: `halted`. [VERIFIED] from their Payment Retries page, 29 August 2026.
-#:
-#: Recorded here because it does two jobs. It is independent corroboration of
-#: the NPCI attempt cap -- 1 presentation plus 3 retries -- which
-#: `docs/results.md` had only from a secondary source. And it means
-#: `harness.baseline_doc`, the naive comparator this project measures against,
-#: is a fair rendering of what the vendor actually does rather than a strawman.
-VENDOR_RETRY_OFFSETS_DAYS = (0, 1, 2, 3)
-VENDOR_TERMINAL_STATE = "halted"
-
 #: What a successful submission looks like in `AttemptOutcome.raw_code`. The
 #: `code` beside it is the INDETERMINATE family's canonical member, because
-#: "the provider has the request and has not answered" is the same *decision*
-#: as a deemed transaction: do not retry, go and find out. The raw code keeps
-#: the two distinguishable in the audit trail.
+#: "the provider has the request and has not answered" is the same DECISION as
+#: a deemed transaction -- do not retry, go and find out -- while the raw code
+#: keeps the two distinguishable in the audit trail.
 SUBMITTED_RAW = "submitted_awaiting_outcome"
 _UNKNOWN_CODE = code_for_reason("deemed_transaction")
 
 
 class RazorpayError(RuntimeError):
-    """Raised only when the provider refused the REQUEST -- a bad credential, a
-    mandate with no token, an order that cannot be paid. Never for a declined
-    payment and never for a transport failure: both of those are outcomes, and
-    an outcome is a return value."""
+    """The provider refused the REQUEST -- a bad credential, a mandate with no
+    token, an order that cannot be paid. NEVER a declined payment and never a
+    transport failure: both of those are outcomes, and an outcome is a return
+    value. The caller cannot conclude a payment does not exist from this: see
+    `live/service.LiveService._execute`, which records UNKNOWN."""
 
 
 @dataclass(frozen=True)
 class MandateBinding:
     """What Razorpay needs to charge one of our mandates.
 
-    Our `MandateRef` is `(customer_id, mandate_index, merchant_id)`, which is
-    the simulation's identity. Razorpay's is a `customer_id` and a `token_id`
-    returned when the AutoPay mandate was authorised. Nothing derives one from
-    the other, so the binding is data supplied by the caller and this class is
-    where the gap is visible instead of implied.
+    `MandateRef` is the simulation's identity; Razorpay's is a `customer_id`
+    and a `token_id`. Nothing derives one from the other, so the binding is
+    data supplied by the caller and this class is where the gap is visible
+    instead of implied.
     """
     rzp_customer_id: str
     rzp_token_id: str
@@ -163,11 +122,8 @@ class MandateBinding:
 class PredeliveryJournal:
     """Where pre-debit orders survive a restart.
 
-    The default is memory, which is right for a batch run that starts and ends
-    in one process. `live/service.py` passes a SQLite-backed implementation,
-    because a service that forgets it created an order will create a second one
-    -- and the provider will refuse it, which is safe but leaves the debit
-    stuck behind a rejection nobody expected.
+    Memory by default, which is right for a batch run that starts and ends in
+    one process. `live/service.py` passes a SQLite-backed implementation.
     """
 
     def __init__(self) -> None:
@@ -191,22 +147,16 @@ class RazorpayExecutor:
                  transport=None, api=None, currency: str = "INR",
                  epoch_origin: int = 0,
                  journal: PredeliveryJournal | None = None,
-                 max_live_nudges: int | None = None,
-                 max_live_escalations: int | None = None):
+                 max_live_nudges: int | None = None):
         self.bindings = bindings
         self.currency = currency
         self.epoch_origin = int(epoch_origin)
         self.journal = journal or PredeliveryJournal()
-        self.max_live_nudges = max_live_nudges
-        if self.max_live_nudges is None:
-            self.max_live_nudges = int(
-                os.environ.get("RAZORPAY_MAX_LIVE_NUDGES", "5"))
-        self.max_live_escalations = max_live_escalations
-        if self.max_live_escalations is None:
-            self.max_live_escalations = int(
-                os.environ.get("RAZORPAY_MAX_LIVE_ESCALATIONS", "5"))
+        #: Caps the two actions that reach the outside world -- an email and
+        #: a Payment Link. `escalate()` writes a local file and needs no cap.
+        self.max_live_nudges = max_live_nudges if max_live_nudges is not None \
+            else int(os.environ.get("RAZORPAY_MAX_LIVE_NUDGES", "5"))
         self.n_live_nudges = 0
-        self.n_live_escalations = 0
         self.n_live_backups = 0
         self.n_escalations = 0
         self.notify_email = os.environ.get("RECOVERY_NOTIFY_EMAIL", "").strip()
@@ -219,15 +169,11 @@ class RazorpayExecutor:
             os.path.join("agent", "runs", "merchant_queue.jsonl"))
         self._backup_ids: dict[str, str] = {}
         self.workflow_log: list[dict] = []
-        self.pending_outcomes = 0
-        #: `{customer_id: handle}`, the same shape `SimExecutor` exposes, so
+        #: `{customer_id: handle}`, the shape `SimExecutor` exposes, so
         #: `agent/loop.py` can put a bank on the `CaseView` either way.
         #:
         #: IN PRODUCTION THIS IS A STAND-IN. The real remitter handle is on the
-        #: customer's VPA (`user@oksbi`) and is something the merchant can read
-        #: off their own transaction report -- which is the argument
-        #: `agent/llm/caseview.py` makes for letting it cross the redaction
-        #: boundary at all. A real integration reads it from the payment
+        #: customer's VPA and a real integration reads it off the payment
         #: object; hashing an index keeps the two backends the same shape.
         self.banks = {int(uid.split("m")[0][1:]): bank_of(int(uid.split("m")[0][1:]))
                       for uid in bindings}
@@ -276,12 +222,10 @@ class RazorpayExecutor:
     def receipt_for(action_id: str, ref: MandateRef, t: int) -> str:
         """The order receipt for one debit. Deterministic, and <= 40 chars.
 
-        This is the real idempotency anchor: Razorpay rejects a second order
-        carrying a receipt it has already seen, so the same logical debit
-        cannot become two orders across a crash. Keyed on `action_id`, which
-        Stage 0 derives from `(run_id, mandate, cycle, target_t, attempt_no)`
-        -- not on wall clock and not on a fresh uuid, because a key that moves
-        between runs is not a key.
+        THE REAL IDEMPOTENCY ANCHOR: Razorpay rejects a second order carrying a
+        receipt it has seen, so one logical debit cannot become two orders
+        across a crash. Keyed on `action_id` -- not on a wall clock and not on
+        a fresh uuid, because a key that moves between runs is not a key.
         """
         raw = f"{action_id}|{ref.uid}|{t}"
         return "rcv_" + hashlib.sha256(raw.encode()).hexdigest()[:32]
@@ -303,11 +247,10 @@ class RazorpayExecutor:
                target_t: int) -> dict:
         """Create the pre-debit order. `POST /v1/orders` with `notification`.
 
-        ORDER_CREATED IS NOT PROOF THE CUSTOMER WAS TOLD. It means Razorpay
+        ORDER_CREATED IS NOT PROOF THE CUSTOMER WAS TOLD -- it means Razorpay
         accepted the instruction to tell them. Only
-        `order.notification.delivered` is evidence of delivery, and NPCI
-        requires the notice 24 hours before the debit, so the distinction is
-        regulatory rather than cosmetic.
+        `order.notification.delivered` is evidence of delivery, and the notice
+        is a regulatory obligation, so the distinction is not cosmetic.
         """
         b = self._binding(ref)
         if not (b.rzp_token_id or "").strip():
@@ -442,15 +385,13 @@ class RazorpayExecutor:
 
         It DOES raise `RazorpayError` when the provider refused the REQUEST --
         a rejected credential, a token that is not confirmed, an order that
-        cannot be paid. No payment was created in those cases, so there is no
-        evidence about the customer's balance, and returning a decline would
-        record one. That asymmetry is deliberate: raising stops the run with a
-        message naming the status, which is loud and recoverable; declining
+        cannot be paid. Those carry no evidence about the customer's balance,
+        so returning a decline would fabricate one. The asymmetry is
+        deliberate: raising stops the run loudly and recoverably; declining
         corrupts every belief the customer has and reports a plausible-looking
-        recovery rate, which is silent.
+        recovery rate, silently.
 
-        THE RETURN ON SUCCESS IS `pending`, NOT SUCCESS. See the module
-        docstring: an accepted submission is not a collected payment.
+        THE RETURN ON SUCCESS IS `pending`, NOT SUCCESS.
         """
         b = self._binding(ref)
         pred = self.journal.load(ref.uid, t)
@@ -501,7 +442,6 @@ class RazorpayExecutor:
         if r.outcome is Outcome.LOST:
             # WE DO NOT KNOW whether the debit landed. Reconciliation resolves
             # it from the order; nothing here may guess.
-            self.pending_outcomes += 1
             return AttemptOutcome(t=t, code=_UNKNOWN_CODE, success=False,
                                   pending=True, raw_code="transport_lost")
 
@@ -520,10 +460,8 @@ class RazorpayExecutor:
     def _refuses_request(self, r) -> bool:
         """Did the provider refuse the REQUEST rather than report on a PAYMENT?
 
-        One predicate, because it is the branch that decides whether a
-        response becomes an exception or a statement about a customer's
-        balance, and a decision that important should have one place to read
-        and one place for a mutant to attack.
+        One predicate, because this branch decides whether a response becomes
+        an exception or a statement about a customer's balance.
         """
         if r.outcome is Outcome.DENIED:
             return True
@@ -535,21 +473,19 @@ class RazorpayExecutor:
     def _is_payment_outcome(payload: dict) -> bool:
         """Did a 4xx report on a PAYMENT, or refuse the REQUEST?
 
-        The distinction is the difference between "the customer's account was
-        empty" and "our API key is wrong", and getting it backwards was a
-        defect on the money path once already -- `docs/errors.md`, "An
-        authentication failure recorded as a statement about the customer's
-        balance". A wrong key would otherwise teach the belief filter that
-        every one of that customer's mandates faced an empty account, and burn
-        all four legal NPCI attempts doing it.
+        The difference between "the customer's account was empty" and "our API
+        key is wrong". Getting it backwards was a defect on the money path once
+        already (`docs/errors.md`): a wrong key would teach the belief filter
+        that every one of that customer's mandates faced an empty account, and
+        burn all four legal NPCI attempts doing it.
 
-        `[REPORTED]` from Razorpay's error documentation: a payment-level
-        failure carries `reason`, `source`, `step` and `metadata.payment_id`;
-        an API-level rejection carries `code` and `description` alone. The 401
-        half is `[VERIFIED]` -- an unauthenticated POST to the real
+        [REPORTED] from Razorpay's error documentation: a payment-level failure
+        carries `reason`, `source`, `step` and `metadata.payment_id`; an
+        API-level rejection carries `code` and `description` alone. The 401
+        half is [VERIFIED] -- an unauthenticated POST to the real
         recurring-charge endpoint returns exactly `code` and `description`,
-        transcript in `logs/razorpay_ladder.json`. The 4xx half is inference,
-        and it is the branch to re-check the day a live key exists.
+        transcript in `logs/razorpay_ladder.json`. THE 4XX HALF IS INFERENCE
+        and is the branch to re-check the day a live key exists.
         """
         err = payload.get("error") or {}
         if not err:
@@ -564,10 +500,9 @@ class RazorpayExecutor:
         Pure, so every branch is reachable from a recorded response in
         `agent/tests/test_razorpay_mapping.py` without a key.
 
-        TWO SHAPES ARRIVE HERE. `create/recurring` answers with a payment id
-        and nothing else. `GET /payments/:id` answers with a full entity
-        carrying `status` and possibly `error_reason`. The first is always
-        `pending`; only the second can resolve an outcome.
+        TWO SHAPES ARRIVE. `create/recurring` answers with a payment id and
+        nothing else; `GET /payments/:id` answers with a full entity carrying
+        `status`. The first is always `pending`; only the second resolves.
         """
         reason = str(payload.get("error_reason") or
                      (payload.get("error") or {}).get("reason") or "")
@@ -575,43 +510,19 @@ class RazorpayExecutor:
 
         if not state and payment_id:
             # The create/recurring shape. Accepted, outcome unknown.
-            self.pending_outcomes += 1
             return AttemptOutcome(t=t, code=_UNKNOWN_CODE, success=False,
                                   pending=True, raw_code=SUBMITTED_RAW)
         if not reason and state in ("captured", "authorized"):
             return AttemptOutcome(t=t, code=OK, success=True, raw_code=state)
         if not reason and state in ("created", "pending"):
-            self.pending_outcomes += 1
             return AttemptOutcome(t=t, code=_UNKNOWN_CODE, success=False,
                                   pending=True, raw_code=state)
         if not reason:
             return AttemptOutcome(t=t, code=code_for_reason(None),
                                   success=False,
                                   raw_code=state or "unknown")
-        pending = is_pending(reason)
-        if pending:
-            self.pending_outcomes += 1
         return AttemptOutcome(t=t, code=code_for_reason(reason), success=False,
-                              pending=pending, raw_code=reason)
-
-    def resolve(self, payment_id: str, t: int) -> AttemptOutcome:
-        """Ask the provider what happened to a submitted payment.
-
-        The authoritative answer, for a payment whose webhook has not arrived
-        or whose submission response was lost. Called by reconciliation, never
-        in a loop -- Razorpay's own guidance is that webhooks are the primary
-        channel and polling is the fallback.
-        """
-        r = self._api.fetch_payment(payment_id)
-        if r.outcome is Outcome.LOST:
-            self.pending_outcomes += 1
-            return AttemptOutcome(t=t, code=_UNKNOWN_CODE, success=False,
-                                  pending=True, raw_code="transport_lost")
-        if r.outcome in (Outcome.DENIED, Outcome.REJECTED):
-            raise RazorpayError(
-                f"Razorpay refused the fetch for payment {payment_id}: HTTP "
-                f"{r.status}, code={r.error_code!r}")
-        return self._outcome_from_response(r.body, t, "")
+                              pending=is_pending(reason), raw_code=reason)
 
     # -------------------------------------------------------- non-money path
     def _notify_email(self, fallback: str = "") -> str:
@@ -652,12 +563,6 @@ class RazorpayExecutor:
         return WorkflowResult(
             executed=emailed, channel="email" if emailed else "outbox",
             detail=f"{smtp} outbox={path}", status="sent" if emailed else "")
-
-    def nudge(self, ref: MandateRef, amount: Rupees, t: int,
-              message: str = "", action_id: str = "",
-              email_subject: str = "") -> WorkflowResult:
-        return self.remind(ref, amount, t, message=message,
-                           action_id=action_id, email_subject=email_subject)
 
     def backup_checkout(self, ref: MandateRef, amount: Rupees, t: int,
                         message: str = "", action_id: str = "") -> WorkflowResult:

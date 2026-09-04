@@ -1,18 +1,13 @@
 """Razorpay's HTTP surface. The only place in this repository that knows a URL.
 
-`razorpay_executor.py` is the `Executor` port -- it answers "charge this
-mandate" in the vocabulary `agent/ports.py` defines. This file is the layer
-underneath it: authentication, paths, request bodies, response parsing, and
-the four things a payment API can do to you. Splitting them means the mandate
-lifecycle (customers, registration orders, tokens, reconciliation) has a home
-that is not the money path, and it means there is exactly one transport, one
-credential handler and one error classifier to audit.
+`razorpay_executor.py` is the `Executor` port. This is the layer underneath:
+authentication, paths, request bodies, response parsing, and the four things a
+payment API can do to you. Splitting them gives the mandate lifecycle a home
+that is not the money path, and leaves one transport, one credential handler
+and one error classifier to audit. `razorpay_mock.py` implements the same
+surface without a socket.
 
-`razorpay_mock.py` implements this same surface without a socket.
-
----------------------------------------------------------------------------
 FOUR OUTCOMES, NOT TWO. The crash argument rests on this distinction.
----------------------------------------------------------------------------
 
   OK          2xx. The provider acted and told us.
   REJECTED    4xx naming a request problem. The provider did NOT act.
@@ -27,35 +22,29 @@ FOUR OUTCOMES, NOT TWO. The crash argument rests on this distinction.
 
 `LOST` is the one that costs money when it is collapsed into a failure.
 
----------------------------------------------------------------------------
-IDEMPOTENCY: WHAT RAZORPAY ACTUALLY PROVIDES, WHICH IS NOT A HEADER.
----------------------------------------------------------------------------
+IDEMPOTENCY: WHAT RAZORPAY ACTUALLY PROVIDES, WHICH IS NOT A HEADER. They
+document idempotency for RazorpayX payouts (`X-Payout-Idempotency`) and for
+refunds, and NONE for `POST /payments/create/recurring`. [VERIFIED]
+razorpay.com Payout Idempotency, read 3 September 2026. A header the provider
+ignores reads like a guarantee that is not there, so this client sends none.
 
-Razorpay documents an idempotency header (`X-Payout-Idempotency`) for
-RazorpayX Payouts and for a small set of explicitly idempotent Route and
-Refund endpoints. **It documents none for `POST /payments/create/recurring`.**
-[VERIFIED] razorpay.com, read 3 September 2026.
+Two documented properties stand in:
 
-An earlier version of this client sent `X-Razorpay-Idempotency-Key` on the
-recurring charge. That header is not in their documentation for that endpoint,
-and a header the provider ignores is worse than no header: it reads, in the
-code and in a review, like a guarantee that is not there. It is gone.
+  1. An order's `receipt` "has to be unique" per account and a second create
+     with the same value is rejected; `GET /v1/orders?receipt=` finds the one
+     that already exists. ORDER CREATION is therefore idempotent on a
+     deterministic receipt. [VERIFIED] razorpay.com Create an Order.
+  2. "No further payment requests are permitted once the order moves to the
+     `paid` state." [VERIFIED] razorpay.com Orders entity.
 
-Two documented properties replace it:
-
-  1. An order's `receipt` is unique per account -- a second create with the
-     same value is rejected -- and `GET /v1/orders?receipt=` finds the order
-     that already exists. So ORDER CREATION is idempotent on a deterministic
-     receipt, and a crash that lost our record of an order can recover it
-     instead of making a second one.
-
-  2. An order can be paid once. Razorpay refuses a further payment against an
-     order that is `paid`, or `attempted` with an authorised payment.
-
-One order per debit attempt therefore makes the DEBIT at-most-once at the
-provider. That is weaker than an idempotency key -- a retried submission gets
-a rejection rather than a replayed success, so the client still has to go and
-look at what happened -- and this repository does not claim otherwise.
+One order per debit attempt therefore makes a COLLECTED debit at-most-once at
+the provider. It is weaker than an idempotency key in two ways this repository
+does not paper over: a retried submission gets a rejection rather than a
+replayed result, so the caller must still reconcile; and an order sitting in
+`attempted` -- a previous payment authorised but not captured -- is not
+documented as closed to a second payment. `payment_capture: true` is set on
+every order here so that window is not held open, but the residual is real and
+is recorded in `docs/results.md` rather than assumed away.
 """
 from __future__ import annotations
 
@@ -69,12 +58,10 @@ from enum import Enum
 
 API_BASE = "https://api.razorpay.com/v1"
 
-#: Every path this repository can reach, so "what can this service call" is one
-#: screen rather than a grep across a package.
+#: Every path this repository can reach, on one screen.
 PATHS = {
     "customers": "/customers",
     "orders": "/orders",
-    "order": "/orders/{order_id}",
     "recurring": "/payments/create/recurring",
     "payments": "/payments",
     "payment": "/payments/{payment_id}",
@@ -93,8 +80,7 @@ DENIED_STATUSES = (401, 403)
 
 #: Razorpay's documented minimum mandate amount, across every merchant
 #: category, is Rs 1. [VERIFIED] razorpay.com UPI AutoPay, read 3 September
-#: 2026. A provider floor, so it is encoded; any ceiling is ours and belongs in
-#: configuration.
+#: 2026. A provider floor; any ceiling is ours and lives in configuration.
 MIN_AMOUNT_PAISE = 100
 
 #: `max_amount` on a mandate token accepts 500 to 100000000 paise, default
@@ -138,8 +124,8 @@ class Transport:
     """Basic-auth JSON over `urllib`. No dependency, and injectable.
 
     Injectable is the point: every offline gate passes a fake and the object
-    under test is the real client. The credential becomes a header once, in
-    `__init__`, and `__repr__` is overridden so it cannot reach a traceback.
+    under test is the real client. The credential becomes a header once, and
+    `__repr__` is overridden so it cannot reach a traceback.
     """
 
     def __init__(self, key_id: str, key_secret: str, timeout: float = 20.0):
@@ -183,10 +169,10 @@ def _as_dict(raw: str) -> dict:
 class RazorpayApi:
     """Every Razorpay call this repository can make.
 
-    Methods return an `ApiResponse` and never raise for a provider answer.
-    They raise `ValueError` for a programming error -- an empty token id, a
-    frequency that is not in Razorpay's list -- because those are bugs and a
-    bug should not be indistinguishable from a decline.
+    Methods return an `ApiResponse` and never raise for a provider answer. They
+    raise `ValueError` for a programming error -- an empty token id, a
+    frequency not in Razorpay's list -- because a bug must not be
+    indistinguishable from a decline.
     """
 
     def __init__(self, transport: Transport, api_base: str = API_BASE):
@@ -196,6 +182,12 @@ class RazorpayApi:
         #: state and not persisted.
         self.calls = 0
         self.lost = 0
+        #: The last request this client sent, for a proof transcript. Kept here
+        #: so a caller needing the exact bytes does not build a second copy of
+        #: the body -- which is how one endpoint ends up with two request
+        #: shapes and only one of them maintained. Never contains a credential:
+        #: the authorisation header is the transport's, not the body's.
+        self.last_request: dict = {}
 
     # ------------------------------------------------------------ internals
     def url(self, key: str, **kw) -> str:
@@ -205,6 +197,7 @@ class RazorpayApi:
              body: dict | None = None) -> ApiResponse:
         """The one place an HTTP status becomes an `Outcome`."""
         self.calls += 1
+        self.last_request = {"method": method, "url": url, "body": body}
         status, payload = self._t.request(method, url, body)
         if status is None:
             self.lost += 1
@@ -240,9 +233,8 @@ class RazorpayApi:
                                    notes: dict | None = None) -> ApiResponse:
         """The mandate-registration order.
 
-        `method: "upi"`, a `customer_id`, and a `token` object carrying
-        `max_amount`, `expire_at` and `frequency`. The order amount is the
-        AUTHORISATION amount, which for UPI is Rs 1 -- not the recurring one.
+        The order amount is the AUTHORISATION amount, which for UPI is Rs 1 --
+        not the recurring one.
         """
         if frequency not in VALID_FREQUENCIES:
             raise ValueError(f"frequency {frequency!r} is not one Razorpay "
@@ -272,11 +264,15 @@ class RazorpayApi:
                                   notes: dict | None = None) -> ApiResponse:
         """The pre-debit order for one subsequent charge.
 
-        `notification.payment_after` is the epoch second before which Razorpay
-        will not run the debit. This is how the pre-debit notice every AutoPay
-        merchant owes the customer is actually issued: Razorpay sends it and
-        reports delivery on `order.notification.delivered`. A 2xx here means
-        the instruction was accepted, NOT that the customer was told.
+        `notification.payment_after` is the "UNIX timestamp post which the
+        debit is supposed to happen" [VERIFIED] razorpay.com create-subsequent-
+        payments, read 3 September 2026. Sending the object is also what takes
+        the retry schedule off Razorpay: "We will not attempt any retry if the
+        debit fails for tokens with the notification object in the created
+        order." That is the whole reason this integration owns its own timing.
+
+        A 2xx here means the instruction was accepted, NOT that the customer
+        was told. Only `order.notification.delivered` is evidence of delivery.
         """
         if not token_id:
             raise ValueError("create_notification_order needs a token id")
@@ -295,15 +291,11 @@ class RazorpayApi:
             body["notes"] = notes
         return self.call("POST", self.url("orders"), body)
 
-    def fetch_order(self, order_id: str) -> ApiResponse:
-        return self.call("GET", self.url("order", order_id=order_id))
-
     def find_order_by_receipt(self, receipt: str) -> ApiResponse:
         """Recover an order whose id was lost. The crash path.
 
-        The receipt is deterministic, so after a restart the question "did I
-        already create this order" has an answer at the provider rather than a
-        second order.
+        The receipt is deterministic, so after a restart "did I already create
+        this order" has an answer at the provider rather than a second order.
         """
         q = urllib.parse.urlencode({"receipt": receipt, "count": 1})
         return self.call("GET", f"{self.url('orders')}?{q}")
@@ -311,8 +303,8 @@ class RazorpayApi:
     def fetch_order_payments(self, order_id: str) -> ApiResponse:
         """Payments Razorpay recorded against one order.
 
-        Resolves an ambiguous submission: the response to the charge was lost,
-        so the payment id is unknown, but the order id is not.
+        Resolves an ambiguous submission: the charge response was lost, so the
+        payment id is unknown but the order id is not.
         """
         return self.call("GET", self.url("order_payments", order_id=order_id))
 
@@ -325,15 +317,14 @@ class RazorpayApi:
         """Submit the debit.
 
         THE SUCCESS RESPONSE IS `{"razorpay_payment_id": "pay_..."}` AND
-        NOTHING ELSE. [VERIFIED] against the create-subsequent-payments
-        reference, read 3 September 2026: no `status`, no `error_reason`.
+        NOTHING ELSE -- no `status`, no `error_reason`. [VERIFIED] against the
+        create-subsequent-payments reference, read 3 September 2026.
 
-        So an accepted submission says only that Razorpay has the request. The
-        outcome arrives by webhook or by fetching the payment. Reading this
-        response as a payment entity -- finding no status and concluding
-        "declined" -- records an accepted debit as an empty account, and then
-        `w3.py:432` hard-zeroes every balance bin at or above the amount for
-        every mandate that customer holds.
+        So an accepted submission says only that Razorpay has the request.
+        Reading it as a payment entity -- finding no status, concluding
+        "declined" -- records an accepted debit as an empty account, and
+        `w3.py:432` then hard-zeroes every balance bin at or above the amount
+        for every mandate that customer holds.
         """
         if not token_id:
             raise ValueError("create_recurring_payment needs a token id")
@@ -388,9 +379,9 @@ class RazorpayApi:
     def ping(self) -> ApiResponse:
         """Reachable, and is the credential accepted?
 
-        `GET /payments?count=1`: it reads, it costs nothing, and it answers 401
-        rather than 404 on a bad credential -- so it distinguishes
-        "unreachable" from "unauthenticated", which a health check must.
+        `GET /payments?count=1` reads, costs nothing, and answers 401 rather
+        than 404 on a bad credential -- so it separates "unreachable" from
+        "unauthenticated", which a health check must.
         """
         return self.call("GET", f"{self.url('payments')}?count=1")
 
@@ -399,9 +390,8 @@ class RazorpayApi:
 def parse_payment_id(body: dict) -> str:
     """Payment id from a create/recurring response or a payment entity.
 
-    Both spellings are read -- the documented `razorpay_payment_id` and the
-    `id` a full entity carries -- because a create and a fetch flow into the
-    same reconciliation code and the branch belongs here, once.
+    Both spellings, because a create and a fetch flow into the same
+    reconciliation code and the branch belongs here, once.
     """
     return str(body.get("razorpay_payment_id") or body.get("id") or "")
 
@@ -410,8 +400,7 @@ def parse_token_from_payment(body: dict) -> str:
     """`token_id` off a payment entity.
 
     Razorpay has used both a flat `token_id` and a nested `token` object across
-    its integrations, so both are read rather than assuming the shape this
-    account happens to return.
+    its integrations, so both are read.
     """
     tid = body.get("token_id")
     if tid:

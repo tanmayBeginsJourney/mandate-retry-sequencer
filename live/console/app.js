@@ -110,8 +110,10 @@ function renderConfig(cfg, counts, provider) {
     : cfg.debit_allowed ? "allowed" : "blocked";
   $("debit-value").textContent = !live ? "NONE — MOCK RAIL"
     : cfg.debit_allowed ? "PERMITTED" : "BLOCKED";
+  const clock = state.health && state.health.clock_offset_h
+    ? ` · demonstration clock +${state.health.clock_offset_h}h` : "";
   $("debit-reason").textContent = cfg.debit_reason +
-    ` · ceiling ${PAISE(cfg.max_debit_paise)} per debit`;
+    ` · ceiling ${PAISE(cfg.max_debit_paise)} per debit` + clock;
 
   $("stat-mandates").textContent = counts.mandates_active;
   $("stat-mandates-note").textContent =
@@ -124,19 +126,15 @@ function renderConfig(cfg, counts, provider) {
   $("stat-unresolved").dataset.tone =
     counts.attempts_conflicted > 0 ? "bad"
       : counts.attempts_unresolved > 0 ? "warn" : "";
-  $("stat-unresolved-note").textContent = counts.attempts_conflicted > 0
+  // A lost response is why an attempt is unresolved, so it belongs here and
+  // not on a tile of its own: the operator reading this number is the one who
+  // needs to know the rail stopped answering.
+  const lost = provider && provider.lost > 0
+    ? ` · ${provider.lost} lost provider response${provider.lost === 1 ? "" : "s"}`
+    : "";
+  $("stat-unresolved-note").textContent = (counts.attempts_conflicted > 0
     ? `${counts.attempts_conflicted} contradicted — needs a human`
-    : "awaiting an authoritative answer";
-
-  $("stat-rail").textContent = provider ? provider.calls : "—";
-  $("stat-rail").dataset.tone = provider && provider.lost > 0 ? "warn" : "";
-  $("stat-rail-note").textContent = provider
-    ? `${provider.lost} lost response${provider.lost === 1 ? "" : "s"} this session`
-    : "provider calls this session";
-  if (state.health && state.health.clock_offset_h) {
-    $("stat-rail-note").textContent +=
-      ` · clock +${state.health.clock_offset_h}h`;
-  }
+    : "awaiting an authoritative answer") + lost;
 }
 
 /* -------------------------------------------------------------- mandates */

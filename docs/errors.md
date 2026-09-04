@@ -558,6 +558,80 @@ modelling a rogue writer inside a single run — passes an explicit flag.
 
 ---
 
+### A provider refusal recorded as a customer decline
+
+This is the same error as "An authentication failure recorded as a statement
+about the customer's balance", one layer up. `RazorpayExecutor.attempt` raises
+`RazorpayError` when the provider refuses the REQUEST. The service caught it and
+wrote the attempt `FAILED` — a terminal state meaning "the debit did not
+collect".
+
+One refusal is `Order already paid`. A resubmission receives it after the
+process dies between sending `POST /payments/create/recurring` and writing the
+acknowledgement, and the order it names **holds a captured payment**. At the one
+crash boundary where the money has certainly moved, the service recorded money
+not collected: the cycle read as uncollected, `recovered_paise` stayed at zero,
+and the NPCI attempt was spent.
+
+The belief filter was not affected. `apply_outcome` runs only from reconciliation
+and webhook processing, both of which require a terminal state reached through a
+different path, so the damage was confined to the ledger and the report. Nothing
+in the design produced that containment.
+
+*Guard:* the refusal now records `UNKNOWN`, which is non-terminal, is never
+retried automatically, and is what reconciliation resolves by asking the order
+which payments it holds. Gate **F4b** drives the boundary end to end: it lets
+the provider take a debit, drops the acknowledgement, restarts the service, and
+fails if the attempt comes out `FAILED`, if a second payment reaches the
+provider, or if the collected rupee is counted anywhere but once. Reverting the
+repair turns four of its five checks red and puts `recovered_paise` back to 0.
+
+---
+
+### A precondition disarmed by the store that was meant to persist it
+
+Nothing was visibly wrong here, and no gate was red. `RazorpayExecutor.attempt`
+refuses to submit unless its journal reports the pre-debit order in
+`ORDER_CREATED` or `NOTIFICATION_DELIVERED` — the executor's own last check
+against submitting twice. The live service backs that journal with SQLite,
+translating `AttemptState` into the executor's `PredeliveryPhase`.
+
+The translation table had two entries and a default. `SUBMITTED`, `UNKNOWN`,
+`AUTHORIZED`, `SUCCEEDED` and `FAILED` all fell through to `ORDER_CREATED`,
+which `attempt()` accepts. The check held only while an in-memory copy of the
+journal remained in the process. A restart rebuilt the phase from the row and
+permitted a debit that had already run. The service's own guard covered the same
+case, so the failure produced no symptom.
+
+*Guard:* the table is total over `AttemptState` and an `assert` at import says
+so, and the in-memory copy is gone so the row is the only record. Gate **F4b6**
+calls `executor.attempt()` directly on a resolved attempt and requires
+`invalid_predelivery_phase`; with the partial table it reaches the network
+instead, and the gate reports that rather than crashing.
+
+---
+
+### A cap that bounded nothing, and a gate that graded itself
+
+`RazorpayExecutor` carried `max_live_escalations`: read from an environment
+variable, defaulting to 5, passed explicitly by a script, and read by nothing.
+`escalate()` appends a row to a local file and makes no provider call, so there
+was nothing to cap. A reader asking what bounds live escalations found a number
+that had no effect.
+
+Gate `A4g` asserted that the webhook route needs no operator token by passing
+the literal `True`, with the claim in its detail string. It could not fail. It
+now builds a second server that requires a token on every other route, posts a
+signed webhook without one and requires 200, then posts a forged signature to
+the same route and requires 400. Making the webhook route require the token
+turns both checks red.
+
+*Guard:* neither is a new mechanism. The first is a deletion. The second applies
+the suite's existing rule — a gate no mutant can fail is not a gate — to a file
+that had not been re-read.
+
+---
+
 ## Documentation and evidence errors
 
 ### A correction that landed in one file and survived in four others

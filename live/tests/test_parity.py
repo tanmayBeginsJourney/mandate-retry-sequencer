@@ -98,12 +98,17 @@ def main() -> int:
 
     # ------------------------------------------------------------------ P4
     r.section("P4  the simulation is untouched by the live work")
-    r.ok("P4a  agent/batch.py still defaults to SimExecutor",
-         "SimExecutor(pop, seed, payday_err" in open(
-             os.path.join(_PKG, "agent", "batch.py"), encoding="utf-8").read(),
-         "the backend switch is still one argument")
     batch_src = open(os.path.join(_PKG, "agent", "batch.py"),
                      encoding="utf-8").read()
+    # PARSED, NOT GREPPED. The earlier form asserted the literal text of one
+    # call, so it went red on a reformat that changed nothing. The claim is
+    # that the simulation root builds a SimExecutor and no other backend.
+    built = sorted({n.func.id for n in ast.walk(ast.parse(batch_src))
+                    if isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Name)
+                    and n.func.id.endswith("Executor")})
+    r.ok("P4a  agent/batch.py builds SimExecutor and no other backend",
+         built == ["SimExecutor"], str(built))
     r.ok("P4b  the composition root does not import live/",
          "\nimport live" not in batch_src and "from live" not in batch_src,
          "the core must not depend on the service that wraps it")

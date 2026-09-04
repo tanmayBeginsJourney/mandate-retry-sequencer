@@ -30,7 +30,7 @@ GATES = [
     ("webhooks", "live.tests.test_webhooks",
      "signature, duplication, ordering, malformed input"),
     ("flow", "live.tests.test_flow",
-     "the lifecycle, including seven crash boundaries"),
+     "the lifecycle, including eight crash boundaries"),
     ("safety", "live.tests.test_safety",
      "the LLM boundary and the absence of a charge endpoint"),
     ("parity", "live.tests.test_parity",
