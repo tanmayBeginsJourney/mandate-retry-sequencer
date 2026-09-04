@@ -1,8 +1,16 @@
-"""THE REDACTION BOUNDARY. One function, one place.
+"""THE REDACTION BOUNDARY. Two functions, one place.
 
-Everything `agent/llm` knows about a mandate comes through `build_case_view`.
-If a field is not constructed here, no diagnoser -- deterministic or
-model-backed -- can leak it, because it never had it.
+Everything `agent/llm` knows about a mandate comes through `build_case_view`
+(what the DIAGNOSER sees, when it is choosing) or `build_explain_view` (what
+the EXPLAINER sees, after everything has been chosen). If a field is not
+constructed in one of them, nothing downstream can leak it, because it never
+had it.
+
+The two differ by a clock and by nothing else that matters: `CaseView` carries
+no time, because a diagnoser must not choose one; `ExplainView` carries the
+schedule, because by then the scheduler has already picked it and Stage 0 has
+already ruled on it. The note above `build_explain_view` states that line in
+full. Everything below applies to both.
 
 WHAT DOES NOT CROSS. The expected balance, the raw payday posterior, the
 customer's salary, the true payday, and every `p_success`. The governance rule
@@ -54,7 +62,7 @@ import hashlib
 import json
 from typing import Sequence
 
-from agent.ports import CaseView, PaydayUncertainty, Rupees
+from agent.ports import CaseView, ExplainView, PaydayUncertainty, Rupees
 
 
 def _hash(payload: dict) -> str:
@@ -98,4 +106,91 @@ def build_case_view(*, amount: Rupees, attempts_used: int, attempts_cap: int,
         uncertainty_band=uncertainty.band,
         merchant_note=merchant_note,
         bank=bank,
+    )
+
+
+# ------------------------------------------------- the explanation boundary
+#
+# THE SECOND BOUNDARY, AND IT IS SEPARATE ON PURPOSE. Overloading `CaseView`
+# with a target hour would put a time into the object the DIAGNOSER reads,
+# which is the one thing ADR-005 is about. Two builders, two types, two
+# audiences: the diagnoser chooses and may not see a clock; the explainer
+# describes and may.
+#
+# WHAT DOES NOT CROSS HERE, beyond everything `build_case_view` already
+# withholds: `p_now`, `p_later` and `index_score`. They are `p_success` under
+# other names -- the belief filter's estimate of whether this customer's
+# account will have money -- and the rule at the top of this file excludes
+# every `p_success` by name. The SCHEDULE those probabilities produced does
+# cross, because an hour is our own decision, already made, already durable in
+# the attempt row, and already on the operator's screen.
+#
+# `est_salary` AND `est_payday` DO NOT CROSS EITHER, even though `live/api.py`
+# serves both to an authenticated operator. Operator-visible is not
+# model-visible. This function is where that distinction is kept, and it is
+# kept by not having the parameters.
+
+def build_explain_view(*, amount: Rupees, attempts_used: int, attempts_cap: int,
+                       day_in_cycle: int, days_left_in_cycle: int, cycle: int,
+                       decline_history: Sequence[str],
+                       uncertainty_band: str,
+                       mandate_state: str, attempt_state: str,
+                       blocked_because: str, conflicted: bool = False,
+                       now_t: int, target_t: int, notify_t: int,
+                       target_is_peak: bool,
+                       gate_verdict: str,
+                       gate_checks: Sequence[Sequence[str]],
+                       root_cause: str, intervention: str,
+                       diagnosis_source: str) -> ExplainView:
+    """Everything the explanation layer will ever know, constructed once.
+
+    `target_is_peak` is passed in rather than derived: NPCI's peak window is a
+    constant in `w3`, `agent/llm` may not import `w3` (gate I1), and
+    `agent.ports` may not import anything (gate I5). The caller knows; this
+    layer is not allowed to.
+    """
+    hist = tuple(decline_history[-6:])
+    checks = tuple((str(c[0]), str(c[1]), str(c[2])) for c in gate_checks)
+    payload = {
+        "attempts_used": attempts_used,
+        "attempts_cap": attempts_cap,
+        "day_in_cycle": day_in_cycle,
+        "days_left_in_cycle": days_left_in_cycle,
+        # Bucketed exactly as `build_case_view` buckets it, so two mandates at
+        # near-identical prices share one cached explanation instead of paying
+        # for the same paragraph twice.
+        "amount_bucket": int(amount // 250),
+        "decline_history": list(hist),
+        "band": uncertainty_band,
+        "mandate_state": mandate_state,
+        "attempt_state": attempt_state,
+        # In the hash: a contradicted attempt and a clean one are the same
+        # row apart from this flag, and they need different explanations.
+        "conflicted": bool(conflicted),
+        "gate_verdict": gate_verdict,
+        "gate_checks": [list(c) for c in checks],
+        "root_cause": root_cause,
+        "intervention": intervention,
+        # THE SCHEDULE IS IN THE HASH AS AN OFFSET, NOT AS AN ABSOLUTE HOUR.
+        # Two mandates whose debit sits the same distance ahead of the same
+        # notice are the same case to explain; that they are in different weeks
+        # of a simulated year is not a difference worth a second paid call.
+        "hours_ahead": target_t - now_t,
+        "lead": target_t - notify_t,
+        "peak": bool(target_is_peak),
+    }
+    return ExplainView(
+        explain_hash=_hash(payload),
+        attempts_used=attempts_used, attempts_cap=attempts_cap,
+        day_in_cycle=day_in_cycle, days_left_in_cycle=days_left_in_cycle,
+        cycle=cycle, amount=amount, decline_history=hist,
+        n_recent_z9=sum(1 for c in hist if c == "Z9"),
+        uncertainty_band=uncertainty_band,
+        mandate_state=mandate_state, attempt_state=attempt_state,
+        blocked_because=blocked_because, conflicted=bool(conflicted),
+        now_t=now_t, target_t=target_t, notify_t=notify_t,
+        target_is_peak=bool(target_is_peak),
+        gate_verdict=gate_verdict, gate_checks=checks,
+        root_cause=root_cause, intervention=intervention,
+        diagnosis_source=diagnosis_source,
     )

@@ -770,6 +770,148 @@ class Diagnosis:
     recommendations: tuple[str, ...] = ()   # e.g. "PARTIAL" -- credits zero money
 
 
+# ------------------------------------------------- the explanation layer
+#
+# READ THIS BEFORE COMPARING `ExplainView` TO `CaseView`. THEY DIFFER BY A
+# CLOCK, AND THAT DIFFERENCE IS THE WHOLE DESIGN.
+#
+# `CaseView` carries NO TIME, because the diagnoser it feeds must not be able
+# to choose one -- and `Diagnosis` has no field to put one in even if it did.
+# That is ADR-005 and it is unchanged.
+#
+# `ExplainView` carries `now_t`, `target_t` and `notify_t`, because the layer
+# it feeds is not choosing anything. The hour is already fixed: `timing.propose`
+# picked it, Stage 0 adjudicated it, and it is on disk in the attempt row before
+# the explanation is ever asked for. THE DIAGNOSIS CANNOT CHOOSE A TIME; THE
+# EXPLANATION MAY DESCRIBE A TIME ALREADY CHOSEN BY THE SCHEDULER. Those are
+# two sentences and the type system enforces the gap between them: nothing
+# constructs a `Diagnosis` from an `ExplainView`, and `Explanation` cannot
+# express a decision.
+#
+# WHAT STILL DOES NOT CROSS, and this is the line that does the work: the
+# SCHEDULE crosses, the PROBABILITIES do not. `p_now`, `p_later` and
+# `index_score` are `p_success` under other names, and `agent/llm/caseview.py`
+# excludes every `p_success` by name. An hour is our own decision, already
+# made and already on the operator's screen. A probability is an inference
+# about a customer's finances.
+
+
+@dataclass(frozen=True)
+class ExplainView:
+    """The ONLY thing the explanation layer ever sees.
+
+    Built by `agent.llm.caseview.build_explain_view` and by nothing else, for
+    the reason that module's docstring gives: a field not constructed at the
+    boundary cannot be leaked by anything downstream, because it never had it.
+
+    OPERATOR-VISIBLE IS NOT MODEL-VISIBLE. `live/api.py` already serves
+    `est_salary` and `est_payday` to an authenticated operator -- they are the
+    cold-start estimates and an operator debugging a schedule needs them. They
+    are absent here anyway. "Safe to show the person running the console" and
+    "safe to send to a third party" are two different questions and this type
+    answers only the second.
+    """
+    #: Content hash. THE CACHE KEY, and it is a hash of the fields below rather
+    #: than a mandate id: two mandates in the same situation should share one
+    #: cached answer, and a per-mandate key would both prevent that and write a
+    #: stable customer-linked identifier into a cache file.
+    explain_hash: str
+
+    # ---- the mandate's situation. Same semantics as the matching CaseView
+    # fields, and defensible for the same reasons: a count, a coarse band, or
+    # the merchant's own price.
+    attempts_used: int
+    attempts_cap: int
+    day_in_cycle: int
+    days_left_in_cycle: int
+    cycle: int
+    amount: Rupees
+    decline_history: tuple[str, ...]
+    n_recent_z9: int
+    uncertainty_band: str                   # narrow | medium | wide
+
+    # ---- what our own state machines say. Ours, not the customer's.
+    mandate_state: str                      # domain.MandateState
+    attempt_state: str                      # domain.AttemptState, or ""
+    blocked_because: str                    # Mandate.refusal_reason(), or ""
+    #: `PaymentAttempt.conflicted` -- two different terminal states arrived for
+    #: one payment and `domain.advance` kept the first.
+    #:
+    #: ADDED AFTER THE EXPLANATION EXPERIMENT, WHICH FOUND ITS ABSENCE. Without
+    #: it a contradicted attempt reads as `attempt_state="SUCCEEDED"` and every
+    #: arm -- the deterministic template included -- reported a clean
+    #: collection, confidently and wrongly, on a row that needs a human. That
+    #: was a correct layer working from an incomplete view, which no amount of
+    #: prompt work could have fixed. A boolean about our own reconciliation is
+    #: not customer state and crosses on the same footing as `attempt_state`.
+    conflicted: bool
+
+    # ---- THE SCHEDULE, ALREADY CHOSEN. See the note above.
+    now_t: int
+    target_t: int
+    notify_t: int
+    #: Computed at the boundary because `agent/llm` may not import `w3` (gate
+    #: I1) and `ports` may not import anything (gate I5), so neither side of
+    #: this type can work out what a peak hour is. The builder can.
+    target_is_peak: bool
+
+    # ---- Stage 0's answer. A regulatory fact about OUR action.
+    gate_verdict: str                       # ALLOWED | REFUSED | ""
+    #: (rule, verdict, detail) per rule, in the order `ALL_RULES` evaluates
+    #: them. A tuple of tuples so the whole view stays frozen and hashable.
+    gate_checks: tuple[tuple[str, str, str], ...]
+
+    # ---- the decision being explained
+    root_cause: str
+    intervention: str
+    diagnosis_source: str                   # llm | fallback
+
+    @property
+    def lead_hours(self) -> int:
+        """Hours between the notice and the debit. NPCI's floor is 24."""
+        return self.target_t - self.notify_t
+
+    @property
+    def decline_families(self) -> tuple[str, ...]:
+        return tuple(family_of(c) for c in self.decline_history)
+
+    @property
+    def has_terminal_code(self) -> bool:
+        return any(c in TERMINAL_CODES for c in self.decline_history)
+
+
+@dataclass(frozen=True)
+class Explanation:
+    """Operator-facing prose about a decision that has ALREADY been made.
+
+    THIS TYPE CANNOT EXPRESS A DECISION, and that is the structural half of
+    the guarantee. There is no intervention, no amount, no target hour, no
+    mandate and no verdict -- `body` is text and everything beside it is
+    provenance. An explanation layer that came back saying "retry at 11:00"
+    would be saying it in prose to a human, which `governance` scans for, and
+    it would still have moved nothing.
+
+    `source` HAS THREE VALUES AND NOT TWO. `agent/llm/compose.py` collapses a
+    governance failure into "template", so "the model was never asked" and
+    "the model answered and its prose was withheld" report identically there.
+    That is a hole in an audit trail: the second is the single most interesting
+    row in the table and the first is routine.
+    """
+    body: str
+    source: Literal["template", "model", "template_withheld"]
+    prompt_id: str = ""
+    #: Why the model's text was replaced. Non-empty only for
+    #: `template_withheld`, and it names the governance rules that fired.
+    withheld_reasons: tuple[str, ...] = ()
+    #: The view this explains, for joining a stored row back to its input.
+    explain_hash: str = ""
+
+    @property
+    def from_model(self) -> bool:
+        """Did a model's own words reach the operator? Not "was one called"."""
+        return self.source == "model"
+
+
 # ------------------------------------------------------------------ stopping
 class StopRule(Enum):
     COLLECTED = "COLLECTED"
