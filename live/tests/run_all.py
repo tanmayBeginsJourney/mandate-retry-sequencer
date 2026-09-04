@@ -37,6 +37,8 @@ GATES = [
      "the simulation and the live rail share the decision layers"),
     ("http", "live.tests.test_api",
      "the served surface, over a real socket"),
+    ("regressions", "live.tests.test_regressions",
+     "one gate per money-path defect, each with a mutant"),
 ]
 
 _PKG = os.path.dirname(os.path.dirname(os.path.dirname(

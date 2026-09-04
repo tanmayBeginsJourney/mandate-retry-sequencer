@@ -452,6 +452,18 @@ dialog input:focus-visible { border-color: var(--focus); }
 .hint { color: var(--muted); font-size: 11px; margin-top: 3px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+/* The live-debit confirmation's facts. A confirmation that does not name the
+   mandate and the amount is a speed bump, not a decision. */
+.dialog-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 16px;
+  font-size: 12.5px;
+}
+.dialog-facts dt { color: var(--muted); }
+.dialog-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+
 .dialog-actions {
   display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
 }

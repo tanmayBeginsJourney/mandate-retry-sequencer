@@ -14,6 +14,23 @@ WHAT THE SCHEMA ENFORCES, RATHER THAN THE CODE:
     than as a second debit at Razorpay.
   * `attempts.id` IS Stage 0's `action_id`, so re-deriving an attempt after a
     restart collides with the existing row instead of creating a twin.
+  * `customers.seq` is UNIQUE and `mandates(customer_id, index_no)` is UNIQUE,
+    so the `c{seq}m{index}` identity every other layer keys on cannot be
+    claimed twice. `allocate_customer` and `allocate_mandate_index` read the
+    next value and insert the row inside ONE transaction, so two concurrent
+    registrations serialise instead of both reading the same maximum.
+
+WHAT THE CODE ENFORCES, BECAUSE SQL CANNOT SAY IT: an attempt's state never
+goes backwards. `put_attempt` writes the whole row, and a caller holding a read
+from before a webhook landed would otherwise put a captured payment back to
+SUBMITTED. The monotonic rule lives at this boundary rather than in every
+caller's memory. See `put_attempt`.
+
+CONCURRENCY. One connection, shared across the HTTP server's threads, and EVERY
+statement -- read or write -- goes through `self._lock`. sqlite3 objects are not
+safe to use concurrently even for reads; leaving reads unguarded produced
+`InterfaceError: bad parameter or other API misuse` and half-built rows under
+load.
 
 NO SECRET IS EVER STORED. The webhook *payload* is stored verbatim because
 signature verification and dispute resolution both need the exact bytes, and
@@ -30,8 +47,9 @@ import time
 from dataclasses import fields
 from typing import Iterator
 
-from live.domain import (AttemptState, Customer, Mandate, MandateState,
-                         PaymentAttempt, WebhookEvent)
+from live.domain import (ATTEMPT_TERMINAL, AttemptState, Customer, Mandate,
+                         MandateState, PaymentAttempt, Transition,
+                         WebhookEvent, advance, advance_mandate)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS customers (
@@ -43,6 +61,13 @@ CREATE TABLE IF NOT EXISTS customers (
     seq                INTEGER NOT NULL DEFAULT 0,
     created_at         INTEGER NOT NULL
 );
+-- `seq` is the integer half of `MandateRef`, so `c{seq}m{index}` is the
+-- identity the belief book, the audit trail and the executor's bindings all
+-- key on. TWO CUSTOMERS SHARING ONE seq SHARE ONE IDENTITY, and the binding
+-- that survives decides whose token gets charged. The database enforces it
+-- because MAX(seq)+1 in Python does not: two concurrent registrations read the
+-- same maximum and both write it.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_seq ON customers(seq);
 
 -- Process-wide settings that must survive a restart. The clock origin lives
 -- here: `target_t` is a simulated hour, and an origin that moved between runs
@@ -76,6 +101,10 @@ CREATE TABLE IF NOT EXISTS mandates (
     updated_at               INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_mandates_token ON mandates(rzp_token_id);
+-- The other half of the same identity. Together with the unique `seq` above
+-- this makes `c{seq}m{index_no}` unique across the database.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mandates_index
+    ON mandates(customer_id, index_no);
 
 CREATE TABLE IF NOT EXISTS attempts (
     id             TEXT PRIMARY KEY,
@@ -89,6 +118,7 @@ CREATE TABLE IF NOT EXISTS attempts (
     outcome_code   TEXT NOT NULL DEFAULT '',
     raw_reason     TEXT NOT NULL DEFAULT '',
     target_t       INTEGER NOT NULL DEFAULT 0,
+    notify_t       INTEGER NOT NULL DEFAULT 0,
     payment_after  INTEGER NOT NULL DEFAULT 0,
     submitted_at   INTEGER NOT NULL DEFAULT 0,
     resolved_at    INTEGER NOT NULL DEFAULT 0,
@@ -103,11 +133,14 @@ CREATE INDEX IF NOT EXISTS idx_attempts_payment ON attempts(payment_id);
 CREATE INDEX IF NOT EXISTS idx_attempts_state   ON attempts(state);
 CREATE INDEX IF NOT EXISTS idx_attempts_target  ON attempts(mandate_uid, target_t);
 
+-- VERIFIED DELIVERIES ONLY. `event_id` is the deduplication key, so a row
+-- here is a claim that Razorpay sent this event -- and an unauthenticated
+-- sender must not be able to make that claim, or it can burn the id its
+-- genuine counterpart will arrive under.
 CREATE TABLE IF NOT EXISTS webhook_events (
     event_id         TEXT PRIMARY KEY,
     event_type       TEXT NOT NULL,
     received_at      INTEGER NOT NULL,
-    signature_valid  INTEGER NOT NULL,
     payload          TEXT NOT NULL,
     processed_at     INTEGER NOT NULL DEFAULT 0,
     result           TEXT NOT NULL DEFAULT '',
@@ -116,6 +149,19 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_received ON webhook_events(received_at);
 CREATE INDEX IF NOT EXISTS idx_events_attempt  ON webhook_events(attempt_id);
+
+-- Deliveries that failed signature verification. Append-only, keyed on nothing
+-- the sender controls, and never read by the state machine -- an attempt to
+-- forge an event is the one delivery where the log matters most, and this is
+-- where it is kept without letting it occupy a real event's id.
+CREATE TABLE IF NOT EXISTS rejected_deliveries (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    at          INTEGER NOT NULL,
+    claimed_id  TEXT NOT NULL DEFAULT '',
+    event_type  TEXT NOT NULL DEFAULT '',
+    reason      TEXT NOT NULL,
+    payload     TEXT NOT NULL
+);
 
 -- Every state change, append-only. The tables above hold the CURRENT answer;
 -- this holds how it got there, which is what a reconciliation dispute needs.
@@ -148,14 +194,13 @@ IMMUTABLE = {
     Mandate: {"id", "customer_id", "index_no", "merchant_id", "est_salary",
               "est_payday", "cycle_days", "created_at"},
     PaymentAttempt: {"id", "mandate_id", "mandate_uid", "amount_paise",
-                     "receipt", "target_t", "cycle", "created_at"},
+                     "receipt", "target_t", "notify_t", "cycle", "created_at"},
 }
 
 #: SQLite gives back ints and strings; these put them back into the domain's
 #: own types. A field not named here round-trips unchanged.
 _COERCE = {"state": {Mandate: MandateState, PaymentAttempt: AttemptState},
-           "conflicted": {PaymentAttempt: bool},
-           "signature_valid": {WebhookEvent: bool}}
+           "conflicted": {PaymentAttempt: bool}}
 
 #: The one place a dataclass is bound to a table.
 TABLES = {Customer: ("customers", "id"), Mandate: ("mandates", "id"),
@@ -263,18 +308,28 @@ class Store:
             if outermost:
                 self._db.execute("COMMIT")
 
+    def _rows(self, sql: str, *args) -> list[sqlite3.Row]:
+        """Every read goes through here, and every read holds the lock.
+
+        The connection is shared by the HTTP server's threads and sqlite3
+        objects are not concurrency-safe even for reads: unguarded, a read
+        interleaved with a write raises `InterfaceError` or returns a row built
+        from two statements' results.
+        """
+        with self._lock:
+            return self._db.execute(sql, args).fetchall()
+
     def _one(self, cls, sql: str, *args):
-        row = self._db.execute(sql, args).fetchone()
-        return _read(cls, row) if row else None
+        rows = self._rows(sql, *args)
+        return _read(cls, rows[0]) if rows else None
 
     def _many(self, cls, sql: str, *args) -> list:
-        return [_read(cls, r) for r in self._db.execute(sql, args)]
+        return [_read(cls, r) for r in self._rows(sql, *args)]
 
     # ----------------------------------------------------------------- meta
     def meta_get(self, key: str, default: str = "") -> str:
-        row = self._db.execute("SELECT value FROM meta WHERE key=?",
-                               (key,)).fetchone()
-        return row["value"] if row else default
+        rows = self._rows("SELECT value FROM meta WHERE key=?", key)
+        return rows[0]["value"] if rows else default
 
     def meta_set_once(self, key: str, value: str) -> str:
         """Write only if absent, and return whatever is stored afterwards.
@@ -288,21 +343,39 @@ class Store:
                        (key, value))
         return self.meta_get(key, value)
 
-    def next_customer_seq(self) -> int:
-        return int(self._db.execute(
-            "SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM customers"
-        ).fetchone()["n"])
+    # -------------------------------------------------------------- identity
+    #
+    # `c{seq}m{index_no}` is the identity the belief book, the audit trail and
+    # the executor's bindings all key on. Allocating either half outside a
+    # transaction lets two concurrent registrations read one maximum and write
+    # it twice, and the loser of that race ends up sharing a uid -- and
+    # therefore a Razorpay token -- with somebody else. Both allocators read
+    # and insert inside ONE `tx()`, whose BEGIN IMMEDIATE serialises them, and
+    # the UNIQUE indexes make a mistake an error rather than a shared identity.
 
-    def next_mandate_index(self, customer_id: str) -> int:
-        """Mandate index WITHIN a customer, which is what `MandateRef` means.
+    def allocate_customer(self, c: Customer) -> Customer:
+        """Assign the next free `seq` and insert, atomically."""
+        with self.tx() as db:
+            c.seq = int(db.execute(
+                "SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM customers"
+            ).fetchone()["n"])
+            db.execute(_upsert(Customer), _values(c))
+        return c
 
-        A global counter would make `c3m7` the seventh mandate in the database
-        rather than this customer's seventh, and the uid is what the belief
-        book and the audit trail key on.
+    def allocate_mandate_index(self, m: Mandate) -> Mandate:
+        """Assign this customer's next free `index_no` and insert, atomically.
+
+        The index counts WITHIN a customer, which is what `MandateRef` means: a
+        global counter would make `c3m7` the seventh mandate in the database
+        rather than this customer's seventh.
         """
-        return int(self._db.execute(
-            "SELECT COALESCE(MAX(index_no), -1) + 1 AS n FROM mandates"
-            " WHERE customer_id=?", (customer_id,)).fetchone()["n"])
+        with self.tx() as db:
+            m.index_no = int(db.execute(
+                "SELECT COALESCE(MAX(index_no), -1) + 1 AS n FROM mandates"
+                " WHERE customer_id=?", (m.customer_id,)).fetchone()["n"])
+            m.updated_at = int(time.time())
+            db.execute(_upsert(Mandate), _values(m))
+        return m
 
     # ------------------------------------------------------------ customers
     def put_customer(self, c: Customer) -> None:
@@ -318,8 +391,23 @@ class Store:
 
     # ------------------------------------------------------------- mandates
     def put_mandate(self, m: Mandate) -> None:
+        """Write the row. A CANCELLED or REJECTED mandate stays that way.
+
+        Same rule as `put_attempt`, for the same reason: this writes every
+        mutable column, so a caller holding a read from before a
+        `token.cancelled` landed would otherwise revive a revoked mandate and
+        make it chargeable again.
+        """
         m.updated_at = int(time.time())
         with self.tx() as db:
+            row = db.execute("SELECT state FROM mandates WHERE id=?",
+                             (m.id,)).fetchone()
+            if row is not None:
+                current = MandateState(row["state"])
+                if (current is not m.state
+                        and advance_mandate(current, m.state)
+                        is not Transition.APPLIED):
+                    m.state = current
             db.execute(_upsert(Mandate), _values(m))
 
     def mandate(self, mid: str) -> Mandate | None:
@@ -337,8 +425,28 @@ class Store:
 
     # ------------------------------------------------------------- attempts
     def put_attempt(self, a: PaymentAttempt) -> None:
+        """Write the row, and NEVER let its state go backwards.
+
+        Every other column is the caller's to set. `state` is not: this is an
+        upsert over the whole row, so a caller holding a read from before a
+        webhook landed would put a captured payment back to SUBMITTED and the
+        cycle would look uncollected. The stored state wins unless the incoming
+        one is a genuine advance, and `a` is corrected in place so the caller
+        is holding the truth rather than a value the database quietly refused.
+
+        Enforced here rather than in each caller because "remember to check
+        `advance` first" is a rule with four call sites and no way to fail
+        loudly when one forgets.
+        """
         a.updated_at = int(time.time())
         with self.tx() as db:
+            row = db.execute("SELECT state FROM attempts WHERE id=?",
+                             (a.id,)).fetchone()
+            if row is not None:
+                current = AttemptState(row["state"])
+                if (current is not a.state
+                        and advance(current, a.state) is not Transition.APPLIED):
+                    a.state = current
             db.execute(_upsert(PaymentAttempt), _values(a))
 
     def attempt(self, aid: str) -> PaymentAttempt | None:
@@ -431,6 +539,17 @@ class Store:
                 " mandate_id=?, attempt_id=? WHERE event_id=?",
                 (int(time.time()), result, mandate_id, attempt_id, event_id))
 
+    def mark_event_failed(self, event_id: str, result: str) -> None:
+        """Record why interpretation failed WITHOUT marking it processed.
+
+        The row stays on `unprocessed_events`, so the next ingest or restart
+        replays it. Every state change is monotonic, so replaying one that
+        partly landed is a no-op.
+        """
+        with self.tx() as db:
+            db.execute("UPDATE webhook_events SET result=? WHERE event_id=?",
+                       (result, event_id))
+
     def event(self, event_id: str) -> WebhookEvent | None:
         return self._one(WebhookEvent,
                          "SELECT * FROM webhook_events WHERE event_id=?",
@@ -443,11 +562,40 @@ class Store:
             " LIMIT ?", limit)
 
     def unprocessed_events(self, limit: int = 100) -> list[WebhookEvent]:
-        """Accepted, signature-valid, never processed. The restart queue."""
+        """Verified, accepted, never processed. The restart queue.
+
+        Every row in this table passed verification, so there is no signature
+        filter here: an unverified delivery is in `rejected_deliveries` and can
+        never reach the state machine.
+        """
         return self._many(
             WebhookEvent,
             "SELECT * FROM webhook_events WHERE processed_at=0"
-            " AND signature_valid=1 ORDER BY received_at LIMIT ?", limit)
+            " ORDER BY received_at LIMIT ?", limit)
+
+    def record_rejected(self, *, claimed_id: str, event_type: str, reason: str,
+                        payload: str, now: int | None = None) -> None:
+        """Log a delivery that failed verification, without giving it an id.
+
+        Append-only and keyed on a rowid, so a sender quoting somebody else's
+        `x-razorpay-event-id` leaves a trace but does not claim the key the
+        genuine event will arrive under.
+        """
+        with self.tx() as db:
+            db.execute(
+                "INSERT INTO rejected_deliveries(at, claimed_id, event_type,"
+                " reason, payload) VALUES(?,?,?,?,?)",
+                (int(time.time()) if now is None else now, claimed_id,
+                 event_type, reason, payload))
+
+    def rejected_count(self) -> int:
+        return int(self._rows(
+            "SELECT COUNT(*) AS n FROM rejected_deliveries")[0]["n"])
+
+    def recent_rejected(self, limit: int = 20) -> list[dict]:
+        return [dict(r) for r in self._rows(
+            "SELECT at, claimed_id, event_type, reason FROM"
+            " rejected_deliveries ORDER BY id DESC LIMIT ?", limit)]
 
     # --------------------------------------------------------- transitions
     def record_transition(self, entity: str, entity_id: str, from_state: str,
@@ -462,15 +610,15 @@ class Store:
 
     def transitions_for(self, entity: str, entity_id: str,
                         limit: int = 100) -> list[dict]:
-        return [dict(r) for r in self._db.execute(
+        return [dict(r) for r in self._rows(
             "SELECT at, from_state, to_state, verdict, source, detail"
             " FROM transitions WHERE entity=? AND entity_id=?"
-            " ORDER BY id LIMIT ?", (entity, entity_id, limit))]
+            " ORDER BY id LIMIT ?", entity, entity_id, limit)]
 
     # -------------------------------------------------------------- counts
     def summary(self) -> dict:
         def one(sql: str, *args) -> int:
-            return int(self._db.execute(sql, args).fetchone()[0])
+            return int(self._rows(sql, *args)[0][0])
 
         return {
             "customers": one("SELECT COUNT(*) FROM customers"),
@@ -483,16 +631,15 @@ class Store:
                 "SELECT COUNT(*) FROM attempts WHERE state=?",
                 AttemptState.SUCCEEDED.value),
             "attempts_unresolved": one(
-                "SELECT COUNT(*) FROM attempts WHERE state NOT IN (?,?)",
-                AttemptState.SUCCEEDED.value, AttemptState.FAILED.value),
+                f"SELECT COUNT(*) FROM attempts WHERE state NOT IN"
+                f" ({','.join('?' * len(ATTEMPT_TERMINAL))})",
+                *[s.value for s in ATTEMPT_TERMINAL]),
             "attempts_conflicted": one(
                 "SELECT COUNT(*) FROM attempts WHERE conflicted=1"),
             "events": one("SELECT COUNT(*) FROM webhook_events"),
-            "events_rejected": one(
-                "SELECT COUNT(*) FROM webhook_events WHERE signature_valid=0"),
+            "events_rejected": one("SELECT COUNT(*) FROM rejected_deliveries"),
             "events_unprocessed": one(
-                "SELECT COUNT(*) FROM webhook_events WHERE processed_at=0"
-                " AND signature_valid=1"),
+                "SELECT COUNT(*) FROM webhook_events WHERE processed_at=0"),
             "recovered_paise": one(
                 "SELECT COALESCE(SUM(amount_paise),0) FROM attempts"
                 " WHERE state=?", AttemptState.SUCCEEDED.value),

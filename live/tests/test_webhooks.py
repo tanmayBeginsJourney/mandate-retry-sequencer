@@ -59,7 +59,7 @@ def main() -> int:
          "which is why verify() takes bytes and not a dict")
 
     # ------------------------------------------------------------------ W2
-    r.section("W2  a bad signature is rejected AND recorded")
+    r.section("W2  a bad signature is rejected, recorded, and takes no id")
     b = Bench()
     try:
         res, err = _ingest(b, body, event_id="evt_forged",
@@ -67,15 +67,27 @@ def main() -> int:
         r.ok("W2a  it is rejected with 400",
              res is None and err is not None and err.status == 400,
              getattr(err, "reason", ""))
-        row = b.svc.store.event("evt_forged")
-        r.ok("W2b  the attempt is still persisted", row is not None)
-        r.ok("W2c  and is marked invalid",
-             row is not None and row.signature_valid is False)
+        # RECORDED, BUT NOT UNDER THE EVENT ID IT CLAIMED. `event_id` is the
+        # deduplication key; letting an unauthenticated sender occupy one means
+        # Razorpay's genuine delivery of that event arrives as a duplicate and
+        # is never processed. See W2f.
+        r.ok("W2b  it does not occupy the event id it claimed",
+             b.svc.store.event("evt_forged") is None)
+        logged = b.svc.store.recent_rejected()
+        r.ok("W2c  but it is logged, with the id it claimed",
+             len(logged) == 1 and logged[0]["claimed_id"] == "evt_forged",
+             str(logged[:1]))
         r.ok("W2d  an invalid event is never queued for processing",
              not any(e.event_id == "evt_forged"
                      for e in b.svc.store.unprocessed_events()))
         r.ok("W2e  processing it changes nothing",
              b.svc.process_webhooks() == [])
+        # The genuine delivery of the same event still gets through.
+        good, gerr = _ingest(b, body, event_id="evt_forged")
+        r.ok("W2f  the real event with that id is accepted, not dismissed as "
+             "a duplicate",
+             gerr is None and good is not None and not good.duplicate,
+             getattr(good, "detail", getattr(gerr, "reason", "")))
     finally:
         b.close()
 

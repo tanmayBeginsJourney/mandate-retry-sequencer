@@ -38,7 +38,12 @@ class MandateState(str, Enum):
     REJECTED = "REJECTED"
     #: Revoked after the fact, by the customer, the bank, or us.
     CANCELLED = "CANCELLED"
-    #: Paused by the customer. UPI-only. May return to ACTIVE.
+    #: Paused. UPI-only, and NOT chargeable. A mandate the CUSTOMER paused can
+    #: be resumed only by the customer, from their UPI app -- "you cannot
+    #: resume a subscription paused by your customer", [VERIFIED] razorpay.com
+    #: pause/resume, read 4 September 2026. So this service never moves a
+    #: mandate out of PAUSED; it returns to ACTIVE only when the provider says
+    #: the token is confirmed again.
     PAUSED = "PAUSED"
 
 
@@ -57,8 +62,9 @@ TOKEN_STATUS_STATE: dict[str, MandateState] = {
     "paused": MandateState.PAUSED,
 }
 
-#: PAUSED is not terminal: a customer can resume a paused UPI mandate, so a
-#: later `token.confirmed` legitimately moves it back to ACTIVE.
+#: PAUSED is not terminal: the customer can resume from their UPI app, and the
+#: `token.confirmed` that follows legitimately moves it back to ACTIVE. Nothing
+#: in this service can cause that transition.
 MANDATE_TERMINAL = frozenset({MandateState.REJECTED, MandateState.CANCELLED})
 
 
@@ -66,13 +72,22 @@ MANDATE_TERMINAL = frozenset({MandateState.REJECTED, MandateState.CANCELLED})
 class AttemptState(str, Enum):
     """One debit's progress. The ranks below define what may follow what."""
 
-    #: On disk BEFORE anything leaves this process. A row still in this state
-    #: after a restart means we do not know whether the provider heard us.
+    #: On disk BEFORE anything leaves this process. Nothing has been sent, so
+    #: a row still in this state after a restart has consumed no NPCI attempt.
     INTENT = "INTENT"
     #: The Razorpay order exists. No payment submitted against it.
     ORDER_CREATED = "ORDER_CREATED"
     #: `order.notification.delivered`. The customer got the pre-debit notice.
     NOTIFIED = "NOTIFIED"
+    #: `order.notification.failed`. The customer did NOT get the notice, so
+    #: this attempt may never be charged. Terminal: a notice that failed
+    #: cannot be un-failed, and a fresh one needs a fresh order.
+    NOTIFICATION_FAILED = "NOTIFICATION_FAILED"
+    #: WRITTEN BEFORE THE DEBIT REQUEST LEAVES THE PROCESS, and the state that
+    #: makes crash recovery possible. A row found here after a restart means a
+    #: debit MAY be at the provider and we never saw the answer. It is never
+    #: resubmitted; `reconcile` asks the order what it holds.
+    SUBMITTING = "SUBMITTING"
     #: `POST /payments/create/recurring` returned a payment id. THE PROVIDER
     #: HAS THE REQUEST. It has not told us the outcome.
     SUBMITTED = "SUBMITTED"
@@ -94,18 +109,34 @@ class AttemptState(str, Enum):
 #: UNKNOWN sits above SUBMITTED and below the terminals on purpose: it is
 #: reached from a lost response and must still be RESOLVABLE by the
 #: authoritative payment state arriving later.
+#:
+#: NOTIFICATION_FAILED is terminal and therefore ranks with the terminals. A
+#: `.delivered` arriving afterwards is refused as stale rather than reopening
+#: the attempt: see `agent/execution/razorpay_predelivery.py` for why the
+#: contradiction settles on the reading that does not debit.
 _RANK: dict[AttemptState, int] = {
     AttemptState.INTENT: 0,
     AttemptState.ORDER_CREATED: 1,
     AttemptState.NOTIFIED: 2,
-    AttemptState.SUBMITTED: 3,
-    AttemptState.UNKNOWN: 4,
-    AttemptState.AUTHORIZED: 5,
-    AttemptState.SUCCEEDED: 6,
-    AttemptState.FAILED: 6,
+    AttemptState.SUBMITTING: 3,
+    AttemptState.SUBMITTED: 4,
+    AttemptState.UNKNOWN: 5,
+    AttemptState.AUTHORIZED: 6,
+    AttemptState.SUCCEEDED: 7,
+    AttemptState.FAILED: 7,
+    AttemptState.NOTIFICATION_FAILED: 7,
 }
 
-ATTEMPT_TERMINAL = frozenset({AttemptState.SUCCEEDED, AttemptState.FAILED})
+ATTEMPT_TERMINAL = frozenset({AttemptState.SUCCEEDED, AttemptState.FAILED,
+                              AttemptState.NOTIFICATION_FAILED})
+
+#: A debit request has left, or may have left, this process. These are the
+#: states that have spent one of NPCI's four presentations; everything below
+#: SUBMITTING has spent none. One definition, so the scheduler's count and the
+#: ledger rebuilt at restart cannot disagree about what an attempt cost.
+ATTEMPT_PRESENTED = frozenset({AttemptState.SUBMITTING, AttemptState.SUBMITTED,
+                               AttemptState.UNKNOWN, AttemptState.AUTHORIZED,
+                               AttemptState.SUCCEEDED, AttemptState.FAILED})
 
 #: Where the local record does not know the provider's final answer, so a
 #: reconciliation poll is worth making. Defined as the complement of the
@@ -257,6 +288,13 @@ class PaymentAttempt:
     #: maps to. Stage 0 reasons in hours, Razorpay in epoch seconds, and a
     #: single field cannot be both.
     target_t: int = 0
+    #: THE HOUR THE SCHEDULER ACTUALLY NOTIFIED AT, stored rather than derived.
+    #: `target_t - 24` is not it: the peak-hour rule pushes a target past the
+    #: first legal slot, so the two differ whenever the notice falls in a peak
+    #: window. Deriving it made the same attempt mean one thing in memory and
+    #: another after a restart, and Stage 0's `pending` rule read the
+    #: difference as a second concurrent notification.
+    notify_t: int = 0
     payment_after: int = 0
     submitted_at: int = 0
     resolved_at: int = 0
@@ -277,16 +315,19 @@ class PaymentAttempt:
 
 @dataclass
 class WebhookEvent:
-    """One delivery. The row exists whether or not we could make sense of it.
+    """One AUTHENTIC delivery. Every row here passed signature verification.
 
-    A REJECTED SIGNATURE IS STILL PERSISTED, with `signature_valid=0`. Dropping
-    it would leave no trace of an attempt to forge an event, which is the one
-    delivery where the log matters most.
+    A DELIVERY THAT FAILED VERIFICATION IS NOT ONE OF THESE. It is recorded in
+    `rejected_deliveries` instead, and the reason is not tidiness: `event_id`
+    is the deduplication key, so a forged delivery quoting a real event id
+    would otherwise CLAIM that id and make Razorpay's genuine retry of the same
+    event look like a duplicate -- dropping a real payment outcome on the floor
+    at the request of whoever sent the forgery. Forensic visibility is kept;
+    the dedup key is not surrendered to an unauthenticated sender.
     """
     event_id: str                 # x-razorpay-event-id. The dedup key.
     event_type: str
     received_at: int
-    signature_valid: bool
     payload: str                  # raw body, verbatim
     processed_at: int = 0
     #: What ingestion decided. Free text for display, not a state machine.
@@ -334,10 +375,17 @@ def from_payment_entity(entity: dict) -> ProviderPaymentView:
     provider is saying it does not know, and FAILED is a claim that it does.
     Rounding an unknown down to a failure is the reading that licenses a retry,
     and the retry is what double-charges the customer.
+
+    A STATUS THIS MAP DOES NOT KNOW BECOMES `UNKNOWN`, NOT `SUBMITTED`. It used
+    to default to SUBMITTED, which asserts the debit is in flight and nothing
+    more is needed -- so a vocabulary Razorpay adds, or a `refunded` arriving
+    on the polling path, would read as a healthy in-flight debit and stop being
+    looked at. UNKNOWN says what is true: the payment exists and we cannot say
+    what it did. It stays on the reconciliation queue and is never retried.
     """
     status = str(entity.get("status") or "")
     reason = str(entity.get("error_reason") or "")
-    state = PAYMENT_STATUS_STATE.get(status, AttemptState.SUBMITTED)
+    state = PAYMENT_STATUS_STATE.get(status, AttemptState.UNKNOWN)
     if reason and is_pending(reason):
         state = AttemptState.UNKNOWN
     return ProviderPaymentView(

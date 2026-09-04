@@ -231,7 +231,7 @@ def main() -> int:
     r.section("X8  a mandate with no token cannot be charged")
     b = Bench(seed=11)
     try:
-        c = b.svc.create_customer(name="C", email="c@example.com",
+        c = b.svc.create_customer(name="Charlie Customer", email="c@example.com",
                                   contact="+919000000003")
         m = b.svc.start_registration(customer_id=c.id, charge_amount_paise=100,
                                      max_amount_paise=150000)

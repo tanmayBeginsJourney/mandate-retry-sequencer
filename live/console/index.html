@@ -213,6 +213,47 @@
   </form>
 </dialog>
 
+<!-- The only control that can move real money. The dialog names the
+     environment, the mandate and the amount, because a confirmation that does
+     not say what is about to happen is a second click, not a decision. -->
+<dialog id="debit-dialog" aria-labelledby="debit-title">
+  <form method="dialog">
+    <h2 id="debit-title">Run a decision tick on the LIVE rail</h2>
+    <p class="dialog-note">
+      This runs the scheduler, the diagnosis layer and Stage&nbsp;0. If all five
+      rules permit and the hour has come, <strong>it submits a real UPI AutoPay
+      debit and money leaves the customer's bank account.</strong> It cannot be
+      recalled.
+    </p>
+    <dl class="dialog-facts">
+      <dt>Environment</dt><dd id="debit-env">—</dd>
+      <dt>Mandate</dt><dd id="debit-mandate">—</dd>
+      <dt>Customer</dt><dd id="debit-customer">—</dd>
+      <dt>Amount at risk</dt><dd id="debit-amount">—</dd>
+    </dl>
+    <div class="dialog-actions">
+      <button class="btn ghost" value="no" type="submit">Do not run it</button>
+      <button class="btn danger" value="yes" type="submit">Run it — money may move</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="token-dialog" aria-labelledby="token-title">
+  <form method="dialog" id="token-form">
+    <h2 id="token-title">Operator token required</h2>
+    <p class="dialog-note">
+      This service is configured with <code>RECOVERY_OPERATOR_TOKEN</code>. The
+      token is held for this browser tab only and is never stored on disk.
+    </p>
+    <label for="token-input">Operator token</label>
+    <input id="token-input" name="token" type="password" required autocomplete="off">
+    <div class="dialog-actions">
+      <button class="btn ghost" value="no" type="submit">Cancel</button>
+      <button class="btn" value="yes" type="submit">Use this token</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="confirm-dialog" aria-labelledby="confirm-title">
   <form method="dialog">
     <h2 id="confirm-title">Cancel this mandate?</h2>

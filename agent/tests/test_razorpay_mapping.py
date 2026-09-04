@@ -503,14 +503,33 @@ def gate_R9(mutant: str | None = None) -> None:
     ok("R9d  a 200 captured payment is untouched",
        err is None and out is not None and out.success is True)
 
-    # (e) the classifier reads the SHAPE of the error object, and the two
-    #     shapes are the ones Razorpay's error documentation distinguishes:
-    #     a payment failure carries `reason` / `metadata.payment_id`; an
-    #     API-level rejection carries `code` and `description` alone.
+    # (e) THE CLASSIFIER ASKS ONE QUESTION: does the error name a payment?
+    #     Razorpay's error reference gives the error object `code`,
+    #     `description`, `field`, `source`, `step`, `reason` and `metadata`,
+    #     and publishes no rule saying which 4xx responses are payment-level.
+    #     `metadata.payment_id` is the only field that is the provider
+    #     ASSERTING a payment exists rather than us reading a shape.
     ok("R9e  a bare code+description is a request refusal, not a decline",
        RazorpayExecutor._is_payment_outcome(LIVE_401) is False)
-    ok("R9e2 an error carrying a reason IS a payment outcome",
+    ok("R9e2 an error naming a payment IS a payment outcome",
        RazorpayExecutor._is_payment_outcome(DOC_400_DECLINE) is True)
+    # THE UNCERTAINTY, ISOLATED. A 4xx that carries a `reason` but names no
+    # payment is NOT read as a decline. It may well be one -- this cannot
+    # establish that from the documentation, so it fails towards "ask the
+    # provider" rather than towards "the customer's account was empty".
+    # Reconciliation resolves it from the order; a wrong decline costs a
+    # belief and four NPCI attempts. Settle this against a live key.
+    reason_only = {"error": {"code": "BAD_REQUEST_ERROR",
+                             "description": "payment failed",
+                             "source": "bank", "step": "payment_authorization",
+                             "reason": "insufficient_funds"}}
+    ok("R9e3 a reason with no payment id is NOT read as a decline",
+       RazorpayExecutor._is_payment_outcome(reason_only) is False,
+       "it becomes RazorpayError -> UNKNOWN -> reconcile, never Z9")
+    out, err = outcome_for(reason_only, 400)
+    ok("R9e4 so it raises rather than teaching the filter an empty account",
+       out is None and type(err).__name__ == "RazorpayError",
+       f"outcome={out} err={type(err).__name__ if err else None}")
 
     # (f) the fixture is still what the wire said, if the transcript is here.
     path = os.path.join(PKG, "logs", "razorpay_ladder.json")

@@ -139,11 +139,11 @@ last one is a live integration.
 |---|---|---|
 | Belief filter, timing rule, constraint layer, audit trail, independent auditor | IMPLEMENTED | and measured — `sim/gate.py --tier full` |
 | Simulation executor | IMPLEMENTED | reproduces the simulation harness bit-exactly, 24 of 24 runs |
-| Live service: durable state, webhook ingestion, reconciliation, crash recovery, operator console | MOCK-VERIFIED | 7 gate files, 225 checks, `py -3.12 -m live.tests.run_all` |
+| Live service: durable state, webhook ingestion, reconciliation, crash recovery, billing-cycle rollover, operator console | MOCK-VERIFIED | 8 gate files, 337 checks, `py -3.12 -m live.tests.run_all` |
 | Razorpay test-mode API authentication | LIVE-DEMONSTRATED | HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
 | Funding reminders over SMTP | LIVE-DEMONSTRATED | delivered through a live test relay, transcript `logs/smtp_reminder_proof.json` |
 | Razorpay test-mode Customer and Payment Link create / fetch / cancel | LIVE-READY | runnable against `rzp_test_` keys via `scripts/prove_workflows.py`; no transcript is committed |
-| Mandate registration order (`POST /v1/orders`, `method: upi`) | LIVE-READY | body [VERIFIED] against Razorpay's authorisation-transaction reference and asserted by `agent/tests/test_razorpay_registration.py` on the request the client actually builds |
+| Mandate registration order (`POST /v1/orders`, `method: upi`) | LIVE-READY | body [VERIFIED] against Razorpay's UPI AutoPay authorisation-transaction reference and asserted by `agent/tests/test_razorpay_registration.py` on the request the client actually builds. One field is unresolved: registration sends `frequency: as_presented`, which that page lists without defining, and whether an account may use it is an account-level entitlement to confirm with Razorpay Support |
 | Pre-debit notification order (`notification.token_id` / `payment_after`) | LIVE-READY | body [VERIFIED] against create-subsequent-payments; never accepted by Razorpay for a real mandate |
 | `order.notification.delivered` webhook | IMPLEMENTED | never observed from Razorpay |
 | Webhook signature verification, deduplication, out-of-order handling | MOCK-VERIFIED | signed payloads the mock rail produces, never one Razorpay sent |

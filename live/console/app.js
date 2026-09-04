@@ -25,10 +25,25 @@ const state = {
   decisions: [],
   events: [],
   config: null,
+  token: "",
   loading: true,
 };
 
 /* ------------------------------------------------------------------ fetch */
+
+/* The operator token lives in sessionStorage: it is gone when the tab closes,
+   is not shared with another tab, and never reaches disk. It travels in a
+   custom header, which also makes any cross-site fetch preflight -- and the
+   server answers no preflight. */
+function operatorToken() {
+  try { return sessionStorage.getItem("operator_token") || ""; }
+  catch (e) { return state.token || ""; }
+}
+
+function setOperatorToken(value) {
+  state.token = value;
+  try { sessionStorage.setItem("operator_token", value); } catch (e) { /* private mode */ }
+}
 
 async function api(path, options) {
   const opts = Object.assign({ headers: {} }, options || {});
@@ -36,6 +51,8 @@ async function api(path, options) {
     opts.headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(opts.body);
   }
+  const token = operatorToken();
+  if (token) opts.headers["X-Operator-Token"] = token;
   const sep = path.includes("?") ? "&" : "?";
   const url = state.reveal ? `${path}${sep}reveal=1` : path;
   const res = await fetch(url, opts);
@@ -413,12 +430,34 @@ async function refresh() {
     renderEvents(snap.recent_events || []);
     if (state.selected) await loadDetail(state.selected);
   } catch (err) {
-    toast(err.status === 401
-      ? "This console needs an operator token."
-      : err.message, "bad");
+    if (err.status === 401) {
+      const supplied = await askForToken();
+      if (supplied) { await refresh(); return; }
+      toast("This console needs an operator token.", "bad");
+    } else {
+      toast(err.message, "bad");
+    }
   } finally {
     state.loading = false;
   }
+}
+
+function askForToken() {
+  return new Promise((resolve) => {
+    const dialog = $("token-dialog");
+    const input = $("token-input");
+    input.value = "";
+    dialog.returnValue = "";
+    dialog.showModal();
+    dialog.addEventListener("close", function once() {
+      dialog.removeEventListener("close", once);
+      const value = input.value.trim();
+      input.value = "";
+      if (dialog.returnValue !== "yes" || !value) { resolve(false); return; }
+      setOperatorToken(value);
+      resolve(true);
+    });
+  });
 }
 
 async function loadDetail(id) {
@@ -454,10 +493,41 @@ $("act-authorize").addEventListener("click", (e) => busy(e.currentTarget, async 
   await refresh();
 }));
 
+/* True when running a tick could actually take a customer's money: the live
+   rail, with debits authorised. Offline the mock rail moves nothing and a
+   confirmation on every tick would train the operator to click through the
+   one that matters. */
+function debitCanMoveMoney() {
+  return Boolean(state.config && state.config.mode === "live"
+    && state.config.debit_allowed);
+}
+
+function confirmLiveDebit() {
+  const d = state.detail || {};
+  $("debit-env").textContent = `LIVE — ${(state.config || {}).key_prefix || "no key"}`;
+  $("debit-mandate").textContent = `${d.uid || "?"} · ${d.id || state.selected}`;
+  $("debit-customer").textContent = d.customer_name || "—";
+  $("debit-amount").textContent =
+    `${PAISE(d.charge_amount_paise)} — the mandate's own amount`;
+  return new Promise((resolve) => {
+    const dialog = $("debit-dialog");
+    dialog.returnValue = "";
+    dialog.showModal();
+    dialog.addEventListener("close", function once() {
+      dialog.removeEventListener("close", once);
+      resolve(dialog.returnValue === "yes");
+    });
+  });
+}
+
 $("act-decide").addEventListener("click", (e) => busy(e.currentTarget, async () => {
   // NO BODY. The amount is the mandate's, the hour is the scheduler's, and
   // the legality is Stage 0's. There is nothing here for an operator -- or
   // anything else holding an HTTP client -- to supply.
+  if (debitCanMoveMoney() && !(await confirmLiveDebit())) {
+    toast("Nothing was submitted.", "info");
+    return null;
+  }
   const out = await api(
     `/api/mandates/${encodeURIComponent(state.selected)}/decide`,
     { method: "POST", body: {} });

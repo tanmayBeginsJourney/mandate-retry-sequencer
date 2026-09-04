@@ -56,22 +56,32 @@ def main() -> int:
     cfg = load(LIVE_ENV)
     allowed, why = cfg.may_debit()
     r.ok("C3a  live mode alone does NOT permit a debit", allowed is False, why)
-    cfg2 = load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": "yes"})
-    r.ok("C3b  live plus the explicit flag permits one",
+    # AUTHORISING DEBITS ALSO REQUIRES AN OPERATOR TOKEN. The route that runs a
+    # decision is the route that debits, so an open operator API and permitted
+    # live debits together are a real debit available to anything that reaches
+    # the port.
+    err = _raises(lambda: load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": "yes"}))
+    r.ok("C3b  the debit flag without an operator token raises",
+         err is not None, str(err or "")[:70])
+    ARMED = {**LIVE_ENV, "RECOVERY_LIVE_DEBIT": "yes",
+             "RECOVERY_OPERATOR_TOKEN": "t0ken"}
+    cfg2 = load(ARMED)
+    r.ok("C3b2 live plus the flag plus a token permits one",
          cfg2.may_debit()[0] is True)
+    r.ok("C3b3 and the console is told authentication is required",
+         cfg2.describe()["operator_auth_required"] is True)
     # ONLY THE LITERAL WORD `yes`. `1`, `true` and `on` all arrive by
     # accident; `yes` is a word somebody typed on purpose. Checked over the
     # whole set at once so the failure names the spelling that got through.
     accidental = [v for v in ("1", "true", "on", "y", "Y", "enabled", "sure")
-                  if load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": v}).may_debit()[0]]
+                  if load({**ARMED, "RECOVERY_LIVE_DEBIT": v}).may_debit()[0]]
     r.ok("C3c  no truthy-looking value but 'yes' enables live debits",
          not accidental, f"these did: {accidental}")
     r.ok("C3c2 and surrounding whitespace and case do not defeat it",
-         load({**LIVE_ENV, "RECOVERY_LIVE_DEBIT": " YES "}).may_debit()[0]
+         load({**ARMED, "RECOVERY_LIVE_DEBIT": " YES "}).may_debit()[0]
          is True)
-    err = _raises(lambda: load({**LIVE_ENV,
-                                "RAZORPAY_KEY_ID": "rzp_test_XXXXXXXXXXXX",
-                                "RECOVERY_LIVE_DEBIT": "yes"}))
+    err = _raises(lambda: load({**ARMED,
+                                "RAZORPAY_KEY_ID": "rzp_test_XXXXXXXXXXXX"}))
     r.ok("C3d  authorising real debits against a TEST key raises",
          err is not None, str(err or "")[:70])
     err = _raises(lambda: load({"RECOVERY_MODE": "offline",

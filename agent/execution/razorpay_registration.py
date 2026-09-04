@@ -101,14 +101,22 @@ def registration_to_binding_fields(res: RegistrationResult) -> dict[str, Any]:
 
 
 def env_snippet(res: RegistrationResult) -> str:
-    """Lines to paste into .env after successful registration."""
+    """Lines to paste into .env after successful registration.
+
+    THE EMAIL AND CONTACT ARE COMMENTS, NOT SETTINGS. They belong to the
+    customer who authorised this mandate and reach a debit only through a
+    `MandateBinding`: the executor reads no environment default for an
+    identity, because one address applied to somebody else's debit is a
+    customer charged under a stranger's details.
+    """
     return "\n".join([
         f"RAZORPAY_TEST_CUSTOMER_ID={res.customer_id}",
         f"RAZORPAY_TEST_TOKEN_ID={res.token_id}",
-        f"RAZORPAY_DEFAULT_EMAIL={res.email}",
-        f"RAZORPAY_DEFAULT_CONTACT={res.contact}",
         f"RAZORPAY_TEST_AMOUNT_PAISE={res.charge_amount_paise}",
         f"RAZORPAY_MANDATE_MAX_PAISE={res.max_amount_paise}",
+        f"# this mandate's binding, for MandateBinding:",
+        f"# email={res.email}",
+        f"# contact={res.contact}",
         f"# registration_order_id={res.order_id}",
         f"# registration_payment_id={res.payment_id}",
     ])

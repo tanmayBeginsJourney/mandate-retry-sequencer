@@ -41,8 +41,11 @@ from agent.constraints.stage0 import Stage0Gate, action_id
 # I2-EXEMPT / L1: this module is the live composition root. It is the only
 # module in `live/` permitted to construct an executor, exactly as
 # `agent/batch.py` is the only one in `agent/`.
-from agent.execution.razorpay_api import (MIN_AMOUNT_PAISE, Outcome,
+from agent.execution.razorpay_api import (DEFAULT_FREQUENCY,
+                                          MAX_AMOUNT_RANGE_PAISE,
+                                          MIN_AMOUNT_PAISE, Outcome,
                                           RazorpayApi, Transport,
+                                          VALID_FREQUENCIES,
                                           first_item, parse_payment_id,
                                           parse_token_from_payment,
                                           parse_token_status)
@@ -56,10 +59,10 @@ from agent.policy.belief_book import BeliefBook
 from agent.ports import (CaseView, InterventionKind, MandateRef, MoneyAction,
                          PendingNotification, Refused, family_of)
 from live.config import LiveConfig, Mode
-from live.domain import (ATTEMPT_UNRESOLVED, AttemptState, Customer, Mandate,
-                         MandateState, PaymentAttempt, TOKEN_STATUS_STATE,
-                         Transition, advance, advance_mandate,
-                         from_payment_entity)
+from live.domain import (ATTEMPT_PRESENTED, ATTEMPT_UNRESOLVED, AttemptState,
+                         Customer, Mandate, MandateState, PaymentAttempt,
+                         TOKEN_STATUS_STATE, Transition, advance,
+                         advance_mandate, from_payment_entity)
 from live.store import Store
 from live import webhooks
 
@@ -70,13 +73,45 @@ EPOCH_ORIGIN_KEY = "epoch_origin"
 #: it; this is named here only so the scheduler can be told how many are left.
 CAP = 4
 
-#: NPCI's pre-debit notice. Stage 0's `lead` rule enforces it; this is here so
-#: the execute tick can reconstruct the notify time of an attempt it resumes.
-LEAD_HOURS = 24
-
 
 class LiveError(RuntimeError):
     """A request cannot be served. Carries a message safe to show an operator."""
+
+
+#: Razorpay's documented limits on the customer object: `name` "must be between
+#: 3-50 characters in length", `email` "a maximum length of 64 characters",
+#: `contact` "a maximum length of 15 characters including country code".
+#: [VERIFIED] razorpay.com Create a Customer, read 4 September 2026.
+MIN_NAME, MAX_NAME, MAX_EMAIL, MAX_CONTACT = 3, 50, 64, 15
+
+
+def validate_customer(name: str, email: str,
+                      contact: str) -> tuple[str, str, str]:
+    """Check what the provider documents, and nothing more.
+
+    THIS IS NOT AN EMAIL VALIDATOR. RFC 5322 addresses are not worth parsing
+    here and a regex that tries is wrong in both directions; the check is that
+    the field is present, is inside Razorpay's length limit, and has the one
+    shape their API requires. The provider is the authority on the rest and
+    says so by rejecting the create call.
+
+    The point of checking at all is ordering: a length Razorpay refuses should
+    cost a validation error, not a half-finished registration.
+    """
+    name, email, contact = name.strip(), email.strip(), contact.strip()
+    bad: list[str] = []
+    if not MIN_NAME <= len(name) <= MAX_NAME:
+        bad.append(f"name must be {MIN_NAME}-{MAX_NAME} characters")
+    if not email or len(email) > MAX_EMAIL or email.count("@") != 1             or email.startswith("@") or email.endswith("@"):
+        bad.append(f"email must be 1-{MAX_EMAIL} characters and contain one "
+                   f"@ with something either side")
+    digits = contact.lstrip("+")
+    if not digits.isdigit() or len(contact) > MAX_CONTACT or len(digits) < 8:
+        bad.append(f"contact must be digits, optionally prefixed with +, at "
+                   f"most {MAX_CONTACT} characters")
+    if bad:
+        raise LiveError("; ".join(bad))
+    return name, email, contact
 
 
 @dataclass
@@ -96,6 +131,7 @@ class Decision:
     p_later: float = 0.0
     index_score: float = 0.0
     attempt_id: str = ""
+    cycle: int = 0
     diagnosis_id: str = ""
     gate_verdict: str = ""
     refused_rule: str = ""
@@ -116,26 +152,39 @@ class Decision:
 #: with the batch root, and `AttemptState` is what survives a restart. This is
 #: the only place they are translated.
 #:
-#: EVERY ATTEMPT STATE MUST APPEAR HERE. A state left out would default to
-#: ORDER_CREATED, and `RazorpayExecutor.attempt` accepts ORDER_CREATED -- so a
-#: row already SUBMITTED would be resubmitted after a restart. That is the
-#: executor's own last-line precondition, and a partial table disarms it.
+#: `DEBIT_ATTEMPTED` MAPS TO `SUBMITTING`, THE WEAKEST THING IT CAN MEAN. The
+#: executor writes that phase BEFORE the request leaves, so the phase asserts
+#: "a debit may be at the provider" and nothing stronger. `SUBMITTED` -- the
+#: provider answered with a payment id -- is a fact only `_execute` has, and it
+#: is written there.
 _PHASE_STATE: dict[PredeliveryPhase, AttemptState] = {
     PredeliveryPhase.ORDER_CREATED: AttemptState.ORDER_CREATED,
     PredeliveryPhase.NOTIFICATION_DELIVERED: AttemptState.NOTIFIED,
-    PredeliveryPhase.DEBIT_ATTEMPTED: AttemptState.SUBMITTED,
+    PredeliveryPhase.NOTIFICATION_FAILED: AttemptState.NOTIFICATION_FAILED,
+    PredeliveryPhase.DEBIT_ATTEMPTED: AttemptState.SUBMITTING,
 }
 _STATE_PHASE: dict[AttemptState, PredeliveryPhase] = {
     AttemptState.INTENT: PredeliveryPhase.NONE,
     AttemptState.ORDER_CREATED: PredeliveryPhase.ORDER_CREATED,
     AttemptState.NOTIFIED: PredeliveryPhase.NOTIFICATION_DELIVERED,
+    AttemptState.NOTIFICATION_FAILED: PredeliveryPhase.NOTIFICATION_FAILED,
+    AttemptState.SUBMITTING: PredeliveryPhase.DEBIT_ATTEMPTED,
     AttemptState.SUBMITTED: PredeliveryPhase.DEBIT_ATTEMPTED,
     AttemptState.UNKNOWN: PredeliveryPhase.DEBIT_ATTEMPTED,
     AttemptState.AUTHORIZED: PredeliveryPhase.DEBIT_ATTEMPTED,
     AttemptState.SUCCEEDED: PredeliveryPhase.DEBIT_ATTEMPTED,
     AttemptState.FAILED: PredeliveryPhase.DEBIT_ATTEMPTED,
 }
+
+# BOTH DIRECTIONS ARE TOTAL, AND THAT IS LOAD-BEARING. A state missing from
+# `_STATE_PHASE` would leave the journal reporting a phase the executor treats
+# as chargeable, so a row already submitted -- or one whose pre-debit notice
+# failed -- would be charged again after a restart. `RazorpayExecutor.attempt`
+# only permits ORDER_CREATED and NOTIFICATION_DELIVERED, and a partial table
+# disarms that check. A phase missing from `_PHASE_STATE` would leave a
+# provider fact with nowhere durable to go.
 assert set(_STATE_PHASE) == set(AttemptState)
+assert set(_PHASE_STATE) == set(PredeliveryPhase) - {PredeliveryPhase.NONE}
 
 
 class SqliteJournal(PredeliveryJournal):
@@ -294,21 +343,43 @@ class LiveService:
         rebuilding the gate.
         """
         self.bindings.clear()
-        for m in self.store.mandates():
-            c = self.store.customer(m.customer_id)
+        # Read each table once. The customer lookup and the per-customer
+        # mandate count were both queries inside the loop, so a hundred
+        # mandates meant two hundred extra round trips per refresh -- and
+        # `refresh()` runs on every mandate change.
+        customers = {c.id: c for c in self.store.customers()}
+        mandates = self.store.mandates()
+        per_customer: dict[str, int] = {}
+        for m in mandates:
+            per_customer[m.customer_id] = per_customer.get(m.customer_id, 0) + 1
+
+        for m in mandates:
+            c = customers.get(m.customer_id)
             if c is None:
                 continue
-            self.bindings[self._ref(m, c).uid] = MandateBinding(
+            uid = self._ref(m, c).uid
+            if uid in self.bindings:
+                # TWO MANDATES CANNOT SHARE ONE uid. The executor charges the
+                # token it finds under this key, so a collision means one
+                # customer's debit runs on another's mandate. The database's
+                # unique indexes on `customers.seq` and
+                # `mandates(customer_id, index_no)` make this unreachable;
+                # failing here rather than overwriting is what keeps a future
+                # regression from being silent money movement.
+                raise LiveError(
+                    f"mandate identity {uid} is claimed by two mandates "
+                    f"({m.id} and one already bound). Refusing to bind: the "
+                    f"executor would charge one customer's token for the "
+                    f"other's mandate.")
+            self.bindings[uid] = MandateBinding(
                 rzp_customer_id=m.rzp_customer_id or c.rzp_customer_id,
                 rzp_token_id=m.rzp_token_id,
                 rzp_email=c.email, rzp_contact=c.contact,
                 charge_amount=m.charge_amount_paise / 100.0,
                 est_salary=m.est_salary, est_payday=m.est_payday)
             if c.seq not in self._known_customers:
-                n = len([x for x in self.store.mandates()
-                         if x.customer_id == c.id])
                 self.book.add_customer(c.seq, m.est_salary, m.est_payday,
-                                       max(1, n))
+                                       max(1, per_customer[c.id]))
                 self._known_customers.add(c.seq)
         self._rehydrate_ledger()
 
@@ -326,8 +397,9 @@ class LiveService:
         attempt reads as four after three refreshes -- the NPCI cap -- and the
         mandate silently stops being chargeable.
         """
+        customers = {c.id: c for c in self.store.customers()}
         for m in self.store.mandates():
-            c = self.store.customer(m.customer_id)
+            c = customers.get(m.customer_id)
             if c is None:
                 continue
             uid = self._ref(m, c).uid
@@ -337,12 +409,16 @@ class LiveService:
                     continue
                 if a.state in (AttemptState.ORDER_CREATED,
                                AttemptState.NOTIFIED):
+                    # THE STORED notify_t, NEVER `target_t - 24`. The scheduler
+                    # notified at an hour the peak rule may have pushed the
+                    # target well past, so reconstructing it put a different
+                    # number in the ledger than the one Stage 0 was given
+                    # before the restart -- and the same attempt was refused in
+                    # one process and allowed in the next.
                     self.ledger.set_pending(uid, PendingNotification(
-                        notify_t=a.target_t - LEAD_HOURS,
-                        target_t=a.target_t, under_previous_notice=False))
-                elif a.state is not AttemptState.INTENT:
-                    # An INTENT row means nothing left the process, so it has
-                    # consumed no NPCI attempt. Everything else has.
+                        notify_t=a.notify_t, target_t=a.target_t,
+                        under_previous_notice=False))
+                elif a.state in ATTEMPT_PRESENTED:
                     self.ledger.record_attempt(uid, a.cycle,
                                                a.outcome_code or "")
 
@@ -353,19 +429,29 @@ class LiveService:
     # ------------------------------------------------------- registration
     def create_customer(self, *, name: str, email: str,
                         contact: str) -> Customer:
+        """Validate, create at the provider, then allocate identity atomically.
+
+        Validation comes FIRST so a malformed field is refused before a
+        customer record exists at Razorpay that nothing here points at.
+        """
+        name, email, contact = validate_customer(name, email, contact)
         r = self.api.create_customer(name=name, email=email, contact=contact,
                                      notes={"source": "recovery-agent"})
         if not r.ok:
             raise LiveError(f"customer create failed: {r.error_description or r.outcome.value}")
-        c = Customer(id=f"cus_{uuid.uuid4().hex[:12]}",
-                     rzp_customer_id=str(r.body.get("id") or ""),
-                     email=email, contact=contact, name=name,
-                     seq=self.store.next_customer_seq())
-        self.store.put_customer(c)
+        # `seq` is allocated and inserted inside one transaction. Reading the
+        # next value here and writing it afterwards let two concurrent
+        # registrations take the same one, and two customers sharing a `seq`
+        # share the `c{seq}m{index}` identity the executor binds tokens to.
+        c = self.store.allocate_customer(Customer(
+            id=f"cus_{uuid.uuid4().hex[:12]}",
+            rzp_customer_id=str(r.body.get("id") or ""),
+            email=email, contact=contact, name=name))
         return c
 
     def start_registration(self, *, customer_id: str, charge_amount_paise: int,
-                           max_amount_paise: int, frequency: str = "monthly",
+                           max_amount_paise: int,
+                           frequency: str = DEFAULT_FREQUENCY,
                            est_salary: float = 0.0, est_payday: int = 1,
                            cycle_days: int = 30) -> Mandate:
         """Create the mandate row and the authorisation order.
@@ -381,6 +467,19 @@ class LiveService:
                             f"{MIN_AMOUNT_PAISE} paise")
         if charge_amount_paise > max_amount_paise:
             raise LiveError("charge amount exceeds the mandate ceiling")
+        lo, hi = MAX_AMOUNT_RANGE_PAISE
+        if not lo <= max_amount_paise <= hi:
+            # Checked here as well as in the client so the refusal does not
+            # depend on which rail is configured, and so it arrives as an
+            # operator-readable message rather than a ValueError.
+            raise LiveError(
+                f"max_amount {max_amount_paise} paise is outside UPI AutoPay's "
+                f"documented range {lo}-{hi} for an ordinary merchant "
+                f"category")
+        if frequency not in VALID_FREQUENCIES:
+            raise LiveError(f"frequency {frequency!r} is not one Razorpay "
+                            f"accepts for UPI AutoPay: "
+                            f"{sorted(VALID_FREQUENCIES)}")
 
         m = Mandate(id=f"mdt_{uuid.uuid4().hex[:12]}", customer_id=c.id,
                     rzp_customer_id=c.rzp_customer_id,
@@ -388,10 +487,13 @@ class LiveService:
                     charge_amount_paise=charge_amount_paise,
                     frequency=frequency,
                     expire_at=int(time.time()) + 10 * 365 * 24 * 3600,
-                    index_no=self.store.next_mandate_index(c.id),
                     est_salary=est_salary or charge_amount_paise / 100.0 * 60,
                     est_payday=est_payday, cycle_days=cycle_days,
                     cycle_start_t=self.now_t())
+        # The mandate row, with its index allocated atomically, exists BEFORE
+        # the provider is called: the other half of the `c{seq}m{index}`
+        # identity is claimed under the same rule as `seq`.
+        m = self.store.allocate_mandate_index(m)
         receipt = f"reg_{m.id}"[:40]
         r = self.api.create_authorization_order(
             customer_id=c.rzp_customer_id,
@@ -549,10 +651,13 @@ class LiveService:
             d.reason = blocked
             return self._record(d)
 
-        # An attempt already scheduled for this cycle owns the decision. Either
-        # its hour has come or it has not.
-        scheduled = self._scheduled_attempt(m)
+        attempts = self.store.attempts_for(m.id, limit=50)
+
+        # An attempt already scheduled owns the decision. Either its hour has
+        # come or it has not.
+        scheduled = self._scheduled_attempt(m, attempts)
         if scheduled is not None:
+            d.cycle = scheduled.cycle
             if scheduled.target_t > now_t:
                 d.reason = (f"a debit is scheduled for hour "
                             f"{scheduled.target_t}; it is now hour {now_t}")
@@ -562,11 +667,17 @@ class LiveService:
                 return self._record(d)
             return self._execute(m, c, scheduled, now_t, d)
 
-        # A debit is in flight or its outcome is unknown. Razorpay's guidance
-        # is not to create another subsequent payment until the previous one's
-        # status is known, and charging twice is the worst thing this can do.
-        open_now = [a for a in self.store.attempts_for(m.id, limit=20)
-                    if a.cycle == m.cycle and a.state in ATTEMPT_UNRESOLVED]
+        # A debit is in flight or its outcome is unknown. Razorpay's own
+        # instruction is "do not create another subsequent payment until you
+        # get the status of the previous one" ([VERIFIED] razorpay.com UPI
+        # create-subsequent-payments, read 4 September 2026), and charging
+        # twice is the worst thing this can do.
+        #
+        # ACROSS EVERY CYCLE, NOT JUST THE CURRENT ONE. An unresolved attempt
+        # left behind by a cycle that has rolled over is exactly the debit
+        # whose outcome is unknown, and filtering it out by cycle number would
+        # let the rollover itself authorise a second charge.
+        open_now = [a for a in attempts if a.state in ATTEMPT_UNRESOLVED]
         if open_now:
             d.reason = (f"attempt {open_now[0].id} is {open_now[0].state.value}; "
                         f"the outcome of the previous debit must be known "
@@ -575,7 +686,69 @@ class LiveService:
             d.attempt_state = open_now[0].state.value
             return self._record(d)
 
-        return self._schedule(m, c, now_t, d)
+        m = self._roll_cycle(m, now_t, c)
+        d.cycle = m.cycle
+
+        if self._collected(m, attempts):
+            d.reason = (f"cycle {m.cycle} is collected; the next debit is "
+                        f"cycle {m.cycle + 1}, which opens at hour "
+                        f"{self._cycle_close_day(m) * 24}")
+            return self._record(d)
+
+        return self._schedule(m, c, now_t, d, attempts)
+
+    # ------------------------------------------------------ cycle semantics
+    #
+    # ONE COLLECTION PER CYCLE, AND ONE CYCLE AT A TIME. Both are taken from
+    # `sim/harness.py`, which is the model every published number was measured
+    # on: a mandate is scheduled only while `not m["collected"]`, and at the
+    # day boundary past `cycle_close` the cycle advances and the per-cycle
+    # counters reset. NPCI's rule is the same shape -- one successful debit on
+    # a token per billing cycle.
+    #
+    # `collected` is DERIVED rather than stored. A cycle is collected when one
+    # of its attempts succeeded, which is a fact already on disk, and a second
+    # copy of it is a second thing to keep true across a crash.
+
+    @staticmethod
+    def _cycle_close_day(m: Mandate) -> int:
+        """The first day NOT in the current cycle. In DAYS, like the sim.
+
+        `cycle_start_t` is a simulated HOUR and `timing.propose` compares this
+        against a day number, so the conversion happens here and once.
+        """
+        return m.cycle_start_t // 24 + m.cycle_days
+
+    @staticmethod
+    def _collected(m: Mandate, attempts: list[PaymentAttempt]) -> bool:
+        return any(a.cycle == m.cycle and a.succeeded for a in attempts)
+
+    def _roll_cycle(self, m: Mandate, now_t: int, c: Customer) -> Mandate:
+        """Advance to the cycle `now_t` falls in, one cycle at a time.
+
+        Durable: the new cycle number and its start hour are written before the
+        next decision reads them, so a restart resumes in the same cycle rather
+        than re-opening a closed one. Called only with no unresolved attempt
+        outstanding, so a rollover can never strand a debit whose outcome is
+        still unknown.
+        """
+        day, before = now_t // 24, m.cycle
+        rolled = False
+        while day >= self._cycle_close_day(m):
+            m.cycle += 1
+            m.cycle_start_t = self._cycle_close_day(m) * 24
+            rolled = True
+        if not rolled:
+            return m
+        self.store.put_mandate(m)
+        self.store.record_transition(
+            "mandate", m.id, f"cycle {before}", f"cycle {m.cycle}",
+            Transition.APPLIED.value, "cycle",
+            f"opened at hour {m.cycle_start_t}")
+        # A fresh cycle restores the full NPCI allowance and drops any notice
+        # left outstanding by the last one.
+        self.ledger.open_cycle(self._ref(m, c).uid, m.cycle)
+        return m
 
     def _blocked(self, m: Mandate) -> str:
         """Every reason this mandate may not be charged at all, in one place."""
@@ -596,29 +769,49 @@ class LiveService:
                     f"mandate's authorised ceiling of {m.max_amount_paise}")
         return ""
 
-    def _scheduled_attempt(self, m: Mandate) -> PaymentAttempt | None:
-        """An attempt with a pre-debit order and no charge submitted yet."""
-        for a in self.store.attempts_for(m.id, limit=20):
-            if a.cycle == m.cycle and a.state in (AttemptState.ORDER_CREATED,
-                                                  AttemptState.NOTIFIED):
+    @staticmethod
+    def _scheduled_attempt(m: Mandate,
+                           attempts: list[PaymentAttempt]) -> PaymentAttempt | None:
+        """An attempt with a pre-debit order and no charge submitted yet.
+
+        Not filtered by cycle: an order created before a rollover is still an
+        order the customer was notified about, and it is executed or it is not
+        -- abandoning it at a cycle boundary would leave Razorpay expecting a
+        debit that never comes.
+        """
+        for a in attempts:
+            if a.state in (AttemptState.ORDER_CREATED, AttemptState.NOTIFIED):
                 return a
         return None
 
-    def _attempts_this_cycle(self, m: Mandate) -> int:
-        return len([a for a in self.store.attempts_for(m.id, limit=20)
-                    if a.cycle == m.cycle])
+    @staticmethod
+    def _attempts_this_cycle(m: Mandate,
+                             attempts: list[PaymentAttempt]) -> int:
+        """NPCI presentations spent in this cycle.
+
+        Counts attempts that reached the provider, not rows. An INTENT that
+        never left the process and an order whose notice failed both cost the
+        customer nothing and must not consume one of the four.
+        """
+        return len([a for a in attempts
+                    if a.cycle == m.cycle and a.state in ATTEMPT_PRESENTED])
 
     # -------------------------------------------------------------- tick A
-    def _schedule(self, m: Mandate, c: Customer, now_t: int,
-                  d: Decision) -> Decision:
+    def _schedule(self, m: Mandate, c: Customer, now_t: int, d: Decision,
+                  attempts: list[PaymentAttempt]) -> Decision:
         ref = self._ref(m, c)
-        attempts_used = self._attempts_this_cycle(m)
+        attempts_used = self._attempts_this_cycle(m, attempts)
         if attempts_used >= CAP:
             d.reason = f"the NPCI attempt cap of {CAP} is spent for this cycle"
             return self._record(d)
 
         day = now_t // 24
-        cycle_close = m.cycle_start_t + m.cycle_days * 24
+        # IN DAYS. `timing.propose` compares it against a day number and
+        # multiplies it by 24 to bound the target hour; handing it an hour made
+        # every cycle close roughly thirty times too late, so no cycle ever
+        # closed and the scheduler kept spending attempts in a window that
+        # should have ended.
+        cycle_close = self._cycle_close_day(m)
 
         # ---- 1. THE DETERMINISTIC SCHEDULER. Nothing else picks a time.
         self._advance_to(c.seq, day)
@@ -663,7 +856,7 @@ class LiveService:
             amount_paise=m.charge_amount_paise, state=AttemptState.INTENT,
             receipt=RazorpayExecutor.receipt_for(f"notify:{ref.uid}", ref,
                                                  prop.target_t),
-            target_t=prop.target_t,
+            target_t=prop.target_t, notify_t=prop.notify_t,
             payment_after=self.epoch_origin + prop.target_t * 3600,
             cycle=m.cycle)
         self.store.put_attempt(attempt)
@@ -710,11 +903,14 @@ class LiveService:
         d.target_t = attempt.target_t
         d.attempt_state = attempt.state.value
 
+        # `notify_t` is READ, not recomputed. It is the hour the scheduler
+        # actually notified at, and Stage 0's `pending` rule compares it
+        # against the outstanding notice.
         action = MoneyAction(
             action_id=attempt.id, ref=ref,
             amount=attempt.amount_paise / 100.0, cycle=m.cycle,
             target_t=attempt.target_t,
-            notify_t=attempt.target_t - LEAD_HOURS, decided_at_t=now_t,
+            notify_t=attempt.notify_t, decided_at_t=now_t,
             kind=InterventionKind.RETRY)
 
         # ---- 5. EXECUTE. Stage 0 evaluates all five rules and reaches the
@@ -736,15 +932,25 @@ class LiveService:
             # `reconcile` resolves by asking the order what it holds.
             d.reason = f"the provider refused the request: {e}"
             d.gate_verdict = "ALLOWED"
-            if advance(attempt.state, AttemptState.UNKNOWN) is Transition.APPLIED:
+            # RE-READ, BECAUSE THE EXECUTOR MAY HAVE MOVED THE ROW. It writes
+            # SUBMITTING before the request leaves, so the row says whether a
+            # debit reached the rail -- which decides whether this is an
+            # ambiguous submission or a request that never went out. Raising
+            # before the send (an incomplete binding) must not burn an attempt.
+            attempt = self.store.attempt(attempt.id) or attempt
+            attempt.raw_reason = "request_refused"
+            if attempt.state is AttemptState.SUBMITTING:
                 self.store.record_transition("attempt", attempt.id,
                                              attempt.state.value,
                                              AttemptState.UNKNOWN.value,
                                              Transition.APPLIED.value, "submit",
-                                             "request refused")
+                                             "request refused after submission")
                 attempt.state = AttemptState.UNKNOWN
-            attempt.raw_reason = "request_refused"
             self.store.put_attempt(attempt)
+            # The gate's ledger did not see this attempt: `submit` raised
+            # before recording it. Rebuilding from disk is what keeps the
+            # in-process count and the one a restart would derive identical.
+            self._rehydrate_ledger()
             d.attempt_state = attempt.state.value
             return self._record(d)
 
@@ -845,11 +1051,14 @@ class LiveService:
                 out.append({"attempt": a.id, "result": "no provider request "
                                                        "was made"})
                 continue
-            entity = self._provider_payment(a)
+            entity, why = self._provider_payment(a)
             if entity is None:
-                out.append({"attempt": a.id,
-                            "result": "the provider has no payment for this "
-                                      "attempt yet"})
+                # "NO PAYMENT YET" AND "COULD NOT ASK" ARE DIFFERENT ANSWERS.
+                # Collapsing them reported a refused credential or a provider
+                # outage as evidence that the debit never happened, which is
+                # the reading that makes an operator resubmit.
+                out.append({"attempt": a.id, "result": why,
+                            "state": a.state.value})
                 continue
             view = from_payment_entity(entity)
 
@@ -893,17 +1102,38 @@ class LiveService:
             out.append({"attempt": a.id, "result": a.state.value})
         return out
 
-    def _provider_payment(self, a: PaymentAttempt) -> dict | None:
+    def _provider_payment(self, a: PaymentAttempt) -> tuple[dict | None, str]:
+        """The provider's payment for this attempt, and why not if absent.
+
+        Three outcomes, kept apart: the payment (resolve it), no payment on an
+        order the provider answered for (genuinely nothing yet), and a call
+        that did not succeed (we know nothing, and must not say we do).
+        """
         if a.payment_id:
             r = self.api.fetch_payment(a.payment_id)
-            return r.body if r.ok else None
+            if r.ok:
+                return r.body, ""
+            return None, self._unreachable("payment", r)
         if not a.order_id:
-            return None
+            return None, "no order was created, so there is nothing to ask about"
         r = self.api.fetch_order_payments(a.order_id)
         if not r.ok:
-            return None
+            return None, self._unreachable("order", r)
         item = first_item(r.body)
-        return item or None
+        if not item:
+            return None, "the provider has no payment for this attempt yet"
+        return item, ""
+
+    @staticmethod
+    def _unreachable(what: str, r) -> str:
+        if r.outcome is Outcome.LOST:
+            return (f"the provider did not answer when asked about the {what}; "
+                    f"the outcome is still unknown")
+        if r.outcome is Outcome.DENIED:
+            return (f"the provider refused the credential when asked about the "
+                    f"{what}; the outcome is still unknown")
+        return (f"the provider rejected the {what} query "
+                f"({r.error_code or r.status}); the outcome is still unknown")
 
     def apply_outcome(self, a: PaymentAttempt) -> None:
         """Fold a RESOLVED attempt into the belief.
@@ -973,9 +1203,33 @@ class LiveService:
                 a = self.store.attempt(res.attempt_id)
                 if a is not None:
                     self.apply_outcome(a)
+                    self._release_dead_notice(a)
             out.append({"changed": res.changed, "detail": res.detail,
                         "mandate": res.mandate_id, "attempt": res.attempt_id})
         return out
+
+    def _release_dead_notice(self, a: PaymentAttempt) -> None:
+        """Drop the gate's pending notice when its attempt can never run.
+
+        A failed pre-debit notice kills the attempt it belongs to, and the
+        outstanding notification in the ledger belongs to that attempt. Left
+        there it blocks every later notification for this mandate as a second
+        concurrent one -- so the mandate would be correctly refused a debit and
+        then incorrectly refused the fresh notice that could replace it.
+
+        Cleared through `clear_pending` rather than by writing the ledger, so
+        the cancellation reaches the audit trail: `auditor.py` rebuilds
+        pendency from the log and a notice dropped silently reads as one still
+        outstanding.
+        """
+        if a.state is not AttemptState.NOTIFICATION_FAILED:
+            return
+        m = self.store.mandate(a.mandate_id)
+        c = self.store.customer(m.customer_id) if m else None
+        if m is None or c is None:
+            return
+        self.gate.clear_pending(self._ref(m, c), a.cycle, self.now_t(),
+                                "pre-debit notification failed")
 
     # ------------------------------------------------------------- status
     def health(self) -> dict:

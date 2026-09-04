@@ -1,5 +1,11 @@
 """Which rail this process talks to, and whether it may move money.
 
+THREE SWITCHES. TWO PICK THE RAIL AND THE PERMISSION; THE THIRD IS WHO MAY
+ASK. `RECOVERY_OPERATOR_TOKEN` is optional for a read-only or offline service
+and MANDATORY once `RECOVERY_LIVE_DEBIT=yes`: the route that runs a decision is
+the route that debits, and an open operator API plus authorised live debits is
+a real debit available to anything that can reach the port.
+
 TWO SWITCHES, AND THEY DO DIFFERENT JOBS. `RECOVERY_MODE` picks the rail:
 `offline` is `MockRazorpayApi` and cannot reach the network, `live` is
 `RazorpayApi` and reaches api.razorpay.com. `RECOVERY_LIVE_DEBIT` decides
@@ -123,6 +129,7 @@ def load(env: dict | None = None) -> LiveConfig:
 
     key_id, key_secret = get("RAZORPAY_KEY_ID"), get("RAZORPAY_KEY_SECRET")
     webhook_secret = get("RAZORPAY_WEBHOOK_SECRET")
+    operator_token = get("RECOVERY_OPERATOR_TOKEN")
 
     # ONLY THE LITERAL WORD `yes`. Deliberately narrower than the usual truthy
     # set: `1`, `true` and `on` all arrive by accident, copied from another
@@ -156,6 +163,17 @@ def load(env: dict | None = None) -> LiveConfig:
         if not key_id.startswith(("rzp_live_", "rzp_test_")):
             raise ConfigError("RAZORPAY_KEY_ID does not look like a Razorpay "
                               "key id (expected rzp_live_ or rzp_test_).")
+        if debit_authorized and not operator_token:
+            # THE ONE CONFIGURATION THAT CAN MOVE REAL MONEY MUST KNOW WHO IS
+            # ASKING. With no token the operator API answers anybody who can
+            # reach the socket, and the route that runs a decision is the route
+            # that debits. A loopback-only service is a reasonable thing to
+            # leave open while it is READ-ONLY; it stops being one the moment
+            # live debits are authorised.
+            raise ConfigError(
+                f"{DEBIT_ENV}=yes without RECOVERY_OPERATOR_TOKEN. Live debits "
+                f"may not be authorised on an operator API that anything "
+                f"reaching the port can call. Set RECOVERY_OPERATOR_TOKEN.")
         if debit_authorized and not key_id.startswith("rzp_live_"):
             # An operator who set the debit flag believing they were on live
             # keys finds out here rather than from a test-mode transaction they
@@ -185,7 +203,7 @@ def load(env: dict | None = None) -> LiveConfig:
         max_debit_paise=max_debit,
         api_base=(get("RAZORPAY_API_BASE")
                   or "https://api.razorpay.com/v1").rstrip("/"),
-        operator_token=get("RECOVERY_OPERATOR_TOKEN"),
+        operator_token=operator_token,
         # Runtime state lives in `live/data/`, which is gitignored in full.
         # Putting a database beside the source that reads it is how a demo
         # database ends up in a public repository with a customer's email in a

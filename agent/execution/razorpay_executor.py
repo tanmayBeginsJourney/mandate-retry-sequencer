@@ -16,11 +16,17 @@ into `agent.ports` vocabulary and does nothing else with the network.
 TWO THINGS THIS EXECUTOR GETS RIGHT THAT A NAIVE ONE DOES NOT:
 
 1. AN ACCEPTED SUBMISSION IS NOT A COLLECTED PAYMENT, AND NOT A DECLINE
-   EITHER. `POST /v1/payments/create/recurring` answers
-   `{"razorpay_payment_id": "pay_..."}` -- no `status`, no `error_reason`.
-   [VERIFIED] razorpay.com create-subsequent-payments, read 3 September 2026.
-   A client that reads it as a payment entity finds no status, concludes
-   "declined", and hands `success=False` to the belief filter, which
+   EITHER. `POST /v1/payments/create/recurring` answers with identifiers and
+   NO PAYMENT STATUS. Razorpay's two current pages for it disagree on how
+   many: the UPI create-subsequent-payments page shows
+   `{"razorpay_payment_id": ...}` alone, and the partner-auth page shows
+   `razorpay_payment_id`, `razorpay_order_id` and `razorpay_signature`.
+   [VERIFIED] razorpay.com, both read 4 September 2026. What they agree on --
+   and all this code relies on -- is that neither carries `status` or
+   `error_reason`.
+
+   A client that reads the response as a payment entity finds no status,
+   concludes "declined", and hands `success=False` to the belief filter, which
    hard-zeroes every balance bin at or above the amount (`w3.py:432`) for
    every mandate that customer holds. So a successful submission returns
    `pending=True` and the answer arrives by webhook or by fetching the payment.
@@ -37,6 +43,15 @@ produces the same receipt after a crash and the provider refuses the second
 order. That is at-most-once for a COLLECTED debit, not exactly-once: a retry
 gets a rejection rather than a replayed result and the caller must reconcile.
 `live/service.py` does, and records the rejection as UNKNOWN.
+
+AND THAT PROVIDER RULE IS A BACKSTOP, NOT THE INVARIANT. It closes an order
+only once it reaches `paid`; an order left `attempted` by a DECLINED payment is
+not documented as closed, so a blind resubmission there would reach the rail
+and present a second debit under one notification. The local invariant is the
+journal write at `attempt()`: DEBIT_ATTEMPTED is durable BEFORE the request
+leaves, so a process that dies mid-request comes back holding a record that
+says a debit may already be out. Nothing here claims exactly-once provider
+execution, because Razorpay does not offer it.
 
 TWO CLOCKS, RECONCILED AT ONE LINE. Stage 0 counts simulated hours (its peak
 rule is `target_t % 24`); Razorpay wants `payment_after` as a Unix second. No
@@ -192,15 +207,21 @@ class RazorpayExecutor:
             self._api = api
         else:
             if transport is None:
-                key_id = key_id or os.environ.get("RAZORPAY_KEY_ID", "")
-                key_secret = key_secret or os.environ.get(
-                    "RAZORPAY_KEY_SECRET", "")
+                # NO os.environ HERE, AND THAT IS THE POINT. A low-level
+                # executor that can assemble a live client out of ambient
+                # environment is a second credential path: a test, a script or
+                # a stray import that forgets to pass an api would silently
+                # acquire one and reach api.razorpay.com. Credentials are
+                # loaded and validated in exactly one place -- `live/config.py`
+                # for the service, the caller's own `Transport` for a script --
+                # and arrive here as an argument.
                 if not key_id or not key_secret:
                     raise RazorpayError(
-                        "No Razorpay credentials. Set RAZORPAY_KEY_ID and "
-                        "RAZORPAY_KEY_SECRET, or pass an api/transport. Test "
-                        "keys are prefixed rzp_test_ and are functionally "
-                        "identical to live keys against separate data.")
+                        "RazorpayExecutor needs an explicit api, transport, or "
+                        "key_id/key_secret pair. It does not read credentials "
+                        "from the environment: one configured path in, and no "
+                        "way for a caller that passed nothing to end up "
+                        "talking to the live rail.")
                 transport = Transport(key_id, key_secret)
             self._api = RazorpayApi(transport, API_BASE)
 
@@ -409,15 +430,28 @@ class RazorpayExecutor:
                 t=t, code=code_for_reason(None), success=False, pending=False,
                 raw_code=f"invalid_predelivery_phase:{pred.phase.value}")
 
-        email = (b.rzp_email
-                 or os.environ.get("RAZORPAY_DEFAULT_EMAIL", "")).strip()
-        contact = (b.rzp_contact
-                   or os.environ.get("RAZORPAY_DEFAULT_CONTACT", "")).strip()
-        if not email or not contact:
+        # THE BINDING IS THE ONLY SOURCE OF WHO IS BEING CHARGED. There is no
+        # environment default for an identity: `RAZORPAY_DEFAULT_EMAIL` would
+        # put one address on a debit belonging to a customer who never gave it,
+        # and a missing binding field would stop looking like a bug.
+        email, contact = b.rzp_email.strip(), b.rzp_contact.strip()
+        missing = [n for n, v in (("email", email), ("contact", contact),
+                                  ("customer id", b.rzp_customer_id.strip()))
+                   if not v]
+        if missing:
             raise RazorpayError(
-                f"mandate {ref.uid}: email and contact are required by "
-                f"create/recurring; set them on MandateBinding or via "
-                f"RAZORPAY_DEFAULT_EMAIL / RAZORPAY_DEFAULT_CONTACT")
+                f"mandate {ref.uid}: create/recurring needs "
+                f"{', '.join(missing)} and the MandateBinding carries none. "
+                f"Live binding data is explicit or the debit does not run.")
+
+        # DURABLE BEFORE THE REQUEST LEAVES. A crash between this line and the
+        # response is the case the whole crash argument is about: the provider
+        # may hold the debit, and the only thing that stops a restart charging
+        # again is a journal that already says DEBIT_ATTEMPTED. Written after
+        # the call -- which is where it used to be -- the record is exactly
+        # missing in the one window it exists for.
+        pred.phase = PredeliveryPhase.DEBIT_ATTEMPTED
+        self.journal.save(pred)
 
         r = self._api.create_recurring_payment(
             email=email, contact=contact, amount_paise=pred.amount_paise,
@@ -426,8 +460,6 @@ class RazorpayExecutor:
             description=f"mandate {ref.uid}",
             notes={"mandate_uid": ref.uid, "action_id": action_id})
 
-        pred.phase = PredeliveryPhase.DEBIT_ATTEMPTED
-        self.journal.save(pred)
         self.predelivery_log.append(envelope_record(
             phase=DEBIT_ATTEMPTED, http_method="POST",
             url=self._api.url("recurring"),
@@ -479,19 +511,31 @@ class RazorpayExecutor:
         that every one of that customer's mandates faced an empty account, and
         burn all four legal NPCI attempts doing it.
 
-        [REPORTED] from Razorpay's error documentation: a payment-level failure
-        carries `reason`, `source`, `step` and `metadata.payment_id`; an
-        API-level rejection carries `code` and `description` alone. The 401
-        half is [VERIFIED] -- an unauthenticated POST to the real
-        recurring-charge endpoint returns exactly `code` and `description`,
-        transcript in `logs/razorpay_ladder.json`. THE 4XX HALF IS INFERENCE
-        and is the branch to re-check the day a live key exists.
+        THE TEST IS `metadata.payment_id`, AND ONLY THAT. Razorpay's error
+        reference gives the error object `code`, `description`, `field`,
+        `source`, `step`, `reason` and `metadata`, and says the fields carry
+        the point and stage of failure -- but it publishes no rule saying which
+        4xx responses are payment-level. [VERIFIED] razorpay.com error
+        reference, read 4 September 2026. So one field is used, the only one
+        that is the provider ASSERTING a payment exists rather than us reading
+        a shape.
+
+        WHAT THIS DELIBERATELY GIVES UP. A genuine payment decline whose 4xx
+        omits `metadata.payment_id` is read as a request refusal, so the caller
+        records UNKNOWN and reconciles instead of learning a decline. That
+        direction is free -- reconciliation asks the order what it holds -- and
+        the other direction costs a customer's belief and four NPCI attempts.
+        The `reason`-alone case used to pass here; it is inference, and this is
+        the branch to settle against a live key rather than to guess at.
+
+        The 401 half is [VERIFIED]: an unauthenticated POST to the real
+        recurring-charge endpoint returns `code` and `description` alone,
+        transcript in `logs/razorpay_ladder.json`.
         """
         err = payload.get("error") or {}
         if not err:
             return False
-        return bool(err.get("reason")
-                    or (err.get("metadata") or {}).get("payment_id"))
+        return bool((err.get("metadata") or {}).get("payment_id"))
 
     def _outcome_from_response(self, payload: dict, t: int,
                                payment_id: str) -> AttemptOutcome:

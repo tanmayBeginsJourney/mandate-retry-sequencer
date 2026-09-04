@@ -83,13 +83,38 @@ DENIED_STATUSES = (401, 403)
 #: 2026. A provider floor; any ceiling is ours and lives in configuration.
 MIN_AMOUNT_PAISE = 100
 
-#: `max_amount` on a mandate token accepts 500 to 100000000 paise, default
-#: 9999900. [VERIFIED] razorpay.com recurring-payments authorisation reference.
-MAX_AMOUNT_RANGE_PAISE = (500, 100_000_000)
+#: `max_amount` on a UPI AutoPay mandate token, in paise. UPI's ceiling is a
+#: PROPERTY OF THE MERCHANT CATEGORY, not one number: 9999900 (Rs 99,999) for
+#: an ordinary MCC, 20000000 (Rs 2,00,000) for MCCs 6211, 6300, 7322, 6529 and
+#: 5960. The floor is 100 (Rs 1) in every category. [VERIFIED] razorpay.com
+#: UPI AutoPay create-authorisation-transaction, read 4 September 2026.
+#:
+#: THE WIDER RANGE THIS USED TO CARRY -- 500 to 100000000 -- IS EMANDATE'S, and
+#: a UPI mandate asking for it is rejected at the provider. Encoding the
+#: ordinary-MCC ceiling means an account entitled to the higher one is refused
+#: locally rather than silently allowed past a limit this code cannot verify;
+#: `MAX_AMOUNT_RANGE_HIGH_MCC_PAISE` is what such an account would pass.
+MAX_AMOUNT_RANGE_PAISE = (100, 9_999_900)
+MAX_AMOUNT_RANGE_HIGH_MCC_PAISE = (100, 20_000_000)
 
-#: Values Razorpay accepts for `token.frequency` on a mandate.
-VALID_FREQUENCIES = frozenset({"daily", "weekly", "monthly", "quarterly",
-                               "yearly", "as_presented"})
+#: Values Razorpay accepts for `token.frequency` on a UPI AutoPay mandate.
+#: [VERIFIED] razorpay.com UPI AutoPay create-authorisation-transaction, read
+#: 4 September 2026 -- including `daily`, which the same page lists.
+VALID_FREQUENCIES = frozenset({"daily", "weekly", "fortnightly", "bimonthly",
+                               "monthly", "quarterly", "half_yearly", "yearly",
+                               "as_presented"})
+
+#: Merchant-controlled charge-at-will, which is what this integration does: the
+#: amount and the day are chosen per cycle by the scheduler, not fixed by a
+#: subscription plan. `monthly` would tell the customer's bank to expect one
+#: debit on a fixed schedule this system does not keep.
+#:
+#: RAZORPAY DOCUMENTS THE VALUE AND NOT ITS SEMANTICS. The UPI frequency list
+#: contains `as_presented`; no current page defines what the PSP does with it,
+#: and whether an account may use it is an account-level entitlement. See
+#: `docs/architecture.md` -- this is the one registration field that needs
+#: confirming with Razorpay Support before a live mandate is created.
+DEFAULT_FREQUENCY = "as_presented"
 
 
 class Outcome(str, Enum):
@@ -235,18 +260,24 @@ class RazorpayApi:
 
         The order amount is the AUTHORISATION amount, which for UPI is Rs 1 --
         not the recurring one.
+
+        NO `payment_capture`. Razorpay's create-order reference and its UPI
+        AutoPay authorisation page both document this request without it, so it
+        is not sent: an undocumented field is not a guarantee, and the
+        subsequent-payment order -- where the same page DOES document it -- is
+        the request that actually needs the capture behaviour.
         """
         if frequency not in VALID_FREQUENCIES:
             raise ValueError(f"frequency {frequency!r} is not one Razorpay "
                              f"accepts: {sorted(VALID_FREQUENCIES)}")
         lo, hi = MAX_AMOUNT_RANGE_PAISE
         if not lo <= max_amount_paise <= hi:
-            raise ValueError(f"max_amount {max_amount_paise} paise is outside "
-                             f"Razorpay's documented range {lo}-{hi}")
+            raise ValueError(
+                f"max_amount {max_amount_paise} paise is outside UPI AutoPay's "
+                f"documented range {lo}-{hi} for an ordinary merchant category")
         body: dict = {
             "amount": auth_amount_paise,
             "currency": "INR",
-            "payment_capture": True,
             "method": "upi",
             "customer_id": customer_id,
             "receipt": receipt[:40],
@@ -273,6 +304,11 @@ class RazorpayApi:
 
         A 2xx here means the instruction was accepted, NOT that the customer
         was told. Only `order.notification.delivered` is evidence of delivery.
+
+        `payment_capture` IS documented on THIS request -- it appears in the
+        create-subsequent-payments order body, [VERIFIED] razorpay.com UPI
+        create-subsequent-payments, read 4 September 2026 -- which is why it is
+        sent here and not on the authorisation order.
         """
         if not token_id:
             raise ValueError("create_notification_order needs a token id")
@@ -422,7 +458,13 @@ def parse_token_status(token: dict) -> str:
 
 
 def parse_order_id(body: dict) -> str:
-    return str(body.get("id") or "")
+    """Order id from an order entity or from a create/recurring response.
+
+    Both spellings, for the reason `parse_payment_id` reads both: the
+    create/recurring response names the order `razorpay_order_id`, and the
+    caller cross-checks it against the order it meant to charge.
+    """
+    return str(body.get("id") or body.get("razorpay_order_id") or "")
 
 
 def first_item(body: dict) -> dict:

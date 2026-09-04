@@ -24,6 +24,13 @@ FOUR PROPERTIES RAZORPAY DOCUMENTS, AND WHAT EACH COSTS IF IGNORED.
      durable thing -- verify, insert, return -- and interpretation happens
      after the response. No LLM call, no provider call and no belief update
      runs inside the request. `api.py` holds that split.
+
+THREE STAGES, KEPT SEPARATE: accepted (the signature checked out), persisted
+(the row is on disk under its event id), processed (the state machine has read
+it). A delivery that fails verification is never accepted and never reaches the
+event id. One that is persisted but throws while being interpreted stays
+unprocessed and is replayed; nothing is discarded because interpreting it went
+wrong once.
 """
 from __future__ import annotations
 
@@ -101,17 +108,21 @@ def ingest(store: Store, *, raw_body: bytes, signature: str, event_id: str,
     Everything that must happen before the 2xx, and deliberately small: a
     signature check, a JSON parse for the event name, one insert.
 
-    A BAD SIGNATURE IS STILL RECORDED, with `signature_valid=0`, and the caller
-    answers 400. Dropping it would leave no trace of a forgery attempt, which
-    is the one delivery where the log matters most. The payload is kept either
-    way because a signature dispute cannot be settled without the bytes.
+    VERIFY FIRST, THEN CLAIM THE EVENT ID. The order is the whole point. The id
+    is the deduplication key, so recording an unverified delivery under it
+    lets anyone who can reach this endpoint burn the id of an event Razorpay
+    has not delivered yet -- and the genuine delivery, arriving later with a
+    valid signature, is then dismissed as a duplicate and never processed. A
+    forged request would silently drop a real payment outcome.
+
+    A REJECTED DELIVERY IS STILL LOGGED, in `rejected_deliveries`, with the id
+    it claimed and the bytes it sent. Forensic visibility costs nothing here;
+    surrendering the dedup key costs a payment.
     """
     now = int(time.time()) if now is None else now
 
     if len(raw_body) > MAX_BODY_BYTES:
         raise WebhookRejected(413, "webhook body too large")
-
-    valid = verify(raw_body, signature, secret)
 
     try:
         body = json.loads(raw_body.decode("utf-8"))
@@ -121,19 +132,23 @@ def ingest(store: Store, *, raw_body: bytes, signature: str, event_id: str,
         body = {}
 
     event_type = str(body.get("event") or "")
+    claimed = (event_id or "").strip()
+
+    if not verify(raw_body, signature, secret):
+        store.record_rejected(
+            claimed_id=claimed, event_type=event_type,
+            reason="signature verification failed",
+            payload=raw_body.decode("utf-8", "replace"), now=now)
+        raise WebhookRejected(400, "signature verification failed")
 
     # An absent event id would collapse every delivery onto one dedup key, so
     # the body's own hash stands in: two identical payloads dedupe and two
     # different ones do not, which is the best available answer.
-    key = (event_id or "").strip() or (
-        "sha256:" + hashlib.sha256(raw_body).hexdigest())
+    key = claimed or ("sha256:" + hashlib.sha256(raw_body).hexdigest())
 
     fresh = store.record_event(WebhookEvent(
         event_id=key, event_type=event_type, received_at=now,
-        signature_valid=valid, payload=raw_body.decode("utf-8", "replace")))
-
-    if not valid:
-        raise WebhookRejected(400, "signature verification failed")
+        payload=raw_body.decode("utf-8", "replace")))
 
     if not fresh:
         # Acknowledged and deliberately NOT reprocessed: the first delivery
@@ -301,28 +316,34 @@ def _apply_notification(store: Store, event: WebhookEvent, body: dict,
         return Applied(False, f"no local attempt for order {order_id or '?'}")
 
     delivered = event.event_type.endswith(".delivered")
-    if not delivered:
-        # A failed notice does not fail the payment -- nothing was charged.
-        # It blocks the debit, which the executor checks before submitting, so
-        # the state is left where it is and the fact is recorded.
-        store.record_transition("attempt", attempt.id, attempt.state.value,
-                                attempt.state.value,
-                                Transition.APPLIED.value, source,
-                                "notification failed")
-        return Applied(True, "pre-debit notification FAILED; debit blocked",
-                       attempt.mandate_id, attempt.id)
+    target = (AttemptState.NOTIFIED if delivered
+              else AttemptState.NOTIFICATION_FAILED)
+    detail = f"notification {'delivered' if delivered else 'failed'}"
 
-    verdict = advance(attempt.state, AttemptState.NOTIFIED)
+    # A FAILED NOTICE IS A DURABLE STATE, NOT A LOG LINE. It used to record a
+    # transition from the attempt's state to itself and leave the row alone, so
+    # the executor's precondition still read ORDER_CREATED and submitted the
+    # debit -- while this function returned the words "debit blocked". The
+    # block has to be a state the executor can see, and NOTIFICATION_FAILED is
+    # terminal, so nothing can charge under this order afterwards.
+    verdict = advance(attempt.state, target)
     store.record_transition("attempt", attempt.id, attempt.state.value,
-                            AttemptState.NOTIFIED.value, verdict.value,
-                            source, "notification delivered")
+                            target.value, verdict.value, source, detail)
+    if verdict is Transition.CONFLICT:
+        attempt.conflicted = True
+        store.put_attempt(attempt)
+        return Applied(True, f"CONFLICT: {detail} for an attempt already "
+                             f"{attempt.state.value}; flagged for review",
+                       attempt.mandate_id, attempt.id)
     if verdict is not Transition.APPLIED:
-        return Applied(False, f"notification arrived after "
+        return Applied(False, f"{detail} does not follow "
                               f"{attempt.state.value}; ignored as stale",
                        attempt.mandate_id, attempt.id)
-    attempt.state = AttemptState.NOTIFIED
+    attempt.state = target
     store.put_attempt(attempt)
-    return Applied(True, "pre-debit notification delivered",
+    return Applied(True, ("pre-debit notification delivered" if delivered else
+                          "pre-debit notification FAILED; this attempt can no "
+                          "longer be charged"),
                    attempt.mandate_id, attempt.id)
 
 
@@ -338,11 +359,17 @@ def process_pending(store: Store, limit: int = 100) -> list[Applied]:
         try:
             res = apply_event(store, ev)
         except Exception as e:                       # noqa: BLE001
-            # One malformed event must not stop the queue. The type name is
-            # recorded; the message is NOT, because a provider payload can
-            # appear in it and payloads carry an email and a contact.
-            store.mark_event_processed(ev.event_id,
-                                       f"error: {type(e).__name__}")
+            # ACCEPTED AND PERSISTED, BUT NOT PROCESSED. The event stays on the
+            # queue and is retried at the next ingest or restart: marking it
+            # processed here would throw away a payment outcome because of a
+            # transient fault on our side, and Razorpay will not send it again.
+            # One failing event does not stop the queue -- the loop moves on --
+            # and `events_unprocessed` is what shows an operator it is stuck.
+            #
+            # The type name is recorded; the message is NOT, because a provider
+            # payload can appear in it and payloads carry an email and a
+            # contact.
+            store.mark_event_failed(ev.event_id, f"error: {type(e).__name__}")
             out.append(Applied(False, f"error: {type(e).__name__}"))
             continue
         store.mark_event_processed(ev.event_id, res.detail, res.mandate_id,

@@ -222,9 +222,13 @@ def main() -> int:
         status, body, _ = call(f"{base}/api/mandates/{m.id}")
         r.ok("A7e  a served route redacts by default", status == 200
              and m.rzp_token_id not in str(body))
+        # REVEALING REQUIRES REAL AUTHENTICATION, not merely reaching the
+        # route. This server has no operator token configured, so it cannot
+        # tell who is asking and does not hand out a customer's provider ids.
         status, body, _ = call(f"{base}/api/mandates/{m.id}?reveal=1")
-        r.ok("A7f  and reveals on request", status == 200
-             and m.rzp_token_id in str(body))
+        r.ok("A7f  reveal=1 alone does not unredact when no token is "
+             "configured",
+             status == 200 and m.rzp_token_id not in str(body))
 
         # -------------------------------------------------------------- A8
         r.section("A8  loading the console cannot move money")

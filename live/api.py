@@ -28,6 +28,7 @@ number and are stored only so a signature dispute can be settled.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import re
@@ -82,12 +83,35 @@ class Api:
         self.config: LiveConfig = service.config
 
     # ------------------------------------------------------------ security
+    #
+    # THE BROWSER THREAT MODEL, STATED. The operator API listens on localhost.
+    # A page on any origin the operator happens to have open can send it a
+    # cross-site request, and the browser attaches no token but does send the
+    # request. Two things stop that, and they cover different cases:
+    #
+    #   * A CONFIGURED OPERATOR TOKEN. It travels in `X-Operator-Token` or
+    #     `Authorization`, and a custom header makes a cross-site `fetch`
+    #     preflight. No CORS headers are ever sent, so the preflight fails and
+    #     the request is never made. `config.load` requires a token whenever
+    #     live debits are authorised, so the one configuration that can move
+    #     real money always has this.
+    #   * THE ORIGIN CHECK BELOW. Not every cross-site request preflights: a
+    #     form post, or `fetch` with a `text/plain` body, is a "simple request"
+    #     and is delivered. Those carry an `Origin` the browser sets and the
+    #     page cannot forge, so a mutating route refuses when it names anything
+    #     but this server. Non-browser callers -- curl, a script, Razorpay --
+    #     send no Origin and are unaffected.
+    #
+    # CORS is not the defence. Disabling CORS stops a page READING the reply;
+    # it does not stop the request arriving, and the request is what debits.
+
     def authenticated(self, headers) -> bool:
         """True when the caller may use the operator API.
 
-        With no `RECOVERY_OPERATOR_TOKEN` the API is open, which is right for
-        loopback and wrong for anything reachable -- so `server.py` refuses to
-        bind a non-loopback address without one.
+        With no `RECOVERY_OPERATOR_TOKEN` the API is open. That is confined to
+        a read-only, offline or loopback service: `config.load` refuses to
+        authorise live debits without a token, and `server.py` refuses to bind
+        a non-loopback address without one.
         """
         if not self.config.operator_token:
             return True
@@ -96,8 +120,32 @@ class Api:
                         "Bearer ").strip())
         if not supplied:
             return False
-        import hmac
         return hmac.compare_digest(supplied, self.config.operator_token)
+
+    @staticmethod
+    def same_origin(headers) -> bool:
+        """Is this mutating request from our own page, or from another site?
+
+        An absent `Origin` is allowed: browsers set it on every cross-origin
+        request, so absence means the caller is not a browser. A present one
+        must match `Host`.
+        """
+        origin = (headers.get("Origin") or "").strip()
+        if not origin:
+            return True
+        host = (headers.get("Host") or "").strip()
+        return origin.rsplit("//", 1)[-1] == host and bool(host)
+
+    def may_reveal(self, headers) -> bool:
+        """Full provider identifiers require real authentication.
+
+        Not merely "the request got this far". With no token configured
+        `authenticated` is True for everybody, and that used to be enough to
+        unredact a live customer's payment and token ids. A service that has
+        not been given an operator token cannot tell who is asking, so it does
+        not hand out identifiers.
+        """
+        return bool(self.config.operator_token) and self.authenticated(headers)
 
     # -------------------------------------------------------------- routes
     def get(self, path: str, query: dict, headers) -> tuple[int, dict]:
@@ -114,7 +162,7 @@ class Api:
 
         if not self.authenticated(headers):
             return 401, {"error": "operator token required"}
-        reveal = query.get("reveal") == "1"
+        reveal = query.get("reveal") == "1" and self.may_reveal(headers)
 
         # TWO READ ROUTES, NOT SIX. `/api/state` is everything the console
         # renders in one request and `/api/mandates/{id}` is the detail behind
@@ -137,6 +185,8 @@ class Api:
     def post(self, path: str, body: dict, headers) -> tuple[int, dict]:
         if not self.authenticated(headers):
             return 401, {"error": "operator token required"}
+        if not self.same_origin(headers):
+            return 403, {"error": "cross-site request refused"}
         try:
             if path == "/api/customers":
                 c = self.svc.create_customer(
@@ -146,14 +196,19 @@ class Api:
                 return 201, {"customer": self._customer(c)}
 
             if path == "/api/mandates":
+                # `frequency` is passed through ONLY when the caller sent one.
+                # Its default is the service's, so there is one place that
+                # decides what an unspecified mandate registers as -- and this
+                # module cannot import the provider layer to name it (gate L1).
+                extra = ({"frequency": str(body["frequency"]).strip()}
+                         if str(body.get("frequency") or "").strip() else {})
                 m = self.svc.start_registration(
                     customer_id=str(body.get("customer_id") or ""),
                     charge_amount_paise=int(body.get("charge_amount_paise") or 0),
                     max_amount_paise=int(body.get("max_amount_paise") or 0),
-                    frequency=str(body.get("frequency") or "monthly"),
                     est_salary=float(body.get("est_salary") or 0),
                     est_payday=int(body.get("est_payday") or 1),
-                    cycle_days=int(body.get("cycle_days") or 30))
+                    cycle_days=int(body.get("cycle_days") or 30), **extra)
                 return 201, {"mandate": self._mandate(m)}
 
             if path.startswith("/api/mandates/"):
@@ -295,8 +350,8 @@ class Api:
         """
         return [{"event_id": e.event_id, "event_type": e.event_type,
                  "received_at": e.received_at, "processed_at": e.processed_at,
-                 "signature_valid": e.signature_valid, "result": e.result,
-                 "mandate_id": e.mandate_id, "attempt_id": e.attempt_id}
+                 "result": e.result, "mandate_id": e.mandate_id,
+                 "attempt_id": e.attempt_id}
                 for e in self.svc.store.recent_events(limit)]
 
 
@@ -385,7 +440,23 @@ def make_handler(api: Api):
             return self.rfile.read(length) if length else b""
 
         # ---- verbs
+        #
+        # A ROUTE THAT RAISES MUST STILL ANSWER. An unhandled exception here
+        # leaves `BaseHTTPRequestHandler` to close the socket, and the caller
+        # sees a dropped connection -- which reads as the service being down,
+        # not as one broken request. The wrapper answers 500 with the exception
+        # TYPE and nothing else: the message can carry a provider payload, and
+        # payloads carry a customer's email and contact.
+        def _guarded(self, fn):
+            try:
+                fn()
+            except Exception as e:                  # noqa: BLE001
+                self._json(500, {"error": f"internal error: {type(e).__name__}"})
+
         def do_GET(self):
+            self._guarded(self._get)
+
+        def _get(self):
             path, query = self._split()
             if path == "/" or path == "/index.html":
                 self._static("index.html")
@@ -397,6 +468,9 @@ def make_handler(api: Api):
             self._json(status, payload)
 
         def do_POST(self):
+            self._guarded(self._post)
+
+        def _post(self):
             path, _ = self._split()
 
             if path == "/webhooks/razorpay":

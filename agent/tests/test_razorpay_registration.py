@@ -53,13 +53,19 @@ def main() -> int:
     ok("auth order amount Rs 1", order["amount"] == AUTH_AMOUNT_PAISE)
     ok("method upi", order["method"] == "upi")
     ok("token max_amount", order["token"]["max_amount"] == 4990000)
-    ok("payment_capture", order["payment_capture"] is True)
+    # NO payment_capture. Razorpay's create-order reference and its UPI AutoPay
+    # authorisation page both document this request without it. It IS
+    # documented on the subsequent-payment order, which is where it is sent --
+    # `test_razorpay_predelivery.py` checks that half.
+    ok("no payment_capture on the authorisation order",
+       "payment_capture" not in order)
     ok("it is the /orders endpoint", api.last_request["url"].endswith("/orders"))
 
-    # Razorpay documents max_amount as 500..100000000 paise. The builder this
-    # replaced only required >= 100, so a value the provider rejects reached
-    # the network to find that out.
-    for bad in (100, 100_000_001):
+    # UPI AutoPay's own range: 100 (Rs 1) to 9999900 (Rs 99,999) for an
+    # ordinary merchant category. The wider 500..100000000 this used to check
+    # is eMandate's, and a UPI mandate asking for it is rejected at the
+    # provider.
+    for bad in (99, 9_999_901):
         try:
             api.create_authorization_order(
                 customer_id="c", max_amount_paise=bad, expire_at=2000000000,
@@ -67,6 +73,12 @@ def main() -> int:
             ok(f"max_amount {bad} refused before the network", False)
         except ValueError:
             ok(f"max_amount {bad} refused before the network", True)
+    for good in (100, 9_999_900):
+        api.create_authorization_order(
+            customer_id="c", max_amount_paise=good, expire_at=2000000000,
+            frequency="monthly", receipt="r")
+        ok(f"max_amount {good} is inside the UPI range",
+           api.last_request["body"]["token"]["max_amount"] == good)
     try:
         api.create_authorization_order(
             customer_id="c", max_amount_paise=4990000, expire_at=2000000000,

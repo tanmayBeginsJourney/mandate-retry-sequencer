@@ -110,7 +110,7 @@ def main() -> int:
     r.section("F2  registration reaches ACTIVE only on a confirmed token")
     b = Bench()
     try:
-        c = b.svc.create_customer(name="A", email="a@example.com",
+        c = b.svc.create_customer(name="Alpha Customer", email="a@example.com",
                                   contact="+919000000001")
         m = b.svc.start_registration(customer_id=c.id, charge_amount_paise=100,
                                      max_amount_paise=150000)
@@ -129,7 +129,7 @@ def main() -> int:
 
     b = Bench(plan=MockPlan(token_status="rejected"))
     try:
-        c = b.svc.create_customer(name="B", email="b@example.com",
+        c = b.svc.create_customer(name="Bravo Customer", email="b@example.com",
                                   contact="+919000000002")
         m = b.svc.start_registration(customer_id=c.id, charge_amount_paise=100,
                                      max_amount_paise=150000)
@@ -145,13 +145,26 @@ def main() -> int:
 
     # ------------------------------------------------------------------ F3
     r.section("F3  the happy path walks the full state machine")
-    b = Bench(plan=MockPlan(debits=["captured"]), seed=11)
+    b = Bench(plan=MockPlan(debits=["captured"] * 8), seed=11)
     try:
         c, m = b.registered()
         b.run_until_resolved(m.id)
-        attempts = b.svc.store.attempts_for(m.id)
-        r.ok("F3a  exactly one attempt was made", len(attempts) == 1,
-             f"{len(attempts)} attempts")
+        collected_at = len(b.svc.store.attempts_for(m.id))
+        # KEEP TICKING PAST THE COLLECTION, to the end of the billing cycle.
+        # `run_until_resolved` returns the moment an attempt resolves, and a
+        # driver that stops there cannot see a second charge in the same cycle
+        # -- which is where a repeat collection lives. The debit plan captures
+        # every time, so any further submission is another real collection.
+        base = b.svc.epoch_origin
+        close_h = (m.cycle_start_t // 24 + m.cycle_days) * 24
+        for hour in range(0, close_h, 2):
+            b.svc.decide(m.id, now=base + hour * 3600)
+            b.deliver()
+        attempts = [a for a in b.svc.store.attempts_for(m.id)
+                    if a.cycle == 0]
+        r.ok("F3a  exactly one attempt in the cycle, ticking to its close",
+             len(attempts) == 1,
+             f"{len(attempts)} attempts, {collected_at} at first resolution")
         if attempts:
             a = attempts[0]
             states = [t["to_state"] for t
@@ -159,13 +172,18 @@ def main() -> int:
                       if t["verdict"] == "APPLIED"]
             r.ok("F3b  it reached SUCCEEDED",
                  a.state is AttemptState.SUCCEEDED, a.state.value)
-            r.ok("F3c  through INTENT, ORDER_CREATED, NOTIFIED, SUBMITTED",
-                 states[:4] == ["INTENT", "ORDER_CREATED", "NOTIFIED",
-                                "SUBMITTED"], str(states))
+            # SUBMITTING sits between the notice and the acknowledgement: it is
+            # written before the request leaves, so a crash in the request is
+            # recoverable. See live/domain.py.
+            r.ok("F3c  through INTENT, ORDER_CREATED, NOTIFIED, SUBMITTING, "
+                 "SUBMITTED",
+                 states[:5] == ["INTENT", "ORDER_CREATED", "NOTIFIED",
+                                "SUBMITTING", "SUBMITTED"], str(states))
             r.ok("F3d  the pre-debit order was created before the charge",
                  bool(a.order_id) and bool(a.payment_id))
             r.ok("F3e  the collected amount is counted once",
-                 b.svc.store.summary()["recovered_paise"] == a.amount_paise)
+                 b.svc.store.summary()["recovered_paise"] == a.amount_paise,
+                 f"{b.svc.store.summary()['recovered_paise']} paise")
     finally:
         b.close()
 
@@ -429,11 +447,7 @@ def main() -> int:
     # away with it. Asserting "it trips at least once in five" is the stable
     # formulation. Asserting it trips every time would be a gate that goes red
     # for reasons unrelated to the code, which teaches people to re-run.
-    unlocked = {"errors": []}
-    for _ in range(5):
-        unlocked = _hammer("_decide")
-        if unlocked["errors"]:
-            break
+    unlocked = _hammer("_decide")
     r.ok("F7c1 the locked path raises nothing",
          locked["errors"] == [], str(locked["errors"][:3]))
     r.ok("F7c2 it leaves exactly one attempt",
@@ -442,10 +456,18 @@ def main() -> int:
          locked["debits"] == 1, f"{locked['debits']} debit payments")
     r.ok("F7c4 the attempt is not falsely marked failed",
          locked["raw"] != "request_refused", locked["raw"] or "(none)")
-    r.ok("F7c5 MUTANT: without the lock the same load raises, within 5 tries",
-         unlocked["errors"] != [],
-         f"{len(unlocked['errors'])} errors: "
-         f"{sorted(set(unlocked['errors']))[:3]}")
+    # The lock is no longer the only thing holding this invariant up, and the
+    # gate says so rather than implying otherwise. The executor writes
+    # SUBMITTING before the request leaves and the store refuses a backwards
+    # transition, so twelve unsynchronised ticks converge on one debit too.
+    # THE MUTANT FOR THE RULE THAT DOES CARRY IT -- journalling after the
+    # request instead of before -- is B2g/B2h in test_regressions.py, where it
+    # produces a second debit. Asserting an exception here would be a gate
+    # nothing can trip.
+    r.ok("F7c5 the unsynchronised path also lands on one debit",
+         unlocked["attempts"] == 1 and unlocked["debits"] == 1,
+         f"{unlocked['attempts']} attempts, {unlocked['debits']} debits, "
+         f"errors={sorted(set(unlocked['errors']))[:3]}")
 
     # ------------------------------------------------------------------ F8
     r.section("F8  a cancelled mandate stops being chargeable immediately")

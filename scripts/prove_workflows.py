@@ -80,7 +80,19 @@ def main() -> int:
     os.environ["RECOVERY_OUTBOX"] = outbox
     os.environ["RECOVERY_QUEUE"] = queue
 
-    ex = RazorpayExecutor(bindings={}, max_live_nudges=3)
+    # THE CREDENTIAL IS READ HERE AND PASSED IN. This script creates a real
+    # Payment Link, so it needs a real key -- but the executor no longer takes
+    # one from the environment on its own, and the difference matters: a caller
+    # that MEANT to run offline used to get a live client instead of an error.
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+    key_secret = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+    if not key_id or not key_secret:
+        print("REFUSED: this script creates a Payment Link at Razorpay and "
+              "needs RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET (rzp_test_ keys) "
+              "in .env.", file=sys.stderr)
+        return 2
+    ex = RazorpayExecutor(bindings={}, max_live_nudges=3,
+                          key_id=key_id, key_secret=key_secret)
     ex.outbox_path = outbox
     ex.queue_path = queue
     log_path = os.path.join(tmp, "wf.jsonl")
