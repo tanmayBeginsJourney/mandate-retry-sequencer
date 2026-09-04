@@ -38,6 +38,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,25 +70,26 @@ class TripwireTransport:
     def __init__(self) -> None:
         self.calls = 0
 
-    def post(self, url, body, idempotency_key):
+    def request(self, method, url, body=None):
         self.calls += 1
         raise AssertionError(
-            f"NETWORK REACHED. Stage 0 let an action through to {url}. "
-            f"That is the failure this script exists to detect.")
-
-    def get(self, url):
-        self.calls += 1
-        raise AssertionError(f"NETWORK REACHED on GET {url}")
+            f"NETWORK REACHED. Stage 0 let an action through to {method} "
+            f"{url}. That is the failure this script exists to detect.")
 
 
 class CountingTransport(TripwireTransport):
     """For the legal case only: records the call and returns a captured
     payment instead of raising, so step 1 can show the executor IS reached."""
 
-    def post(self, url, body, idempotency_key):
+    def request(self, method, url, body=None):
         self.calls += 1
-        self.last = dict(url=url, body=body, idempotency_key=idempotency_key)
+        self.last = dict(method=method, url=url, body=body)
+        self.sent.append(self.last)
         return 200, {"id": "pay_TESTONLY", "status": "captured"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sent: list[dict] = []
 
 
 def hdr(s: str) -> None:
@@ -106,20 +108,24 @@ def build(transport, log_path: str):
     # come from `charge_amount` on the binding; email and contact are required
     # by `POST /v1/payments/create/recurring`.
     #
-    # WITHOUT THEM THIS SCRIPT PROVED NOTHING AND SAID IT PASSED. `notify()`
-    # returned `ORDER_CREATE_FAILED` ("invalid amount: 0 paise"), the gate
-    # swallowed it into a log line, `execute()` never reached the transport,
-    # and step 1 printed ALLOWED with `network calls 0` before crashing on the
-    # missing record. That is the shape this repository calls a vacuous gate.
-    # Found and fixed 1 September 2026; the predelivery path shipped in commit
-    # 91b1fc1 and this script was not updated with it.
+    # WITHOUT THEM THIS SCRIPT PROVES NOTHING AND SAYS IT PASSED. `notify()`
+    # returns `ORDER_CREATE_FAILED` ("invalid amount: 0 paise"), the gate
+    # swallows it into a log line, `execute()` never reaches the transport, and
+    # step 1 prints ALLOWED with `network calls 0`. That is a vacuous gate, so
+    # the assertion below counts the calls rather than trusting the verdict.
     ex = RazorpayExecutor(
         bindings={REF.uid: MandateBinding(rzp_customer_id="cust_demo:45",
                                           rzp_token_id="token_demo",
                                           rzp_email="demo@example.com",
                                           rzp_contact="+919999999999",
                                           charge_amount=AMOUNT)},
-        transport=transport)
+        transport=transport,
+        # THE CLOCK. Stage 0 counts simulated hours; Razorpay wants a future
+        # Unix second on `notification.payment_after`. `epoch_origin` is the
+        # wall-clock second simulated hour 0 maps to, and the executor is the
+        # only place the two meet. Anchoring it at "now" puts every target in
+        # this script comfortably in the future.
+        epoch_origin=int(time.time()))
     ledger = AttemptLedger()
     log = AuditLog(log_path, RUN)
     return ex, ledger, log, Stage0Gate(ex, ledger, log)
@@ -155,45 +161,32 @@ def main() -> int:
     print(f"    gate verdict        {type(d).__name__.upper()}")
     print(f"    network calls       {t1.calls}")
     assert isinstance(d, Allowed), "a legal action must reach the executor"
-    if t1.calls:
-        print(f"    idempotency key     {t1.last['idempotency_key']}")
-        print(f"    request body        amount={t1.last['body']['amount']} paise, "
-              f"recurring={t1.last['body']['recurring']!r}")
+    order_call = next((c for c in t1.sent if c["url"].endswith("/orders")), None)
+    charge = next((c for c in t1.sent
+                   if c["url"].endswith("create/recurring")), None)
+    if order_call:
+        # The receipt is the provider-side idempotency anchor: Razorpay
+        # rejects a second order carrying one it has already seen.
+        print(f"    order receipt       {order_call['body']['receipt']}")
+        print(f"    payment_after       "
+              f"{order_call['body']['notification']['payment_after']}  "
+              f"(epoch seconds, converted from simulated hour "
+              f"{a.target_t})")
+    if charge:
+        print(f"    charge body         amount={charge['body']['amount']} "
+              f"paise, recurring={charge['body']['recurring']!r}")
     print(f"    outcome             {d.outcome.code}  "
           f"success={d.outcome.success}  pending={d.outcome.pending}  "
           f"raw={d.outcome.raw_code!r}")
     pred = ex.predelivery_state(REF, a.target_t)
     print(f"    predelivery order   {pred.order_id if pred else 'NOT CREATED'}")
 
-    # WHY THERE IS NO NETWORK CALL HERE, SAID OUT LOUD RATHER THAN ASSERTED
-    # AWAY. Stage 0 allows the action and hands it to the real executor. The
-    # executor then refuses to fabricate a debit without a predelivery order,
-    # and the order cannot be created from this script's clock:
-    # `RazorpayExecutor.notify` sets `payment_after = int(target_t)` and
-    # requires it to be a FUTURE UNIX EPOCH SECOND, while Stage 0's rules read
-    # the same field as SIMULATED HOURS (`check_peak` is `target_t % 24`).
-    # One field, two unit systems, and they meet exactly here.
-    #
-    # That is a real limitation and it is recorded as one: the live
-    # `RazorpayExecutor` has never been driven end-to-end by Stage 0 with a
-    # genuine order, because no single value of `target_t` satisfies both
-    # clocks. What this step DOES prove is unchanged and is worth stating: the
-    # gate allows a legal action, the executor is the real class, and the
-    # executor's own precondition binds rather than being bypassed.
-    #
-    # Until 1 September 2026 this step asserted `t1.calls == 1` and crashed
-    # before reaching the assert, so the script exited non-zero while printing
-    # nothing about why.
-    if t1.calls == 0:
-        assert d.outcome.raw_code == "missing_predelivery_order", d.outcome.raw_code
-        print("    LIMITATION          no network call: Stage 0's clock is "
-              "simulated hours and the")
-        print("                        live predelivery order needs future "
-              "epoch seconds. The")
-        print("                        executor refused rather than "
-              "fabricating a debit.")
-    else:
-        assert t1.calls == 1
+    # TWO CALLS, NOT ONE. The decoupled flow is an order carrying the
+    # pre-debit notification, then the charge against that order. Both go
+    # through the fake transport, so this step shows the gate allowing a legal
+    # action, the real executor being reached, and the real request bodies
+    # being built -- without a key and without a socket.
+    assert t1.calls == 2, f"expected order + charge, got {t1.calls} calls"
 
     # ---------------------------------------------------------------- step 2
     hdr(f"2.  THE SAME DEBIT AT {peak_hours[0]:02d}:00 -- inside an NPCI peak "

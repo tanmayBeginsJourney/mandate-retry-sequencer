@@ -23,16 +23,14 @@ PKG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
-from agent.execution.razorpay_executor import API_BASE, _UrllibTransport
+from agent.execution.razorpay_api import (API_BASE, RazorpayApi,
+                                          Transport, parse_order_id,
+                                          parse_token_status)
 from agent.execution.razorpay_registration import (AUTH_AMOUNT_PAISE,
                                                    RegistrationResult,
                                                    RegistrationSession,
-                                                   build_auth_order_body,
-                                                   build_customer_body,
                                                    default_expire_at,
                                                    env_snippet,
-                                                   parse_customer_id,
-                                                   parse_order_id,
                                                    parse_payment_token,
                                                    registration_to_binding_fields,
                                                    transcript_record,
@@ -65,49 +63,45 @@ def _contact(raw: str) -> str:
     return c
 
 
-def create_registration_session(transport: _UrllibTransport, *, kid: str,
+def create_registration_session(api: RazorpayApi, *, kid: str,
                                 name: str, email: str, contact: str,
                                 max_amount_paise: int,
                                 charge_amount_paise: int,
                                 frequency: str) -> tuple[RegistrationSession, list]:
     """Create customer + auth order. Returns session and transcript rows."""
+    # THE BODIES ARE THE ADAPTER'S, NOT THIS SCRIPT'S. Both calls go through
+    # `RazorpayApi`, so the requests that reach a real key are the same ones
+    # every offline gate exercises. `api.last_request` gives the transcript the
+    # exact bytes without a second builder to keep in step.
     log: list[dict] = []
     receipt = f"rcv_reg_{int(time.time())}"[:40]
-    cust_body = build_customer_body(
+
+    def record(phase: str, r) -> dict:
+        log.append(transcript_record(
+            phase=phase, http_method=api.last_request.get("method", ""),
+            url=api.last_request.get("url", ""),
+            request_body=api.last_request.get("body"),
+            http_status=r.status, response_body=r.body))
+        if not r.ok:
+            raise RuntimeError(f"{phase} failed HTTP {r.status}: "
+                               f"{r.error_description or r.outcome.value}")
+        return r.body
+
+    cust_payload = record("CUSTOMER_CREATED", api.create_customer(
         name=name, email=email, contact=contact,
-        notes={"purpose": "autopay_registration_harness"})
-    st, cust_payload = transport.post(f"{API_BASE}/customers", cust_body,
-                                      "rcv_reg_customer")
-    log.append(transcript_record(
-        phase="CUSTOMER_CREATED", http_method="POST",
-        url=f"{API_BASE}/customers", request_body=cust_body,
-        http_status=st, response_body=cust_payload))
-    if st is None or st >= 400:
-        err = (cust_payload.get("error") or {})
-        raise RuntimeError(
-            f"customer create failed HTTP {st}: {err.get('description')}")
-    customer_id = parse_customer_id(cust_payload)
+        notes={"purpose": "autopay_registration_harness"}))
+    customer_id = parse_order_id(cust_payload)
     if not customer_id:
         raise RuntimeError("customer create response missing id")
 
-    order_body = build_auth_order_body(
-        customer_id=customer_id,
-        max_amount_paise=max_amount_paise,
-        expire_at=default_expire_at(),
-        frequency=frequency,
-        receipt=receipt,
-        notes={"purpose": "autopay_registration_harness",
-               "charge_amount_paise": charge_amount_paise})
-    st, order_payload = transport.post(f"{API_BASE}/orders", order_body,
-                                       "rcv_reg_order")
-    log.append(transcript_record(
-        phase="AUTH_ORDER_CREATED", http_method="POST",
-        url=f"{API_BASE}/orders", request_body=order_body,
-        http_status=st, response_body=order_payload))
-    if st is None or st >= 400:
-        err = (order_payload.get("error") or {})
-        raise RuntimeError(
-            f"order create failed HTTP {st}: {err.get('description')}")
+    order_payload = record("AUTH_ORDER_CREATED",
+                           api.create_authorization_order(
+                               customer_id=customer_id,
+                               max_amount_paise=max_amount_paise,
+                               expire_at=default_expire_at(),
+                               frequency=frequency, receipt=receipt,
+                               notes={"purpose": "autopay_registration_harness",
+                                      "charge_amount_paise": charge_amount_paise}))
     order_id = parse_order_id(order_payload)
     if not order_id:
         raise RuntimeError("order create response missing id")
@@ -121,7 +115,7 @@ def create_registration_session(transport: _UrllibTransport, *, kid: str,
     return session, log
 
 
-def complete_registration(transport: _UrllibTransport, session: RegistrationSession,
+def complete_registration(api: RazorpayApi, session: RegistrationSession,
                           *, payment_id: str, order_id: str, signature: str,
                           key_secret: str, charge_amount_paise: int,
                           log: list) -> RegistrationResult:
@@ -134,7 +128,8 @@ def complete_registration(transport: _UrllibTransport, session: RegistrationSess
         raise ValueError("checkout signature verification failed")
 
     url = f"{API_BASE}/payments/{payment_id}"
-    st, pay_payload = transport.get(url)
+    r = api.fetch_payment(payment_id)
+    st, pay_payload = r.status, r.body
     log.append(transcript_record(
         phase="PAYMENT_FETCHED", http_method="GET", url=url,
         request_body=None, http_status=st, response_body=pay_payload,
@@ -151,14 +146,18 @@ def complete_registration(transport: _UrllibTransport, session: RegistrationSess
 
     token_status = ""
     tok_url = f"{API_BASE}/customers/{session.customer_id}/tokens"
-    st2, tok_payload = transport.get(tok_url)
+    r2 = api.fetch_customer_tokens(session.customer_id)
+    st2, tok_payload = r2.status, r2.body
     log.append(transcript_record(
         phase="TOKENS_LISTED", http_method="GET", url=tok_url,
         request_body=None, http_status=st2, response_body=tok_payload))
     if st2 == 200 and isinstance(tok_payload, dict):
         for item in tok_payload.get("items") or []:
             if str(item.get("id") or "") == token_id:
-                token_status = str(item.get("status") or "")
+                # `recurring_details.status`, not `status`. Only `confirmed`
+                # may be charged, and the top-level `status` field is not the
+                # one that says so.
+                token_status = parse_token_status(item)
                 break
 
     return RegistrationResult(
@@ -255,7 +254,7 @@ def _checkout_html(*, key_id: str, session: RegistrationSession,
 
 class _Handler(BaseHTTPRequestHandler):
     session: RegistrationSession | None = None
-    transport: _UrllibTransport | None = None
+    api: RazorpayApi | None = None
     key_secret: str = ""
     charge_amount_paise: int = 0
     transcript: list = []
@@ -300,9 +299,9 @@ class _Handler(BaseHTTPRequestHandler):
                        "application/json")
             return
         try:
-            assert self.session and self.transport
+            assert self.session and self.api
             res = complete_registration(
-                self.transport, self.session,
+                self.api, self.session,
                 payment_id=str(payload.get("razorpay_payment_id") or ""),
                 order_id=str(payload.get("razorpay_order_id") or ""),
                 signature=str(payload.get("razorpay_signature") or ""),
@@ -328,11 +327,11 @@ class _Handler(BaseHTTPRequestHandler):
                        "application/json")
 
 
-def verify_token(transport: _UrllibTransport, customer_id: str,
-                   token_id: str) -> dict:
+def verify_token(api: RazorpayApi, customer_id: str,
+                 token_id: str) -> dict:
     """GET customer tokens and return the matching token entity."""
-    url = f"{API_BASE}/customers/{customer_id}/tokens"
-    st, payload = transport.get(url)
+    r = api.fetch_customer_tokens(customer_id)
+    st, payload = r.status, r.body
     if st is None or st >= 400:
         err = (payload.get("error") or {})
         raise RuntimeError(f"token list failed HTTP {st}: {err.get('description')}")
@@ -362,7 +361,7 @@ def main() -> int:
     args = parser.parse_args()
 
     kid, sec = _require_test_keys()
-    transport = _UrllibTransport(kid, sec, timeout=30.0)
+    api = RazorpayApi(Transport(kid, sec, timeout=30.0), API_BASE)
 
     if args.verify_token:
         cid = os.environ.get("RAZORPAY_TEST_CUSTOMER_ID", "").strip()
@@ -370,7 +369,7 @@ def main() -> int:
         if not cid or not tid:
             raise SystemExit("Set RAZORPAY_TEST_CUSTOMER_ID and "
                              "RAZORPAY_TEST_TOKEN_ID")
-        tok = verify_token(transport, cid, tid)
+        tok = verify_token(api, cid, tid)
         print(json.dumps(sanitize(tok), indent=2))
         return 0
 
@@ -381,13 +380,13 @@ def main() -> int:
 
     print("Creating Test Mode customer + UPI auth order…")
     session, transcript = create_registration_session(
-        transport, kid=kid, name=args.name, email=email, contact=contact,
+        api, kid=kid, name=args.name, email=email, contact=contact,
         max_amount_paise=args.max_amount_paise,
         charge_amount_paise=args.charge_amount_paise,
         frequency=args.frequency)
 
     _Handler.session = session
-    _Handler.transport = transport
+    _Handler.api = api
     _Handler.key_secret = sec
     _Handler.charge_amount_paise = args.charge_amount_paise
     _Handler.transcript = transcript

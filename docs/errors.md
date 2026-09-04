@@ -413,17 +413,135 @@ report prints the fallback rate beside the money.
 
 ### Two clocks meeting at one field
 
-Stage 0 reads the target timestamp as simulated hours; the live executor reads the
-same field as a future Unix epoch second when it creates the pre-debit order. No
-single value satisfies both, so **the live executor has never been driven end to
+Stage 0 reads the target timestamp as simulated hours; the live executor read the
+same field as a future Unix epoch second when it created the pre-debit order. No
+single value satisfies both, so **the live executor could not be driven end to
 end by Stage 0 with a genuine order**. It surfaced when a script meant to
 demonstrate refusal printed "allowed" with zero network calls and then died on a
 missing record: the gate had swallowed the executor's exception into a log line.
 
-*Guard:* the script prints the mismatch rather than working around it, and asserts
-the executor refuses for exactly that reason. This remains an open integration
-defect, recorded in [architecture.md](architecture.md#razorpayexecutor) rather
-than smoothed over.
+*Guard:* an explicit `epoch_origin` on the executor, and one conversion —
+`_epoch` — where the units change. Without an origin the executor refuses to
+create an order rather than sending a timestamp in 1970, which a gate asserts.
+`scripts/prove_stage0_refuses.py` now drives a legal action through the real
+executor and prints the converted `payment_after` beside the simulated hour it
+came from.
+
+### An accepted submission parsed as a decline
+
+`POST /v1/payments/create/recurring` answers `{"razorpay_payment_id": "pay_..."}`
+and nothing else — no status, no error reason. The executor handed that response
+to a parser expecting a payment entity, which found no status, fell through to
+its last branch and returned an ambiguous decline. **Every successful submission
+would have been recorded as a failed one**, and the loop hands a failure to the
+belief, which hard-zeroes every balance bin at or above the amount for every
+mandate that customer holds. This is the same shape as the authentication defect
+above, one layer along: a response that is not a payment object, read as one.
+
+It was found by reading the current API reference rather than by a test. No
+offline fixture could have caught it, because every fixture was a payment entity
+transcribed from the documentation and none was the create-recurring response —
+nobody had looked at what that endpoint actually returns.
+
+*Guard:* an accepted submission returns `pending`, not success and not failure.
+The outcome arrives on `payment.captured` or `payment.failed`, or from
+`GET /v1/payments/:id`, and the belief is updated there rather than at
+submission. A gate asserts the documented response shape resolves to pending.
+
+### An idempotency header the provider does not honour
+
+The executor sent `X-Razorpay-Idempotency-Key` on the recurring charge, and the
+module's own docstring called it the reason a retried request could not become a
+second debit. Razorpay documents no idempotency header for that endpoint; the
+documented one is for RazorpayX Payouts and a small set of explicitly idempotent
+Route and Refund endpoints. The header was invented, the comment beside it read
+as a guarantee, and the code was marked `UNVERIFIED` in a way that had stopped
+being read.
+
+A header the provider ignores is worse than no header, because it is a safety
+claim nobody will re-examine.
+
+*Guard:* the header is gone and the claim with it. Safety rests on two properties
+Razorpay does document: an order's `receipt` is unique per account, so a
+deterministic receipt makes order creation idempotent and a lost order id is
+recoverable by lookup; and an order can be paid once, so one order per debit
+attempt makes the debit at-most-once at the provider. That is weaker than an
+idempotency key — a retried submission gets a rejection rather than a replayed
+result — and the weaker claim is the one now written down.
+
+### A reconciliation set assembled by hand
+
+The set of attempt states worth polling the provider about was a hand-written
+list. `AUTHORIZED` was not in it, so a payment that was authorised and never
+captured would have sat unresolved forever, never polled and never noticed —
+money the customer had committed and the merchant never counted. Found by a gate
+that compared the hand-written set against "everything that is not terminal" and
+found them different.
+
+*Guard:* the set is derived rather than listed. A state that is not terminal is
+polled, by construction, and adding a state to the machine cannot leave it out.
+
+### A log replayed into a counter that was never zeroed
+
+The constraint gate's attempt ledger lives in memory, so a service that restarts
+between scheduling a debit and running it has to rebuild the ledger from the
+durable attempt rows. The rebuild ran on every mandate change and replayed the
+rows without clearing the counter first. Three rebuilds turned one real attempt
+into four — which is the NPCI cap — so the mandate silently stopped being
+chargeable for the rest of its cycle. Nothing failed loudly: the gate refused
+with the correct rule, for a reason that was arithmetic rather than regulatory.
+
+Found by asking what happens when the rebuild runs twice, which it does on any
+ordinary registration.
+
+*Guard:* the rebuild resets each cycle before replaying it. A gate calls it five
+times and asserts the count does not move. Replaying a log into a counter is
+idempotent only if the counter is zeroed first, and this one is now.
+
+### A read-decide-write path with no lock, on a threaded server
+
+The money path reads a mandate's state, decides on it and writes the result
+back. The HTTP server is threaded, and nothing serialised those three steps per
+mandate, so two concurrent ticks could both see no attempt in flight, both
+schedule one, and both submit against the same order. Driving twelve threads at
+one mandate produced integrity errors, a SQLite connection used from two places
+at once, and a type error — none of which would have been diagnosable from the
+symptom, which is a debit recorded as refused because the provider correctly
+refused the second request for an order already paid.
+
+*Guard:* one lock per mandate around the whole tick. The gate runs the same load
+through the locked path and the unlocked one and requires the unlocked one to
+fail, so the lock cannot be removed without a red gate. That mutant is
+probabilistic — thread interleaving is not something a test can command — so it
+is retried up to five times rather than asserted once, because a gate that is
+red one run in six teaches people to re-run instead of to read.
+
+### A flag that read the environment it had been handed
+
+The live configuration takes an environment mapping so tests can drive every
+branch, and the helper that reads the flag authorising real debits read
+`os.environ` instead of the mapping. Every test asserting the flag's behaviour
+was measuring the process environment, in which it was unset — so the three
+gates covering the switch that permits real money all passed without exercising
+it. Found by writing those gates and watching them fail against the value they
+had just set.
+
+*Guard:* the helper takes the mapping. A function handed a source of truth that
+consults a different one makes the parameter a lie, and this one decided whether
+a debit could be submitted.
+
+### A refusal the sender could not read
+
+The HTTP layer refused an over-long request body by responding 413 without
+reading it. The client was still writing, so it saw a connection reset rather
+than the status it had been sent — which a webhook provider reports as an outage
+and retries, rather than as a rejection and stops. It showed up as a test that
+failed roughly one run in six, which is the shape a real intermittent looks like
+before anyone looks at it.
+
+*Guard:* the body is drained in bounded chunks and discarded before the 413 is
+sent, up to a ceiling past which the connection is closed instead. A gate
+asserts that the status arrives, not merely that it is generated.
 
 ### One log file, one run — assumed by every reader, enforced by nothing
 
@@ -437,6 +555,80 @@ and lied on its second.
 
 *Guard:* opening a non-empty audit log raises. The one legitimate append — a test
 modelling a rogue writer inside a single run — passes an explicit flag.
+
+---
+
+### A provider refusal recorded as a customer decline
+
+This is the same error as "An authentication failure recorded as a statement
+about the customer's balance", one layer up. `RazorpayExecutor.attempt` raises
+`RazorpayError` when the provider refuses the REQUEST. The service caught it and
+wrote the attempt `FAILED` — a terminal state meaning "the debit did not
+collect".
+
+One refusal is `Order already paid`. A resubmission receives it after the
+process dies between sending `POST /payments/create/recurring` and writing the
+acknowledgement, and the order it names **holds a captured payment**. At the one
+crash boundary where the money has certainly moved, the service recorded money
+not collected: the cycle read as uncollected, `recovered_paise` stayed at zero,
+and the NPCI attempt was spent.
+
+The belief filter was not affected. `apply_outcome` runs only from reconciliation
+and webhook processing, both of which require a terminal state reached through a
+different path, so the damage was confined to the ledger and the report. Nothing
+in the design produced that containment.
+
+*Guard:* the refusal now records `UNKNOWN`, which is non-terminal, is never
+retried automatically, and is what reconciliation resolves by asking the order
+which payments it holds. Gate **F4b** drives the boundary end to end: it lets
+the provider take a debit, drops the acknowledgement, restarts the service, and
+fails if the attempt comes out `FAILED`, if a second payment reaches the
+provider, or if the collected rupee is counted anywhere but once. Reverting the
+repair turns four of its five checks red and puts `recovered_paise` back to 0.
+
+---
+
+### A precondition disarmed by the store that was meant to persist it
+
+Nothing was visibly wrong here, and no gate was red. `RazorpayExecutor.attempt`
+refuses to submit unless its journal reports the pre-debit order in
+`ORDER_CREATED` or `NOTIFICATION_DELIVERED` — the executor's own last check
+against submitting twice. The live service backs that journal with SQLite,
+translating `AttemptState` into the executor's `PredeliveryPhase`.
+
+The translation table had two entries and a default. `SUBMITTED`, `UNKNOWN`,
+`AUTHORIZED`, `SUCCEEDED` and `FAILED` all fell through to `ORDER_CREATED`,
+which `attempt()` accepts. The check held only while an in-memory copy of the
+journal remained in the process. A restart rebuilt the phase from the row and
+permitted a debit that had already run. The service's own guard covered the same
+case, so the failure produced no symptom.
+
+*Guard:* the table is total over `AttemptState` and an `assert` at import says
+so, and the in-memory copy is gone so the row is the only record. Gate **F4b6**
+calls `executor.attempt()` directly on a resolved attempt and requires
+`invalid_predelivery_phase`; with the partial table it reaches the network
+instead, and the gate reports that rather than crashing.
+
+---
+
+### A cap that bounded nothing, and a gate that graded itself
+
+`RazorpayExecutor` carried `max_live_escalations`: read from an environment
+variable, defaulting to 5, passed explicitly by a script, and read by nothing.
+`escalate()` appends a row to a local file and makes no provider call, so there
+was nothing to cap. A reader asking what bounds live escalations found a number
+that had no effect.
+
+Gate `A4g` asserted that the webhook route needs no operator token by passing
+the literal `True`, with the claim in its detail string. It could not fail. It
+now builds a second server that requires a token on every other route, posts a
+signed webhook without one and requires 200, then posts a forged signature to
+the same route and requires 400. Making the webhook route require the token
+turns both checks red.
+
+*Guard:* neither is a new mechanism. The first is a deletion. The second applies
+the suite's existing rule — a gate no mutant can fail is not a gate — to a file
+that had not been re-read.
 
 ---
 

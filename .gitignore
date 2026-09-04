@@ -12,3 +12,7 @@ REMEDIATION_STATUS.md
 # Internal AI-agent working instructions. Local only; not part of the
 # published project.
 CLAUDE.md
+
+# Live-service runtime state: the SQLite database and its audit logs. Webhook
+# payloads carry a customer's email and contact, so none of it is publishable.
+live/data/

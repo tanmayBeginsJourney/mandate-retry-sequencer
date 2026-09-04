@@ -123,30 +123,80 @@ repository is produced with the deterministic path.
 
 ## What is implemented
 
-Every layer is built and measured. The Razorpay executor is implemented and its
-test-mode connectivity and workflow calls have been exercised against the live
-API. Each row states the evidence behind it, because "implemented", "exercised
-against the live test API" and "demonstrated on an authorised mandate" are three
-different claims.
+Every layer is built and measured. Each row below states its evidence level,
+because "the code exists", "a mock exercises it", "it would work against a real
+key" and "it has run against a real key" are four different claims and only the
+last one is a live integration.
 
-| | Evidence |
+| Level | Means |
 |---|---|
-| Belief filter, timing rule, constraint layer, audit trail, independent auditor | implemented and measured |
-| Simulation executor | implemented; reproduces the simulation harness bit-exactly, 24 of 24 runs |
-| Razorpay test-mode API authentication | exercised — HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
-| Funding reminders over SMTP | exercised — delivered through a live test relay, transcript `logs/smtp_reminder_proof.json` |
-| Razorpay test-mode Customer and Payment Link create / fetch / cancel | implemented and runnable against `rzp_test_` keys via `scripts/prove_workflows.py`; no transcript is committed |
-| Pre-debit notification order (`POST /v1/orders`) | implemented; not demonstrated against an authorised mandate |
-| `order.notification.delivered` webhook | not observed |
-| Recurring charge on an authorised mandate | implemented; **never submitted**, so not demonstrated |
+| **IMPLEMENTED** | the code exists and is reachable; nothing exercises it end to end |
+| **MOCK-VERIFIED** | a gate drives it against `MockRazorpayApi`, which answers the way Razorpay's documentation says Razorpay answers |
+| **LIVE-READY** | the request shape is [VERIFIED] against current Razorpay documentation and the path has been driven with a real client against a stub transport; no live call has been made |
+| **LIVE-DEMONSTRATED** | it has run against `api.razorpay.com` and a transcript is committed |
 
-The last three rows are limited by an account capability rather than by the
-client. UPI AutoPay mandate registration is not available on the test account
-used here: UPI and Recurring Payments are on-demand Razorpay features and were
-not provisioned, so no mandate token exists for a request to reference.
+| | Level | Evidence |
+|---|---|---|
+| Belief filter, timing rule, constraint layer, audit trail, independent auditor | IMPLEMENTED | and measured — `sim/gate.py --tier full` |
+| Simulation executor | IMPLEMENTED | reproduces the simulation harness bit-exactly, 24 of 24 runs |
+| Live service: durable state, webhook ingestion, reconciliation, crash recovery, billing-cycle rollover, operator console | MOCK-VERIFIED | 8 gate files, 337 checks, `py -3.12 -m live.tests.run_all` |
+| Razorpay test-mode API authentication | LIVE-DEMONSTRATED | HTTP 200 on `GET /v1/payments` with an `rzp_test_` key, transcript `logs/razorpay_ladder.json` |
+| Funding reminders over SMTP | LIVE-DEMONSTRATED | delivered through a live test relay, transcript `logs/smtp_reminder_proof.json` |
+| Razorpay test-mode Customer and Payment Link create / fetch / cancel | LIVE-READY | runnable against `rzp_test_` keys via `scripts/prove_workflows.py`; no transcript is committed |
+| Mandate registration order (`POST /v1/orders`, `method: upi`) | LIVE-READY | body [VERIFIED] against Razorpay's UPI AutoPay authorisation-transaction reference and asserted by `agent/tests/test_razorpay_registration.py` on the request the client actually builds. One field is unresolved: registration sends `frequency: as_presented`, which that page lists without defining, and whether an account may use it is an account-level entitlement to confirm with Razorpay Support |
+| Pre-debit notification order (`notification.token_id` / `payment_after`) | LIVE-READY | body [VERIFIED] against create-subsequent-payments; never accepted by Razorpay for a real mandate |
+| `order.notification.delivered` webhook | IMPLEMENTED | never observed from Razorpay |
+| Webhook signature verification, deduplication, out-of-order handling | MOCK-VERIFIED | signed payloads the mock rail produces, never one Razorpay sent |
+| Recurring charge on an authorised mandate | IMPLEMENTED | **never submitted.** No mandate token exists to charge |
+
+**Nothing in this repository is LIVE-DEMONSTRATED for the money path.** The two
+rows that are demonstrated are an authentication probe and an email.
+
+The last rows are limited by an account capability rather than by the client.
+UPI AutoPay mandate registration is not available on the test account used here:
+UPI and Recurring Payments are on-demand Razorpay features and were not
+provisioned, so no mandate token exists for a request to reference.
 Authenticating against the API is not the same as executing a payment, and a
 successful order creation would not be proof of notification delivery. No result
 in this repository depends on a live debit.
+
+A passing mock suite and a live integration are different claims. The mock rail
+answers the way Razorpay's documentation says Razorpay answers, and it declines,
+loses responses, redelivers webhooks and delivers them out of order on purpose —
+which is enough to test a state machine and not evidence about the real one.
+
+## The live service
+
+`live/` runs the same decision layers against Razorpay instead of the
+simulation. The scheduler, the belief filter, the diagnosis layer and the
+constraint gate are the same objects the batch run imports, not copies of them;
+`live/tests/test_parity.py` asserts that by object identity. What differs is the
+executor and the fact that state is durable.
+
+```
+Razorpay ──webhook──▶ verify signature ─▶ persist ─▶ 2xx
+                                            │
+                                            ▼
+                              belief ─▶ scheduler ─▶ diagnosis
+                                            │
+                                            ▼
+                                        Stage 0 ──refused──▶ audit
+                                            │ allowed
+                                            ▼
+                                   RazorpayExecutor ─▶ Razorpay ─▶ UPI
+```
+
+Two switches decide what it can do, and they are separate on purpose.
+`RECOVERY_MODE` picks the rail — `offline` uses a deterministic mock and cannot
+reach the network, `live` reaches Razorpay. `RECOVERY_LIVE_DEBIT` decides
+whether a debit may actually be submitted while in live mode, so that reading
+production state and taking a customer's money are not the same gesture. Live
+mode with a missing credential is an error; it never falls back to the mock.
+
+There is no endpoint that accepts an amount, a token or a time. The only route
+that can move money runs the whole chain and takes no request body at all: the
+amount comes from the mandate the customer authorised, the hour from the belief
+filter, and the legality from Stage 0.
 
 ## Results
 
@@ -303,10 +353,18 @@ results: [`docs/results.md`](docs/results.md).
   the filter's diffusion leaks through the balance floor it does model. A repair
   exists, is measured, and is off because it kills more mandates at the shipping
   horizon.
-- **Stage 0 and the live Razorpay executor keep two different clocks** for the
-  same field, so the live executor has not been driven end to end by the
-  constraint layer with a genuine order. The disagreement is asserted by a test
-  rather than worked around.
+- **The live path has never met Razorpay.** Every part of it — the pre-debit
+  order, the recurring charge, the webhook handler, the state machine, the
+  reconciliation — is exercised only against a mock rail written from
+  Razorpay's documentation. Their real API has read none of these request
+  bodies, so the request shapes are a hypothesis with a citation, not a
+  verified contract.
+- **The customer's income and payday are supplied, not inferred.** The belief
+  filter needs a starting salary and salary date, and a live integration has no
+  oracle for either: the merchant knows the subscription price, not the
+  customer's pay cycle. The live service takes both as an operator estimate and
+  records them as such. Nothing here measures how wrong they are on real
+  customers, and every live timing decision inherits that.
 - **Sample size is bounded by compute**: 500 customers, about 2 mandates each,
   10 populations, one run seed per published table. `n` was selected by
   measuring the experiment at 100, 250, 500, 1,000 and 2,000; n=500 sits within
@@ -369,6 +427,34 @@ py -3.12 agent/eval/run_eval.py --llm --judge --replay
 
 Replays the diagnosis eval from committed response caches. 0.5s, $0.00.
 
+### The live service and its console
+
+```bash
+py -3.12 -m live.server
+```
+
+Starts on `127.0.0.1:8730` in offline mode against the mock rail. The console is
+at the root; `/health` and `/ready` need no token. Registering a mandate,
+authorising it and running decision ticks all work there without a key, without
+the network and without money — the mock declines, loses responses and
+redelivers webhooks on purpose, and every one of them goes through the same
+signature verification and the same state machine the live path uses.
+
+Live mode needs `RECOVERY_MODE=live` and three credentials by name —
+`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` — and
+refuses to start without them rather than falling back. Submitting a real debit
+needs `RECOVERY_LIVE_DEBIT=yes` as well. Binding anything but loopback needs
+`RECOVERY_OPERATOR_TOKEN`. Values belong in `.env`, which is gitignored.
+
+```bash
+py -3.12 -m live.tests.run_all
+```
+
+Seven gate files, 225 checks, about four seconds. Configuration, the state
+machine, webhooks, the full lifecycle across seven crash boundaries, the safety
+boundaries, simulation/live parity, and the HTTP surface over a real socket.
+Every one runs offline and none can move money.
+
 If `import numpy` fails, check the interpreter rather than the dependency list.
 `sim/gate.py` and the git hooks probe for an interpreter that can import NumPy
 instead of trusting the executable name.
@@ -405,6 +491,7 @@ then runs the fast tier, the documentation checks and their self-tests, and
 |---|---|
 | `agent/` | Policy, constraints, context, execution, LLM layer, audit trail, eval |
 | `sim/` | The simulated world, the belief filters, the 27-gate suite, the documentation checkers |
+| `live/` | The service that runs the same decision layers against Razorpay: durable state, webhook ingestion, reconciliation, the operator console, and its gates |
 | `scripts/` | Page data, constraint-layer proof, Razorpay connectivity ladder, test-mode workflow proof, sweeps, git hooks |
 | `logs/` | Committed transcripts for every figure quoted above |
 

@@ -1,4 +1,9 @@
-"""Offline gates for UPI AutoPay registration body shapes."""
+"""Offline gates for UPI AutoPay registration.
+
+The body-shape gates drive `RazorpayApi` against a stub transport and read the
+request it actually built. An earlier form tested a separate builder function,
+which meant the shape under test was not the shape the live script sent.
+"""
 from __future__ import annotations
 
 import os
@@ -9,13 +14,19 @@ PKG = os.path.dirname(os.path.dirname(HERE))
 if PKG not in sys.path:
     sys.path.insert(0, PKG)
 
-# I2-EXEMPT: drives the mandate-registration payload through the live executor against a stub transport.
+# I2-EXEMPT: drives the mandate-registration payload through the live client against a stub transport.
+from agent.execution.razorpay_api import RazorpayApi
 from agent.execution.razorpay_registration import (AUTH_AMOUNT_PAISE,
-                                                   build_auth_order_body,
-                                                   build_customer_body,
                                                    registration_to_binding_fields,
                                                    RegistrationResult,
                                                    verify_checkout_signature)
+
+
+class StubTransport:
+    """Records the request and answers 200. No socket, no credential."""
+
+    def request(self, method, url, body=None):
+        return 200, {"id": "cust_stub"}
 
 _results: list[tuple[bool, str]] = []
 
@@ -27,16 +38,54 @@ def ok(name: str, cond: bool) -> None:
 
 def main() -> int:
     print("REGISTRATION GATES (offline)")
-    cust = build_customer_body(name="T", email="t@example.com", contact="+919999999999")
-    ok("customer body", cust["fail_existing"] == "0" and cust["email"] == "t@example.com")
+    api = RazorpayApi(StubTransport())
 
-    order = build_auth_order_body(
+    api.create_customer(name="T", email="t@example.com",
+                        contact="+919999999999")
+    cust = api.last_request["body"]
+    ok("customer body", cust["fail_existing"] == "0"
+       and cust["email"] == "t@example.com")
+
+    api.create_authorization_order(
         customer_id="cust_x", max_amount_paise=4990000,
         expire_at=2000000000, frequency="as_presented", receipt="r1")
+    order = api.last_request["body"]
     ok("auth order amount Rs 1", order["amount"] == AUTH_AMOUNT_PAISE)
     ok("method upi", order["method"] == "upi")
     ok("token max_amount", order["token"]["max_amount"] == 4990000)
-    ok("payment_capture", order["payment_capture"] is True)
+    # NO payment_capture. Razorpay's create-order reference and its UPI AutoPay
+    # authorisation page both document this request without it. It IS
+    # documented on the subsequent-payment order, which is where it is sent --
+    # `test_razorpay_predelivery.py` checks that half.
+    ok("no payment_capture on the authorisation order",
+       "payment_capture" not in order)
+    ok("it is the /orders endpoint", api.last_request["url"].endswith("/orders"))
+
+    # UPI AutoPay's own range: 100 (Rs 1) to 9999900 (Rs 99,999) for an
+    # ordinary merchant category. The wider 500..100000000 this used to check
+    # is eMandate's, and a UPI mandate asking for it is rejected at the
+    # provider.
+    for bad in (99, 9_999_901):
+        try:
+            api.create_authorization_order(
+                customer_id="c", max_amount_paise=bad, expire_at=2000000000,
+                frequency="monthly", receipt="r")
+            ok(f"max_amount {bad} refused before the network", False)
+        except ValueError:
+            ok(f"max_amount {bad} refused before the network", True)
+    for good in (100, 9_999_900):
+        api.create_authorization_order(
+            customer_id="c", max_amount_paise=good, expire_at=2000000000,
+            frequency="monthly", receipt="r")
+        ok(f"max_amount {good} is inside the UPI range",
+           api.last_request["body"]["token"]["max_amount"] == good)
+    try:
+        api.create_authorization_order(
+            customer_id="c", max_amount_paise=4990000, expire_at=2000000000,
+            frequency="hourly", receipt="r")
+        ok("an undocumented frequency is refused", False)
+    except ValueError:
+        ok("an undocumented frequency is refused", True)
 
     res = RegistrationResult(
         customer_id="cust_x", order_id="order_x", payment_id="pay_x",

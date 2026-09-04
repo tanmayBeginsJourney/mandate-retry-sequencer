@@ -13,8 +13,6 @@ ORDER_CREATED is NOT proof the customer received the regulatory pre-debit alert.
 """
 from __future__ import annotations
 
-import copy
-import json
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -83,28 +81,6 @@ def effective_amount_paise(notify_amount: float, binding_amount: float) -> int:
     return int(round(rupees * 100))
 
 
-def build_order_body(*, amount_paise: int, currency: str, receipt: str,
-                     token_id: str, payment_after: int) -> dict[str, Any]:
-    """POST /v1/orders body per UPI AutoPay subsequent-payments guide."""
-    return {
-        "amount": amount_paise,
-        "currency": currency,
-        "payment_capture": True,
-        "receipt": receipt,
-        "notification": {
-            "token_id": token_id,
-            "payment_after": payment_after,
-        },
-    }
-
-
-def parse_order_id(payload: dict) -> str:
-    if not isinstance(payload, dict):
-        return ""
-    oid = payload.get("id")
-    return str(oid) if oid else ""
-
-
 def parse_notification_webhook(payload: dict) -> NotificationWebhook | None:
     """Parse order.notification.delivered / order.notification.failed."""
     if not isinstance(payload, dict):
@@ -131,18 +107,27 @@ def parse_notification_webhook(payload: dict) -> NotificationWebhook | None:
 
 def apply_notification_webhook(rec: PredeliveryOrder,
                                wh: NotificationWebhook) -> PredeliveryOrder:
-    """Advance phase only on delivery webhooks; never downgrade DELIVERED."""
+    """Record one notification webhook. A FAILURE IS ABSORBING.
+
+    Razorpay delivers at least once and does not guarantee order, so a
+    `.delivered` and a `.failed` for one notification can arrive either way
+    round. They contradict each other and this cannot tell which is right, so
+    the phase settles on the reading that does not debit: once anything has
+    said the pre-debit notice failed, no charge runs under this order. A
+    missed collection is recoverable; a debit with no notice the customer
+    received is a regulatory breach that is not.
+    """
     rec.webhook_events.append(wh.event)
     rec.notification_id = wh.notification_id or rec.notification_id
     if wh.payment_after is not None:
         rec.payment_after = wh.payment_after
     if wh.delivered_at is not None:
         rec.delivered_at = wh.delivered_at
-    if wh.event == WEBHOOK_DELIVERED:
+    if wh.event == WEBHOOK_FAILED:
+        rec.phase = PredeliveryPhase.NOTIFICATION_FAILED
+    elif (wh.event == WEBHOOK_DELIVERED
+            and rec.phase is not PredeliveryPhase.NOTIFICATION_FAILED):
         rec.phase = PredeliveryPhase.NOTIFICATION_DELIVERED
-    elif wh.event == WEBHOOK_FAILED:
-        if rec.phase != PredeliveryPhase.NOTIFICATION_DELIVERED:
-            rec.phase = PredeliveryPhase.NOTIFICATION_FAILED
     return rec
 
 

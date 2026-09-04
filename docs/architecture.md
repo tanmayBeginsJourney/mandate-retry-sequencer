@@ -290,8 +290,26 @@ Gate `I2` permits only `constraints/stage0.py` and the composition root to hold
 an executor, which is why the backend can be swapped without any other layer
 knowing. `I2T` allows a test to hold one if the test says so in an
 `# I2-EXEMPT:` line naming why, and `I6` keeps the execution layer from reaching
-back up into the layers that decide on its behalf. Seven import-graph rules are
-listed in [results.md](results.md#the-import-graph-gates).
+back up into the layers that decide on its behalf. `L1` and `L2` extend the same
+discipline to `live/`: only `live/service.py` may hold an executor, and nothing
+under `agent/` may import `live/`. The import-graph rules are listed in
+[results.md](results.md#the-import-graph-gates).
+
+`agent/execution/razorpay_api.py` owns the HTTP: URLs, authentication, request
+bodies and the four things a payment API can do to a caller. It is the only
+module in the repository that knows a Razorpay URL.
+`agent/execution/razorpay_mock.py` implements the same surface without a socket.
+`RazorpayExecutor` turns those answers into `agent/ports.py` vocabulary and
+touches the network through nothing else.
+
+**Four outcomes, not two.** `OK` — the provider acted and said so. `REJECTED` —
+a 4xx naming a request problem; the provider did not act. `DENIED` — 401 or 403,
+so the credential was refused and nothing reached payment processing. `LOST` —
+no response at all, so the provider may have acted. Collapsing `LOST` into a
+failure is what turns a dropped connection into a statement about a customer's
+balance, and collapsing `DENIED` into one is
+[errors.md](errors.md)'s "An authentication failure recorded as a statement
+about the customer's balance".
 
 ### `SimExecutor`
 
@@ -318,7 +336,9 @@ Each row states its evidence level rather than a pass or fail:
 | Test-mode Customer creation | implemented, runs against `rzp_test_` keys via `scripts/prove_workflows.py`; **no transcript is committed**, so the repository holds no record that it ran |
 | Test-mode Payment Link create, fetch, cancel | same script, same status: runnable, no committed transcript |
 | Pre-debit notification order — `POST /v1/orders` carrying the `notification` object | implemented; **not demonstrated** against an authorised mandate |
-| `order.notification.delivered` webhook | **not observed** |
+| `order.notification.delivered` webhook | **not observed** from Razorpay |
+| Webhook signature verification, deduplication, out-of-order handling | implemented; exercised against payloads the mock rail signs, **never against one Razorpay sent** |
+| Durable state, crash recovery, reconciliation | implemented; exercised against the mock rail, `py -3.12 -m live.tests.run_all` |
 | Recurring charge on an authorised mandate | implemented; **never submitted**, so not demonstrated |
 
 The reason is an account capability, not a gap in the client. UPI AutoPay
@@ -334,16 +354,282 @@ decline, because no payment was created. Recording it as a decline would teach
 the belief filter that the account was empty, for every one of that customer's
 mandates at once.
 
-**Two clocks meet at one field and disagree.** Stage 0 reads `target_t` as
-simulated hours — the peak rule is `target_t % 24` — while
-`RazorpayExecutor.notify` reads the same field as a future Unix epoch second
-when it creates the pre-debit order. No single value satisfies both, so the live
-executor has never been driven end to end by Stage 0 with a genuine order. The
-disagreement is detected rather than papered over:
-`scripts/prove_stage0_refuses.py` prints it and asserts the executor refuses for
-exactly that reason. Reconciling the two clocks is an open piece of work in the
-executor, not in the constraint layer, whose behaviour is measured against the
-simulation executor and independently recounted from the audit log.
+**Two clocks meet at one field.** Stage 0 reads `target_t` as simulated hours —
+the peak rule is `target_t % 24` — while Razorpay wants `payment_after` as a
+future Unix epoch second. No single integer is both. The conversion happens in
+one place, `RazorpayExecutor._epoch`, from an `epoch_origin` the service anchors
+to a local midnight so that `target_t % 24` is the real hour of the day. Without
+an origin the executor refuses to create an order rather than sending a
+timestamp in 1970. `scripts/prove_stage0_refuses.py` drives the constraint layer
+end to end through the executor against a transport that raises if an illegal
+action ever reaches it.
+
+**Idempotency.** No idempotency header is sent on the recurring charge, because
+Razorpay documents none for that endpoint. The headers they do document —
+`X-Payout-Idempotency` for RazorpayX payouts and composite APIs,
+`X-Refund-Idempotency` for instant refunds — cover neither this path nor
+anything on it. A header the provider ignores reads, in the code and in a
+review, like a guarantee that is not there.
+
+Two documented properties stand in its place. An order's `receipt` "has to be
+unique" and is treated as an idempotency key, so a deterministic receipt makes
+order creation idempotent and `GET /v1/orders?receipt=` recovers an order whose
+id a crash lost. And "no further payment requests are permitted once the order
+moves to the `paid` state", so one order per debit attempt makes a *collected*
+debit at-most-once at the provider.
+
+That is weaker than an idempotency key in two ways, both stated rather than
+glossed. A retried submission gets a rejection rather than a replayed result,
+so the caller still has to go and look. And the closure is documented only for
+`paid`: an order whose payment failed stays `attempted`, and the documentation
+does not say a further payment against it is refused. On that path the provider
+would accept a second request, so the provider rule is a backstop and not the
+guarantee.
+
+The guarantee is local and durable. The executor writes `DEBIT_ATTEMPTED` to its
+journal — `SUBMITTING` in the attempt row — *before* the request leaves the
+process, so a process that dies mid-request restarts holding a record that says
+a debit may be out. An attempt in that state is never resubmitted; it goes to
+reconciliation, which asks the order what payments it holds. This is not
+exactly-once and is not claimed to be.
+
+`payment_capture: true` is sent on the subsequent-payment order, where
+Razorpay's create-subsequent-payments page documents it. It is not sent on the
+authorisation order: neither the create-order reference nor the UPI AutoPay
+authorisation page documents it there.
+
+---
+
+## The live service
+
+`live/` runs the same decision layers against Razorpay. It owns durable state,
+the mandate lifecycle, webhook ingestion and the HTTP surface. It owns no
+decision: timing comes from `agent/policy/timing.py`, legality from
+`agent/constraints/stage0.py`, diagnosis from `agent/llm/`. Those are the same
+objects `agent/batch.py` imports, and `live/tests/test_parity.py` asserts it by
+object identity rather than by inspection.
+
+The diagnoser it constructs is `RuleBasedDiagnoser`, the deterministic one. The
+model overlay is accepted as a constructor argument and is not wired in by
+default, so a live tick makes no model call.
+
+`live/service.py` is the second composition root, and gate `L1` keeps it the
+only module in the package that may hold an executor. Gate `L2` keeps the
+dependency pointing one way: nothing under `agent/` imports `live/`, so the
+simulation does not need a database to run.
+
+### Two modes, and the direction each fails in
+
+`RECOVERY_MODE` picks the rail. `offline` uses the mock and cannot reach the
+network. `live` reaches Razorpay. An unset variable is `offline`; a misspelled
+one raises rather than guessing.
+
+`RECOVERY_LIVE_DEBIT` decides whether a debit may be submitted while in live
+mode. It is separate because reading a mandate's state, replaying a webhook and
+rendering the console are all things worth doing against the live rail without
+charging anybody.
+
+Setting it requires `RECOVERY_OPERATOR_TOKEN`. The route that runs a decision is
+the route that debits, so an operator API that answers anybody who can reach the
+port, with live debits permitted, is a real debit available to anything on the
+machine. Configuration refuses that combination at startup. Mutating operator
+routes also refuse a request whose `Origin` names another site, which is what a
+page on another origin can send without a preflight.
+
+Live mode with a missing credential is an error, never a quiet demotion to the
+mock. Offline mode cannot reach the network whatever the environment holds. Both
+directions have been wrong in real systems and only one of them is loud.
+
+### The durable model
+
+Four entities, and deliberately not a copy of Razorpay's object model. A payment
+entity carries thirty-odd fields; what is stored is what changes a decision,
+closes a reconciliation, or lets a human find the transaction on Razorpay's
+dashboard.
+
+| Entity | Holds |
+|---|---|
+| `Customer` | our id and theirs, joined; nothing derives one from the other |
+| `Mandate` | token id, provider token status, the amount ceiling the customer authorised, the registration order and payment, the cold-start estimates, the cycle |
+| `PaymentAttempt` | Stage 0's `action_id` as its primary key, the order and payment ids, the deterministic receipt, the target hour and the epoch second it maps to, the outcome |
+| `WebhookEvent` | the provider's event id as primary key, the raw body, and what interpreting it did. Every row here passed verification; a delivery that did not is in `rejected_deliveries` |
+
+Five constraints are enforced by the schema rather than by code.
+`webhook_events.event_id` is the primary key, so a duplicate delivery is
+rejected by the database and not by a check-then-insert two concurrent requests
+can both pass. `attempts.receipt` is unique, so two attempts cannot claim one
+provider order. `attempts.id` is Stage 0's `action_id`, so re-deriving an
+attempt after a restart collides with the existing row instead of creating a
+twin. `customers.seq` is unique and `mandates(customer_id, index_no)` is unique,
+so the `c{seq}m{index}` identity the belief book, the audit trail and the
+executor's token bindings all key on cannot be claimed twice — and both halves
+are allocated and inserted inside one transaction, because reading the next
+value and writing it afterwards let two concurrent registrations take the same
+one and bind a customer to another customer's token.
+
+The attempt row stores the hour the scheduler notified at as well as the hour it
+targets. The two are not related by a constant: the peak-window rule pushes a
+target past the first legal slot, so `target_t - 24` is not the notification
+time whenever the notice falls in a peak hour. Deriving it made the same attempt
+mean one thing in memory and another after a restart.
+
+Every state change is also appended to a `transitions` table. The entity tables
+hold the current answer; that one holds how it got there, which is what a
+reconciliation dispute needs.
+
+### The two state machines
+
+A mandate is `PENDING`, `ACTIVE`, `REJECTED`, `CANCELLED` or `PAUSED`, mapped
+from the provider's `recurring_details.status`. Only `ACTIVE` may be charged,
+and only a `confirmed` token is `ACTIVE`. An order existing is not
+authorisation, and neither is a 200. `REJECTED` and `CANCELLED` are final;
+`PAUSED` is not, because a customer can resume a paused UPI mandate from their
+UPI app. Nothing in this service can cause that transition — Razorpay documents
+that a mandate the customer paused cannot be resumed by the merchant — so it
+returns to `ACTIVE` only when the provider reports the token confirmed again.
+
+An attempt runs `INTENT → ORDER_CREATED → NOTIFIED → SUBMITTING → SUBMITTED →
+AUTHORIZED → SUCCEEDED`, with `FAILED` as another terminal, `UNKNOWN` for an
+outcome nobody knows, and `NOTIFICATION_FAILED` as the terminal for an attempt
+whose pre-debit notice did not reach the customer.
+
+`SUBMITTING` is written before the debit request leaves the process. A row found
+there after a restart means a debit may be at the provider and the answer was
+never seen; it is never resubmitted, and reconciliation asks the order what it
+holds. Without it the durable record of a request only appeared once the
+response came back, which is exactly the window a crash falls in.
+
+Every transition goes through one function that compares ranks and
+refuses to go backwards, because Razorpay delivers webhooks at least once and
+does not guarantee order — so a redelivered `payment.authorized` would otherwise
+overwrite a `payment.captured` that already landed, and a collected cycle would
+become uncollected. The rule is also enforced where the row is written, not only
+where a caller remembers to ask: a whole-row write whose state does not advance
+keeps the stored one.
+
+Two different terminal states for one payment are recorded as a conflict, not
+resolved. One of them is wrong and this code cannot tell which; picking a winner
+by arrival time would be inventing an answer the provider did not give.
+
+### Billing cycles
+
+A cycle is `cycle_days` long and opens at a stored hour. The live service takes
+its rules from `sim/harness.py`, which is the model every published number was
+measured on:
+
+- **One collection per cycle.** A cycle whose attempt succeeded is closed to
+  further debits. The simulation expresses this as a `collected` flag that
+  removes the mandate from scheduling; the service derives the same fact from
+  the attempts already on disk, so it survives a restart without a second copy
+  of it to keep true. NPCI's own rule has the same shape — one successful debit
+  on a token per billing cycle.
+- **The cycle advances at the day boundary past its close**, and the attempt
+  allowance, the outstanding notice and the previous decline code reset with it.
+  The new cycle number and its opening hour are written to the mandate row, so a
+  restart resumes in the cycle it was in rather than reopening a closed one.
+- **A cycle never rolls over an unresolved attempt.** A debit whose outcome is
+  unknown blocks scheduling regardless of which cycle it belongs to, so the
+  rollover itself cannot authorise a second charge.
+
+The window is measured in days, which is the unit `timing.propose` compares it
+against. Passing hours made every cycle close roughly thirty times too late, so
+no cycle ever closed and the scheduler kept spending attempts inside a window
+that should have ended.
+
+### Webhooks
+
+The signature is HMAC-SHA256 over the raw request body, in `X-Razorpay-Signature`.
+Razorpay's documentation says in as many words not to parse or cast the body
+before signing it, so `verify` takes `bytes` and not a dict — a caller
+physically cannot hand it a re-serialised object, which would hash differently
+and fail on every genuine event.
+
+Ingestion does the smallest durable thing: verify, insert, return. Razorpay
+allows five seconds and resends anything it does not see acknowledged, so no
+model call, no provider call and no belief update happens inside the request.
+Interpretation runs after the response.
+
+Verification happens before the event id is claimed. `x-razorpay-event-id` is
+the deduplication key, so a delivery recorded under it before its signature is
+checked lets an unauthenticated sender occupy the id of an event Razorpay has
+not sent yet — and the genuine delivery, arriving later with a valid signature,
+is then dismissed as a duplicate and never processed. A rejected delivery is
+recorded in `rejected_deliveries` instead, with the id it claimed and the bytes
+it sent, and answered 400. The log keeps its forensic value; the dedup key is
+not handed to the sender.
+
+An unhandled event type is accepted and acknowledged rather than 4xx'd: a 4xx
+makes Razorpay retry for twenty-four hours and then disable the webhook.
+
+`order.notification.failed` moves the attempt to `NOTIFICATION_FAILED`, which is
+terminal. The pre-debit notice is a regulatory obligation and a notice that
+failed cannot be un-failed, so no charge runs against that order; a later
+`order.notification.delivered` for the same notification contradicts it, and the
+reading that does not debit wins. A fresh notice needs a fresh order, which the
+next tick creates.
+
+### Crash boundaries
+
+| Where the process dies | What it leaves | How it recovers |
+|---|---|---|
+| before the intent is written | nothing | re-deciding is safe |
+| after the intent, before the order | an `INTENT` row, no provider state | reconciliation reports that no request was made |
+| after the order, before recording it | an order at Razorpay whose id we lost | `GET /v1/orders?receipt=` finds it; the receipt is deterministic |
+| after the order, before the debit | a scheduled attempt | the next tick submits it; the gate's ledger is rebuilt from the store |
+| during the debit, before the response | `SUBMITTING` — written before the request left | never resubmitted; reconciliation asks the order which payments it holds |
+| during the debit, response lost | `UNKNOWN` — the money may have moved | never retried; the order is asked which payments it has |
+| during the debit, request re-sent after a restart | the provider refuses it (`Order already paid`) and the attempt is recorded `UNKNOWN`, **not** `FAILED` | reconciliation reads the order and finds the payment that did collect |
+| after the debit, before the webhook | `SUBMITTED` | `GET /v1/payments/:id` |
+| after the webhook, before interpreting it | a durable event, unprocessed | replayed at startup; every write is monotonic, so a replay is a no-op |
+
+The property this rests on is that a debit is at-most-once at the provider, and
+the property it does not have is exactly-once. A retried submission after a lost
+response gets a rejection, not a replayed success, so the client still has to
+reconcile. Nothing here claims otherwise.
+
+**And a provider refusal is never read as a decline.** `Order already paid` is
+exactly what a resubmission after a crash mid-request receives, and the order it
+names may hold a captured payment. Recording that as `FAILED` would report a
+collected cycle as uncollected and spend an NPCI attempt on it, so the service
+records `UNKNOWN` — non-terminal, never auto-retried, resolved by asking the
+order what it holds. Gate `F4b` drives that boundary and fails if the attempt
+comes out `FAILED` or if the money is counted anywhere but once.
+
+The executor's own precondition is the second line of that defence. Its journal
+is rebuilt from the attempt row on every load, so a row at or past `SUBMITTING`
+must report a phase `attempt()` refuses. The mapping is total in both
+directions and asserted to be: a state missing from it would leave the journal
+reporting a phase the executor treats as chargeable, and a restart would resubmit
+a debit that had already run — or charge one whose pre-debit notice failed.
+
+### The HTTP surface
+
+There is no `POST /charge`. No route accepts an amount, and none accepts a
+token. The only route that can move money runs the whole chain and reads no
+request body at all: the amount comes from the mandate the customer authorised,
+the hour from the belief filter, the legality from Stage 0. A generic charge
+endpoint would make every guarantee in this repository conditional on nobody
+calling it — including the guarantee that a language model cannot pick a debit
+amount, because a model with an HTTP client and a generic endpoint has picked
+one.
+
+The webhook endpoint is the only unauthenticated write route, because Razorpay
+cannot present an operator token. Its authentication is the signature. Every
+other route requires `RECOVERY_OPERATOR_TOKEN` when one is configured, and the
+server refuses to bind a non-loopback address without one.
+
+Provider identifiers are shortened in responses unless the caller authenticates
+and asks for them. Webhook payloads are never returned: they carry the
+customer's email and contact and exist only so a signature dispute can be
+settled.
+
+### The operator console
+
+`live/console/` is a static page served by the same process, with no framework
+and no build step. It renders environment, mandate state, the decision chain,
+the payment lifecycle, the webhook timeline and the diagnosis. It decides
+nothing. Its content security policy permits no third-party origin, so the type
+is a system stack and there are no remote assets.
 
 ---
 
