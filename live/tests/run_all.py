@@ -39,6 +39,8 @@ GATES = [
      "the served surface, over a real socket"),
     ("regressions", "live.tests.test_regressions",
      "one gate per money-path defect, each with a mutant"),
+    ("console", "live.tests.test_console",
+     "the operator page renders the contract and spends nothing"),
 ]
 
 _PKG = os.path.dirname(os.path.dirname(os.path.dirname(

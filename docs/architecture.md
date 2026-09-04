@@ -626,10 +626,31 @@ settled.
 ### The operator console
 
 `live/console/` is a static page served by the same process, with no framework
-and no build step. It renders environment, mandate state, the decision chain,
-the payment lifecycle, the webhook timeline and the diagnosis. It decides
-nothing. Its content security policy permits no third-party origin, so the type
-is a system stack and there are no remote assets.
+and no build step. It decides nothing. Its content security policy permits no
+third-party origin, so the type is a system stack and there are no remote
+assets.
+
+It is composed around one object: the chain of authority behind the payment on
+screen, read down a single rule — the Razorpay event, the belief, the scheduler
+(*when*), the diagnosis (*what*), Stage 0 (*whether*), the provider, and the
+webhook that answered. Each stage names the layer that decided it, so the
+separation this document argues for is the page's structure rather than a
+caption on it. Above the chain sits the environment, the standing order and one
+sentence saying what happened; below it, the deliveries that arrived and the
+order's own record.
+
+Two properties are worth stating because they constrain what it may show. The
+page renders only fields `/api/state` and `/api/mandates/{id}` serve, and
+derives nothing the money path already computed — `attempts_used`,
+`gate_checks`, `p_now` and `uncertainty_band` are read, never recomputed, so no
+second copy of an NPCI or Stage 0 rule exists in a browser. And two records of
+one attempt are merged on `attempt_id`: NPCI's notice period makes scheduling
+and charging separate ticks, and each carries half the chain.
+
+`live/tests/test_console.py` holds both, along with the properties that keep
+the page from becoming a way to spend: no input outside its dialogs, no control
+naming a time or forcing an attempt, a `/decide` body that is a literal `{}`,
+and offline-only controls that are absent in live mode rather than disabled.
 
 ---
 

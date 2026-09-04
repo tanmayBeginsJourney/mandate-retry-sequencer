@@ -1,493 +1,371 @@
 /* ===========================================================================
    Operator console.
 
-   A technical operations surface, not a product page. Density is deliberate:
-   an operator reading this is checking whether a payment moved, and scrolling
-   past decoration to find out is a cost.
+   THE VISUAL DNA IS `docs/index.html` AND THE MATERIAL RULE IS ITS RULE:
+   information sits in hairline-divided grids and lists, never in cards. The
+   page has one shadow (the dialog) and one radius (form controls). Hierarchy
+   comes from scale, weight, tracking and alignment.
 
-   COLOUR CARRIES ONE MEANING AND ONLY ONE: whether real money can move. The
-   environment chip is the loudest thing on the page and everything else is
-   neutral, because a console where six things are highlighted has highlighted
-   nothing. State elsewhere is carried by weight, position and a small marker
-   glyph as well as by hue, so it still reads without colour.
+   THE SPINE IS THE PAGE. `docs/index.html` has a device -- `.rv .said`, a 2px
+   left rule marking attributed speech. The spine is that device at full scale:
+   one continuous rule with the deciding authority right-aligned against it.
+   There are no nodes, no chips and no icons, because a dot would be the only
+   thing on the page whose job is to look like something.
 
-   NO REMOTE ASSETS. The page is served with a strict content security policy
-   that permits no third-party origin, so the type is a system stack and the
-   only images are inline shapes.
+   NO WEBFONT. The page is served under `default-src 'none'; style-src 'self'`
+   with no `font-src`, so a remote face fails silently. Georgia carries the
+   display line -- it is the nearest system relative of the page's Newsreader
+   and it is on every target platform.
+
+   COLOUR IS NEVER THE ONLY SIGNAL. Every state that has a colour also has a
+   word, and the spine's rule changes colour only alongside a verdict written
+   in text beside it.
    =========================================================================== */
 
-:root {
-  --bg:            #fbfbfa;
-  --surface:       #ffffff;
-  --surface-2:     #f4f4f2;
-  --ink:           #14140f;
-  --ink-2:         #45453d;
-  --muted:         #67675f;   /* 4.5:1 on --surface-2, the tightest pairing */
-  --faint:         #9c9c93;
-  --rule:          #e4e4df;
-  --rule-2:        #efefea;
+:root{
+  /* Inherited verbatim from docs/index.html: warm paper, one green for money
+     landed, one clay red for declined. Amber is the one addition -- the
+     console has a third state the page never had to show: held, or unknown. */
+  --paper:#faf9f6; --surface:#ffffff; --surface-2:#f5f3ee;
+  --ink:#16130f; --ink-2:#443f38; --muted:#6f6960; --faint:#a09992;
+  --rule:#e3ded4; --rule-2:#eeeae2;
+  --accent:#14684f; --accent-ink:#0d5540; --accent-soft:#e2efe9;
+  --warn:#a13a20; --warn-ink:#8b3119; --warn-soft:#f9eae4;
+  --hold:#8a6414; --hold-ink:#75540f; --hold-soft:#f7f0dc;
+  --shadow:0 1px 2px rgba(22,19,15,.04), 0 24px 64px -32px rgba(22,19,15,.32);
 
-  --ok:            #146c46;
-  --ok-soft:       #e6f1ea;
-  --warn:          #8a5a08;
-  --warn-soft:     #f8efdd;
-  --bad:           #99311c;
-  --bad-soft:      #f8e8e3;
-  --info:          #23557a;
-  --info-soft:     #e6eef5;
-
-  --live:          #99311c;
-  --live-soft:     #f8e8e3;
-
-  --focus:         #1c5fb0;
-
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-          Arial, "Helvetica Neue", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-          "Liberation Mono", monospace;
-
-  --r: 8px;
-  --shadow: 0 1px 2px rgba(20,20,15,.05), 0 6px 18px -12px rgba(20,20,15,.22);
-  --step: 4px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI",
+         Roboto,Helvetica,Arial,sans-serif;
+  --serif:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,
+          "Times New Roman",serif;
+  --mono:ui-monospace,"Cascadia Mono",SFMono-Regular,"SF Mono",Menlo,Consolas,
+         monospace;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:        #0e0e0d;
-    --surface:   #161615;
-    --surface-2: #1d1d1b;
-    --ink:       #f2f2ee;
-    --ink-2:     #c6c6bd;
-    --muted:     #8b8b82;
-    --faint:     #63635b;
-    --rule:      #2a2a27;
-    --rule-2:    #212120;
-
-    --ok:        #5cc396;  --ok-soft:   #12271f;
-    --warn:      #d6a44c;  --warn-soft: #2a2110;
-    --bad:       #e08063;  --bad-soft:  #2b1610;
-    --info:      #7db3dc;  --info-soft: #13212c;
-    --live:      #e08063;  --live-soft: #2b1610;
-    --focus:     #7db3dc;
-    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 6px 18px -12px rgba(0,0,0,.7);
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e0d0b; --surface:#17150f; --surface-2:#1d1a14;
+    --ink:#f3f0e9; --ink-2:#c8c1b5; --muted:#8d8579; --faint:#645d53;
+    --rule:#2b271f; --rule-2:#221f19;
+    --accent:#4fc298; --accent-ink:#6fd6b1; --accent-soft:#122a22;
+    --warn:#e08063; --warn-ink:#ef9880; --warn-soft:#2b1610;
+    --hold:#d3aa54; --hold-ink:#e0bd73; --hold-soft:#2a2211;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 24px 64px -32px rgba(0,0,0,.85);
   }
 }
-
-* { box-sizing: border-box; }
-
-/* The UA rule for [hidden] is `display:none` at element specificity, so any
-   class rule setting `display` beats it. Several below do. This makes hiding
-   work the way every author expects it to. */
-[hidden] { display: none !important; }
-
-html { -webkit-text-size-adjust: 100%; }
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
+:root[data-theme="dark"]{
+  --paper:#0e0d0b; --surface:#17150f; --surface-2:#1d1a14;
+  --ink:#f3f0e9; --ink-2:#c8c1b5; --muted:#8d8579; --faint:#645d53;
+  --rule:#2b271f; --rule-2:#221f19;
+  --accent:#4fc298; --accent-ink:#6fd6b1; --accent-soft:#122a22;
+  --warn:#e08063; --warn-ink:#ef9880; --warn-soft:#2b1610;
+  --hold:#d3aa54; --hold-ink:#e0bd73; --hold-soft:#2a2211;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 24px 64px -32px rgba(0,0,0,.85);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .01ms !important;
-    transition-duration: .01ms !important;
-  }
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600}
+p{margin:0}
+ul,ol,dl,dd{margin:0;padding:0;list-style:none}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--ink);color:var(--paper);
+  padding:10px 16px;z-index:99}
+.skip:focus{left:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+code{font-family:var(--mono);font-size:.88em}
+
+/* ============================================================ environment
+   Not a badge. A full-bleed ruled line whose whole band changes when the rail
+   can move real money -- so the page's colour temperature IS the indicator
+   and there is nothing small to miss. */
+.env{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+  padding:11px 40px;border-bottom:1px solid var(--rule);background:var(--surface-2);
+  font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-2)}
+.env-state{font-weight:500;color:var(--ink);white-space:nowrap}
+.env-reason{letter-spacing:.05em;text-transform:none;font-size:11.5px;color:var(--muted);
+  font-family:var(--sans)}
+.env-clock{margin-left:auto;color:var(--faint);white-space:nowrap;letter-spacing:.1em}
+/* Live but read-only: the rail is real and the debit switch is not thrown.
+   Marked, not alarmed -- reserving the solid band for the one configuration
+   that can actually spend is what keeps that band meaningful. */
+.env[data-mode="live-readonly"]{background:var(--warn-soft);
+  border-bottom:2px solid var(--warn)}
+.env[data-mode="live-readonly"] .env-state{color:var(--warn-ink)}
+.env[data-mode="live"]{background:var(--warn);border-bottom-color:var(--warn);color:#fff}
+.env[data-mode="live"] .env-state,
+.env[data-mode="live"] .env-reason,
+.env[data-mode="live"] .env-clock{color:#fff;opacity:.94}
+.env[data-mode="live"] .env-reason{opacity:.86}
+@media(max-width:760px){.env{padding:10px 20px;gap:8px 14px}
+  .env-clock{margin-left:0;width:100%}}
+
+/* ================================================================== shell */
+.shell{display:grid;grid-template-columns:248px minmax(0,1fr);
+  max-width:1320px;margin:0 auto;align-items:start}
+@media(max-width:1080px){.shell{grid-template-columns:1fr}}
+
+/* ================================================================= orders
+   A list, not a sidebar of cards. The selected row is marked by a rule and by
+   ink weight -- the same two devices the spine uses. */
+.orders{padding:36px 28px 36px 40px;border-right:1px solid var(--rule);
+  position:sticky;top:0}
+.orders h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--muted);font-weight:400;margin-bottom:14px}
+.orders li{border-top:1px solid var(--rule-2)}
+.orders li:last-child{border-bottom:1px solid var(--rule-2)}
+.order-btn{display:block;width:100%;text-align:left;background:none;border:0;
+  border-left:2px solid transparent;padding:11px 0 11px 12px;cursor:pointer;
+  margin-left:-14px;transition:border-color .16s ease,color .16s ease}
+.order-btn .who{display:block;font-size:14.5px;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.order-btn .sub{display:block;font-family:var(--mono);font-size:11px;color:var(--faint);
+  letter-spacing:.03em;margin-top:2px;font-variant-numeric:tabular-nums}
+.order-btn:hover .who{color:var(--ink)}
+.order-btn[aria-current="true"]{border-left-color:var(--accent)}
+.order-btn[aria-current="true"] .who{color:var(--ink);font-weight:600}
+.order-btn[aria-current="true"] .sub{color:var(--muted)}
+.orders-empty{font-size:13.5px;color:var(--muted);line-height:1.55;padding:6px 0 0}
+.link{background:none;border:0;padding:0;color:var(--accent-ink);cursor:pointer;
+  font-size:inherit;box-shadow:inset 0 -1px 0 currentColor;text-align:left}
+.link:hover{box-shadow:inset 0 -2px 0 currentColor}
+.link.add{margin-top:18px;font-size:13.5px}
+.portfolio{margin-top:26px;border-top:1px solid var(--rule)}
+.portfolio div{display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+  padding:8px 0;border-bottom:1px solid var(--rule-2)}
+.portfolio dt{font-size:12.5px;color:var(--muted)}
+.portfolio dd{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+/* NARROW: the order list becomes a band, not a screen.
+   Stacked full width it pushed the answer and the spine off the first screen
+   entirely -- so on a phone the page opened on navigation instead of on what
+   happened. Here the list scrolls sideways in one compact row and the
+   portfolio totals sit inline beside it, so the whole band costs about 90px
+   and the answer is still the first thing read. */
+@media(max-width:1080px){
+  .orders{position:static;border-right:0;border-bottom:1px solid var(--rule);
+    padding:18px 0 16px;display:grid;gap:12px}
+  .orders h2,.orders-empty,.link.add{padding:0 20px}
+  .orders h2{margin-bottom:0}
+  .orders ul{display:flex;gap:0 10px;overflow-x:auto;padding:0 20px 2px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .orders li{border:0;flex:0 0 auto;scroll-snap-align:start}
+  .orders li:last-child{border-bottom:0}
+  .order-btn{margin-left:0;padding:6px 0 6px 11px;
+    border-left:2px solid var(--rule-2);white-space:nowrap}
+  .order-btn .who{max-width:34vw}
+  .portfolio{display:flex;gap:0 26px;flex-wrap:wrap;border-top:1px solid var(--rule-2);
+    margin:0;padding:12px 20px 0}
+  .portfolio div{border-bottom:0;gap:8px;padding:0}
+  .link.add{justify-self:start;margin-top:0}
 }
 
-h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.01em; }
-p { margin: 0; }
-em { font-style: normal; font-weight: 600; color: var(--ink); }
+/* =================================================================== main */
+main{padding:52px 56px 96px;min-width:0}
+@media(max-width:1080px){main{padding:36px 20px 72px}}
 
-.skip {
-  position: absolute; left: -9999px; top: 0; z-index: 100;
-  background: var(--surface); color: var(--ink);
-  padding: 8px 14px; border-radius: 0 0 var(--r) 0;
-}
-.skip:focus { left: 0; }
+.sec{font-family:var(--mono);font-size:10.5px;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--muted);font-weight:400;margin-bottom:20px}
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
+/* ============================================================== the answer
+   Identity is small and factual. The outcome is the largest thing on the page
+   and is a sentence, because a state name is not an answer. */
+.head-top{display:flex;align-items:baseline;justify-content:space-between;
+  gap:24px 32px;flex-wrap:wrap;margin-bottom:26px}
+.ident{font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;color:var(--muted);
+  text-transform:uppercase;font-variant-numeric:tabular-nums}
+.ident b{color:var(--ink);font-weight:500}
+.answer{font-family:var(--serif);font-weight:400;
+  font-size:clamp(30px,4.4vw,52px);line-height:1.06;letter-spacing:-.017em;
+  max-width:17ch;color:var(--ink);text-wrap:balance}
+.answer .q{color:var(--warn-ink)}
+.answer .g{color:var(--accent-ink)}
+.answer .h{color:var(--hold-ink)}
+.because{margin-top:22px;max-width:56ch;font-size:16px;line-height:1.58;color:var(--ink-2)}
+.blocked{margin-top:14px;max-width:56ch;font-size:14px;color:var(--warn-ink);
+  border-left:2px solid var(--warn);padding-left:14px}
 
-/* --------------------------------------------------------------- top bar */
-.bar {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-}
-.bar-in {
-  max-width: 1240px; margin: 0 auto;
-  padding: 12px 24px;
-  display: flex; align-items: center; gap: 16px;
-  flex-wrap: wrap;
-}
-.brand { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.brand-name { font-weight: 600; letter-spacing: -.01em; }
-.brand-sub { color: var(--muted); font-size: 12px; }
+/* ---- actions: text, at body size, beside the object they act on --------- */
+.acts{display:flex;gap:0;flex-wrap:wrap;align-items:center}
+.act{background:none;border:0;padding:7px 14px;cursor:pointer;font-size:13.5px;
+  color:var(--ink-2);border-radius:4px;white-space:nowrap;
+  transition:color .16s ease,background-color .16s ease}
+.act:hover:not(:disabled){color:var(--ink);background:var(--surface-2)}
+.act:disabled{color:var(--faint);cursor:not-allowed}
+.act.is-busy{opacity:.5}
+.acts .act + .act{margin-left:2px}
+/* The decide control at rest: quiet, because on the mock rail it moves
+   nothing and a loud button on every tick trains an operator to click
+   through the one that matters. */
+.act.decide{color:var(--ink);box-shadow:inset 0 0 0 1px var(--rule)}
+.act.decide:hover:not(:disabled){box-shadow:inset 0 0 0 1px var(--muted);background:none}
+/* Live, with debits authorised. The only hatched element on the page. */
+.act.decide[data-live="yes"]{color:var(--warn-ink);font-weight:600;
+  box-shadow:inset 0 0 0 1px var(--warn);
+  background:repeating-linear-gradient(135deg,transparent 0 6px,
+             var(--warn-soft) 6px 12px)}
+.act.decide[data-live="yes"]:hover:not(:disabled){background:var(--warn-soft)}
+.act.solid{background:var(--ink);color:var(--paper)}
+.act.solid:hover:not(:disabled){background:var(--accent);color:#fff}
+.act.danger{color:var(--warn-ink);box-shadow:inset 0 0 0 1px var(--warn)}
+.act.danger:hover:not(:disabled){background:var(--warn-soft)}
+.act.cancel{color:var(--warn-ink)}
+.act.cancel:hover:not(:disabled){background:var(--warn-soft)}
+.act.quiet{color:var(--muted)}
 
-.dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--faint); flex: none; align-self: center;
-  transition: background .18s ease;
-}
-.dot[data-live="offline"] { background: var(--info); }
-.dot[data-live="live"] {
-  background: var(--live);
-  box-shadow: 0 0 0 3px var(--live-soft);
-}
-
-.bar-right { margin-left: auto; display: flex; align-items: center; gap: 8px;
-             flex-wrap: wrap; }
-
-.env {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 4px 10px; border-radius: 999px;
-  border: 1px solid var(--rule);
-  background: var(--surface-2);
-  font-size: 12px;
-}
-.env-label { color: var(--muted); }
-.env strong { font-weight: 600; letter-spacing: .02em; }
-.env[data-state="offline"] { background: var(--info-soft); border-color: transparent; }
-.env[data-state="offline"] strong { color: var(--info); }
-.env[data-state="live"] { background: var(--live-soft); border-color: transparent; }
-.env[data-state="live"] strong { color: var(--live); }
-.env[data-state="blocked"] { background: var(--surface-2); }
-.env[data-state="blocked"] strong { color: var(--muted); }
-.env[data-state="allowed"] { background: var(--warn-soft); border-color: transparent; }
-.env[data-state="allowed"] strong { color: var(--warn); }
-
-.bar-note {
-  max-width: 1240px; margin: 0 auto; padding: 0 24px 10px;
-  color: var(--muted); font-size: 12px;
-}
-
-/* --------------------------------------------------------------- buttons */
-.btn {
-  font: inherit; font-size: 13px; font-weight: 500;
-  color: var(--surface); background: var(--ink);
-  border: 1px solid var(--ink);
-  padding: 6px 13px; border-radius: 6px; cursor: pointer;
-  transition: transform .12s ease, opacity .12s ease, background .12s ease;
-}
-.btn:hover { opacity: .88; }
-.btn:active { transform: translateY(1px); }
-.btn[disabled] { opacity: .45; cursor: not-allowed; transform: none; }
-.btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--rule); }
-.btn.ghost:hover { background: var(--surface-2); opacity: 1; }
-.btn.ghost[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
-.btn.small { padding: 4px 10px; font-size: 12px; }
-/* A destructive action is outlined, not filled. White on the dark-mode red
-   measures 2.8:1, and a solid red button is also the loudest thing on a page
-   whose loudest thing should be whether real money can move. */
-.btn.danger {
-  background: var(--bad-soft); border-color: var(--bad); color: var(--bad);
-}
-.btn.danger:hover { background: var(--bad-soft); opacity: .85; }
-.btn.is-busy { position: relative; color: transparent; }
-.btn.is-busy::after {
-  content: ""; position: absolute; inset: 0; margin: auto;
-  width: 12px; height: 12px; border-radius: 50%;
-  border: 2px solid currentColor; border-top-color: transparent;
-  color: var(--surface);
-  animation: spin .6s linear infinite;
-}
-.btn.ghost.is-busy::after { color: var(--ink-2); }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.link {
-  font: inherit; color: var(--focus); background: none; border: 0;
-  padding: 0; cursor: pointer; text-decoration: underline;
-  text-underline-offset: 2px;
+/* ================================================================ the spine
+   One rule. Seven authorities. The label is right-aligned against the rule so
+   the eye reads WHO before WHAT, which is the whole argument. */
+.spine-wrap{margin-top:76px}
+.spine li{display:grid;grid-template-columns:112px 2px minmax(0,1fr);
+  gap:0 22px;align-items:start}
+.spine .who{grid-column:1;text-align:right;padding-top:11px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);line-height:1.35}
+.spine .who b{display:block;color:var(--ink-2);font-weight:500}
+.spine .who .verb{display:block;color:var(--faint);letter-spacing:.1em}
+.spine .who .verb.own{color:var(--accent-ink)}
+/* The rule segment. State lives here AND in the words beside it. */
+.spine .bar{grid-column:2;background:var(--rule);width:2px;min-height:100%;
+  align-self:stretch}
+.spine li[data-on="done"] .bar{background:var(--accent)}
+.spine li[data-on="bad"]  .bar{background:var(--warn)}
+.spine li[data-on="hold"] .bar{background:var(--hold)}
+.spine li[data-on="idle"] .bar{background:var(--rule-2)}
+.spine .said{grid-column:3;padding:9px 0 17px}
+.spine .said .v{font-size:17px;line-height:1.35;color:var(--ink);letter-spacing:-.008em}
+.spine li[data-on="idle"] .said .v{color:var(--muted);font-weight:400}
+.spine .said .d{margin-top:4px;font-size:14px;color:var(--ink-2);max-width:58ch;
+  line-height:1.5}
+.spine .said .quote{margin-top:8px;font-size:13.5px;color:var(--muted);
+  font-style:italic;max-width:58ch;line-height:1.5}
+/* Evidence: the numbers the authority in this row actually used. Nowhere else
+   on the page are these shown, because nowhere else did anything use them. */
+.spine .ev{margin-top:9px;display:flex;flex-wrap:wrap;gap:4px 22px;
+  font-family:var(--mono);font-size:11.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.spine .ev b{color:var(--ink-2);font-weight:500}
+/* Stage 0's five verdicts, when it has adjudicated. */
+.rules{margin-top:10px;display:flex;flex-wrap:wrap;gap:3px 18px;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.02em}
+.rules span{color:var(--muted)}
+.rules span b{font-weight:500;color:var(--accent-ink)}
+.rules span[data-v="REFUSED"] b{color:var(--warn-ink)}
+.spine-note{margin-top:16px;padding-left:134px;font-size:13px;color:var(--muted);
+  max-width:64ch}
+@media(max-width:640px){
+  .spine li{grid-template-columns:2px minmax(0,1fr);gap:0 16px}
+  .spine .who{grid-column:2;text-align:left;padding:12px 0 0}
+  .spine .who b{display:inline}
+  .spine .who .verb{display:inline;margin-left:6px}
+  .spine .bar{grid-column:1;grid-row:1/3}
+  .spine .said{grid-column:2;padding-top:3px}
+  .spine-note{padding-left:18px}
 }
 
-/* ---------------------------------------------------------------- layout */
-main {
-  max-width: 1240px; margin: 0 auto;
-  padding: 20px 24px 64px;
-  display: flex; flex-direction: column; gap: 20px;
-}
-.grid { display: grid; gap: 12px; }
-.stats { grid-template-columns: repeat(4, 1fr); }
-.split { display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 20px; }
-.split:nth-of-type(3) { grid-template-columns: 1fr 1fr; }
+/* ================================================================= events */
+.events-wrap{margin-top:64px}
+.events li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 24px;
+  padding:12px 0;border-top:1px solid var(--rule-2);align-items:baseline}
+.events li:last-child{border-bottom:1px solid var(--rule-2)}
+.events .n{font-family:var(--mono);font-size:13.5px;color:var(--ink);letter-spacing:-.01em}
+.events .t{font-family:var(--mono);font-size:11.5px;color:var(--faint);
+  text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.events .r{grid-column:1/-1;font-size:13.5px;color:var(--ink-2)}
+.events li[data-tone="good"] .n{color:var(--accent-ink)}
+.events li[data-tone="bad"] .n{color:var(--warn-ink)}
+.events li[data-tone="stale"] .n{color:var(--muted)}
+.events li[data-tone="stale"] .r{color:var(--muted)}
+.rejected li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 24px;
+  padding:12px 14px;margin-bottom:2px;border-left:2px solid var(--warn);
+  background:var(--warn-soft);align-items:baseline}
+.rejected .n{font-family:var(--mono);font-size:13px;color:var(--warn-ink);font-weight:500}
+.rejected .t{font-family:var(--mono);font-size:11.5px;color:var(--warn-ink);opacity:.75;
+  text-align:right;white-space:nowrap}
+.rejected .r{grid-column:1/-1;font-size:13px;color:var(--warn-ink)}
+.none{font-size:14px;color:var(--muted)}
 
-@media (max-width: 1000px) {
-  .stats { grid-template-columns: repeat(2, 1fr); }
-  .split, .split:nth-of-type(3) { grid-template-columns: 1fr; }
-}
-@media (max-width: 560px) {
-  .bar-in { padding: 10px 14px; }
-  .bar-note { padding: 0 14px 8px; }
-  main { padding: 14px 14px 48px; gap: 14px; }
-  .stats { grid-template-columns: 1fr; }
-}
+/* ================================================================== facts */
+.facts-wrap{margin-top:64px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:0;border-top:1px solid var(--rule)}
+.facts>div{padding:14px 24px 14px 0;border-bottom:1px solid var(--rule-2);min-width:0}
+.facts dt{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:3px}
+.facts dd{font-size:15px;color:var(--ink);overflow-wrap:anywhere}
+.facts dd.mono{font-size:13px;color:var(--ink-2)}
+.facts dd.bad{color:var(--warn-ink)}
+.facts.thin dd{font-size:13px}
+.prov{margin-top:26px}
+.prov summary{font-size:13.5px;color:var(--muted);cursor:pointer;padding:6px 0;
+  list-style:none}
+.prov summary::-webkit-details-marker{display:none}
+.prov summary::before{content:"› ";color:var(--faint)}
+.prov[open] summary::before{content:"⌄ "}
+.prov summary:hover{color:var(--ink)}
+.history{margin-top:20px;border-top:1px solid var(--rule-2)}
+.history li{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:16px;
+  padding:9px 0;border-bottom:1px solid var(--rule-2);font-size:13px;
+  align-items:baseline}
+.history .s{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.history .d{color:var(--muted)}
+.history .w{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:right}
+.history li[data-v="IGNORED_STALE"] .s{color:var(--faint)}
+@media(max-width:640px){.history li{grid-template-columns:1fr auto}
+  .history .d{grid-column:1/-1}}
+.danger-zone{margin-top:32px;padding-top:18px;border-top:1px solid var(--rule);
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:space-between}
 
-/* ----------------------------------------------------------------- tiles */
-.tile {
-  background: var(--surface); border: 1px solid var(--rule);
-  border-radius: var(--r); padding: 12px 14px;
-}
-.tile h2 {
-  font-size: 11px; font-weight: 500; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted); margin-bottom: 4px;
-}
-.tile-value {
-  font-size: 22px; font-weight: 600; letter-spacing: -.02em;
-  font-variant-numeric: tabular-nums; line-height: 1.2;
-}
-.tile-note { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.tile-value[data-tone="ok"] { color: var(--ok); }
-.tile-value[data-tone="bad"] { color: var(--bad); }
-.tile-value[data-tone="warn"] { color: var(--warn); }
+/* ================================================================ dialogs
+   The one place the page uses a shadow and a card, because a modal genuinely
+   is a separate object. */
+dialog{border:0;border-radius:8px;padding:0;background:var(--surface);color:var(--ink);
+  box-shadow:var(--shadow);max-width:560px;width:calc(100% - 40px)}
+dialog::backdrop{background:rgba(22,19,15,.44)}
+dialog form{padding:28px 30px 24px}
+dialog h2{font-family:var(--serif);font-weight:400;font-size:24px;letter-spacing:-.015em;
+  margin-bottom:12px}
+.dialog-note{font-size:14px;color:var(--ink-2);line-height:1.55;margin-bottom:18px}
+.dialog-facts{display:grid;grid-template-columns:auto 1fr;gap:7px 20px;
+  padding:16px 0;border-top:1px solid var(--rule-2);border-bottom:1px solid var(--rule-2);
+  margin-bottom:20px;font-size:14px}
+.dialog-facts dt{color:var(--muted)}
+.dialog-facts dd{color:var(--ink);font-family:var(--mono);font-size:13px;
+  overflow-wrap:anywhere}
+dialog label{display:block;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);margin:14px 0 5px}
+dialog input{width:100%;font:inherit;font-size:14.5px;padding:8px 11px;
+  background:var(--paper);color:var(--ink);border:1px solid var(--rule);border-radius:5px}
+dialog input:focus-visible{border-color:var(--accent)}
+dialog .row{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+@media(max-width:520px){dialog .row{grid-template-columns:1fr}}
+.hint{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.45}
+.form-error{margin-top:16px;font-size:13.5px;color:var(--warn-ink);
+  border-left:2px solid var(--warn);padding-left:12px}
+.dialog-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:24px;
+  padding-top:18px;border-top:1px solid var(--rule-2)}
 
-/* ---------------------------------------------------------------- panels */
-.panel {
-  background: var(--surface); border: 1px solid var(--rule);
-  border-radius: var(--r); padding: 14px 16px 16px;
-  min-width: 0;
-}
-.panel-head {
-  display: flex; align-items: center; gap: 10px;
-  margin-bottom: 10px; flex-wrap: wrap;
-}
-.panel-head h2 { font-size: 14px; }
-.panel-head .actions, .panel-head .btn:last-child { margin-left: auto; }
-.panel-head .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.sub {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--muted); font-weight: 500;
-  margin: 18px 0 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--rule-2);
-}
-.lead { color: var(--ink-2); font-size: 13px; margin-bottom: 12px; max-width: 62ch; }
-.lead.constraint {
-  border-left: 2px solid var(--rule); padding-left: 12px;
-}
-.empty {
-  color: var(--muted); font-size: 13px;
-  padding: 18px 2px; max-width: 56ch;
-}
-.empty.small { padding: 10px 2px; }
+/* ================================================================= toasts */
+.toasts{position:fixed;left:40px;bottom:28px;display:flex;flex-direction:column;
+  gap:8px;z-index:60;max-width:min(460px,calc(100% - 80px))}
+.toast{background:var(--ink);color:var(--paper);padding:11px 16px;border-radius:5px;
+  font-size:13.5px;line-height:1.45;box-shadow:var(--shadow);
+  animation:rise .2s ease both}
+.toast[data-kind="bad"]{background:var(--warn-ink);color:#fff}
+.toast[data-kind="ok"]{background:var(--accent-ink);color:#fff}
+@media(max-width:760px){.toasts{left:20px;right:20px;max-width:none}}
 
-.badge {
-  font-size: 11px; font-weight: 500; letter-spacing: .02em;
-  padding: 2px 8px; border-radius: 999px;
-  background: var(--surface-2); color: var(--ink-2);
-  border: 1px solid var(--rule);
-  white-space: nowrap;
-}
-.badge.muted { color: var(--muted); }
-.badge.ok   { background: var(--ok-soft);   color: var(--ok);   border-color: transparent; }
-.badge.bad  { background: var(--bad-soft);  color: var(--bad);  border-color: transparent; }
-.badge.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-.badge.info { background: var(--info-soft); color: var(--info); border-color: transparent; }
-
-/* -------------------------------------------------------------- mandates */
-.mandates { list-style: none; margin: 0; padding: 0; display: flex;
-            flex-direction: column; gap: 4px; }
-.mandate {
-  width: 100%; text-align: left; font: inherit; cursor: pointer;
-  /* `color` is NOT inherited by a button: the user-agent default wins and the
-     label renders in the UA's black, which on a dark surface is unreadable.
-     `font: inherit` does not cover it. */
-  color: var(--ink);
-  background: transparent; border: 1px solid transparent;
-  border-radius: 6px; padding: 9px 10px;
-  display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
-  transition: background .12s ease, border-color .12s ease;
-}
-.mandate:hover { background: var(--surface-2); }
-.mandate[aria-current="true"] {
-  background: var(--surface-2); border-color: var(--rule);
-}
-.mandate-name { font-weight: 500; }
-.mandate-meta {
-  grid-column: 1 / -1; color: var(--muted); font-size: 12px;
-  font-family: var(--mono);
-}
-
-.skeleton-row { display: flex; gap: 8px; padding: 9px 10px; }
-.sk {
-  display: block; height: 11px; border-radius: 4px;
-  background: linear-gradient(90deg, var(--surface-2), var(--rule-2), var(--surface-2));
-  background-size: 200% 100%;
-  animation: shimmer 1.1s ease-in-out infinite;
-}
-.sk-a { width: 45%; } .sk-b { width: 28%; }
-@keyframes shimmer { to { background-position: -200% 0; } }
-
-/* ---------------------------------------------------------------- facts */
-.facts {
-  margin: 0; display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px 18px;
-}
-.facts > div { min-width: 0; }
-.facts dt {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--muted); margin-bottom: 1px;
-}
-.facts dd {
-  margin: 0; font-size: 13px; overflow-wrap: anywhere;
-}
-.facts dd.mono { font-family: var(--mono); font-size: 12px; }
-
-/* ------------------------------------------------------------- lifecycle */
-.lifecycle {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; gap: 6px;
-}
-.lifecycle li {
-  display: flex; align-items: center; gap: 7px;
-  padding: 5px 11px 5px 9px; border-radius: 999px;
-  border: 1px solid var(--rule); background: var(--surface-2);
-  color: var(--muted); font-size: 12px;
-}
-.lifecycle li::before {
-  content: "○"; font-size: 10px; line-height: 1;
-}
-.lifecycle li[data-on="done"] {
-  background: var(--ok-soft); border-color: transparent; color: var(--ok);
-  font-weight: 500;
-}
-.lifecycle li[data-on="done"]::before { content: "●"; }
-.lifecycle li[data-on="current"] {
-  background: var(--info-soft); border-color: transparent; color: var(--info);
-  font-weight: 600;
-}
-.lifecycle li[data-on="current"]::before { content: "◉"; }
-.lifecycle li[data-on="failed"] {
-  background: var(--bad-soft); border-color: transparent; color: var(--bad);
-  font-weight: 600;
-}
-.lifecycle li[data-on="failed"]::before { content: "✕"; }
-
-/* --------------------------------------------------------------- tables */
-.tablewrap { overflow-x: auto; }
-.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.tbl th, .tbl td {
-  text-align: left; padding: 7px 10px 7px 0;
-  border-bottom: 1px solid var(--rule-2); white-space: nowrap;
-}
-.tbl th {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--muted); font-weight: 500;
-}
-.tbl td.mono { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
-.tbl tbody tr:last-child td { border-bottom: 0; }
-.tbl .num { font-variant-numeric: tabular-nums; }
-
-/* ------------------------------------------------------------- timeline */
-.timeline, .events { list-style: none; margin: 0; padding: 0; }
-.timeline > li, .events > li {
-  padding: 11px 0 11px 16px;
-  border-left: 2px solid var(--rule-2);
-  position: relative;
-}
-.timeline > li::before, .events > li::before {
-  content: ""; position: absolute; left: -5px; top: 17px;
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--rule); border: 2px solid var(--surface);
-}
-.timeline > li[data-acted="true"]::before { background: var(--ok); }
-.timeline > li[data-refused="true"]::before { background: var(--bad); }
-.events > li[data-valid="false"]::before { background: var(--bad); }
-.events > li[data-changed="true"]::before { background: var(--info); }
-
-.t-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.t-title { font-weight: 500; }
-.t-time { color: var(--muted); font-size: 11px; font-family: var(--mono);
-          margin-left: auto; }
-.t-body { color: var(--ink-2); font-size: 12.5px; margin-top: 3px; }
-.t-chain {
-  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px;
-}
-.t-chain .badge { font-size: 10.5px; padding: 1px 7px; }
-.t-nums {
-  margin-top: 6px; font-family: var(--mono); font-size: 11.5px;
-  color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap;
-}
-
-/* ------------------------------------------------------------------ llm */
-.llm { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.llm-card {
-  border: 1px solid var(--rule); border-radius: var(--r);
-  padding: 11px 13px; background: var(--surface-2);
-}
-.llm-card h3 {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--muted); font-weight: 500; margin-bottom: 5px;
-}
-.llm-card p { font-size: 13px; color: var(--ink-2); }
-.llm-card p.strong { color: var(--ink); font-weight: 500; }
-
-/* --------------------------------------------------------------- dialog */
-dialog {
-  border: 1px solid var(--rule); border-radius: 12px;
-  padding: 0; background: var(--surface); color: var(--ink);
-  box-shadow: var(--shadow); max-width: 560px; width: calc(100vw - 32px);
-}
-dialog::backdrop { background: rgba(20,20,15,.42); }
-dialog form { padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 4px; }
-dialog h2 { font-size: 16px; margin-bottom: 4px; }
-.dialog-note { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
-dialog label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--muted); margin-top: 10px;
-}
-dialog input {
-  font: inherit; font-size: 13px; color: var(--ink);
-  background: var(--bg); border: 1px solid var(--rule);
-  border-radius: 6px; padding: 7px 9px; width: 100%;
-}
-dialog input:focus-visible { border-color: var(--focus); }
-.hint { color: var(--muted); font-size: 11px; margin-top: 3px; }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-@media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
-/* The live-debit confirmation's facts. A confirmation that does not name the
-   mandate and the amount is a speed bump, not a decision. */
-.dialog-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
-  margin: 0 0 16px;
-  font-size: 12.5px;
-}
-.dialog-facts dt { color: var(--muted); }
-.dialog-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
-
-.dialog-actions {
-  display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
-}
-.form-error {
-  margin-top: 12px; padding: 8px 10px; border-radius: 6px;
-  background: var(--bad-soft); color: var(--bad); font-size: 12.5px;
-}
-
-/* --------------------------------------------------------------- toasts */
-.toasts {
-  position: fixed; right: 16px; bottom: 16px; z-index: 60;
-  display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
-  pointer-events: none;
-}
-.toast {
-  background: var(--surface); border: 1px solid var(--rule);
-  border-left: 3px solid var(--info);
-  border-radius: 6px; box-shadow: var(--shadow);
-  padding: 9px 13px; font-size: 13px; max-width: 380px;
-  animation: rise .2s cubic-bezier(.2,.8,.3,1);
-}
-.toast[data-kind="ok"]  { border-left-color: var(--ok); }
-.toast[data-kind="bad"] { border-left-color: var(--bad); }
-@keyframes rise {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
+/* ================================================================= motion
+   Two movements, and both report a fact: the spine steps when the machine
+   steps, and a toast arrives. Nothing loops and nothing pulses. */
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.spine li{animation:rise .26s cubic-bezier(.2,.7,.3,1) both}
+.answer{animation:rise .3s cubic-bezier(.2,.7,.3,1) both}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0ms!important;
+    transition-duration:.01ms!important}
 }
