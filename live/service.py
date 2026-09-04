@@ -121,6 +121,12 @@ class Decision:
     at: int
     acted: bool
     reason: str
+    #: THE SIMULATED HOUR THIS TICK REASONED IN, beside `at`, which is the
+    #: wall-clock second it happened at. Both are recorded because they answer
+    #: different questions: Stage 0's peak and lead rules are stated in
+    #: simulated hours, and an operator comparing `target_t` against a UNIX
+    #: timestamp is comparing two different clocks. Written on every path.
+    now_t: int = 0
     intervention: str = ""
     root_cause: str = ""
     rationale: str = ""
@@ -142,6 +148,27 @@ class Decision:
     outcome_raw: str = ""
     attempt_state: str = ""
     provider: dict = field(default_factory=dict)
+    #: NPCI presentations already spent in the cycle this tick reasoned about,
+    #: against the regulatory ceiling. `attempts_used` counts attempts that
+    #: REACHED THE PROVIDER -- see `_attempts_this_cycle` -- so an intent that
+    #: never left the process is not one of them. Read-only; the cap check in
+    #: `_schedule` reads the same number.
+    attempts_used: int = 0
+    attempts_cap: int = CAP
+    #: The belief filter's coarse confidence about WHEN this customer is worth
+    #: asking: narrow | medium | wide. It is the same label `CaseView` carries,
+    #: and it is a label rather than the posterior for the reason
+    #: `agent/llm/caseview.py` gives -- a band says how sure our model is, a
+    #: number would say something about the customer. Empty on a tick that
+    #: never reached the scheduler.
+    uncertainty_band: str = ""
+    #: EVERY STAGE 0 RULE'S ANSWER, not just the first objection. `submit`
+    #: evaluates all five and writes all five to the audit log; this is the
+    #: same five kept in memory so the console can show them without reading
+    #: the log back. Empty on a tick that never submitted a money action --
+    #: the pre-debit notification is adjudicated by one short-circuiting
+    #: predicate, and what it found is already in `refused_rule`.
+    gate_checks: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -644,7 +671,7 @@ class LiveService:
 
         now_t = self.now_t(now)
         d = Decision(mandate_id=m.id, at=int(time.time()), acted=False,
-                     reason="")
+                     reason="", now_t=now_t)
 
         blocked = self._blocked(m)
         if blocked:
@@ -652,6 +679,10 @@ class LiveService:
             return self._record(d)
 
         attempts = self.store.attempts_for(m.id, limit=50)
+        # BEFORE THE ROLLOVER, because the paths below that return without
+        # rolling are reasoning about the cycle the mandate is still in. The
+        # rollover recounts it against the cycle it opened.
+        d.attempts_used = self._attempts_this_cycle(m, attempts)
 
         # An attempt already scheduled owns the decision. Either its hour has
         # come or it has not.
@@ -688,6 +719,7 @@ class LiveService:
 
         m = self._roll_cycle(m, now_t, c)
         d.cycle = m.cycle
+        d.attempts_used = self._attempts_this_cycle(m, attempts)
 
         if self._collected(m, attempts):
             d.reason = (f"cycle {m.cycle} is collected; the next debit is "
@@ -800,7 +832,16 @@ class LiveService:
     def _schedule(self, m: Mandate, c: Customer, now_t: int, d: Decision,
                   attempts: list[PaymentAttempt]) -> Decision:
         ref = self._ref(m, c)
+        # COUNTED HERE, FROM THIS METHOD'S OWN ARGUMENTS, and not read off the
+        # Decision. `_decide` puts the same number on `d` for the console, and
+        # it would be tempting to reuse it -- but then the NPCI cap check would
+        # depend on a display field having been populated correctly by the
+        # caller, and a fifth debit is not a rendering bug. The assignment
+        # below is the other direction: the scheduler's number overwrites the
+        # display one, so the console can never show a count the cap check
+        # did not use.
         attempts_used = self._attempts_this_cycle(m, attempts)
+        d.attempts_used = attempts_used
         if attempts_used >= CAP:
             d.reason = f"the NPCI attempt cap of {CAP} is spent for this cycle"
             return self._record(d)
@@ -830,6 +871,10 @@ class LiveService:
         # ---- 2. THE DIAGNOSIS LAYER. It names a cause and picks an
         #         intervention. `Diagnosis` has no field for a time.
         view = self._case_view(m, c, attempts_used, day)
+        # READ OFF THE VIEW, not recomputed from the belief. The band the
+        # console shows is then by construction the band the diagnoser was
+        # shown, rather than a second reading of a filter that has moved on.
+        d.uncertainty_band = view.uncertainty_band
         diag = self.diagnoser.diagnose(view)
         d.intervention = diag.intervention.value
         d.root_cause = diag.root_cause.value
@@ -917,6 +962,7 @@ class LiveService:
         #         executor only if every one of them permits.
         try:
             verdict = self.gate.submit(action)
+            d.gate_checks = self._gate_checks(attempt.id)
         except RazorpayError as e:
             # THE PROVIDER REFUSED THE REQUEST, WHICH IS NOT THE SAME AS
             # REFUSING THE PAYMENT. It is never evidence about the customer, so
@@ -932,6 +978,11 @@ class LiveService:
             # `reconcile` resolves by asking the order what it holds.
             d.reason = f"the provider refused the request: {e}"
             d.gate_verdict = "ALLOWED"
+            # The five rules ran and permitted the action; the refusal came
+            # from the provider, after the gate. Recording them here is what
+            # keeps "Stage 0 allowed this" and "the debit did not land" from
+            # looking like the same event.
+            d.gate_checks = self._gate_checks(attempt.id)
             # RE-READ, BECAUSE THE EXECUTOR MAY HAVE MOVED THE ROW. It writes
             # SUBMITTING before the request leaves, so the row says whether a
             # debit reached the rail -- which decides whether this is an
@@ -1025,6 +1076,17 @@ class LiveService:
         for d in range(last + 1, day + 1):
             self.book.advance_day(customer_seq, d)
         self._advanced[customer_seq] = day
+
+    def _gate_checks(self, action_id: str) -> list:
+        """What Stage 0's five rules said about `action_id`, or nothing.
+
+        The gate keeps one slot and tags it with what it adjudicated. A tag
+        that does not match means another mandate's tick overwrote it between
+        the submission and this read, and the honest answer is then an empty
+        list rather than somebody else's verdicts.
+        """
+        tag, checks = self.gate.last_checks
+        return [dict(c) for c in checks] if tag == action_id else []
 
     def _record(self, d: Decision) -> Decision:
         self.decisions.append(d)

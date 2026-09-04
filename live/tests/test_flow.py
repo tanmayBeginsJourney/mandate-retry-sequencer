@@ -24,8 +24,8 @@ import live.tests  # noqa: F401
 from agent.execution.razorpay_api import RazorpayApi
 from agent.execution.razorpay_mock import MockPlan, MockRazorpayApi
 from agent.execution.razorpay_executor import RazorpayError
-from live.domain import AttemptState, MandateState
-from live.service import LiveService
+from live.domain import ATTEMPT_PRESENTED, AttemptState, MandateState
+from live.service import Decision, LiveService
 from live.tests._harness import Bench, Results
 from live.webhooks import process_pending
 
@@ -502,6 +502,124 @@ def main() -> int:
         m = b.svc.store.mandate(m.id)
         r.ok("F9c  resuming brings it back to ACTIVE",
              m.state is MandateState.ACTIVE, m.state.value)
+    finally:
+        b.close()
+
+    # ------------------------------------------------------------------ F10
+    #
+    # THE READ-ONLY FIELDS THE CONSOLE RENDERS. Each is a fact the service
+    # already computed and then threw away, and each is asserted to carry the
+    # SAME value the decision was made on rather than a second reading of it.
+    # A display field that drifts from the number the code acted on is worse
+    # than no display field: it is a wrong answer with an operator's trust
+    # behind it.
+    r.section("F10 a decision reports the numbers it was made on")
+    b = Bench(plan=MockPlan(debits=["failed:insufficient_funds"] * 6), seed=11)
+    try:
+        c, m = b.registered(charge_paise=100)
+        base = b.svc.epoch_origin
+        ticks = []
+        for hour in range(0, 24 * 20, 2):
+            ticks.append(b.svc.decide(m.id, now=base + hour * 3600))
+            b.deliver()
+
+        r.ok("F10a every tick reports the simulated hour it reasoned in",
+             all(t.now_t == (base_h * 2) for base_h, t in enumerate(ticks)),
+             f"{[t.now_t for t in ticks[:4]]}…")
+        r.ok("F10b and the wall clock separately, which is a different number",
+             all(t.at > t.now_t for t in ticks),
+             "`at` is epoch seconds; `now_t` is a simulated hour")
+
+        r.ok("F10c the cap reported is the regulatory cap",
+             {t.attempts_cap for t in ticks} == {4},
+             str({t.attempts_cap for t in ticks}))
+        presented = [a for a in b.svc.store.attempts_for(m.id)
+                     if a.state in ATTEMPT_PRESENTED]
+        after = [t for t in ticks if t.now_t > max(
+            (a.target_t for a in presented), default=-1)]
+        r.ok("F10d attempts_used counts presentations, and it moved",
+             bool(presented) and bool(after)
+             and after[-1].attempts_used == len(
+                 [a for a in presented if a.cycle == after[-1].cycle]),
+             f"{len(presented)} presented, last tick says "
+             f"{after[-1].attempts_used if after else 'no tick'}")
+
+        sched = [t for t in ticks if t.uncertainty_band]
+        r.ok("F10e the band is set exactly on the ticks that diagnosed",
+             bool(sched)
+             and all(t.diagnosis_id for t in sched)
+             and all(not t.diagnosis_id for t in ticks
+                     if not t.uncertainty_band),
+             f"{len(sched)} of {len(ticks)} ticks")
+        r.ok("F10f and it is a coarse label, never a posterior",
+             {t.uncertainty_band for t in sched} <= {"narrow", "medium", "wide"},
+             str({t.uncertainty_band for t in sched}))
+
+        submitted = [t for t in ticks if t.gate_verdict]
+        r.ok("F10g gate_checks carries all five rules on an adjudicated tick",
+             bool(submitted)
+             and all([x["rule"] for x in t.gate_checks]
+                     == ["cap", "peak", "lead", "pending", "represent"]
+                     for t in submitted),
+             f"{len(submitted)} adjudicated")
+        r.ok("F10h and its verdicts agree with the one the gate acted on",
+             all((t.gate_verdict == "ALLOWED")
+                 == all(x["verdict"] == "PASS" for x in t.gate_checks)
+                 for t in submitted))
+        r.ok("F10i a tick that submitted nothing claims no verdicts",
+             all(not t.gate_checks for t in ticks if not t.gate_verdict),
+             "an empty list, not five invented PASSes")
+    finally:
+        b.close()
+
+    # A REFUSAL MUST BE VISIBLE AS ONE. With no refused tick in the run above
+    # the assertion at F10h holds vacuously, so the refusing half is driven
+    # here: a peak-hour action straight to the gate, which is what X7 proves
+    # is refused and what an operator most needs to see the reason for.
+    b = Bench(seed=11)
+    try:
+        from agent.ports import InterventionKind, MandateRef, MoneyAction
+        c, m = b.registered()
+        ref = MandateRef(c.seq, m.index_no, m.merchant_id)
+        b.svc.ledger.open_cycle(ref.uid, m.cycle)
+        peak = 11 * 24 + 11
+        b.svc.gate.submit(MoneyAction(
+            action_id="f10", ref=ref, amount=1.0, cycle=m.cycle,
+            target_t=peak, notify_t=peak - 24, decided_at_t=peak - 24,
+            kind=InterventionKind.RETRY))
+        tag, checks = b.svc.gate.last_checks
+        refused = [x["rule"] for x in checks if x["verdict"] == "REFUSED"]
+        r.ok("F10j a refusal names every rule that objected, not just the first",
+             tag == "f10" and "peak" in refused and len(checks) == 5,
+             f"refused={refused}")
+        r.ok("F10k and the refusing rule carries its detail",
+             all(x["detail"] for x in checks if x["verdict"] == "REFUSED"),
+             str([x["detail"][:40] for x in checks
+                  if x["verdict"] == "REFUSED"]))
+        r.ok("F10l the slot is tagged, so another mandate's tick shows nothing",
+             b.svc._gate_checks("some-other-action") == [],
+             "the tag is what makes the field honest under concurrency")
+    finally:
+        b.close()
+
+    # THE DISPLAY FIELD IS NOT AN INPUT TO THE CAP CHECK, and this is the
+    # mutant for it. `_decide` writes `attempts_used` on the Decision for the
+    # console, and reusing that number in `_schedule` would save one call to a
+    # pure function -- at the price of making a fifth NPCI presentation a
+    # consequence of a rendering bug. So the scheduler is handed a Decision
+    # that CLAIMS the cap is spent, and must ignore it.
+    b = Bench(seed=11)
+    try:
+        c, m = b.registered()
+        m = b.svc.store.mandate(m.id)
+        lying = Decision(mandate_id=m.id, at=0, acted=False, reason="",
+                         now_t=0, attempts_used=99)
+        out = b.svc._schedule(m, c, b.svc.now_t(), lying,
+                              b.svc.store.attempts_for(m.id))
+        r.ok("F10m a Decision claiming the cap is spent does not spend it",
+             "cap" not in out.reason, out.reason[:70])
+        r.ok("F10n and the scheduler overwrites the claim with its own count",
+             out.attempts_used == 0, str(out.attempts_used))
     finally:
         b.close()
 

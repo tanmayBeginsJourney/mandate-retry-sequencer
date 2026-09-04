@@ -103,6 +103,27 @@ def main() -> int:
         r.ok("A4e  and the error names no secret",
              "whsec" not in str(body) and WEBHOOK_SECRET not in str(body))
 
+        # A REFUSED DELIVERY MUST BE VISIBLE, NOT MERELY COUNTED. It never
+        # becomes a `WebhookEvent` -- it is refused the dedup key on purpose --
+        # so `recent_events` structurally cannot show it, and until the state
+        # payload carried these rows an operator could see that something had
+        # been rejected and never what.
+        status, state, _ = call(f"{base}/api/state")
+        rejected = state.get("rejected_events")
+        r.ok("A4k  the refused delivery above appears in the state payload",
+             status == 200 and isinstance(rejected, list) and len(rejected) == 1
+             and rejected[0].get("reason"), str(rejected)[:90])
+        r.ok("A4l  with the claimed id it quoted, which it did not get to keep",
+             rejected and "evt_" in str(rejected[0].get("claimed_id")),
+             str(rejected[0].get("claimed_id")) if rejected else "")
+        r.ok("A4m  and WITHOUT the body an unauthenticated sender posted",
+             rejected and "payload" not in rejected[0],
+             "the raw body is kept for a signature dispute, not for a console")
+        r.ok("A4n  the count and the rows agree",
+             len(rejected or []) == state["counts"]["events_rejected"],
+             f"{len(rejected or [])} rows, "
+             f"{state['counts']['events_rejected']} counted")
+
         # The 413 has to ARRIVE, not just be generated. A server that refuses
         # without draining leaves the sender mid-write and it sees a reset,
         # which a webhook provider reports as an outage rather than as a

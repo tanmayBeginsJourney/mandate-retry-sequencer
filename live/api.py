@@ -289,6 +289,14 @@ class Api:
         snap["recent_attempts"] = [self._attempt(a) for a
                                    in self.svc.store.recent_attempts(10)]
         snap["recent_events"] = self._events(10)
+        # DELIVERIES THAT FAILED VERIFICATION, which `recent_events` cannot
+        # show: a forged or corrupted delivery never becomes a `WebhookEvent`
+        # (see `domain.WebhookEvent` for why it is refused the dedup key), so
+        # until now the console could see the COUNT in `counts` and never the
+        # rows. `store.recent_rejected` selects four columns and not the
+        # payload -- the body an unauthenticated sender posted is kept for a
+        # signature dispute and is not console material.
+        snap["rejected_events"] = self.svc.store.recent_rejected(10)
         snap["decisions"] = [d.as_dict() for d
                              in reversed(self.svc.decisions[-10:])]
         return snap
