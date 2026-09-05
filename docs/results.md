@@ -312,9 +312,16 @@ substitute for [Baselines](#baselines).
 
 ## Pooling
 
+Extra attempt volume buys two different things, at two different scopes, and
+they are measured separately. **Within one customer it buys timing:**
 `BeliefBook` holds one belief state per customer, shared across that customer's
 mandates, so an outcome on one subscription updates the estimate used to time all
-of them. The mechanism is implemented, it is exercised by every run, and it is
+of them. That is the effect on money collected, and it is what the consent
+setting governs. **Across customers it buys rail awareness:** the outage test
+needs eight attempts inside a window, which a single merchant does not see. That
+is a different mechanism on a different denominator, it is not gated on any one
+customer's permission, and it is measured under
+[Outage detection](#outage-detection) rather than here. The mechanism is implemented, it is exercised by every run, and it is
 switchable: `pooling` takes `"all"`, `"none"` or `"consented"` plus a
 per-customer consent set, so the non-pooled and consent-gated configurations are
 measured rather than argued about.
@@ -406,10 +413,20 @@ record, all secondary:
   it was collected for, with specific and informed consent; the DPDP Rules
   notified in 2025 phase that in.
 
-That reading was produced by a language model, was not written by a lawyer, and
-was not checked against the primary documents. Razorpay's merchant terms, their
-privacy policy, the RBI PA Directions 2025 text and the October 2025 NPCI
-circular on Merchant Identifier Codes have not been read.
+Every line above is secondary and none of it was produced by a lawyer, which is
+why each carries `[REPORTED]` rather than `[VERIFIED]`. The primary sources an
+operator's counsel would work from are the RBI Payment Aggregator Directions
+2025, the DPDP Act 2023 and the Rules notified in 2025, the NPCI AutoPay
+specification, and the operator's own merchant terms and privacy policy. Reading
+them is a legal exercise and its conclusion belongs to the operator.
+
+**The headline does not depend on which way that question is answered.** The
+entire span from full pooling to none is 0.16 points against a paired 2 SE of
+0.16 in the canonical world — an operator can withhold pooling from every
+customer and the published collection figure is unchanged. What pooling buys
+grows with the number of mandates one customer holds, so the quantity at stake
+is the aggregator argument rather than the headline, and it is priced at every
+consent level in the table above.
 
 The engineering response is to make the question a runtime setting rather than a
 design assumption: pooling is a per-customer permission, the non-pooled and

@@ -812,10 +812,16 @@ footer{padding:56px 0 90px}
         <h2>Merchant-level and pooled data</h2>
         <p>A single merchant charges a customer once a month and so observes one attempt per
         customer per month. An aggregator carrying that customer's other subscriptions observes
-        more. Estimating payday and detecting an outage both depend on attempt volume, and how
-        much more an aggregator observes depends on how many subscriptions a customer holds.
-        The agent keeps one belief state per customer, shared across that customer's
-        subscriptions, and what that sharing is worth is measured below.</p>
+        more. Extra volume buys two different things, at two different scopes, and they are
+        measured separately below.</p>
+        <p><b>Within one customer, it buys timing.</b> The agent keeps one belief state per
+        customer, shared across that customer's subscriptions, so a decline on one subscription
+        moves the payday and balance estimate used to schedule all of them. That is the effect
+        on money collected, and it is the one a per-customer consent setting governs.
+        <b>Across customers, it buys rail awareness.</b> Detecting that a bank is failing needs
+        eight attempts inside a window, which one merchant does not see &mdash; a separate
+        mechanism, on a different denominator, and not gated on any one customer's
+        permission.</p>
       </div>
     </div>
 
@@ -877,17 +883,24 @@ footer{padding:56px 0 90px}
       </div>
     </div>
 
-    <div class="card" style="margin-top:16px;border-color:var(--warn);background:var(--warn-soft)">
-      <h3 style="color:var(--warn-ink)">Legal status</h3>
-      <p class="small" style="margin-bottom:0;color:var(--ink-2)">Whether cross-merchant
-      pooling &mdash; a payment aggregator using one merchant's transaction outcomes to schedule
-      another merchant's debit for the same customer &mdash; is lawful in India
-      <b>has not been established</b> either way. The treatment is jurisdiction- and
-      provider-dependent and is a question of law, outside the scope of this engineering
-      evaluation. No statute or circular addresses the scenario directly; Razorpay's merchant
-      terms, their privacy policy and the relevant RBI directions have not been read. The
-      engineering response is to make pooling a per-customer permission, which is not a legal
-      conclusion.</p>
+    <div class="card" style="margin-top:16px">
+      <h3>Legal status, and why the headline does not turn on it</h3>
+      <p class="small">Whether cross-merchant pooling &mdash; an aggregator using one merchant's
+      outcomes to time another merchant's debit for the same customer &mdash; is lawful in India
+      <b>has not been established</b> either way. No single statute or RBI circular addresses the
+      scenario directly, and it is a question of law rather than of engineering: the primary
+      sources an operator's counsel would read are the RBI Payment Aggregator Directions 2025,
+      the DPDP Act 2023 and its 2025 Rules, the NPCI AutoPay specification, and the operator's
+      own merchant terms. The reading on file is secondary and was not produced by a lawyer, so
+      it is carried as <code>[REPORTED]</code> rather than as a finding.</p>
+      <p class="small" style="margin-bottom:0"><b>The result above does not depend on the
+      answer.</b> Pooling is a per-customer permission, and the whole span from full pooling to
+      none is worth <b>0.16 points against a 2 SE of 0.16</b> in the world the headline is
+      measured in &mdash; not distinguishable from zero. An operator can switch it off entirely
+      and the collection figure is unchanged. What pooling buys grows with the number of
+      subscriptions one customer holds, which is the aggregator case rather than the headline,
+      and it is priced above at every consent level. Shipping the switch is an engineering
+      answer, not a legal conclusion.</p>
     </div>
   </div>
 </section>
@@ -923,8 +936,10 @@ footer{padding:56px 0 90px}
       <div class="figure-foot">
         <p class="tiny" style="margin:0">Source: Razorpay's published
         <code>payments_error_reasons</code> list, 110 distinct reasons, committed verbatim to the
-        repository. The second and third states are not simulated and carry no frequency. No
-        source gives a rate for either.</p>
+        repository. All three are mapped to a failure family and routed &mdash; the third is why
+        an attempt can end <code>UNKNOWN</code> rather than <code>FAILED</code>. The simulated
+        world draws a rate for the first only: no published source gives a frequency for the
+        other two, and a swept parameter is preferred to an invented one.</p>
       </div>
     </div>
   </div>
@@ -2011,7 +2026,7 @@ const DECLINES = {
       "empty account moves the estimate in the wrong direction. Retrying is also wrong, since " +
       "the balance was never available to this mandate. A merchant seeing only its own debits " +
       "cannot distinguish this from an empty account.",
-    tag: "<span class=\"tag warn\">not simulated · no frequency known</span>"
+    tag: "<span class=\"tag\">mapped and routed · no published rate to simulate</span>"
   },
   deem: {
     what: "The response was lost. Whether the debit went through is unknown, and the customer " +
@@ -2020,7 +2035,7 @@ const DECLINES = {
       "timing score compares the chance of success now against later, and no pair of those " +
       "numbers encodes <em>do not act, because the outcome is unknown</em>. Cases like this " +
       "are handled by the diagnosis step.",
-    tag: "<span class=\"tag warn\">not simulated · no frequency known</span>"
+    tag: "<span class=\"tag\">mapped and routed · no published rate to simulate</span>"
   }
 };
 

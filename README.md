@@ -445,10 +445,12 @@ then runs the fast tier, the documentation checks and their self-tests, and
   records them as such. Nothing here measures how wrong they are on real
   customers, and every live timing decision inherits that.
 - **The legal treatment of cross-merchant pooling has not been established in
-  Indian law**, is jurisdiction- and provider-dependent, and is outside the
-  scope of this engineering evaluation. Pooling is a per-customer permission for
-  that reason, and the cost of withholding it is measured. **Engineering consent
-  is not a legal conclusion.**
+  Indian law**, is jurisdiction- and provider-dependent, and is a question for an
+  operator's counsel rather than for this evaluation. Pooling is a per-customer
+  permission for that reason, and the cost of withholding it is measured at every
+  consent level. The headline does not turn on the answer: the whole span from
+  full pooling to none is 0.16 points against a 2 SE of 0.16 here. **Engineering
+  consent is not a legal conclusion.**
 
 The across-seed spread, the unpublished decline frequencies, the incremental
 value of pooling and the compute-bound sample size are stated in full in
