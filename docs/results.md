@@ -455,12 +455,40 @@ populations** (`py -3.12 agent/tests/test_v3_power.py`, transcript
 `logs/w30_canonical_n500.txt`). All at n=500, `pop_spend=0.93`, run seed 907.
 Agent measurements.
 
-| | measured | populations | published | verdict | ceiling |
-|---|---|---|---|---|---|
-| **V1** first-presentation failure rate | 10.62% ±0.24 | 100 | 8–15% | **hit** | — |
-| **V3** recovery under fixed-interval retries | 21.80% ±0.71 | 100 | 20–40% | **hit** | — |
-| **V5** recovery under smart retry timing | 94.19% ±0.72 | 20 | 70–85% | miss, too high | 100% |
-| **V7** share of recoveries inside 10 days | 42.90% | 20 | 85–95% | miss, too slow | 51.9% |
+| | measured | populations | published | band published by | verdict | ceiling |
+|---|---|---|---|---|---|---|
+| **V1** first-presentation failure rate | 10.62% ±0.24 | 100 | 8–15% | [productgrowth.in][v1] | **hit** | — |
+| **V3** recovery under fixed-interval retries | 21.80% ±0.71 | 100 | 20–40% | [RetentionLens][v3] | **hit** | — |
+| **V5** recovery under smart retry timing | 94.19% ±0.72 | 20 | 70–85% | [Slicker][v5] | miss, too high | 100% |
+| **V7** share of recoveries inside 10 days | 42.90% | 20 | 85–95% | [Recurly][v7] | miss, too slow | 51.9% |
+
+[v1]: https://productgrowth.in/insights/fintech/upi-autopay-guide/
+[v3]: https://retentionlens.com/state-of-involuntary-churn
+[v5]: https://www.slickerhq.com/resources/blog/2025-failed-payment-recovery-benchmarks-saas-median-47-percent
+[v7]: https://recurly.com/blog/failed-payment-recovery-data-based-strategy/
+
+**The sentence each band rests on.** Located and re-read 5 September 2026. All four are
+`[REPORTED]`: a URL makes a band checkable, it does not make it independent, and none of
+these tags is upgraded by having one.
+
+- **V1** — [productgrowth.in, *UPI AutoPay: Design Guide for Recurring Payments*][v1]
+  (January 2026, updated June 2026): *"UPI AutoPay failure rates run 8–15% vs 2–3% for
+  card mandates."* A practitioner guide, not an operator disclosure.
+- **V3** — [RetentionLens, *The State of Involuntary Churn 2026*][v3], citing Slicker's
+  2025 benchmarks: *"Basic fixed-interval retries ~20–40%."* The same ladder carries the
+  other two figures quoted in [Sources](#sources) — no retries ~0–10%, and smart retries
+  with card updater and email ~70–85%.
+- **V5** — [Slicker, *2025 Failed-Payment Recovery Benchmarks*][v5] (7 September 2025):
+  *"Best-in-class dunning recovers 70–85% of failed charges."* Its stated industry median,
+  47.6%, is attributed there to Recurly's 2023–24 benchmark study. Secondary.
+- **V7** — [Recurly, *Failed Payment Recovery: What the Data Shows*][v7] (30 April 2026):
+  *"90% of recovered transactions occur within the first 10 days of a failed payment."*
+  The only one of the four read at the primary vendor rather than through an intermediary.
+
+**Three of the four bands describe card dunning rather than UPI AutoPay**, which is the
+mechanism behind V7's miss and is stated as such below. These are the pages whose figures
+match the bands recorded here; they are not provably the same pages the bands were first
+taken from.
 
 **Read V3 from the 100-population run, not the 20.** On the same 20 populations
 that carry V5 and V7, V3 reads 20.28% against a 2 SE of 2.04 — inside the band,
@@ -522,7 +550,8 @@ UPI AutoPay holders, and even the top corner leaves V7 around 73%, still below
 its band. Those sweeps predate the belief repair and the current `n`; they are
 quoted for direction only.
 
-**What this comparison is not.** Both bands are `[REPORTED]` and vendor-sourced.
+**What this comparison is not.** Both bands are `[REPORTED]` and vendor-sourced —
+[Slicker][v5] and [Recurly][v7], both companies selling recovery software.
 V5's band is the source's top performers; that source's stated median is 47.6%.
 The world and the agent share an author. This is an internal consistency
 argument, not independent evidence.
@@ -1258,15 +1287,25 @@ declines may not. `[REPORTED]` Technical declines are under 1% of failures.
 per day, which is why this system infers a balance rather than querying one.
 
 **Failure and recovery rates.** `[REPORTED]` UPI AutoPay debit failure 8–15%
-against 2–3% for card e-mandates, from trade-blog summaries; neither is an
-operator disclosure. `[VERIFIED]` Razorpay's own comparison page discusses
+against 2–3% for card e-mandates —
+[productgrowth.in, *UPI AutoPay: Design Guide for Recurring Payments*][v1]:
+*"UPI AutoPay failure rates run 8–15% vs 2–3% for card mandates."* A practitioner
+guide; neither figure is an operator disclosure. `[VERIFIED]` Razorpay's own comparison page discusses
 mandate completion, drop-off, retry cost and revenue leakage and **publishes no
 AutoPay failure rate at all** — the operator this system is built for does not
 publish the number it most needs. `[REPORTED]` The recovery bands used as
-validation targets: no retries ~0–10%; fixed-interval retries ~20–40%; industry
-median ~47.6%; smart retries with card updater and email 70–85%; share of
-recoveries inside ten days ~90%. All from companies selling recovery software,
-aggregating non-comparable customer bases. `[REPORTED]` Industry benchmark for
+validation targets: no retries ~0–10%, fixed-interval retries ~20–40% and smart
+retries with card updater and email ~70–85%, all three from
+[RetentionLens, *The State of Involuntary Churn 2026*][v3], which cites Slicker's
+2025 benchmarks; industry median ~47.6% and the 70–85% band again from
+[Slicker, *2025 Failed-Payment Recovery Benchmarks*][v5], which attributes the
+median to Recurly's 2023–24 benchmark study; share of recoveries inside ten days
+~90% from [Recurly, *Failed Payment Recovery: What the Data Shows*][v7]:
+*"90% of recovered transactions occur within the first 10 days of a failed
+payment."* All from companies selling recovery software,
+aggregating non-comparable customer bases, and only the last read at the primary
+vendor. Every one stays `[REPORTED]`; a working link is not independence.
+`[REPORTED]` Industry benchmark for
 retry-optimisation uplift 6–8%; **it is unclear whether that is percentage
 points or relative uplift.**
 

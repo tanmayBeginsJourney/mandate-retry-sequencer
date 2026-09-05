@@ -977,6 +977,7 @@ footer{padding:56px 0 90px}
               <th>What was measured</th>
               <th class="n">This world</th>
               <th class="n">Published</th>
+              <th>Published by</th>
               <th></th>
             </tr></thead>
             <tbody>
@@ -984,24 +985,32 @@ footer{padding:56px 0 90px}
                 <td>Share of debits failing on their due date</td>
                 <td class="n pos">10.62%</td>
                 <td class="n">8–15%</td>
+                <td><a href="https://productgrowth.in/insights/fintech/upi-autopay-guide/"
+                       rel="nofollow noopener">productgrowth.in</a></td>
                 <td><span class="tag good">hit</span></td>
               </tr>
               <tr>
                 <td>Recovery under a fixed-interval retry schedule</td>
                 <td class="n pos">21.80%</td>
                 <td class="n">20–40%</td>
+                <td><a href="https://retentionlens.com/state-of-involuntary-churn"
+                       rel="nofollow noopener">RetentionLens</a></td>
                 <td><span class="tag good">hit</span></td>
               </tr>
               <tr>
                 <td>Recovery under smart retry timing</td>
                 <td class="n neg">94.19%</td>
                 <td class="n">70–85%</td>
+                <td><a href="https://www.slickerhq.com/resources/blog/2025-failed-payment-recovery-benchmarks-saas-median-47-percent"
+                       rel="nofollow noopener">Slicker</a></td>
                 <td><span class="tag warn">miss — too high</span></td>
               </tr>
               <tr>
                 <td>Share of recoveries landing inside 10 days</td>
                 <td class="n neg">42.90%</td>
                 <td class="n">85–95%</td>
+                <td><a href="https://recurly.com/blog/failed-payment-recovery-data-based-strategy/"
+                       rel="nofollow noopener">Recurly</a></td>
                 <td><span class="tag warn">miss — too slow</span></td>
               </tr>
             </tbody>
@@ -1020,6 +1029,26 @@ footer{padding:56px 0 90px}
           <code>py -3.12 agent/tests/test_canonical_world.py --confirm</code> (transcript
           <code>logs/w30_canonical_n500.txt</code>).
           <span class="tag">not gate-protected</span>
+        </p>
+        <p class="tiny" style="margin-top:12px">
+          <b>The sentence each band rests on</b>, located and re-read 5&nbsp;September&nbsp;2026.
+          <a href="https://productgrowth.in/insights/fintech/upi-autopay-guide/"
+             rel="nofollow noopener">productgrowth.in</a>: “UPI AutoPay failure rates run
+          8–15% vs 2–3% for card mandates.”
+          <a href="https://retentionlens.com/state-of-involuntary-churn"
+             rel="nofollow noopener">RetentionLens</a>, citing Slicker's 2025 benchmarks:
+          “Basic fixed-interval retries ~20–40%.”
+          <a href="https://www.slickerhq.com/resources/blog/2025-failed-payment-recovery-benchmarks-saas-median-47-percent"
+             rel="nofollow noopener">Slicker</a>: “Best-in-class dunning recovers 70–85% of
+          failed charges” — stated median 47.6%, attributed there to Recurly's 2023–24 study.
+          <a href="https://recurly.com/blog/failed-payment-recovery-data-based-strategy/"
+             rel="nofollow noopener">Recurly</a>: “90% of recovered transactions occur within
+          the first 10 days of a failed payment.”
+          All four are companies selling recovery software and all four stay
+          <code>[REPORTED]</code>: a working link makes a band checkable, not independent.
+          Only the last was read at the primary vendor rather than through an intermediary,
+          and three of the four describe card dunning rather than UPI AutoPay — which is the
+          mechanism behind the fourth row's miss.
         </p>
       </div>
     </div>
@@ -1363,7 +1392,9 @@ footer{padding:56px 0 90px}
         this simulated world at <code>pop_spend=0.93</code>.</li>
       <li><b>Two of the four external checks are missed, and one of them cannot be hit on
         this rail.</b> A clairvoyant schedule obeying the same four-attempt cap and notice
-        rules reaches only 51.9% of failed debits inside ten days, against a published band of
+        rules reaches only 51.9% of failed debits inside ten days, against a
+        <a href="https://recurly.com/blog/failed-payment-recovery-data-based-strategy/"
+           rel="nofollow noopener">published band</a> of
         85–95% drawn from card dunning. The agent reaches 42.9%, or 82.6% of what is
         available.</li>
       <li><b>The study is small:</b> 500 customers, about 2 mandates each, 10 populations

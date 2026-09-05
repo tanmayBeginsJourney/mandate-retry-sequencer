@@ -140,12 +140,22 @@ predictable end, where the frozen schedule wins.
 
 **External validation is 2 of 4.** There is no public benchmark for payment retry
 scheduling, so the world is scored against aggregate statistics published by
-companies that sell recovery software. The due-date failure rate and the
-fixed-interval recovery rate land inside their published bands; recovery under
+companies that sell recovery software: the due-date failure rate against
+[productgrowth.in](https://productgrowth.in/insights/fintech/upi-autopay-guide/)
+(8–15%), fixed-interval recovery against
+[RetentionLens](https://retentionlens.com/state-of-involuntary-churn) (20–40%),
+smart-retry recovery against
+[Slicker](https://www.slickerhq.com/resources/blog/2025-failed-payment-recovery-benchmarks-saas-median-47-percent)
+(70–85%), and the share of recoveries inside ten days against
+[Recurly](https://recurly.com/blog/failed-payment-recovery-data-based-strategy/)
+(~90%). The first two land inside their published bands; recovery under
 smart retry timing is a miss, too high, and the share of recoveries inside ten
-days is a miss, too slow. Both misses are attributed to the world rather than
-explained away, and the attribution, the full table and the clairvoyant upper
-bound are in [`docs/results.md`](docs/results.md#external-validation).
+days is a miss, too slow. Every band stays `[REPORTED]` — a citation makes it
+checkable, not independent, and three of the four describe card dunning rather
+than UPI AutoPay. Both misses are attributed to the world rather than
+explained away, and the attribution, the quoted sentence behind each band, the
+full table and the clairvoyant upper bound are in
+[`docs/results.md`](docs/results.md#external-validation).
 
 Full experimental design, uncertainty treatment and negative results:
 [`docs/results.md`](docs/results.md).
