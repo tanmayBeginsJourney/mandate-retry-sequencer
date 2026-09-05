@@ -83,7 +83,36 @@ const PAISE = (n) =>
   typeof n === "number" ? `₹${(n / 100).toLocaleString("en-IN", {
     minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
 
-const WHEN = (ts) => {
+/* ONE CLOCK ON THIS PAGE, AND IT IS THE SIMULATED ONE.
+
+   The service reasons in simulated hours counted from `epoch_origin`, and
+   `hour 752` is the number it counts in. Nobody reads that as a moment. Every
+   time on this page is rendered as `Day 27, 08:00` instead -- the same number,
+   divided by 24 -- so the scheduler's target, the mandate's cycle and a
+   webhook's arrival can be compared without a conversion in the reader's head.
+
+   THE WALL CLOCK IS NOT DELETED, IT IS DEMOTED. `received_at`, `processed_at`
+   and a transition's `at` are real seconds and a signature dispute is settled
+   in real time, so the raw values stay -- inside the disclosures, labelled,
+   where they cannot be mistaken for the clock the scheduler reasons in. */
+
+/* Simulated hour -> a moment a person can read. */
+const HOUR = (t) => {
+  const h = Math.max(0, Math.trunc(Number(t) || 0));
+  return `Day ${Math.floor(h / 24)}, ${String(h % 24).padStart(2, "0")}:00`;
+};
+
+/* THERE IS NO CONVERSION FROM A WALL-CLOCK SECOND TO THIS CLOCK, and there
+   cannot be one. `advance_clock` moves the offset while the service runs, so a
+   row stamped at a real second under one offset and read back under another
+   would land on an hour it was never recorded at -- a webhook that answered a
+   Day 12 debit rendering as Day 24 because the demonstration has since moved
+   on. Every simulated time on this page comes from a field that IS a simulated
+   hour: `target_t`, `notify_t`, `now_t`, `cycle_start_t`. Every wall-clock
+   second is printed raw, by `RAW`, labelled, and only inside a disclosure. */
+
+/* The raw wall clock. Used only where the real second is the point. */
+const RAW = (ts) => {
   if (!ts) return "—";
   const d = new Date(ts * 1000);
   // A mandate expiry is ten years out. Dropping the year there turns 2036
@@ -94,7 +123,6 @@ const WHEN = (ts) => {
     farOff ? { year: "numeric" } : {}));
 };
 
-const HOUR = (t) => `hour ${Number(t).toLocaleString()}`;
 const NUM = (x, dp) => Number(x).toFixed(dp === undefined ? 3 : dp);
 
 /* A decline code and Razorpay's own word for it, never one without the
@@ -136,6 +164,26 @@ const CAUSE = {
   OUTCOME_UNKNOWN: "the outcome cannot be determined",
   UNKNOWN: "an undetermined cause",
 };
+/* The Payment Link that replaces the fourth mandate debit. Every state but the
+   empty one holds that debit, and each holds it for a different reason. */
+const BACKUP = {
+  issued: "open — the fourth mandate debit is held until it is paid or closes",
+  paid: "paid — this cycle is collected, and no debit was needed",
+  expired: "closed unpaid — the cycle is forfeited so the mandate survives",
+  cancelled: "cancelled — the cycle is forfeited so the mandate survives",
+};
+/* Why the fourth debit is held, in a sentence rather than a status. */
+const BACKUP_WHY = {
+  issued: "three debits declined on funds, so a payment link replaces the "
+    + "fourth. Spending it would end the mandate and forfeit every remaining "
+    + "billing cycle",
+  paid: "the customer paid the link, so this cycle is collected and no fourth "
+    + "debit was needed",
+  expired: "the link closed unpaid. This cycle is forfeited and the fourth "
+    + "debit is not fired, so the mandate survives into the next one",
+  cancelled: "the link was cancelled. This cycle is forfeited and the fourth "
+    + "debit is not fired, so the mandate survives into the next one",
+};
 const RULE_MEANS = {
   cap: "four presentations per cycle",
   peak: "no debit inside a peak window",
@@ -164,22 +212,24 @@ function renderEnv() {
 
   const bits = [];
   if (cfg.debit_reason) bits.push(SENTENCE(cfg.debit_reason));
-  if (typeof cfg.max_debit_paise === "number") {
+  // THE CEILING IS A LIVE-MONEY CONSTRAINT AND IS SHOWN IN BOTH LIVE MODES.
+  // Offline it bounds nothing -- the mock rail moves no money -- so printing
+  // it there is a number an operator has to work out is irrelevant.
+  if (live && typeof cfg.max_debit_paise === "number") {
     bits.push(`ceiling ${PAISE(cfg.max_debit_paise)} per debit`);
   }
   if (!cfg.operator_auth_required) bits.push("operator API open on loopback");
-  const lost = state.counts && state.counts.events_rejected;
-  if (lost) bits.push(`${lost} delivery${lost === 1 ? "" : "-ies"} failed verification`);
   if (state.providerLost) {
     bits.push(`${state.providerLost} lost provider response${
       state.providerLost === 1 ? "" : "s"}`);
   }
   $("env-reason").textContent = bits.join(" · ");
 
-  const clock = [];
-  if (typeof h.now_t === "number") clock.push(HOUR(h.now_t));
-  if (h.clock_offset_h) clock.push(`demonstration clock +${h.clock_offset_h}h`);
-  $("env-clock").textContent = clock.join(" · ");
+  // The demonstration offset is not printed beside the clock: the clock ALREADY
+  // includes it, so "Day 24, 00:00 · demonstration clock +564h" is one moment
+  // stated twice, in two units.
+  $("env-clock").textContent =
+    typeof h.now_t === "number" ? HOUR(h.now_t) : "";
 }
 
 /* ============================================================= orders ==== */
@@ -195,6 +245,11 @@ function renderOrders() {
     const btn = el("button", "order-btn");
     btn.type = "button";
     btn.setAttribute("aria-current", String(m.id === state.selected));
+    // The button's own text is two spans a screen reader reads as fragments.
+    // Name it once, as a person and an amount.
+    btn.setAttribute("aria-label",
+      `${m.customer_name || m.id}, ${m.uid}, ${PAISE(m.charge_amount_paise)}, `
+      + `${m.state.toLowerCase()}`);
     btn.append(el("span", "who", m.customer_name || m.id));
     btn.append(el("span", "sub",
       `${m.uid} · ${PAISE(m.charge_amount_paise)} · ${m.state.toLowerCase()}`));
@@ -225,7 +280,7 @@ function answerFor(m, a) {
                  tail: ".", tone: "h" },
       REJECTED: { lead: "The mandate was ", key: "rejected", tail: " at authorisation.",
                   tone: "q" },
-      CANCELLED: { lead: "This standing order is ", key: "cancelled", tail: ".",
+      CANCELLED: { lead: "This mandate is ", key: "cancelled", tail: ".",
                    tone: "q" },
       PAUSED: { lead: "The customer has ", key: "paused", tail: " this mandate.",
                 tone: "h" },
@@ -233,6 +288,20 @@ function answerFor(m, a) {
     if (by) return by;
     return { lead: "This order ", key: "cannot be charged", tail: ".", tone: "q" };
   }
+  // THE LADDER OUTRANKS THE LAST ATTEMPT. Once a Payment Link stands in for
+  // the fourth debit, "the debit was declined" describes an attempt that is no
+  // longer what is happening to this mandate.
+  const backup = {
+    issued: { lead: "A ", key: "payment link", tail: " has replaced the fourth debit.",
+              tone: "h" },
+    paid: { lead: "The customer ", key: "paid the link", tail: ". This cycle is collected.",
+            tone: "g" },
+    expired: { lead: "The payment link ", key: "closed unpaid",
+               tail: ". The cycle is forfeited and the mandate survives.", tone: "q" },
+    cancelled: { lead: "The payment link was ", key: "cancelled",
+                 tail: ". The cycle is forfeited and the mandate survives.", tone: "q" },
+  }[m.backup_status];
+  if (backup) return backup;
   if (!a) {
     return { lead: "Nothing has been ", key: "attempted", tail: " yet.", tone: "" };
   }
@@ -261,7 +330,7 @@ function renderHead(m, a, d) {
   const ident = $("ident");
   ident.replaceChildren();
   if (!m) {
-    ident.textContent = "Select a standing order";
+    ident.textContent = "Select a mandate";
   } else {
     // NOT the attempt count. `attempts_used` is what the scheduler was told
     // when it decided -- counted before this attempt existed -- so printing
@@ -282,10 +351,14 @@ function renderHead(m, a, d) {
 
   const because = $("because");
   if (!m) {
-    because.textContent = "A standing order on UPI AutoPay is debited once a " +
-      "cycle. When the account is short the debit is declined — and this " +
-      "decides when to ask again, what to do about it, and whether that is " +
-      "allowed.";
+    because.textContent = "A UPI AutoPay mandate is debited once a cycle. When " +
+      "the account is short the debit is declined — and this decides when to " +
+      "ask again, what to do about it, and whether that is allowed.";
+  } else if (m && m.backup_status) {
+    // THE LADDER OUTRANKS THE LAST ATTEMPT HERE TOO. What is happening to this
+    // mandate is the link, not the debit that preceded it.
+    because.textContent = SENTENCE(BACKUP_WHY[m.backup_status]
+      || "A backup checkout stands in for the fourth mandate debit") + ".";
   } else if (a && (a.state === "FAILED" || a.state === "SUCCEEDED")) {
     // The decision's `reason` describes the SUBMISSION -- "awaiting the
     // authoritative outcome" -- and the outcome has since arrived. Repeating
@@ -301,9 +374,8 @@ function renderHead(m, a, d) {
     // No decision record for this attempt -- the ticks that produced it ran
     // before a restart. Report the durable facts and say so.
     because.textContent =
-      `Recorded at ${WHEN(a.created_at)}${
-        a.target_t ? `, for ${HOUR(a.target_t)}` : ""}. The reasoning behind ` +
-      "it ran in an earlier session and is not held on disk.";
+      (a.target_t ? `The debit is set for ${HOUR(a.target_t)}. ` : "") +
+      "The reasoning behind it is not in this session's decision log.";
   } else {
     because.textContent = "No decision has run against this order in this " +
       "session.";
@@ -312,6 +384,21 @@ function renderHead(m, a, d) {
   const blocked = $("blocked");
   blocked.hidden = !(m && m.blocked_because);
   if (m && m.blocked_because) blocked.textContent = SENTENCE(m.blocked_because) + ".";
+}
+
+/* ============================================================ latest tick ==
+   The newest tick, when it is NOT the tick the spine below describes. Its own
+   block, its own hour, and outside the spine's numbering -- see
+   `currentDecision` for what folding it in produced.
+   ========================================================================= */
+
+function renderLatest(d) {
+  const wrap = $("latest");
+  wrap.hidden = !d;
+  if (!d) return;
+  $("latest-h").textContent =
+    `The latest tick · ${HOUR(d.now_t)} · later than the attempt below`;
+  $("latest-d").textContent = SENTENCE(d.reason || "Nothing to do") + ".";
 }
 
 /* ============================================================= the spine ==
@@ -378,12 +465,14 @@ function renderSpine(m, a, d, events) {
       on: /failed|rejected|cancelled/.test(trigger.event_type) ? "bad" : "done",
       v: trigger.event_type,
       d: SENTENCE(trigger.result || "recorded") + ".",
-      ev: [["received", WHEN(trigger.received_at)]],
+      // No time. The only clock this row has is `received_at`, a real second,
+      // and the hour that matters -- when the debit ran -- is on the attempt.
+      ev: a && a.target_t ? [["debit", HOUR(a.target_t)]] : [],
     }));
   } else {
     rows.push(row("Razorpay", "the event", {
       on: "idle", v: "Nothing delivered yet",
-      d: "No webhook has arrived for this standing order.",
+      d: "No webhook has arrived for this mandate.",
     }));
   }
 
@@ -391,14 +480,27 @@ function renderSpine(m, a, d, events) {
          No balance, salary, payday or distribution crosses the HTTP
          boundary, and this row does not pretend otherwise. --------------- */
   const resolved = a && (a.state === "SUCCEEDED" || a.state === "FAILED");
+  // THE FILTER IS IN MEMORY AND THE ATTEMPT ROW IS ON DISK. A resolved attempt
+  // is not evidence that the belief read it: a service restarted on an
+  // existing database serves outcomes it has never folded in. The service
+  // reports which ones it did, and this row believes that rather than `state`.
+  const folded = resolved && a.folded_in_session === true;
+  const measurement = resolved
+    ? `A ${a.state === "SUCCEEDED" ? "collected" : "declined"} ${
+      PAISE(a.amount_paise)} debit is a censored measurement of the balance ` +
+      "at that hour."
+    : "";
   rows.push(row("Belief", "updated", {
-    on: resolved ? "done" : "idle",
-    v: resolved ? "Folded in a resolved debit" : "Nothing resolved to fold in",
-    d: resolved
-      ? `A ${a.state === "SUCCEEDED" ? "collected" : "declined"} ${
-        PAISE(a.amount_paise)} debit is a censored measurement of the balance ` +
-        "at that hour. Only a terminal outcome reaches the filter."
-      : "A submission is not an outcome, so nothing has been learned from it.",
+    on: folded ? "done" : "idle",
+    v: folded
+      ? "Folded in a resolved debit"
+      : resolved ? "Not recorded in this session" : "Nothing resolved to fold in",
+    d: folded
+      ? measurement + " Only a terminal outcome reaches the filter."
+      : resolved
+        ? measurement + " This attempt resolved before the service was " +
+          "restarted, so the filter in this process has not read it."
+        : "A submission is not an outcome, so nothing has been learned from it.",
   }));
 
   /* --- 3. the scheduler. IT OWNS TIMING AND NOTHING ELSE DOES. ---------- */
@@ -428,9 +530,11 @@ function renderSpine(m, a, d, events) {
     rows.push(row("Scheduler", "when", {
       on: "idle", own: true, v: "Not recorded in this session",
       d: "The scheduler chose an hour" +
-        (a && a.target_t ? ` — ${HOUR(a.target_t)}, which the attempt below ` +
-          "still carries. The probabilities behind it" : ", and the evidence " +
-          "behind it") + " is held in memory and does not survive a restart.",
+        (a && a.target_t
+          ? ` — ${HOUR(a.target_t)}, which the attempt below still carries. ` +
+            "The probabilities behind it are held in memory and do not "
+          : ", and the evidence behind it is held in memory and does not ") +
+        "survive a restart.",
     }));
   }
 
@@ -444,11 +548,14 @@ function renderSpine(m, a, d, events) {
         ? `Root cause: ${CAUSE[d.root_cause] || d.root_cause.toLowerCase()}.`
         : "",
       quote: d.rationale || "",
-      // "fallback" is the deterministic rule engine. The model is not wired
-      // into this service, and naming it here would be a claim about the
-      // running system that is not true.
+      // A NUDGE ACCOMPANIES THE DEBIT, IT DOES NOT REPLACE IT. Saying only
+      // "prompt the customer" beside a scheduled attempt reads as the
+      // diagnosis layer having cancelled it -- which is what this service used
+      // to do, and is the one thing that layer must never decide.
       ev: [["source", d.diagnosis_source === "llm"
-        ? "language model" : "deterministic rules"]],
+        ? "language model" : "deterministic rules"],
+      ...(d.intervention === "NUDGE"
+        ? [["and the debit", "still runs at the scheduler's hour"]] : [])],
     }));
   } else if (d) {
     rows.push(row("Diagnosis", "what", {
@@ -524,7 +631,7 @@ function renderSpine(m, a, d, events) {
       ev: [
         a.payment_id ? ["payment", a.payment_id] : null,
         a.order_id ? ["order", a.order_id] : null,
-        a.submitted_at ? ["submitted", WHEN(a.submitted_at)] : null,
+        a.target_t ? ["charged", HOUR(a.target_t)] : null,
       ].filter(Boolean),
     }));
   } else if (a && a.order_id) {
@@ -550,9 +657,10 @@ function renderSpine(m, a, d, events) {
       on: /failed/.test(answer.event_type) ? "bad" : "done",
       v: answer.event_type,
       d: SENTENCE(answer.result || "") + ".",
-      ev: [["received", WHEN(answer.received_at)],
-           answer.processed_at ? ["processed", WHEN(answer.processed_at)] : null,
-      ].filter(Boolean),
+      // The raw arrival second is under "What arrived", where it is labelled
+      // as the wall clock it is.
+      ev: [["for", HOUR(a && a.target_t ? a.target_t : 0)],
+           ["state", answer.processed_at ? "applied" : "queued"]],
     }));
   } else {
     rows.push(row("Webhook", "the answer", {
@@ -609,34 +717,148 @@ function eventTone(e) {
   return "";
 }
 
-function renderEvents(events) {
-  const list = $("event-list");
-  const rejected = $("rejected-list");
-  list.replaceChildren();
-  rejected.replaceChildren();
-  $("events-none").hidden = events.length > 0 || state.rejected.length > 0;
+/* What one attempt did, in one sentence, from the durable row. */
+function attemptOutcome(a) {
+  const words = outcomeWords(a);
+  const by = {
+    SUCCEEDED: `Collected ${PAISE(a.amount_paise)}`,
+    FAILED: `Declined${words ? " — " + words : ""}`,
+    UNKNOWN: "Outcome unknown — never retried, resolved by reconciliation",
+    SUBMITTED: "Submitted, awaiting the authoritative outcome",
+    SUBMITTING: "A debit may be at the provider",
+    NOTIFIED: "Notified. The debit has not been submitted",
+    ORDER_CREATED: "Pre-debit order created. The customer has not been notified",
+    NOTIFICATION_FAILED: "The pre-debit notice failed, so this attempt was "
+      + "never charged and spent no NPCI presentation",
+    INTENT: "Recorded, and nothing was sent",
+  };
+  return by[a.state] || a.state;
+}
 
-  /* Deliveries that FAILED VERIFICATION. They never become webhook rows --
-     a forged delivery is refused the dedup key on purpose -- so they are a
-     separate list, above, and they are never silently mixed in with
-     authentic ones. */
-  state.rejected.forEach((r) => {
-    const li = document.createElement("li");
-    li.append(el("span", "n", r.event_type || "unnamed delivery"));
-    li.append(el("span", "t", WHEN(r.at)));
-    li.append(el("span", "r",
-      `${SENTENCE(r.reason || "refused")}. Claimed ${r.claimed_id || "no event id"}.`));
-    rejected.append(li);
+function attemptTone(a) {
+  if (a.state === "SUCCEEDED") return "good";
+  if (a.state === "FAILED" || a.state === "NOTIFICATION_FAILED") return "bad";
+  if (a.state === "UNKNOWN") return "stale";
+  return "";
+}
+
+/* ONE BLOCK PER ATTEMPT, IN THE ORDER THE ATTEMPTS HAPPENED.
+
+   Every event row already carries `attempt_id`; the renderer used to drop it
+   and print a flat list ordered by `received_at`. That is the WALL clock, so
+   two attempts nineteen simulated days apart appeared twelve real seconds
+   apart, six rows across two cycles looked unrelated, and the reader had no
+   way to tell which decline belonged to which debit.
+
+   The heading is the attempt and its simulated hours. The deliveries that
+   carried its outcome are inside it, behind a disclosure: they are Razorpay's
+   evidence for the line above, not six separate things that happened. */
+function renderEvents(m, events) {
+  const list = $("event-list");
+  list.replaceChildren();
+  // OLDEST FIRST, BY THE SIMULATED HOUR THE DEBIT RAN AT. Reversing the served
+  // order is not enough: the store orders by `created_at`, a wall-clock second,
+  // and a seeded month is driven in far less than a second -- so three attempts
+  // days apart came back in whatever order SQLite returned them and were
+  // numbered 1, 2, 3 against days 25, 28, 27. `target_t` is the hour the block
+  // is headed with, so it is the hour the blocks are ordered by.
+  const attempts = ((m && m.attempts) || []).slice()
+    .sort((x, y) => (x.target_t || 0) - (y.target_t || 0)
+      || (x.created_at || 0) - (y.created_at || 0));
+  const byAttempt = new Map();
+  const loose = [];
+  events.forEach((e) => {
+    if (e.attempt_id && attempts.some((a) => a.id === e.attempt_id)) {
+      if (!byAttempt.has(e.attempt_id)) byAttempt.set(e.attempt_id, []);
+      byAttempt.get(e.attempt_id).push(e);
+    } else {
+      loose.push(e);
+    }
   });
 
-  events.forEach((e) => {
+  attempts.forEach((a, i) => {
+    const mine = byAttempt.get(a.id) || [];
+    const li = document.createElement("li");
+    li.dataset.tone = attemptTone(a);
+
+    const head = el("div", "att-h");
+    head.append(el("b", null, `Attempt ${i + 1}`));
+    head.append(el("span", null, `· Cycle ${a.cycle} ·`));
+    head.append(el("span", null, HOUR(a.target_t)));
+    li.append(head);
+
+    li.append(el("div", "att-line",
+      `Notified ${HOUR(a.notify_t)} · charged ${HOUR(a.target_t)}`));
+    li.append(el("div", "att-out", attemptOutcome(a)));
+
+    const det = document.createElement("details");
+    det.className = "att-raw";
+    const verified = mine.length
+      ? `${mine.length} webhook${mine.length === 1 ? "" : "s"} · signature verified`
+      : "no webhook delivered for this attempt";
+    det.append(el("summary", null, verified));
+    if (mine.length) det.append(rawList(mine));
+    li.append(det);
+    list.append(li);
+  });
+
+  // Deliveries this mandate received that belong to no attempt: the token
+  // events from registration, and anything Razorpay sent that ingestion could
+  // not join. Kept visible rather than dropped.
+  if (loose.length) {
+    const li = document.createElement("li");
+    li.append(el("div", "att-h", "Not tied to an attempt"));
+    li.append(el("div", "att-line",
+      "Registration and token events for this mandate."));
+    const det = document.createElement("details");
+    det.className = "att-raw";
+    det.append(el("summary", null,
+      `${loose.length} delivery${loose.length === 1 ? "" : "-ies"} · signature verified`));
+    det.append(rawList(loose));
+    li.append(det);
+    list.append(li);
+  }
+
+  $("events-none").hidden = attempts.length > 0 || loose.length > 0;
+  renderRefused();
+}
+
+function rawList(rows) {
+  const ol = el("ol", "raw");
+  rows.forEach((e) => {
     const li = document.createElement("li");
     li.dataset.tone = eventTone(e);
     li.append(el("span", "n", e.event_type || "unnamed event"));
-    li.append(el("span", "t", WHEN(e.received_at)));
+    // THE ONE PLACE THE WALL CLOCK SURVIVES, and it is labelled. `received_at`
+    // is a real second: it settles a signature dispute, and it is not the
+    // clock the scheduler reasons in.
+    li.append(el("span", "t", `received ${RAW(e.received_at)}`));
     li.append(el("span", "r",
       SENTENCE(e.result || (e.processed_at ? "recorded" : "queued for processing"))));
-    list.append(li);
+    ol.append(li);
+  });
+  return ol;
+}
+
+/* Deliveries that FAILED VERIFICATION. Their own section, never under "What
+   arrived": a forged delivery is refused the deduplication key on purpose and
+   nothing about it arrived. */
+function renderRefused() {
+  const rejected = $("rejected-list");
+  rejected.replaceChildren();
+  const rows = state.rejected || [];
+  $("refused-wrap").hidden = rows.length === 0;
+  if (!rows.length) return;
+  $("refused-lede").textContent =
+    `${rows.length} deliver${rows.length === 1 ? "y" : "ies"} failed signature ` +
+    "verification and were not recorded. Nothing here reached the state machine.";
+  rows.forEach((r) => {
+    const li = document.createElement("li");
+    li.append(el("span", "n", r.event_type || "unnamed delivery"));
+    li.append(el("span", "t", `received ${RAW(r.at)}`));
+    li.append(el("span", "r",
+      `${SENTENCE(r.reason || "refused")}. Claimed ${r.claimed_id || "no event id"}.`));
+    rejected.append(li);
   });
 }
 
@@ -662,11 +884,24 @@ function renderFacts(m) {
   fact(dl, "Mandate state", m.state);
   fact(dl, "Debit amount", PAISE(m.charge_amount_paise));
   fact(dl, "Authorised ceiling", PAISE(m.max_amount_paise));
-  fact(dl, "Frequency", m.frequency);
   fact(dl, "Billing cycle", `${m.cycle} · every ${m.cycle_days} days`);
-  fact(dl, "Chargeable", m.chargeable ? "yes" : "no",
-    false, !m.chargeable);
-  fact(dl, "Expires", WHEN(m.expire_at));
+  // THE LADDER, and only when it has moved. A row reading "0 reminders" on
+  // every healthy mandate is a row nobody reads.
+  if (m.reminders_sent) {
+    fact(dl, "Funding reminders", `${m.reminders_sent} sent this cycle`);
+  }
+  if (m.backup_status) {
+    fact(dl, "Backup checkout", BACKUP[m.backup_status] || m.backup_status,
+      false, m.backup_status === "expired" || m.backup_status === "cancelled");
+  }
+
+  // CUT FROM THE DEFAULT VIEW: `Frequency`, `Expires` and `Chargeable`.
+  // Frequency is `monthly` on every mandate here. Expiry is ten years out.
+  // And `Chargeable` restated `Mandate state` in one word while the sentence
+  // at the top of the page already says what the mandate can do and why --
+  // three rows that a reader has to scan and none that changes a decision.
+  // `chargeable` is still READ, by `renderActions`, to decide whether the
+  // control is live.
 
   // `est_salary` and `est_payday` are in this payload and are NOT rendered.
   // They are an operator's stated guess at a customer's pay cycle, recorded
@@ -681,6 +916,7 @@ function renderFacts(m) {
   fact(pv, "Customer record", m.rzp_customer_id, true);
   fact(pv, "Authorisation order", m.registration_order_id, true);
   fact(pv, "Authorisation payment", m.registration_payment_id, true);
+  fact(pv, "Backup payment link", m.backup_vendor_id, true);
   fact(pv, "Cycle opened", HOUR(m.cycle_start_t), true);
 
   const hist = $("history");
@@ -690,7 +926,7 @@ function renderFacts(m) {
     li.dataset.v = t.verdict;
     li.append(el("span", "s", `${t.from_state || "—"} → ${t.to_state}`));
     li.append(el("span", "d", t.detail || t.source));
-    li.append(el("span", "w", WHEN(t.at)));
+    li.append(el("span", "w", RAW(t.at)));
     hist.append(li);
   });
 }
@@ -733,8 +969,44 @@ async function busy(button, fn) {
    sends, not a rule about which tick matters. With no attempt yet -- a mandate
    that has only ever waited -- the newest decision IS the story, and it is
    used. */
+/* TWO RECORDS, TWO MOMENTS, AND THEY ARE NEVER SPLICED.
+
+   `currentDecision` returns `{ own, latest }`.
+
+   `own` is the decision the spine is drawn from: the tick, or the two ticks,
+   that produced the attempt on screen. Rows 3 to 5 of the spine are that
+   tick's reasoning and rows 6 and 7 are that attempt's outcome, so both halves
+   have to describe one moment or the chain is a fiction.
+
+   `latest` is the newest tick for this mandate WHEN IT DESCRIBES SOMETHING
+   ELSE -- a wait, days after the attempt below resolved. It carries no
+   `attempt_id`, because a tick that spends nothing creates nothing to carry
+   one.
+
+   Folding `latest` into the spine is what produced the worst frame on this
+   page: rows 3 to 5 read "No attempt proposed / Not consulted / Not yet
+   adjudicated" from today's wait, and rows 6 and 7 read "Debit submitted to
+   Razorpay / payment.failed" from an attempt weeks older. Read top to bottom
+   that says the scheduler proposed nothing, Stage 0 never adjudicated, and a
+   debit went out anyway -- a picture of the guardrail being bypassed, drawn
+   from two records that were each correct. So it gets its own block, above the
+   spine and labelled with its own hour.
+
+   With no attempt yet -- a mandate that has only ever waited -- the newest
+   decision IS the story and there is no second moment to keep apart. */
 function currentDecision(attempt) {
   const mine = state.decisions.filter((d) => d.mandate_id === state.selected);
+  if (!attempt) return { own: mine[0] || null, latest: null };
+  const newest = mine[0];
+  const describesAnother = Boolean(
+    newest && !newest.attempt_id && attempt.id &&
+    (attempt.state === "SUCCEEDED" || attempt.state === "FAILED" ||
+     attempt.state === "NOTIFICATION_FAILED"));
+  return { own: ownDecision(mine, attempt),
+           latest: describesAnother ? newest : null };
+}
+
+function ownDecision(mine, attempt) {
   if (attempt) {
     // ONE ATTEMPT, TWO TICKS. NPCI wants 24 hours' notice, so scheduling and
     // charging are separate calls: the first carries the hour the scheduler
@@ -763,8 +1035,11 @@ function currentDecision(attempt) {
       return merged;
     }
   }
-  // `/api/state` returns decisions newest-first.
-  return mine[0] || null;
+  // NO DECISION IN THE SERVED WINDOW DESCRIBES THIS ATTEMPT. Rows 3 to 5 then
+  // say "not recorded in this session", which is what is true: `decisions` is
+  // in memory and ten deep. Returning the newest one instead is the splice
+  // this function exists to refuse.
+  return null;
 }
 
 function paint() {
@@ -773,14 +1048,26 @@ function paint() {
   const m = state.detail;
   // `attempts_for` is ordered newest first, so [0] is the live attempt.
   const a = m && m.attempts && m.attempts.length ? m.attempts[0] : null;
-  const d = currentDecision(a);
+  const { own, latest } = currentDecision(a);
   const events = state.events.filter(
     (e) => !state.selected || e.mandate_id === state.selected);
-  renderHead(m, a, d);
-  renderSpine(m, a, d, events);
-  renderEvents(events);
+  renderHead(m, a, own);
+  renderLatest(latest);
+  renderSpine(m, a, own, events);
+  renderEvents(m, events);
   renderFacts(m);
   renderActions(m, a);
+}
+
+/* THE MANDATE TO OPEN ON, when the operator has not chosen one.
+   The list order is insertion order, so the first row is whichever mandate
+   was seeded first -- usually one that collected on its first attempt and has
+   nothing left to explain. A mandate standing on the escalation ladder, or
+   one waiting on an outcome, is the one an operator opened this page for. */
+function mostInteresting(mandates) {
+  return mandates.find((m) => m.backup_status)
+    || mandates.find((m) => m.unresolved_attempts > 0)
+    || mandates[0];
 }
 
 async function refresh() {
@@ -795,7 +1082,7 @@ async function refresh() {
     state.events = snap.recent_events || [];
     state.rejected = snap.rejected_events || [];
     if (!state.selected && state.mandates.length) {
-      state.selected = state.mandates[0].id;
+      state.selected = mostInteresting(state.mandates).id;
     }
     if (state.selected && !state.mandates.some((m) => m.id === state.selected)) {
       state.selected = state.mandates.length ? state.mandates[0].id : null;
@@ -864,15 +1151,22 @@ function debitCanMoveMoney() {
 
 function renderActions(m, a) {
   $("acts").hidden = !m;
+  // The scheduler reasons in days. Offline there is no customer and no money,
+  // so the clock can move; live `advance_clock` refuses, because Stage 0's
+  // peak and lead rules read that clock. It lives in the environment band
+  // beside the clock it moves, so it is not gated on a mandate being selected.
+  $("act-advance").hidden = !offline();
+  // Reconcile asks the provider how debits it never answered for ended. With
+  // nothing unresolved there is nothing to ask, so the control is not there.
+  const open = (state.counts && state.counts.attempts_unresolved) || 0;
+  const rec = $("act-reconcile");
+  rec.hidden = open === 0;
+
   if (!m) return;
 
   // Authorisation is a human on a phone. Offline the mock stands in for one;
   // live there is no such call and the control does not exist.
   $("act-authorize").hidden = !(offline() && m.state === "PENDING");
-  // The scheduler reasons in days. Offline there is no customer and no money,
-  // so the clock can move; live `advance_clock` refuses, because Stage 0's
-  // peak and lead rules read that clock.
-  $("act-advance").hidden = !offline();
 
   const decide = $("act-decide");
   const money = debitCanMoveMoney();
@@ -880,7 +1174,7 @@ function renderActions(m, a) {
   decide.disabled = !m.chargeable;
   decide.textContent = money
     ? "Run the chain — a debit may be submitted"
-    : "Run a decision tick";
+    : "Ask the agent what to do now";
   decide.title = m.chargeable
     ? (money ? "Live rail with debits authorised."
       : (state.config && state.config.debit_reason) || "")
@@ -936,11 +1230,14 @@ $("act-decide").addEventListener("click", (e) => busy(e.currentTarget, async () 
 }));
 
 $("act-advance").addEventListener("click", (e) => busy(e.currentTarget, async () => {
-  const out = await api("/api/demo/advance", { method: "POST", body: { hours: 12 } });
+  // NO `hours`. The service knows the next hour at which a tick would do
+  // something different; naming a number here would put a second, worse copy
+  // of the scheduler's own knowledge in the browser.
+  const out = await api("/api/demo/advance", { method: "POST", body: {} });
   const acted = (out.decisions || []).filter((x) => x.acted).length;
   toast(acted
-    ? `Clock at hour ${out.now_t}. ${acted} debit${acted === 1 ? "" : "s"} submitted.`
-    : `Clock at hour ${out.now_t}. The scheduler is still waiting.`,
+    ? `${HOUR(out.now_t)}. ${acted} debit${acted === 1 ? "" : "s"} submitted.`
+    : `${HOUR(out.now_t)}. The scheduler is still waiting.`,
     acted ? "ok" : "info");
   await refresh();
 }));
@@ -977,7 +1274,7 @@ $("act-cancel").addEventListener("click", async () => {
     try {
       await api(`/api/mandates/${encodeURIComponent(state.selected)}/cancel`,
         { method: "POST", body: {} });
-      toast("Standing order cancelled at the provider.", "ok");
+      toast("Mandate cancelled at the provider.", "ok");
       await refresh();
     } catch (err) {
       toast(err.message, "bad");

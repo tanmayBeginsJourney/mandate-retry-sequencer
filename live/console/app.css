@@ -90,6 +90,9 @@ code{font-family:var(--mono);font-size:.88em}
 .env-reason{letter-spacing:.05em;text-transform:none;font-size:11.5px;color:var(--muted);
   font-family:var(--sans)}
 .env-clock{margin-left:auto;color:var(--faint);white-space:nowrap;letter-spacing:.1em}
+/* The clock control sits in this band, beside the clock it moves. It is
+   offline-only, so it never appears on a live band and needs no live rules. */
+.env-act{margin:-4px 0}
 /* Live but read-only: the rail is real and the debit switch is not thrown.
    Marked, not alarmed -- reserving the solid band for the one configuration
    that can actually spend is what keeps that band meaningful. */
@@ -255,6 +258,13 @@ main{padding:52px 56px 96px;min-width:0}
 .rules span{color:var(--muted)}
 .rules span b{font-weight:500;color:var(--accent-ink)}
 .rules span[data-v="REFUSED"] b{color:var(--warn-ink)}
+/* A tick that describes a different moment from the attempt below it. Set
+   apart so the two are never read as one causal chain. */
+.latest{margin-bottom:22px;padding:12px 16px;border-left:2px solid var(--rule);
+  background:var(--surface-2)}
+.latest-h{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted)}
+.latest-d{font-size:14.5px;color:var(--ink);margin-top:5px}
 .spine-note{margin-top:16px;padding-left:134px;font-size:13px;color:var(--muted);
   max-width:64ch}
 @media(max-width:640px){
@@ -269,17 +279,41 @@ main{padding:52px 56px 96px;min-width:0}
 
 /* ================================================================= events */
 .events-wrap{margin-top:64px}
-.events li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 24px;
-  padding:12px 0;border-top:1px solid var(--rule-2);align-items:baseline}
-.events li:last-child{border-bottom:1px solid var(--rule-2)}
-.events .n{font-family:var(--mono);font-size:13.5px;color:var(--ink);letter-spacing:-.01em}
-.events .t{font-family:var(--mono);font-size:11.5px;color:var(--faint);
+.events-head{display:flex;align-items:baseline;justify-content:space-between;
+  gap:16px;flex-wrap:wrap}
+
+/* One block per attempt, in the order the attempts happened. The heading is
+   the attempt; the deliveries that carried its outcome are inside it. */
+.events>li{display:block;border-top:1px solid var(--rule);padding:16px 0}
+.events>li:last-child{border-bottom:1px solid var(--rule)}
+.att-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:12px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted)}
+.att-h b{color:var(--ink);font-weight:500}
+.att-line{font-size:14px;color:var(--ink-2);margin-top:6px}
+.att-out{font-size:15px;color:var(--ink);margin-top:4px}
+.events>li[data-tone="good"] .att-out{color:var(--accent-ink)}
+.events>li[data-tone="bad"] .att-out{color:var(--warn-ink)}
+.events>li[data-tone="stale"] .att-out{color:var(--muted)}
+.att-raw{margin-top:10px}
+.att-raw>summary{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;
+  color:var(--muted);cursor:pointer}
+.att-raw>summary:hover{color:var(--ink-2)}
+.att-raw ol{margin-top:8px}
+.raw li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 24px;
+  padding:9px 0;border-top:1px solid var(--rule-2);align-items:baseline}
+.raw .n{font-family:var(--mono);font-size:13px;color:var(--ink);letter-spacing:-.01em}
+.raw .t{font-family:var(--mono);font-size:11.5px;color:var(--faint);
   text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.events .r{grid-column:1/-1;font-size:13.5px;color:var(--ink-2)}
-.events li[data-tone="good"] .n{color:var(--accent-ink)}
-.events li[data-tone="bad"] .n{color:var(--warn-ink)}
-.events li[data-tone="stale"] .n{color:var(--muted)}
-.events li[data-tone="stale"] .r{color:var(--muted)}
+.raw .r{grid-column:1/-1;font-size:13px;color:var(--ink-2)}
+.raw li[data-tone="good"] .n{color:var(--accent-ink)}
+.raw li[data-tone="bad"] .n{color:var(--warn-ink)}
+.raw li[data-tone="stale"] .n{color:var(--muted)}
+.raw li[data-tone="stale"] .r{color:var(--muted)}
+/* Refused deliveries. Their own section, never under "What arrived": none of
+   them is a delivery this service accepted. */
+.refused-wrap{margin-top:56px}
+.refused-lede{font-size:13.5px;color:var(--warn-ink);margin-bottom:10px}
 .rejected li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 24px;
   padding:12px 14px;margin-bottom:2px;border-left:2px solid var(--warn);
   background:var(--warn-soft);align-items:baseline}

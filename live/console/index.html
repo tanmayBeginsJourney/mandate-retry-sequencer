@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recovery agent — standing orders</title>
+<title>Recovery agent — AutoPay mandates</title>
 <meta name="robots" content="noindex">
 <!-- NO REMOTE ASSET. `api.py` serves this page under
      `default-src 'none'; style-src 'self'` with no `font-src`, so a webfont
@@ -13,30 +13,35 @@
 </head>
 <body>
 
-<a class="skip" href="#order">Skip to the selected standing order</a>
+<a class="skip" href="#order">Skip to the selected mandate</a>
 
 <!-- ===================================================================
      THE ENVIRONMENT. A full-bleed ruled line, not a badge. Offline it is
      paper-toned; live it turns the band solid and recolours the page. The
      environment is the loudest thing here on purpose.
+
+     The clock control lives here, beside the clock it moves, and not in the
+     row of actions on a mandate: it moves the service's clock, not that
+     mandate's.
      =================================================================== -->
 <div class="env" id="env" data-mode="loading">
   <span class="env-state" id="env-state">CHECKING THE RAIL</span>
   <span class="env-reason" id="env-reason"></span>
   <span class="env-clock" id="env-clock"></span>
+  <button class="act quiet env-act" id="act-advance" type="button" hidden>Move the clock to the next decision</button>
 </div>
 
 <div class="shell">
 
   <!-- =================================================================
-       THE ORDERS. Navigation, and the only list on the first screen.
+       THE MANDATES. Navigation, and the only list on the first screen.
        ================================================================= -->
   <nav class="orders" aria-labelledby="orders-h">
-    <h2 id="orders-h">Standing orders</h2>
+    <h2 id="orders-h">AutoPay mandates</h2>
     <ul id="order-list"></ul>
     <p class="orders-empty" id="orders-empty" hidden>
       Nothing is registered.
-      <button class="link" id="empty-new" type="button">Register a standing order</button>
+      <button class="link" id="empty-new" type="button">Set up a new AutoPay mandate</button>
       to watch the chain run.
     </p>
     <div class="portfolio" id="portfolio" hidden>
@@ -44,32 +49,31 @@
       <div><dt>Attempts collected</dt><dd id="pf-attempts">—</dd></div>
       <div><dt>Awaiting an answer</dt><dd id="pf-open">—</dd></div>
     </div>
-    <button class="link add" id="new-order" type="button">Register a standing order</button>
+    <button class="link add" id="new-order" type="button">Set up a new AutoPay mandate</button>
   </nav>
 
   <main id="order">
 
     <!-- ===============================================================
-         THE ANSWER. Which order, what happened, and the chain behind it.
+         THE ANSWER. Which mandate, what happened, and the chain behind it.
          =============================================================== -->
     <header class="head">
       <div class="head-top">
-        <p class="ident" id="ident">Select a standing order</p>
+        <p class="ident" id="ident">Select a mandate</p>
         <div class="acts" id="acts" hidden>
-          <button class="act" id="act-authorize" type="button" hidden>Simulate authorisation</button>
-          <button class="act" id="act-advance" type="button" hidden>Advance 12 hours</button>
-          <button class="act" id="act-reconcile" type="button">Reconcile</button>
-          <!-- The only control that can move money. Its treatment changes
-               with what the rail can actually do; see `describeDecide`. -->
-          <button class="act decide" id="act-decide" type="button">Run a decision tick</button>
+          <button class="act" id="act-authorize" type="button" hidden>Approve it, as the customer would</button>
+          <!-- The only control that can move money, alone on this row. Its
+               treatment changes with what the rail can actually do; see
+               `renderActions`. -->
+          <button class="act decide" id="act-decide" type="button">Ask the agent what to do now</button>
         </div>
       </div>
 
       <h1 class="answer" id="answer">The recovery agent</h1>
       <p class="because" id="because">
-        A standing order on UPI AutoPay is debited once a cycle. When the
-        account is short the debit is declined — and this decides when to ask
-        again, what to do about it, and whether that is allowed.
+        A UPI AutoPay mandate is debited once a cycle. When the account is
+        short the debit is declined — and this decides when to ask again, what
+        to do about it, and whether that is allowed.
       </p>
       <p class="blocked" id="blocked" hidden></p>
     </header>
@@ -81,25 +85,48 @@
          =============================================================== -->
     <section class="spine-wrap" aria-labelledby="spine-h">
       <h2 id="spine-h" class="sec">The decision</h2>
+      <!-- A TICK THAT DESCRIBES A DIFFERENT MOMENT FROM THE ATTEMPT BELOW.
+           It gets its own block rather than being folded into the spine; see
+           `renderLatest`. -->
+      <div class="latest" id="latest" hidden>
+        <p class="latest-h" id="latest-h"></p>
+        <p class="latest-d" id="latest-d"></p>
+      </div>
       <ol class="spine" id="spine"></ol>
       <p class="spine-note" id="spine-note" hidden></p>
     </section>
 
     <!-- ===============================================================
-         WHAT ARRIVED. Below the fold on purpose.
+         WHAT ARRIVED. Below the fold on purpose. One block per attempt,
+         in the order the attempts happened; the raw deliveries are behind
+         a disclosure inside each block.
          =============================================================== -->
     <section class="events-wrap" aria-labelledby="events-h">
-      <h2 id="events-h" class="sec">What arrived</h2>
-      <ol class="rejected" id="rejected-list"></ol>
+      <div class="events-head">
+        <h2 id="events-h" class="sec">What arrived</h2>
+        <button class="act quiet" id="act-reconcile" type="button" hidden>Ask Razorpay how the unanswered debits ended</button>
+      </div>
       <ol class="events" id="event-list" aria-live="polite"></ol>
       <p class="none" id="events-none">Razorpay has sent nothing yet.</p>
     </section>
 
     <!-- ===============================================================
-         THE ORDER ITSELF.
+         REFUSED. Deliveries that failed signature verification. NEVER
+         under "What arrived": nothing here is a delivery this service
+         accepted, and a forgery is refused the deduplication key on
+         purpose. See `domain.WebhookEvent`.
+         =============================================================== -->
+    <section class="refused-wrap" id="refused-wrap" aria-labelledby="refused-h" hidden>
+      <h2 id="refused-h" class="sec">Refused</h2>
+      <p class="refused-lede" id="refused-lede"></p>
+      <ol class="rejected" id="rejected-list"></ol>
+    </section>
+
+    <!-- ===============================================================
+         THE MANDATE ITSELF.
          =============================================================== -->
     <section class="facts-wrap" aria-labelledby="facts-h" id="facts-wrap" hidden>
-      <h2 id="facts-h" class="sec">The standing order</h2>
+      <h2 id="facts-h" class="sec">The mandate</h2>
       <dl class="facts" id="facts"></dl>
       <details class="prov">
         <summary>Provider record and state history</summary>
@@ -108,7 +135,7 @@
       </details>
       <div class="danger-zone" id="danger-zone" hidden>
         <button class="act quiet" id="reveal-toggle" type="button" aria-pressed="false">Show full identifiers</button>
-        <button class="act cancel" id="act-cancel" type="button">Cancel this standing order</button>
+        <button class="act cancel" id="act-cancel" type="button">Cancel this mandate</button>
       </div>
     </section>
   </main>
@@ -119,7 +146,7 @@
      ================================================================== -->
 <dialog id="register-dialog" aria-labelledby="reg-title">
   <form method="dialog" id="register-form">
-    <h2 id="reg-title">Register a standing order</h2>
+    <h2 id="reg-title">Set up a new AutoPay mandate</h2>
     <p class="dialog-note" id="reg-note"></p>
 
     <label for="reg-name">Customer name</label>
@@ -173,7 +200,7 @@
 </dialog>
 
 <!-- The only control that can move real money. The dialog names the
-     environment, the order, the customer and the amount, because a
+     environment, the mandate, the customer and the amount, because a
      confirmation that does not say what is about to happen is a second click,
      not a decision. -->
 <dialog id="debit-dialog" aria-labelledby="debit-title">
@@ -187,7 +214,7 @@
     </p>
     <dl class="dialog-facts">
       <dt>Environment</dt><dd id="debit-env">—</dd>
-      <dt>Standing order</dt><dd id="debit-mandate">—</dd>
+      <dt>Mandate</dt><dd id="debit-mandate">—</dd>
       <dt>Customer</dt><dd id="debit-customer">—</dd>
       <dt>Amount at risk</dt><dd id="debit-amount">—</dd>
     </dl>
@@ -216,14 +243,14 @@
 
 <dialog id="confirm-dialog" aria-labelledby="confirm-title">
   <form method="dialog">
-    <h2 id="confirm-title">Cancel this standing order?</h2>
+    <h2 id="confirm-title">Cancel this mandate?</h2>
     <p class="dialog-note">
       This deletes the token at Razorpay. The customer would have to authorise a
       new mandate in their UPI app before any further debit. It cannot be undone.
     </p>
     <div class="dialog-actions">
       <button class="act" value="no" type="submit">Keep it</button>
-      <button class="act danger" value="yes" type="submit">Cancel the order</button>
+      <button class="act danger" value="yes" type="submit">Cancel the mandate</button>
     </div>
   </form>
 </dialog>

@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One customer's month — UPI AutoPay Recovery Agent</title>
+<meta name="description" content="One simulated customer's billing cycle, day by day: a fixed retry schedule spends four attempts into an empty account, and the agent spends one, waits, and collects after the salary lands.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+/* ===========================================================================
+   THE PRESENTER VIEW. One customer's month on one screen.
+
+   THE PALETTE, THE TYPE AND THE THEMING ARE `index.html`'s, copied rather than
+   imported: this page is served as a static file beside it with no build step,
+   so a shared stylesheet would be a second request for six kilobytes. Warm
+   paper, one green for money landed, one clay red for declined; state is
+   carried by shape as well as by colour, so the chart still reads without hue.
+
+   NOTHING ON THIS PAGE HAPPENED ON RAZORPAY, and nothing on it has Razorpay's
+   shape. No payment, order, customer, token or event identifier appears
+   anywhere, and no webhook row does either. Every figure is read out of
+   `data/scenarios.json`, which `scripts/build_page_data.py` generates from a
+   real run of the agent against the simulated world.
+   =========================================================================== */
+:root{
+  --paper:#faf9f6; --surface:#ffffff; --surface-2:#f5f3ee;
+  --ink:#16130f; --ink-2:#443f38; --muted:#6f6960; --faint:#a09992;
+  --rule:#e3ded4; --rule-2:#eeeae2;
+  --accent:#14684f; --accent-ink:#0d5540; --accent-soft:#e2efe9;
+  --warn:#a13a20; --warn-ink:#8b3119; --warn-soft:#f9eae4;
+  --shadow:0 1px 2px rgba(22,19,15,.04), 0 8px 24px -16px rgba(22,19,15,.18);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --serif:Newsreader,Georgia,"Times New Roman",serif;
+  --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e0d0b; --surface:#17150f; --surface-2:#1d1a14;
+    --ink:#f3f0e9; --ink-2:#c8c1b5; --muted:#8d8579; --faint:#645d53;
+    --rule:#2b271f; --rule-2:#221f19;
+    --accent:#4fc298; --accent-ink:#6fd6b1; --accent-soft:#122a22;
+    --warn:#e08063; --warn-ink:#ef9880; --warn-soft:#2b1610;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e0d0b; --surface:#17150f; --surface-2:#1d1a14;
+  --ink:#f3f0e9; --ink-2:#c8c1b5; --muted:#8d8579; --faint:#645d53;
+  --rule:#2b271f; --rule-2:#221f19;
+  --accent:#4fc298; --accent-ink:#6fd6b1; --accent-soft:#122a22;
+  --warn:#e08063; --warn-ink:#ef9880; --warn-soft:#2b1610;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -16px rgba(0,0,0,.6);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:16px;line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(24px,3.2vw,32px);
+  line-height:1.1;letter-spacing:-.012em}
+h3{font-size:15px;font-weight:600;letter-spacing:-.005em;margin-bottom:5px}
+p{margin:0;color:var(--ink-2)}
+.tiny{font-size:12.5px;line-height:1.5;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+code,.mono{font-family:var(--mono);font-size:.87em;background:var(--surface-2);
+  padding:.12em .38em;border-radius:4px;border:1px solid var(--rule-2)}
+a{color:var(--accent-ink);text-decoration:none;
+  box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--accent) 35%,transparent)}
+a:hover{box-shadow:inset 0 -2px 0 var(--accent)}
+a:focus-visible,button:focus-visible,input:focus-visible{
+  outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+strong,b{font-weight:600;color:var(--ink)}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+@media(max-width:720px){.wrap{padding:0 18px}}
+
+/* ---- the bar across the top ---------------------------------------------- */
+.top{border-bottom:1px solid var(--rule);background:var(--paper)}
+.topin{max-width:1180px;margin:0 auto;padding:0 32px;min-height:54px;
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.brand{font-family:var(--serif);font-size:17px;color:var(--ink);white-space:nowrap;
+  box-shadow:none}
+.brand:hover{box-shadow:none}
+.disclaimer{font-size:12.5px;color:var(--muted);margin-left:auto;max-width:62ch}
+.themebtn{background:none;border:1px solid var(--rule);color:var(--muted);
+  border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:14px;line-height:1;
+  display:grid;place-items:center;flex:none}
+.themebtn:hover{color:var(--ink);border-color:var(--muted)}
+@media(max-width:900px){.topin{padding:8px 18px}.disclaimer{margin-left:0;order:3;flex-basis:100%}}
+
+/* ---- the head line ------------------------------------------------------- */
+.head{padding:22px 0 16px;display:flex;align-items:flex-end;justify-content:space-between;
+  gap:20px;flex-wrap:wrap}
+.facts{display:flex;gap:0;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.facts span{padding-left:14px;margin-left:14px;border-left:1px solid var(--rule);
+  white-space:nowrap}
+.facts span:first-child{padding-left:0;margin-left:0;border-left:0}
+.facts b{color:var(--ink);font-weight:500}
+
+/* ---- the figure ---------------------------------------------------------- */
+.figure{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);
+  overflow:hidden;box-shadow:var(--shadow)}
+.figure-body{overflow-x:auto;padding:8px 10px 0}
+svg.chart{display:block;width:100%;height:auto;min-width:620px}
+.ax{fill:var(--faint);font-size:10.5px;font-family:var(--sans)}
+.lbl{fill:var(--muted);font-size:11.5px;font-family:var(--sans);font-weight:500}
+.lbl-ink{fill:var(--ink);font-size:11.5px;font-family:var(--sans);font-weight:500}
+.note-t{fill:var(--faint);font-size:10.5px;font-family:var(--sans)}
+
+/* ---- the narration ------------------------------------------------------- */
+.say{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:0 20px;
+  align-items:baseline;padding:15px 24px;border-top:1px solid var(--rule-2);
+  background:var(--surface-2)}
+.say .day{font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.say .line{font-size:16px;color:var(--ink);min-height:1.6em}
+.say[data-tone="win"] .line{color:var(--accent-ink)}
+.say[data-tone="fail"] .line{color:var(--warn-ink)}
+.openbtn{appearance:none;background:var(--surface);border:1px solid var(--rule);
+  border-radius:7px;padding:7px 13px;font:inherit;font-size:13px;color:var(--ink-2);
+  cursor:pointer;white-space:nowrap}
+.openbtn:hover{border-color:var(--muted);color:var(--ink)}
+.openbtn[disabled]{opacity:.45;cursor:default}
+@media(max-width:760px){.say{grid-template-columns:1fr;gap:6px}}
+
+/* ---- the tally ----------------------------------------------------------- */
+.tally{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--rule-2)}
+.tally > div{padding:14px 24px}
+.tally > div + div{border-left:1px solid var(--rule-2)}
+.tk{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px}
+.tv{display:flex;gap:0;flex-wrap:wrap;font-size:14px;color:var(--ink-2)}
+.tv span{padding-left:14px;margin-left:14px;border-left:1px solid var(--rule-2);
+  white-space:nowrap}
+.tv span:first-child{padding-left:0;margin-left:0;border-left:0}
+.tv b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.tv b.good{color:var(--accent-ink)}
+.tv b.bad{color:var(--warn-ink)}
+@media(max-width:760px){.tally{grid-template-columns:1fr}
+  .tally > div + div{border-left:0;border-top:1px solid var(--rule-2)}}
+
+/* ---- the controls -------------------------------------------------------- */
+.ctlbar{display:flex;flex-wrap:wrap;gap:18px 30px;align-items:flex-end;
+  padding:16px 24px;background:var(--surface-2);border-top:1px solid var(--rule-2)}
+.ctl{flex:1 1 240px;min-width:0}
+.ctl label,.ctl .cl{display:block;font-size:12px;font-weight:600;letter-spacing:.02em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0;display:block}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);
+  font-variant-numeric:tabular-nums;margin-top:5px}
+.playbtn{appearance:none;background:var(--ink);color:var(--paper);border:0;
+  border-radius:7px;padding:9px 18px;font:inherit;font-size:14px;font-weight:500;
+  cursor:pointer;white-space:nowrap}
+.playbtn:hover{background:var(--accent)}
+
+/* ---- the footnote -------------------------------------------------------- */
+.foot{padding:16px 0 40px}
+
+/* ---- the spine ----------------------------------------------------------- */
+dialog{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);
+  color:var(--ink);padding:0;max-width:760px;width:calc(100% - 36px);box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(22,19,15,.44)}
+.dh{display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  padding:20px 26px 14px;border-bottom:1px solid var(--rule-2)}
+.dh h2{font-family:var(--serif);font-weight:400;font-size:24px;letter-spacing:-.01em}
+.closebtn{appearance:none;background:none;border:1px solid var(--rule);border-radius:6px;
+  width:30px;height:30px;font:inherit;color:var(--muted);cursor:pointer;line-height:1}
+.closebtn:hover{color:var(--ink);border-color:var(--muted)}
+.spine{list-style:none;margin:0;padding:0}
+.spine li{display:grid;grid-template-columns:112px 3px minmax(0,1fr);gap:0 18px;
+  padding:14px 26px;border-bottom:1px solid var(--rule-2)}
+.spine li:last-child{border-bottom:0}
+.spine .who{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);padding-top:2px}
+.spine .who b{display:block;color:var(--ink);font-weight:500;letter-spacing:.08em}
+.spine .bar{background:var(--rule);border-radius:2px}
+.spine li[data-on="done"] .bar{background:var(--accent)}
+.spine li[data-on="bad"] .bar{background:var(--warn)}
+.spine li[data-on="hold"] .bar{background:var(--muted)}
+.spine .v{font-size:15.5px;color:var(--ink);font-weight:500}
+.spine .d{font-size:13.5px;color:var(--ink-2);margin-top:3px}
+.spine .ev{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:7px;
+  font-family:var(--mono);font-size:11px;color:var(--faint)}
+.spine .ev b{color:var(--ink-2);font-weight:500}
+.said{margin:0 26px 20px;padding:14px 16px;border:1px solid var(--rule-2);
+  border-radius:8px;background:var(--surface-2)}
+.said .sk{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px}
+.said .sv{font-size:14px;color:var(--ink);margin-bottom:12px}
+.said .sv:last-child{margin-bottom:0}
+.said .why{font-size:12.5px;color:var(--muted);margin-top:12px}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="topin">
+    <a class="brand" href="index.html">UPI AutoPay Recovery Agent</a>
+    <p class="disclaimer">A measured run of the simulator. No Razorpay
+      transaction, mandate or decline code has been observed by this project.</p>
+    <button class="themebtn" id="theme" aria-label="Switch between light and dark">◐</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="head">
+    <div>
+      <h1>One customer's month</h1>
+      <p class="tiny" style="margin-top:4px">Read out of the audit log of an agent run
+        against the simulated world. <a href="index.html#story">The full page</a> has the
+        batch result and the limitations.</p>
+    </div>
+    <div class="facts" id="facts"></div>
+  </div>
+
+  <div class="figure">
+    <div class="figure-body">
+      <svg class="chart" id="tl" viewBox="0 0 1160 372" role="img" aria-labelledby="tl-t tl-d">
+        <title id="tl-t">One customer's billing cycle, day by day</title>
+        <desc id="tl-d">The customer's balance sits at zero from the due date until the
+          salary lands, then falls back towards zero by the end of the cycle. Beneath it,
+          two rows of attempts on the same days: a fixed retry schedule fires four times
+          into the empty days and collects nothing, and the agent spends one attempt, waits,
+          and collects after the salary arrives.</desc>
+      </svg>
+    </div>
+
+    <div class="say" id="say" data-tone="">
+      <div class="day" id="say-day"></div>
+      <div class="line" id="say-line"></div>
+      <button class="openbtn" id="open" type="button">Open the decision</button>
+    </div>
+
+    <div class="tally">
+      <div>
+        <div class="tk">The fixed retry schedule</div>
+        <div class="tv" id="t-base"></div>
+      </div>
+      <div>
+        <div class="tk">This agent</div>
+        <div class="tv" id="t-agent"></div>
+      </div>
+    </div>
+
+    <div class="ctlbar">
+      <div class="ctl" style="flex:0 0 auto">
+        <span class="cl">&nbsp;</span>
+        <button class="playbtn" id="play" type="button">▶ Play the month</button>
+      </div>
+      <div class="ctl">
+        <label for="c-day">Day of the cycle</label>
+        <input type="range" id="c-day" min="26" max="55" step="1" value="55">
+        <div class="ticks"><span id="tick-lo">day 26</span><span id="tick-hi">day 55</span></div>
+      </div>
+      <div class="ctl">
+        <label for="c-err">How well is payday known?</label>
+        <input type="range" id="c-err" min="0" max="5" step="1" value="3"
+               aria-describedby="err-note">
+        <div class="ticks"><span>±1 day</span><span>±3</span><span>±5</span><span>±7</span><span>±10</span><span>±14 days</span></div>
+      </div>
+    </div>
+
+    <div class="ctlbar" style="border-top:1px solid var(--rule-2);padding-top:12px;padding-bottom:14px">
+      <p class="tiny" id="err-note" style="margin:0"></p>
+    </div>
+  </div>
+
+  <div class="foot">
+    <p class="tiny" id="alts"></p>
+  </div>
+</div>
+
+<dialog id="spine-dialog" aria-labelledby="sp-title">
+  <div class="dh">
+    <div>
+      <h2 id="sp-title">The decision</h2>
+      <p class="tiny" id="sp-sub" style="margin-top:2px"></p>
+    </div>
+    <button class="closebtn" id="sp-close" type="button" aria-label="Close">✕</button>
+  </div>
+  <ol class="spine" id="spine"></ol>
+  <div class="said">
+    <div class="sk">What the merchant is told</div>
+    <div class="sv" id="sp-merchant"></div>
+    <div class="sk">What the agent knows</div>
+    <div class="sv" id="sp-internal"></div>
+    <p class="why">The two are generated separately and the difference between them is
+      the redaction boundary. The merchant line never carries the customer's financial
+      state.</p>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/* ===========================================================================
+   THE PAGE LOOKS UP; IT DOES NOT COMPUTE. Every figure here is a field of
+   `data/scenarios.json`, generated by `scripts/build_page_data.py` from a real
+   `agent.batch.run_once` against the canonical world. No policy is
+   reimplemented in this file: the attempt days, the probabilities, the index
+   scores, the balance trace and the narration are all read.
+
+   The one thing this file derives is a COUNT — how many of the attempts in
+   that list fall on or before the day on screen. That is counting rows, not
+   deciding anything.
+   =========================================================================== */
+
+const ERRS = [1, 3, 5, 7, 10, 14];
+const S = { errIdx: 3, day: null, timer: null, holdUntil: 0 };
+let D = null;
+
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const rupees = (n) => "₹" + Math.round(n).toLocaleString("en-IN");
+const fmt = (n, d = 2) => Number(n).toFixed(d);
+const pct = (p) => Math.round(p * 100) + "%";
+
+/* EVERY TIME ON THIS PAGE IS A DAY AND AN HOUR. The simulation decides at
+   08:00 and 99.22% of its attempts land there, so the hour is not decoration;
+   it is the hour the peak-window rule is stated about. */
+const AT = (d) => "Day " + d + ", 08:00";
+
+const svgEl = (tag, attrs, text) => {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+};
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+const clear = (svg) => {
+  Array.prototype.slice.call(svg.children).forEach((n) => {
+    const t = n.tagName.toLowerCase();
+    if (t !== "title" && t !== "desc") svg.removeChild(n);
+  });
+};
+const niceMax = (v) => {
+  const mag = Math.pow(10, Math.floor(Math.log10(v)));
+  return Math.ceil(v / (mag / 2)) * (mag / 2);
+};
+
+/* ------------------------------------------------------------------ theme */
+(function theme() {
+  const saved = (() => { try { return localStorage.getItem("theme"); } catch (e) { return null; } })();
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  $("theme").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const isDark = cur ? cur === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const next = isDark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) { /* private mode */ }
+  });
+})();
+
+/* ------------------------------------------------------------- shorthands */
+const arm = () => D.hero.arms[String(ERRS[S.errIdx])];
+const lastDay = () => D.hero.cycle_end - 1;
+const today = () => (S.day == null ? lastDay() : S.day);
+
+/* =========================================================================
+   THE CHART. Time runs left to right; the balance line above, the two attempt
+   rows below it on the same axis.
+   ========================================================================= */
+const TL = { w: 1160, padl: 86, padr: 34, chartY: 22, chartH: 132,
+             rowA: 202, rowB: 276, rowMid: 44, axisY: 356 };
+
+function drawTimeline() {
+  const svg = $("tl");
+  clear(svg);
+  const h = D.hero, bal = h.balance;
+  const d0 = h.cycle_start, d1 = lastDay();
+  const upTo = today();
+
+  const x = (d) => TL.padl + (d - d0) / (d1 - d0) * (TL.w - TL.padl - TL.padr);
+  const maxBal = niceMax(Math.max.apply(null, bal.map((b) => b.bal)) * 1.05);
+  const y = (v) => TL.chartY + TL.chartH - (v / maxBal) * TL.chartH;
+  const floor = TL.chartY + TL.chartH;
+  const half = (x(d1) - x(d0)) / (d1 - d0) / 2;
+
+  /* --- shade every day the account cannot cover the debit */
+  bal.forEach((b) => {
+    if (b.bal >= h.amount) return;
+    svg.appendChild(svgEl("rect", { x: x(b.day) - half, y: TL.chartY,
+      width: half * 2, height: TL.chartH, fill: "var(--ink)", opacity: 0.045 }));
+  });
+
+  /* --- the amount due, and the axis */
+  svg.appendChild(svgEl("line", { x1: TL.padl, x2: TL.w - TL.padr,
+    y1: y(h.amount), y2: y(h.amount), stroke: "var(--muted)", "stroke-width": 1,
+    "stroke-dasharray": "3 4", opacity: 0.6 }));
+  svg.appendChild(svgEl("text", { x: TL.padl - 10, y: y(h.amount) + 3.5,
+    "text-anchor": "end", class: "ax" }, rupees(h.amount) + " due"));
+  svg.appendChild(svgEl("text", { x: TL.padl - 10, y: TL.chartY + 8,
+    "text-anchor": "end", class: "ax" }, rupees(maxBal)));
+  svg.appendChild(svgEl("line", { x1: TL.padl, x2: TL.w - TL.padr, y1: floor,
+    y2: floor, stroke: "var(--rule)", "stroke-width": 1 }));
+
+  /* --- the balance line. THE TRUE BALANCE IN THE SIMULATED WORLD, which is a
+         parameter of a fictional customer and is what makes the wait legible.
+         The live console never shows it and must not; see docs/results.md. */
+  let path = "";
+  bal.forEach((b, i) => {
+    path += (i ? "L" : "M") + x(b.day).toFixed(1) + " " + y(b.bal).toFixed(1);
+  });
+  svg.appendChild(svgEl("path", { d: path + "L" + x(d1).toFixed(1) + " " + floor +
+    "L" + x(d0).toFixed(1) + " " + floor + "Z", fill: "var(--accent)", opacity: 0.09 }));
+  svg.appendChild(svgEl("path", { d: path, fill: "none", stroke: "var(--accent)",
+    "stroke-width": 1.9, "stroke-linejoin": "round" }));
+
+  /* --- the day the salary lands */
+  const payday = bal.reduce((best, b) => (b.bal > best.bal ? b : best), bal[0]);
+  svg.appendChild(svgEl("line", { x1: x(payday.day), x2: x(payday.day),
+    y1: TL.chartY - 4, y2: TL.rowB + TL.rowMid, stroke: "var(--accent)",
+    "stroke-width": 1, "stroke-dasharray": "2 3", opacity: 0.5 }));
+  svg.appendChild(svgEl("text", { x: x(payday.day) + 8, y: TL.chartY + 11,
+    class: "lbl", fill: "var(--accent-ink)" },
+    "salary lands · day " + payday.day + " · " + rupees(payday.bal)));
+
+  /* --- the two attempt rows, on the same axis as the balance */
+  const rows = [
+    { y: TL.rowA, label: "A fixed retry schedule",
+      sub: "charge on the due date, then retry on each of the next three days",
+      items: h.naive.map((a) => ({ day: a.day, ok: a.success })), waits: false },
+    { y: TL.rowB, label: "This agent",
+      sub: "attempt, read the decline as a measurement, wait, notify, debit",
+      items: arm().attempts.map((a) => ({ day: a.day, ok: a.success })), waits: true },
+  ];
+
+  rows.forEach((row) => {
+    const mid = row.y + TL.rowMid;
+    svg.appendChild(svgEl("text", { x: TL.padl, y: row.y, class: "lbl-ink" }, row.label));
+    svg.appendChild(svgEl("text", { x: TL.padl, y: row.y + 15, class: "note-t" }, row.sub));
+    svg.appendChild(svgEl("line", { x1: TL.padl, x2: TL.w - TL.padr, y1: mid, y2: mid,
+      stroke: "var(--rule-2)", "stroke-width": 1 }));
+
+    for (let d = d0; d <= d1; d++) {
+      svg.appendChild(svgEl("circle", { cx: x(d), cy: mid, r: 1.3,
+        fill: "var(--faint)", opacity: d <= upTo ? 0.5 : 0.16 }));
+    }
+
+    /* the hold between the first attempt and the next, drawn as a span */
+    if (row.waits && row.items.length > 1) {
+      const from = row.items[0].day;
+      // TO THE DAY IT DECIDES, NOT THE DAY IT CHARGES. The notice goes out 24
+      // hours before the debit, so the last day of the hold is the day before
+      // the next attempt.
+      const to = Math.min(row.items[1].day - 1, upTo);
+      if (to > from) {
+        svg.appendChild(svgEl("line", { x1: x(from), x2: x(to), y1: mid, y2: mid,
+          stroke: "var(--accent)", "stroke-width": 3, opacity: 0.24,
+          "stroke-linecap": "round" }));
+        svg.appendChild(svgEl("text", { x: (x(from) + x(to)) / 2, y: mid + 17,
+          "text-anchor": "middle", class: "note-t" },
+          "holding — " + (to - from) + (to - from === 1 ? " day" : " days")));
+      }
+    }
+
+    row.items.forEach((a) => {
+      if (a.day > upTo) return;
+      const px = x(a.day);
+      const col = a.ok ? "var(--accent)" : "var(--warn)";
+      svg.appendChild(svgEl("line", { x1: px, x2: px, y1: mid, y2: mid - 15,
+        stroke: col, "stroke-width": a.ok ? 2 : 1.2, opacity: a.ok ? 1 : 0.75 }));
+      svg.appendChild(svgEl("circle", { cx: px, cy: mid - 19, r: 6.8,
+        fill: a.ok ? col : "var(--surface)", stroke: col, "stroke-width": 1.4 }));
+      if (a.ok) {
+        svg.appendChild(svgEl("path", { d: "M" + (px - 3) + " " + (mid - 19) +
+          "l2.2 2.4L" + (px + 3.2) + " " + (mid - 22.4), fill: "none",
+          stroke: "var(--surface)", "stroke-width": 1.6, "stroke-linecap": "round",
+          "stroke-linejoin": "round" }));
+        svg.appendChild(svgEl("text", { x: px + 13, y: mid - 15, class: "lbl",
+          fill: "var(--accent-ink)" }, "collected " + rupees(h.amount)));
+      } else {
+        svg.appendChild(svgEl("path", { d: "M" + (px - 2.6) + " " + (mid - 21.6) +
+          "l5.2 5.2M" + (px + 2.6) + " " + (mid - 21.6) + "l-5.2 5.2", fill: "none",
+          stroke: col, "stroke-width": 1.5, "stroke-linecap": "round" }));
+      }
+    });
+
+    const shown = row.items.filter((a) => a.day <= upTo);
+    const landed = shown.filter((a) => a.ok).length;
+    svg.appendChild(svgEl("text", { x: TL.w - TL.padr, y: row.y, "text-anchor": "end",
+      class: "lbl", fill: landed ? "var(--accent-ink)" : "var(--muted)" },
+      shown.length + (shown.length === 1 ? " attempt, " : " attempts, ") +
+      (landed ? landed + " collected" : "nothing collected")));
+  });
+
+  /* --- the day axis */
+  for (let d = d0; d <= d1; d++) {
+    if ((d - d0) % 5 !== 0 && d !== d1) continue;
+    svg.appendChild(svgEl("text", { x: x(d), y: TL.axisY, "text-anchor": "middle",
+      class: "ax" }, "day " + d));
+  }
+
+  /* --- where the scrubber is */
+  svg.appendChild(svgEl("line", { x1: x(upTo), x2: x(upTo), y1: TL.chartY - 6,
+    y2: TL.axisY - 12, stroke: "var(--ink)", "stroke-width": 1, opacity: 0.35 }));
+}
+
+/* =========================================================================
+   THE NARRATION AND THE TALLY
+   ========================================================================= */
+
+/* A day can carry several narration entries -- a decline, then a fresh wait.
+   Show the most consequential rather than whichever happens to be last. */
+const RANK = { win: 4, fail: 3, notify: 2, decide: 1, wait: 0 };
+
+function lineFor(day) {
+  const rows = arm().narration.filter((n) => n.day === day);
+  if (!rows.length) return null;
+  return rows.reduce((best, n) =>
+    (RANK[n.tone] || 0) > (RANK[best.tone] || 0) ? n : best, rows[0]);
+}
+
+/* The newest narration at or before `day`, so a day the agent did nothing on
+   still says what it is waiting for. */
+function lineAtOrBefore(day) {
+  for (let d = day; d >= D.hero.cycle_start; d--) {
+    const row = lineFor(d);
+    if (row) return row;
+  }
+  return null;
+}
+
+function drawSay() {
+  const day = today();
+  const row = lineAtOrBefore(day);
+  const say = $("say");
+  if (!row) {
+    say.dataset.tone = "";
+    $("say-day").textContent = AT(day);
+    $("say-line").textContent = "Nothing has happened on this mandate yet.";
+    $("open").disabled = true;
+    return;
+  }
+  // THE CHIP LABELS THE SENTENCE, NOT THE SCRUBBER. Days 39 to 55 carry no
+  // event, so a chip reading "Day 55" beside a line about day 38 would date
+  // the sentence wrongly. Where the scrubber is, is on the chart.
+  $("say-day").textContent = AT(row.day);
+  say.dataset.tone = row.tone;
+  // THE MERCHANT LINE BY DEFAULT. `internal` is one click away, inside the
+  // decision, where the two sit beside each other and the difference between
+  // them is the point.
+  $("say-line").textContent = row.merchant;
+  $("open").disabled = false;
+}
+
+function drawTally() {
+  const h = D.hero, day = today(), cap = 4;
+  const rows = [
+    ["t-base", h.naive.map((a) => ({ day: a.day, ok: a.success }))],
+    ["t-agent", arm().attempts.map((a) => ({ day: a.day, ok: a.success }))],
+  ];
+  rows.forEach(([id, items]) => {
+    const shown = items.filter((a) => a.day <= day);
+    const got = shown.filter((a) => a.ok).length * h.amount;
+    const left = Math.max(0, cap - shown.length);
+    const box = $(id);
+    box.replaceChildren();
+    const add = (label, value, cls) => {
+      const s = el("span");
+      s.append(document.createTextNode(label + " "));
+      const b = el("b", cls || null, value);
+      s.append(b);
+      box.append(s);
+    };
+    add("attempts used", String(shown.length) + " of " + cap);
+    add("left this cycle", String(left), left === 0 ? "bad" : null);
+    add("collected", rupees(got), got ? "good" : null);
+  });
+}
+
+function drawErrNote() {
+  const err = ERRS[S.errIdx];
+  const row = D.sweep.find((r) => r.err === err);
+  const a = arm();
+  const days = a.attempts.map((x) => x.day);
+  const won = a.attempts.filter((x) => x.success);
+  const mine = "At ±" + err + (err === 1 ? " day" : " days") +
+    " the agent attempts this customer on " +
+    days.map((d) => "day " + d).join(" and ") + ", and collects " +
+    (won.length ? "on day " + won[0].day : "nothing") + ". ";
+  const pop = "Across the whole population at this setting: agent " +
+    fmt(row.agent) + "%, a fixed schedule that waits for the estimated payday " +
+    fmt(row.payday_wait) + "%, difference " +
+    (row.diff >= 0 ? "+" : "") + fmt(row.diff) + " points with a 2 SE of " +
+    fmt(row.two_se) + " — " + row.verdict + ".";
+  $("err-note").textContent = mine + pop;
+}
+
+/* =========================================================================
+   THE SPINE. Seven authorities, in the order the money path runs them, with
+   the same names and the same wording the operator console uses.
+   ========================================================================= */
+
+function row(who, verb, opts) {
+  const li = document.createElement("li");
+  li.dataset.on = opts.on || "idle";
+  const w = el("div", "who");
+  w.append(el("b", null, who));
+  w.append(document.createTextNode(verb));
+  li.append(w);
+  li.append(el("div", "bar"));
+  const said = el("div", "said-cell");
+  said.append(el("div", "v", opts.v));
+  if (opts.d) said.append(el("div", "d", opts.d));
+  if (opts.ev && opts.ev.length) {
+    const ev = el("div", "ev");
+    opts.ev.forEach(([k, v]) => {
+      const s = el("span");
+      s.append(document.createTextNode(k + " "));
+      s.append(el("b", null, v));
+      ev.append(s);
+    });
+    said.append(ev);
+  }
+  li.append(said);
+  return li;
+}
+
+/* The tick the decision panel describes: the newest one at or before the day
+   on screen. `ticks` carries one row per day the scheduler was asked. */
+function tickAtOrBefore(day) {
+  const ticks = arm().ticks.filter((t) => t.day <= day);
+  return ticks.length ? ticks[ticks.length - 1] : null;
+}
+
+function openSpine() {
+  const h = D.hero, day = today();
+  const a = arm();
+  const tick = tickAtOrBefore(day);
+  const line = lineAtOrBefore(day);
+  const when = tick ? tick.day : day;
+  // TWO DIFFERENT SETS, AND CONFLATING THEM IS HOW A PANEL LIES.
+  //
+  // `known` is every outcome this tick could have reasoned on -- including one
+  // that landed earlier the same day, which is the whole point of the beat: the
+  // decline arrives, and the next tick is the one that reads it.
+  //
+  // `spent` is what the NPCI cap had already consumed BEFORE this tick, which
+  // is a strictly earlier day, because the attempt this tick proposes is not
+  // yet one of them.
+  const known = a.attempts.filter((x) => x.day <= when);
+  const spent = a.attempts.filter((x) => x.day < when);
+  const last = known.length ? known[known.length - 1] : null;
+  const fired = Boolean(tick && tick.verdict === "ok");
+  // The attempt this tick led to, and only when it proposed one. A tick that
+  // waited proposed nothing, so rows 6 and 7 have nothing to report -- reading
+  // a later attempt into them would draw a debit this tick did not authorise.
+  const led = fired ? a.attempts.find((x) => x.day > when) ||
+    a.attempts.find((x) => x.day === when) : null;
+
+  $("sp-sub").textContent = tick
+    ? AT(tick.day) + " · the agent was asked what to do"
+    : AT(day);
+
+  const list = $("spine");
+  list.replaceChildren();
+
+  /* --- 1. what the rail said last */
+  if (last) {
+    // `success` and `code` are the generator's field names; the chart maps
+    // them to `ok` for drawing and this panel reads the row as it ships.
+    list.append(row("Razorpay", "the event", {
+      on: last.success ? "done" : "bad",
+      v: last.success ? "The debit was collected" : "The debit was declined",
+      d: last.success
+        ? rupees(h.amount) + " cleared at " + AT(last.day) + "."
+        : "Insufficient funds. The account held less than " + rupees(h.amount) +
+          " at " + AT(last.day) + ".",
+      ev: [["day", String(last.day)], ["code", last.code]],
+    }));
+  } else {
+    list.append(row("Razorpay", "the event", {
+      on: "idle", v: "Nothing has been attempted yet",
+      d: "This is the first decision of the cycle.",
+    }));
+  }
+
+  /* --- 2. the belief. THE EVIDENCE, NEVER THE POSTERIOR. The console draws
+         this row the same way, and for the same reason. */
+  list.append(row("Belief", "updated", {
+    on: last ? "done" : "idle",
+    v: last ? "Folded in a resolved debit" : "Nothing resolved to fold in",
+    d: last
+      ? "A " + (last.success ? "collected " : "declined ") + rupees(h.amount) +
+        " debit is a censored measurement of the balance at that hour. Only a " +
+        "terminal outcome reaches the filter."
+      : "A submission is not an outcome, so nothing has been learned from it.",
+  }));
+
+  /* --- 3. the scheduler. IT OWNS TIMING AND NOTHING ELSE DOES. */
+  if (tick && fired) {
+    list.append(row("Scheduler", "when", {
+      on: "done",
+      v: "Debit at " + AT(led ? led.day : tick.day + 1),
+      d: "Now is the best remaining day of the cycle. The pre-debit notice goes " +
+        "out at " + AT(tick.day) + " — the 24 hours NPCI requires before an " +
+        "AutoPay debit.",
+      ev: [["p(now)", fmt(tick.p_now, 3)], ["p(later)", fmt(tick.p_later, 3)],
+           ["index", (tick.index >= 0 ? "+" : "") + fmt(tick.index, 2)]],
+    }));
+  } else if (tick) {
+    list.append(row("Scheduler", "when", {
+      on: "hold", v: "No attempt proposed",
+      d: "The chance of clearing " + rupees(h.amount) + " today is " +
+        pct(tick.p_now) + ". The best chance on any remaining day of the cycle " +
+        "is " + pct(tick.p_later) + ". Waiting is worth more, so no attempt was " +
+        "placed and none was spent.",
+      ev: [["p(now)", fmt(tick.p_now, 3)], ["p(later)", fmt(tick.p_later, 3)],
+           ["index", (tick.index >= 0 ? "+" : "") + fmt(tick.index, 2)]],
+    }));
+  } else {
+    list.append(row("Scheduler", "when", {
+      on: "idle", v: "Not yet asked",
+      d: "The cycle has not opened.",
+    }));
+  }
+
+  /* --- 4. the diagnosis. It names an intervention; it has no field for a
+         time, so it cannot appear in row 3. The diagnoser on this run is the
+         deterministic rule engine -- no language model is on the path that
+         decides whether to debit a customer. */
+  if (tick && fired) {
+    list.append(row("Diagnosis", "what", {
+      on: "done", v: "Retry the debit",
+      d: "The scheduler proposed an hour and the diagnosis layer chose what to " +
+        "do at it.",
+      ev: [["source", "deterministic rules"]],
+    }));
+  } else if (tick) {
+    list.append(row("Diagnosis", "what", {
+      on: "idle", v: "Not consulted",
+      d: "The diagnosis layer runs only once the scheduler has proposed an hour. " +
+        "It cannot choose one.",
+    }));
+  } else {
+    list.append(row("Diagnosis", "what", {
+      on: "idle", v: "Not consulted", d: "",
+    }));
+  }
+
+  /* --- 5. Stage 0. Five rules, all evaluated, before anything is sent. */
+  if (tick && fired) {
+    list.append(row("Stage 0", "whether", {
+      on: "done", v: "Allowed",
+      d: "Every rule permitted, so the action reached the executor: inside the " +
+        "four presentations a cycle allows, outside every peak window, at least " +
+        "24 hours after the notice, with no other notice outstanding, and not a " +
+        "re-presentation of a funds decline.",
+      ev: [["presentations", spent.length + " of 4 spent"]],
+    }));
+  } else {
+    list.append(row("Stage 0", "whether", {
+      on: "idle", v: "Not adjudicated",
+      d: "The five rules are evaluated when a debit is submitted. Nothing was " +
+        "submitted on this day.",
+    }));
+  }
+
+  /* --- 6. the provider */
+  if (tick && fired) {
+    list.append(row("Provider", "execution", {
+      on: "done", v: "Debit submitted",
+      d: "A submission is an acknowledgement, not an outcome.",
+      ev: [["runs at", AT(led ? led.day : tick.day + 1)]],
+    }));
+  } else {
+    list.append(row("Provider", "execution", {
+      on: "idle", v: "Nothing submitted",
+      d: "No order, no debit, and no presentation spent.",
+    }));
+  }
+
+  /* --- 7. the authoritative answer, for the attempt THIS tick proposed */
+  const answer = led && led.day <= day ? led : null;
+  if (answer) {
+    list.append(row("Webhook", "the answer", {
+      on: answer.success ? "done" : "bad",
+      v: answer.success ? "Collected " + rupees(h.amount)
+        : "Declined — insufficient funds",
+      d: answer.success
+        ? "The cycle is collected. " + (4 - spent.length - 1) + " of the four " +
+          "presentations NPCI allows are still in hand."
+        : "The outcome arrives out of band. Until it does, the attempt stays " +
+          "unresolved and is never retried.",
+      ev: [["day", String(answer.day)], ["code", answer.code]],
+    }));
+  } else {
+    list.append(row("Webhook", "the answer", {
+      on: "idle", v: "No answer yet",
+      d: "The outcome arrives out of band. Until it does, the attempt stays " +
+        "unresolved and is never retried.",
+    }));
+  }
+
+  $("sp-merchant").textContent = line ? line.merchant : "—";
+  $("sp-internal").textContent = line ? line.internal : "—";
+  $("spine-dialog").showModal();
+}
+
+/* =========================================================================
+   PLAYBACK
+   ========================================================================= */
+function render() { drawTimeline(); drawSay(); drawTally(); drawErrNote(); }
+
+function stop() {
+  clearInterval(S.timer);
+  S.timer = null;
+  $("play").textContent = "▶ Play the month";
+}
+
+/* THE FIVE DAYS THE STORY TURNS ON: the due date, the agent's attempts, the
+   day the fixed schedule runs out of them, and the day the salary lands. Read
+   out of the data rather than listed, so the beats follow the arm the reader
+   has selected.
+
+   The naive schedule's middle two retries are deliberately NOT beats. They are
+   the same event as the first one, against the same empty account, and holding
+   on each of them spends six seconds saying so. */
+function beats() {
+  const h = D.hero;
+  const payday = h.balance.reduce((best, b) => (b.bal > best.bal ? b : best),
+                                  h.balance[0]).day;
+  const set = new Set([h.cycle_start, payday]);
+  arm().attempts.forEach((a) => set.add(a.day));
+  if (h.naive.length) set.add(h.naive[h.naive.length - 1].day);
+  return set;
+}
+
+const STEP_MS = 250;
+const HOLD_TICKS = 8;          // ~2s at 250ms a day
+
+function play() {
+  if (S.timer) { stop(); return; }
+  const d1 = lastDay(), marks = beats();
+  S.day = D.hero.cycle_start;
+  S.holdUntil = 0;
+  $("c-day").value = S.day;
+  $("play").textContent = "■ Pause";
+  render();
+  S.timer = setInterval(() => {
+    if (S.holdUntil > 0) { S.holdUntil--; return; }
+    S.day++;
+    if (S.day > d1) { S.day = d1; $("c-day").value = d1; stop(); render(); return; }
+    $("c-day").value = S.day;
+    render();
+    if (marks.has(S.day)) S.holdUntil = HOLD_TICKS;
+  }, STEP_MS);
+}
+
+/* =========================================================================
+   WIRING
+   ========================================================================= */
+fetch("data/scenarios.json")
+  .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then((data) => {
+    D = data;
+    const h = D.hero;
+
+    const facts = $("facts");
+    [["", rupees(h.amount) + " a month"],
+     ["due", "day " + h.due_day],
+     ["cycle", "days " + h.cycle_start + "–" + lastDay()],
+     ["", "population seed " + D.meta.pop_seed + " · run seed " + D.meta.run_seed],
+    ].forEach(([k, v]) => {
+      const s = el("span");
+      if (k) s.append(document.createTextNode(k + " "));
+      s.append(el("b", null, v));
+      facts.append(s);
+    });
+
+    $("c-day").min = h.cycle_start;
+    $("c-day").max = lastDay();
+    $("c-day").value = lastDay();
+    $("tick-lo").textContent = "day " + h.cycle_start;
+    $("tick-hi").textContent = "day " + lastDay();
+
+    $("alts").textContent =
+      "The agent does not collect from every customer. Two mandates in this " +
+      "population are attempted at least three times over the 120 days and " +
+      "never collect: " +
+      h.alternatives.map((x) => x.uid + " (" +
+        x.note.replace(/ -- /g, " — ").replace(/Rs /g, "₹") + ")")
+        .join("; ") + ".";
+
+    $("c-day").addEventListener("input", (e) => {
+      stop(); S.day = +e.target.value; render();
+    });
+    $("c-err").addEventListener("input", (e) => {
+      S.errIdx = +e.target.value; render();
+    });
+    $("play").addEventListener("click", play);
+    $("open").addEventListener("click", openSpine);
+    $("sp-close").addEventListener("click", () => $("spine-dialog").close());
+
+    let raf = null;
+    window.addEventListener("resize", () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(drawTimeline);
+    });
+
+    render();
+  })
+  .catch((err) => {
+    console.error(err);
+    document.querySelector(".wrap").insertAdjacentHTML("afterbegin",
+      "<div class=\"figure\" style=\"padding:20px 24px;border-color:var(--warn)\">" +
+      "<h3>The page data could not be loaded</h3>" +
+      "<p class=\"tiny\" style=\"margin:0\">This page reads <code>data/scenarios.json</code>, " +
+      "so it needs to be served rather than opened from the filesystem. Run " +
+      "<code>python -m http.server --directory docs</code> from the repository root, " +
+      "or regenerate the file with <code>python scripts/build_page_data.py</code>.</p></div>");
+  });
+</script>
+</body>
+</html>
