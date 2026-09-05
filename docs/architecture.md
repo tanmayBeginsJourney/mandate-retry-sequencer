@@ -153,6 +153,21 @@ discovery is limited by observation volume.
 the non-pooled and consent-gated configurations are runnable and measurable
 rather than hypothetical.
 
+**The belief does not survive a process restart, and the live service says so.**
+`BeliefBook` is in memory. A restarted service rebuilds each customer from
+`est_salary` and `est_payday` — the cold-start prior — and ages it forward with
+`advance_day`; ageing is not evidence, so a customer with three observed
+declines is served by a filter that has never seen one. Resolved attempts are
+not replayed into it, because the day a replay would have to fold each one in is
+not on disk: the running service records an outcome with the belief standing at
+the day of the last scheduling tick, not at the attempt's target day, and
+replaying at the target day produces a different posterior rather than a delayed
+one. The operator console reports which outcomes the filter in the current
+process actually read, and prints "Not recorded in this session" for the rest,
+so the page never claims a measurement the filter never took. On the live rail
+this bounds a mandate's timing quality after a restart; no published measurement
+is affected, because every one is a single-process batch run.
+
 **What it is worth depends on how many mandates a customer holds, and how much
 turns on that count has been measured.** In the canonical world,
 where a customer holds about two, withholding pooling costs 0.16 points against
