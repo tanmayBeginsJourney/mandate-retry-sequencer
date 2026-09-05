@@ -182,7 +182,10 @@ class RazorpayExecutor:
         self.queue_path = os.environ.get(
             "RECOVERY_QUEUE",
             os.path.join("agent", "runs", "merchant_queue.jsonl"))
-        self._backup_ids: dict[str, str] = {}
+        #: mandate uid -> (reference_id, payment link id) for the CURRENT
+        #: cycle's backup link. The reference id is in the key so a later
+        #: cycle cannot replay an earlier cycle's link; see `backup_checkout`.
+        self._backup_ids: dict[str, tuple[str, str]] = {}
         self.workflow_log: list[dict] = []
         #: `{customer_id: handle}`, the shape `SimExecutor` exposes, so
         #: `agent/loop.py` can put a bank on the `CaseView` either way.
@@ -608,14 +611,48 @@ class RazorpayExecutor:
             executed=emailed, channel="email" if emailed else "outbox",
             detail=f"{smtp} outbox={path}", status="sent" if emailed else "")
 
+    def adopt_backup(self, uid: str, reference_id: str, vendor_id: str) -> None:
+        """Take a Payment Link this process did not create.
+
+        `_backup_ids` is in memory and the link's id is on the caller's disk,
+        so a restarted service holds a mandate whose link it cannot name --
+        `fetch_backup` answers "no backup link id" and the link's status stays
+        wherever the last process left it. A link the customer PAYS after a
+        restart is then never seen, and the cycle is reported uncollected on
+        money that arrived.
+
+        `setdefault`, because a process that has already issued this cycle's
+        link holds the newer entry and must keep it. Plain values only: nothing
+        under `agent/` may import from `live/`, so the caller passes the two
+        strings rather than a row.
+        """
+        if not (uid and reference_id and vendor_id):
+            return
+        self._backup_ids.setdefault(uid, (reference_id[:40], vendor_id))
+
     def backup_checkout(self, ref: MandateRef, amount: Rupees, t: int,
                         message: str = "", action_id: str = "") -> WorkflowResult:
         """Create a Payment Link that replaces the fourth mandate debit.
 
         Email notify is on when RECOVERY_NOTIFY_EMAIL is set. SMS stays off.
         """
-        existing = self._backup_ids.get(ref.uid)
-        if existing:
+        # THE REPLAY CACHE IS KEYED ON THE REFERENCE ID, NOT ON THE MANDATE.
+        #
+        # It was keyed on `ref.uid` alone, so the SECOND billing cycle that
+        # needed a backup link replayed the FIRST cycle's -- a link for the
+        # wrong month, at whatever amount that month was, in whatever state it
+        # had reached. If the earlier link had been paid, the caller polls it,
+        # reads `paid`, and marks the new cycle collected. That reports revenue
+        # that never arrived.
+        #
+        # `reference_id` is Razorpay's own idempotency anchor for a Payment
+        # Link and the caller already derives it per cycle, so keying on it
+        # replays a link exactly when the provider would refuse a duplicate of
+        # it and never otherwise. `SimExecutor` mints a fresh link per call and
+        # has always been right here; this is the two backends agreeing again.
+        reference_id = (action_id or f"{ref.uid}_{t}")[:40]
+        prev_ref, existing = self._backup_ids.get(ref.uid, ("", ""))
+        if existing and prev_ref == reference_id:
             r = self._api.fetch_payment_link(existing)
             if r.ok and r.body.get("id"):
                 return WorkflowResult(
@@ -637,7 +674,7 @@ class RazorpayExecutor:
             "description": (message or "Pay this period's subscription. The "
                             "automatic debit is paused so you are not charged "
                             "twice.")[:2048],
-            "reference_id": (action_id or f"{ref.uid}_{t}")[:40],
+            "reference_id": reference_id,
             "expire_by": int(time.time()) + 48 * 3600,
             "customer": {"name": f"Customer {ref.customer_id}",
                          "email": to_addr,
@@ -658,11 +695,12 @@ class RazorpayExecutor:
                 vid, url, st = found
                 ok, recovered = True, True
         if ok:
-            prev = self._backup_ids.get(ref.uid)
-            if prev != vid:
-                self._backup_ids[ref.uid] = vid
-                if prev is None:
-                    self.n_live_backups += 1
+            if existing != vid or prev_ref != reference_id:
+                self._backup_ids[ref.uid] = (reference_id, vid)
+                # A NEW LINK, not a re-read of one. The quota counts links
+                # created against a live account, so a replay must not
+                # increment it and a fresh cycle's link must.
+                self.n_live_backups += 1
         detail = (f"http {'recovered' if recovered else r.status} id={vid} "
                   f"notify_email={notify_on} short_url={bool(url)}" if ok else
                   f"http {r.status} {r.error_code} {r.error_description}")
@@ -693,7 +731,9 @@ class RazorpayExecutor:
                 self._map_link_status(str(p.get("status") or "issued")))
 
     def fetch_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
-        vid = self._backup_ids.get(ref.uid, "")
+        # The mandate's CURRENT link. `backup_checkout` replaces the entry
+        # whenever the reference id changes, so this is never last cycle's.
+        _ref_id, vid = self._backup_ids.get(ref.uid, ("", ""))
         if not vid:
             return WorkflowResult(executed=False,
                                   channel="razorpay_payment_link",
@@ -708,7 +748,9 @@ class RazorpayExecutor:
                               detail=f"http {r.status} status={raw}")
 
     def cancel_backup(self, ref: MandateRef, t: int) -> WorkflowResult:
-        vid = self._backup_ids.get(ref.uid, "")
+        # The mandate's CURRENT link. `backup_checkout` replaces the entry
+        # whenever the reference id changes, so this is never last cycle's.
+        _ref_id, vid = self._backup_ids.get(ref.uid, ("", ""))
         if not vid:
             return WorkflowResult(executed=False, detail="no backup link id")
         r = self._api.cancel_payment_link(vid)

@@ -53,8 +53,17 @@ from agent.execution.razorpay_executor import (MandateBinding, PredeliveryJourna
                                                RazorpayError, RazorpayExecutor)
 from agent.execution.razorpay_mock import MockRazorpayApi, sign as mock_sign
 from agent.execution.razorpay_predelivery import PredeliveryOrder, PredeliveryPhase
+from agent.llm.compose import compose_outreach
 from agent.llm.fallback import RuleBasedDiagnoser
 from agent.policy import timing
+# THE ESCALATION LADDER, AS PURE PREDICATES. The same module `agent/loop.py`
+# asks, so the simulation and the live rail cannot disagree about when a
+# reminder is due or when the fourth debit is held. It imports nothing and
+# decides nothing on its own; see `_apply_intervention` and `_ladder_holds`.
+from agent.recovery import (backup_link_collects, escalate_halts_cycle,
+                            fourth_debit_blocked, is_funds_decline,
+                            should_issue_backup_after_fail,
+                            should_remind_after_fail)
 from agent.policy.belief_book import BeliefBook
 from agent.ports import (CaseView, InterventionKind, MandateRef, MoneyAction,
                          PendingNotification, Refused, family_of)
@@ -69,9 +78,26 @@ from live import webhooks
 #: The database key holding the clock origin. See `LiveService.now_t`.
 EPOCH_ORIGIN_KEY = "epoch_origin"
 
+#: The database key holding the offline demonstration clock's offset, in
+#: hours. See `LiveService.advance_clock`.
+CLOCK_OFFSET_KEY = "clock_offset_h"
+
 #: One presentation plus three retries. `agent/constraints/rules.py` enforces
 #: it; this is named here only so the scheduler can be told how many are left.
 CAP = 4
+
+
+def at_hour(t: int) -> str:
+    """A simulated hour, written the way an operator reads it.
+
+    THE SERVICE COUNTS IN HOURS AND NOBODY READS A MOMENT THAT WAY. `target_t`
+    is hours since `epoch_origin`, so hour 752 and hour 600 are a day and a
+    half apart and neither says so. Every message this module writes for a
+    human names the day and the time instead; the field itself is unchanged and
+    is still served as a number, so nothing downstream has to parse prose.
+    """
+    h = max(0, int(t))
+    return f"day {h // 24}, {h % 24:02d}:00"
 
 
 class LiveError(RuntimeError):
@@ -121,6 +147,12 @@ class Decision:
     at: int
     acted: bool
     reason: str
+    #: THE SIMULATED HOUR THIS TICK REASONED IN, beside `at`, which is the
+    #: wall-clock second it happened at. Both are recorded because they answer
+    #: different questions: Stage 0's peak and lead rules are stated in
+    #: simulated hours, and an operator comparing `target_t` against a UNIX
+    #: timestamp is comparing two different clocks. Written on every path.
+    now_t: int = 0
     intervention: str = ""
     root_cause: str = ""
     rationale: str = ""
@@ -142,6 +174,27 @@ class Decision:
     outcome_raw: str = ""
     attempt_state: str = ""
     provider: dict = field(default_factory=dict)
+    #: NPCI presentations already spent in the cycle this tick reasoned about,
+    #: against the regulatory ceiling. `attempts_used` counts attempts that
+    #: REACHED THE PROVIDER -- see `_attempts_this_cycle` -- so an intent that
+    #: never left the process is not one of them. Read-only; the cap check in
+    #: `_schedule` reads the same number.
+    attempts_used: int = 0
+    attempts_cap: int = CAP
+    #: The belief filter's coarse confidence about WHEN this customer is worth
+    #: asking: narrow | medium | wide. It is the same label `CaseView` carries,
+    #: and it is a label rather than the posterior for the reason
+    #: `agent/llm/caseview.py` gives -- a band says how sure our model is, a
+    #: number would say something about the customer. Empty on a tick that
+    #: never reached the scheduler.
+    uncertainty_band: str = ""
+    #: EVERY STAGE 0 RULE'S ANSWER, not just the first objection. `submit`
+    #: evaluates all five and writes all five to the audit log; this is the
+    #: same five kept in memory so the console can show them without reading
+    #: the log back. Empty on a tick that never submitted a money action --
+    #: the pre-debit notification is adjudicated by one short-circuiting
+    #: predicate, and what it found is already in `refused_rule`.
+    gate_checks: list = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
@@ -268,10 +321,29 @@ class LiveService:
         self.book = BeliefBook(cycle_days=30, days=365, pop_spend=0.93)
         #: OFFLINE ONLY. Hours added to wall-clock time so a demonstration can
         #: watch a month of scheduling in a minute. See `advance_clock`.
-        self.clock_offset_h = 0
+        #:
+        #: DURABLE, BESIDE `epoch_origin`, AND FOR THE SAME REASON. It was in
+        #: memory only, so a restart put the clock back to wall-clock time
+        #: while every `target_t` on disk stayed where the advanced clock had
+        #: written it -- the service rewound by however far the demonstration
+        #: had run, and then refused to charge attempts it had already
+        #: scheduled because their hour was suddenly in the future.
+        #: `advance_clock` refuses in live mode, so this can only ever be
+        #: non-zero offline.
+        self.clock_offset_h = int(self.store.meta_get(CLOCK_OFFSET_KEY, "0")
+                                  or 0)
         self._known_customers: set[int] = set()
         #: customer seq -> the last day its belief has been advanced to.
         self._advanced: dict[int, int] = {}
+        #: Attempt ids whose outcome THIS PROCESS folded into the belief.
+        #:
+        #: The belief lives in memory and the attempt row lives on disk, so a
+        #: resolved attempt on disk is not evidence that the filter running now
+        #: has read it -- a service restarted on an existing database holds
+        #: attempts it has never seen. The console reports the belief from this
+        #: set rather than from the attempt's state, so it cannot claim a
+        #: measurement the filter never took.
+        self._folded: set[str] = set()
         self.decisions: list[Decision] = []
         #: One lock per mandate around the money path. Two concurrent ticks
         #: would both see no open attempt, both schedule, and both submit
@@ -333,7 +405,42 @@ class LiveService:
         if hours <= 0:
             raise LiveError("the clock only moves forward")
         self.clock_offset_h += int(hours)
+        # `advance_clock` is the only writer, so a stale value here would mean
+        # the offset had moved without going through the live-mode refusal
+        # above.
+        # WRITTEN BEFORE THE CALLER IS TOLD. A crash between the two would
+        # otherwise leave the next start reading an hour the operator has
+        # already seen the console move past.
+        self.store.meta_set(CLOCK_OFFSET_KEY, str(self.clock_offset_h))
         return self.clock_offset_h
+
+    def next_decision_hour(self) -> int:
+        """Hours to the next simulated hour at which a tick would do something.
+
+        OFFLINE DEMONSTRATION ONLY, and it decides nothing: it moves the clock,
+        and the scheduler is asked afterwards exactly as it would be on a timer.
+
+        Two things change the answer a tick gives. A scheduled debit runs at
+        its own target hour, which the attempt row already carries. And the
+        belief filter advances once a day, so the probabilities the scheduler
+        compares are the same at every hour of one day. Every hour between
+        those two produces the tick that has just been produced, which is what
+        made a fixed twelve-hour step take a hundred clicks to reach a retry.
+
+        Never zero: the clock only moves forward.
+        """
+        now_t = self.now_t()
+        # The next day boundary. The belief has not moved before then.
+        soonest = (now_t // 24 + 1) * 24
+        for m in self.store.mandates():
+            if not m.chargeable:
+                continue
+            for a in self.store.attempts_for(m.id, limit=50):
+                if (a.state in (AttemptState.ORDER_CREATED,
+                                AttemptState.NOTIFIED)
+                        and now_t < a.target_t < soonest):
+                    soonest = a.target_t
+        return max(1, soonest - now_t)
 
     def refresh(self) -> None:
         """Rebuild the bindings and the belief book from the store.
@@ -381,7 +488,57 @@ class LiveService:
                 self.book.add_customer(c.seq, m.est_salary, m.est_payday,
                                        max(1, per_customer[c.id]))
                 self._known_customers.add(c.seq)
+            # THE PAYMENT LINK'S ID IS DURABLE AND THE EXECUTOR'S MAP IS NOT.
+            # `_issue_backup` derives the reference id the same way, so it is
+            # recoverable from the row rather than needing a column of its own.
+            if m.backup_status and m.backup_vendor_id:
+                self.executor.adopt_backup(
+                    uid, f"backup_{uid}_{m.cycle}", m.backup_vendor_id)
+            self._readopt_mock_state(m, c)
         self._rehydrate_ledger()
+
+    def _readopt_mock_state(self, m: Mandate, c: Customer) -> None:
+        """Tell the offline mock about state it created before this process.
+
+        THE MOCK ONLY. Real Razorpay remembers its own tokens and orders across
+        our restarts; `MockRazorpayApi` keeps both in dictionaries that die
+        with the process, so a service restarted on an existing database holds
+        a `rzp_token_id` and an `order_id` the rail has never heard of. The
+        next call answers "Token does not exist" or "Order does not exist"
+        while the mandate's own row still says ACTIVE and chargeable, which is
+        a wedge the console cannot explain -- and the order case is worse than
+        it looks, because the executor writes SUBMITTING before the request
+        leaves, so a refusal after that point is indistinguishable from a lost
+        response and the attempt ends UNKNOWN awaiting a reconciliation the
+        mock cannot answer either.
+
+        Guarded on the concrete class rather than on the mode, so this can
+        never run against a real rail even if a caller passes an unexpected
+        configuration. Both `adopt_` methods take plain values; nothing in
+        `agent/execution/` may import from `live/`.
+        """
+        if not isinstance(self.api, MockRazorpayApi):
+            return
+        rzp_customer = m.rzp_customer_id or c.rzp_customer_id
+        if not m.rzp_token_id or not rzp_customer:
+            return
+        self.api.adopt_token(
+            token_id=m.rzp_token_id, customer_id=rzp_customer,
+            max_amount_paise=m.max_amount_paise, expire_at=m.expire_at,
+            status=m.token_status or "confirmed",
+            email=c.email, contact=c.contact)
+        # Only orders a debit may still run against. A resolved attempt's order
+        # is history, and re-declaring it would let a stale receipt block a
+        # fresh one.
+        for a in self.store.attempts_for(m.id, limit=50):
+            if a.resolved or not a.order_id or not a.receipt:
+                continue
+            self.api.adopt_order(
+                order_id=a.order_id, receipt=a.receipt,
+                amount_paise=a.amount_paise, token_id=m.rzp_token_id,
+                payment_after=a.payment_after,
+                status="attempted" if a.payment_id else "created",
+                payment_id=a.payment_id)
 
     def _rehydrate_ledger(self) -> None:
         """REBUILD the gate's ledger from durable state. Not top it up.
@@ -644,7 +801,7 @@ class LiveService:
 
         now_t = self.now_t(now)
         d = Decision(mandate_id=m.id, at=int(time.time()), acted=False,
-                     reason="")
+                     reason="", now_t=now_t)
 
         blocked = self._blocked(m)
         if blocked:
@@ -652,6 +809,10 @@ class LiveService:
             return self._record(d)
 
         attempts = self.store.attempts_for(m.id, limit=50)
+        # BEFORE THE ROLLOVER, because the paths below that return without
+        # rolling are reasoning about the cycle the mandate is still in. The
+        # rollover recounts it against the cycle it opened.
+        d.attempts_used = self._attempts_this_cycle(m, attempts)
 
         # An attempt already scheduled owns the decision. Either its hour has
         # come or it has not.
@@ -659,8 +820,8 @@ class LiveService:
         if scheduled is not None:
             d.cycle = scheduled.cycle
             if scheduled.target_t > now_t:
-                d.reason = (f"a debit is scheduled for hour "
-                            f"{scheduled.target_t}; it is now hour {now_t}")
+                d.reason = (f"a debit is scheduled for {at_hour(scheduled.target_t)}"
+                            f"; it is now {at_hour(now_t)}")
                 d.attempt_id = scheduled.id
                 d.target_t = scheduled.target_t
                 d.attempt_state = scheduled.state.value
@@ -688,11 +849,12 @@ class LiveService:
 
         m = self._roll_cycle(m, now_t, c)
         d.cycle = m.cycle
+        d.attempts_used = self._attempts_this_cycle(m, attempts)
 
         if self._collected(m, attempts):
             d.reason = (f"cycle {m.cycle} is collected; the next debit is "
-                        f"cycle {m.cycle + 1}, which opens at hour "
-                        f"{self._cycle_close_day(m) * 24}")
+                        f"cycle {m.cycle + 1}, which opens on "
+                        f"{at_hour(self._cycle_close_day(m) * 24)}")
             return self._record(d)
 
         return self._schedule(m, c, now_t, d, attempts)
@@ -721,7 +883,14 @@ class LiveService:
 
     @staticmethod
     def _collected(m: Mandate, attempts: list[PaymentAttempt]) -> bool:
-        return any(a.cycle == m.cycle and a.succeeded for a in attempts)
+        """Has this cycle's money arrived, by either route?
+
+        A PAID BACKUP LINK COLLECTS THE CYCLE. It is not an attempt and spends
+        no NPCI presentation, but the customer has paid and a mandate debit
+        after it would take the money twice.
+        """
+        return (any(a.cycle == m.cycle and a.succeeded for a in attempts)
+                or backup_link_collects(m.backup_status))
 
     def _roll_cycle(self, m: Mandate, now_t: int, c: Customer) -> Mandate:
         """Advance to the cycle `now_t` falls in, one cycle at a time.
@@ -744,10 +913,18 @@ class LiveService:
         self.store.record_transition(
             "mandate", m.id, f"cycle {before}", f"cycle {m.cycle}",
             Transition.APPLIED.value, "cycle",
-            f"opened at hour {m.cycle_start_t}")
+            f"opened on {at_hour(m.cycle_start_t)}")
         # A fresh cycle restores the full NPCI allowance and drops any notice
         # left outstanding by the last one.
         self.ledger.open_cycle(self._ref(m, c).uid, m.cycle)
+        # AND IT CLEARS THE LADDER. A link issued for last month must not hold
+        # this month's first debit, and last month's reminders are not this
+        # month's. `halted_cycle` needs no clearing: it is compared against the
+        # cycle number, which has just moved.
+        if m.backup_vendor_id or m.backup_status or m.reminders_sent:
+            m.backup_vendor_id, m.backup_status = "", ""
+            m.reminders_sent = 0
+            self.store.put_mandate(m)
         return m
 
     def _blocked(self, m: Mandate) -> str:
@@ -800,9 +977,55 @@ class LiveService:
     def _schedule(self, m: Mandate, c: Customer, now_t: int, d: Decision,
                   attempts: list[PaymentAttempt]) -> Decision:
         ref = self._ref(m, c)
+        # COUNTED HERE, FROM THIS METHOD'S OWN ARGUMENTS, and not read off the
+        # Decision. `_decide` puts the same number on `d` for the console, and
+        # it would be tempting to reuse it -- but then the NPCI cap check would
+        # depend on a display field having been populated correctly by the
+        # caller, and a fifth debit is not a rendering bug. The assignment
+        # below is the other direction: the scheduler's number overwrites the
+        # display one, so the console can never show a count the cap check
+        # did not use.
         attempts_used = self._attempts_this_cycle(m, attempts)
+        d.attempts_used = attempts_used
         if attempts_used >= CAP:
             d.reason = f"the NPCI attempt cap of {CAP} is spent for this cycle"
+            return self._record(d)
+
+        if m.halted_cycle == m.cycle:
+            d.reason = (f"cycle {m.cycle} is halted; the diagnosis layer "
+                        f"stopped it and it reopens at the next cycle")
+            return self._record(d)
+
+        # ---- 0. THE LADDER, BEFORE THE SCHEDULER IS ASKED FOR AN HOUR.
+        #
+        # THE THIRD FAILED FUNDS ATTEMPT IS THE LAST SAFE MANDATE DEBIT, and
+        # what replaces the fourth is a Payment Link. Deciding this before
+        # `timing.propose` runs is deliberate: proposing an hour for a debit
+        # that must not happen would put a target on the record and then
+        # withdraw it, and the audit trail would carry a scheduled debit
+        # nothing ever intended to send.
+        last_code = self._last_code(m, attempts)
+        if (attempts_used >= CAP - 1
+                and (is_funds_decline(last_code)
+                     or fourth_debit_blocked(m.backup_status))):
+            if not m.backup_status:
+                view = self._case_view(m, c, attempts_used, now_t // 24)
+                diag = self.diagnoser.diagnose(view)
+                d.intervention = diag.intervention.value
+                d.root_cause = diag.root_cause.value
+                d.diagnosis_source = diag.source
+                d.diagnosis_id = diag.diagnosis_id
+                self._issue_backup(m, ref, diag, now_t, view)
+            _hold, why = self._resolve_backup(m, ref, now_t)
+            d.reason = why or ("a backup checkout replaces the fourth mandate "
+                               "debit")
+            return self._record(d)
+
+        # An open link from earlier in this cycle holds every debit under it,
+        # not only the fourth.
+        if m.backup_status:
+            _hold, why = self._resolve_backup(m, ref, now_t)
+            d.reason = why
             return self._record(d)
 
         day = now_t // 24
@@ -825,11 +1048,40 @@ class LiveService:
             d.reason = f"timing: {decision.reason}"
             return self._record(d)
         prop = decision.proposal
+
+        # ---- 1a. A PROVIDER RULE THE SCHEDULER DOES NOT MODEL.
+        #
+        # Razorpay states that a subsequent UPI payment must not be created on
+        # the last day of the billing cycle, and that doing so makes the
+        # payment fail [VERIFIED, "Create Subsequent Payments" for UPI, read
+        # 5 September 2026]. `agent/policy/timing.py` bounds its window at
+        # `dd < cycle_close`, so `cycle_close - 1` -- the last day IN the
+        # cycle -- is a legal target, and this agent's whole behaviour is to
+        # wait late in the cycle. It is therefore biased toward the exact day
+        # the provider says will fail.
+        #
+        # HERE AND NOT IN `agent/constraints/stage0.py`. Stage 0's five rules
+        # are shared with the simulation and each is asserted by a gate; a
+        # sixth would change what the published measurements were audited
+        # against. This is a property of Razorpay, not of the policy, so the
+        # live rail bounds against it and the simulator does not model it.
+        # `docs/results.md` says so.
+        if prop.target_t // 24 >= cycle_close - 1:
+            d.reason = (
+                f"a debit on {at_hour(prop.target_t)} falls on the last day "
+                f"of the billing cycle, which Razorpay refuses for UPI; the "
+                f"cycle closes on {at_hour(cycle_close * 24)}")
+            return self._record(d)
+
         d.target_t, d.notify_t = prop.target_t, prop.notify_t
 
         # ---- 2. THE DIAGNOSIS LAYER. It names a cause and picks an
         #         intervention. `Diagnosis` has no field for a time.
         view = self._case_view(m, c, attempts_used, day)
+        # READ OFF THE VIEW, not recomputed from the belief. The band the
+        # console shows is then by construction the band the diagnoser was
+        # shown, rather than a second reading of a filter that has moved on.
+        d.uncertainty_band = view.uncertainty_band
         diag = self.diagnoser.diagnose(view)
         d.intervention = diag.intervention.value
         d.root_cause = diag.root_cause.value
@@ -842,15 +1094,42 @@ class LiveService:
                       intervention=diag.intervention.value,
                       source=diag.source)
 
-        if diag.intervention is not InterventionKind.RETRY:
-            d.reason = f"diagnosis chose {diag.intervention.value}"
-            self.gate.record_non_money(ref, m.cycle, diag.intervention.value,
-                                       now_t, diagnosis_id=diag.diagnosis_id)
+        # ---- 2a. WHAT THE INTERVENTION MEANS FOR THIS DEBIT.
+        #
+        # A NUDGE IS A REMINDER, NOT A SKIPPED DEBIT, and this used to read it
+        # as one: every non-RETRY answer returned here, so a single funds
+        # decline cancelled every remaining attempt in the cycle. The
+        # diagnoser's own rationale says "Prompting the customer BEFORE the
+        # next scheduled attempt", `agent/loop.py:_phase_decide` falls through
+        # to timing for exactly that reason, and measured against the mock rail
+        # the returning version spent 2 presentations in the first cycle, 1 in
+        # the second and 0 in the third.
+        #
+        # It also put the diagnosis layer in charge of WHEN, which is the one
+        # thing the architecture says it must never decide. The scheduler has
+        # already chosen the hour above; what happens here is only what to do
+        # at it.
+        if not self._apply_intervention(m, c, ref, diag, d, now_t, view,
+                                        attempts_used):
             return self._record(d)
 
         # ---- 3. THE INTENT IS DURABLE BEFORE ANYTHING LEAVES THIS PROCESS.
         aid = action_id(self.log.run_id, ref, m.cycle, prop.target_t,
                         attempts_used + 1)
+        prior = self.store.attempt(aid)
+        if prior is not None and prior.resolved:
+            # THE SAME HOUR, ALREADY TRIED AND CLOSED. Both `action_id` and the
+            # order receipt are derived from the target hour, so writing this
+            # row again would replace a terminal attempt with a fresh INTENT
+            # and then ask Razorpay for an order under a receipt it has already
+            # seen. Reachable only after `_abandon_intent`: a notice that
+            # failed cannot be un-failed, a fresh one needs a fresh order, and
+            # a fresh order needs a fresh hour.
+            d.reason = (f"the attempt for {at_hour(prop.target_t)} is already "
+                        f"{prior.state.value}; a fresh notice needs a fresh "
+                        f"order, and a fresh order needs a different hour")
+            d.attempt_id, d.attempt_state = prior.id, prior.state.value
+            return self._record(d)
         attempt = PaymentAttempt(
             id=aid, mandate_id=m.id, mandate_uid=ref.uid,
             amount_paise=m.charge_amount_paise, state=AttemptState.INTENT,
@@ -863,7 +1142,7 @@ class LiveService:
         self.store.record_transition("attempt", aid, "",
                                      AttemptState.INTENT.value,
                                      Transition.APPLIED.value, "schedule",
-                                     f"target hour {prop.target_t}")
+                                     f"target {at_hour(prop.target_t)}")
         d.attempt_id = aid
 
         # ---- 4. STAGE 0 ADJUDICATES THE NOTIFICATION, and the pre-debit order
@@ -874,6 +1153,11 @@ class LiveService:
         if refusal is not None:
             d.reason = f"Stage 0 refused the notification: {refusal.rule}"
             d.gate_verdict, d.refused_rule = "REFUSED", refusal.rule
+            # The gate refuses before it calls the executor, so nothing was
+            # sent and the intent written at step 3 has to be closed here. See
+            # `_abandon_intent`.
+            d.attempt_state = self._abandon_intent(
+                attempt, f"Stage 0 refused the notification: {refusal.rule}")
             return self._record(d)
 
         pred = self.executor.predelivery_state(ref, prop.target_t)
@@ -883,17 +1167,235 @@ class LiveService:
             # notice matters: the auditor rebuilds pendency from the log, and
             # one left outstanding reads as a second concurrent notice.
             why = self.executor.last_notify.get(ref.uid, {})
+            detail = str(why.get("detail", "reason unrecorded"))
             d.reason = ("the pre-debit order was not created, so nothing was "
-                        f"scheduled: {why.get('detail', 'reason unrecorded')}")
+                        f"scheduled: {detail}")
             self.gate.clear_pending(ref, m.cycle, now_t, "order not created")
+            d.attempt_state = self._abandon_intent(
+                attempt, f"the pre-debit order was not created: {detail}")
             return self._record(d)
 
         attempt = self.store.attempt(aid) or attempt
         d.attempt_state = attempt.state.value
-        d.reason = (f"pre-debit order created; the debit runs at hour "
-                    f"{prop.target_t}")
+        d.reason = (f"pre-debit order created; the debit runs at "
+                    f"{at_hour(prop.target_t)}")
         d.provider = {"order_id": pred.order_id}
         return self._record(d)
+
+    # ------------------------------------------------------- the ladder
+    #
+    # THE ESCALATION LADDER, AND IT IS THE SAME ONE THE SIMULATION RUNS.
+    # `agent/recovery.py` states it as pure predicates and both composition
+    # roots ask it the same questions:
+    #
+    #   attempts 1 and 2 fail on funds -> a funding reminder
+    #   attempt 3 fails on funds       -> a Payment Link REPLACES attempt 4
+    #   while that link is open        -> the fourth mandate debit is held
+    #
+    # The last line is the point of the whole thing. Four failed presentations
+    # end the mandate and forfeit every remaining billing cycle, so the fourth
+    # debit is the expensive one; spending it on an account that has already
+    # declined three times buys almost nothing and costs the customer. The link
+    # collects the cycle if it is paid, and if it closes unpaid the cycle is
+    # forfeited and the mandate lives.
+    #
+    # None of this ran here until now. The ladder was built, the gate exposed
+    # it, the executor implemented it, and `live/service.py` called
+    # `record_non_money`, which writes a log line and stops.
+
+    def _last_code(self, m: Mandate,
+                   attempts: list[PaymentAttempt] | None = None) -> str:
+        """The newest decline code IN THIS CYCLE, or ""."""
+        rows = attempts if attempts is not None else self.store.attempts_for(
+            m.id, limit=50)
+        for a in rows:
+            if a.cycle == m.cycle and a.outcome_code and a.outcome_code != "OK":
+                return a.outcome_code
+        return ""
+
+    def _outreach(self, view: CaseView, diag, purpose: str) -> str:
+        """Customer- or merchant-facing copy for a non-money action.
+
+        `client=None`, so this is the template and never a model call. The
+        service's diagnoser is the deterministic rule engine and the console
+        reports it as such; reaching for a model here to write a reminder
+        would make that report a half-truth. `compose_outreach` runs the same
+        governance filter either way, so the redaction boundary is unchanged.
+        """
+        return compose_outreach(view, diag, client=None, purpose=purpose).body
+
+    def _send_reminder(self, m: Mandate, ref: MandateRef, diag, now_t: int,
+                       view: CaseView) -> None:
+        """Ask the customer to fund the account. Spends no NPCI attempt."""
+        self.gate.send_reminder(
+            ref, m.cycle, m.charge_amount_paise / 100.0, now_t,
+            diagnosis_id=diag.diagnosis_id,
+            message=self._outreach(view, diag, "reminder"),
+            action_id=f"remind_{ref.uid}_{m.cycle}_{m.reminders_sent}")
+        m.reminders_sent += 1
+        self.store.put_mandate(m)
+
+    def _issue_backup(self, m: Mandate, ref: MandateRef, diag, now_t: int,
+                      view: CaseView) -> None:
+        """Put a Payment Link where the fourth mandate debit would have gone.
+
+        A notification already outstanding for that debit must not fire, so it
+        is withdrawn first and the withdrawal is written down -- the auditor
+        rebuilds pendency from the log, and one dropped silently reads as a
+        second concurrent notice.
+
+        A LINK THAT FAILS TO CREATE STILL HOLDS THE DEBIT. `backup_status` goes
+        to "expired" rather than staying empty: failing open into a
+        mandate-killing fourth attempt is worse than missing one cycle.
+        """
+        self.gate.clear_pending(ref, m.cycle, now_t,
+                                "replaced by backup checkout")
+        wr = self.gate.issue_backup_link(
+            ref, m.cycle, m.charge_amount_paise / 100.0, now_t,
+            diagnosis_id=diag.diagnosis_id,
+            message=self._outreach(view, diag, "backup_link"),
+            action_id=f"backup_{ref.uid}_{m.cycle}")
+        if wr.executed:
+            m.backup_vendor_id = wr.vendor_id
+            m.backup_status = wr.status or "issued"
+        else:
+            m.backup_status = "expired"
+        self.store.put_mandate(m)
+
+    def _resolve_backup(self, m: Mandate, ref: MandateRef,
+                        now_t: int) -> tuple[bool, str]:
+        """Poll an open link. Returns (hold the mandate debit, why).
+
+        Every state but "" holds it, and each for a different reason, so the
+        reason is returned rather than reconstructed by the caller.
+        """
+        if not m.backup_status:
+            return False, ""
+        if m.backup_status == "paid":
+            return True, ("the backup checkout was paid; this cycle is "
+                          "collected and a debit would take the money twice")
+        if m.backup_status in ("expired", "cancelled"):
+            return True, ("the backup checkout closed unpaid; the fourth "
+                          "debit is not fired, so the mandate survives into "
+                          "the next cycle")
+        wr = self.gate.poll_backup_link(ref, m.cycle, now_t)
+        status = wr.status or m.backup_status
+        if wr.credited or status == "paid":
+            m.backup_status = "paid"
+            self.store.put_mandate(m)
+            c = self.store.customer(m.customer_id)
+            if c is not None and c.seq in self._known_customers:
+                # A PAID LINK IS EVIDENCE ABOUT THE BALANCE, exactly as a
+                # collected debit is: the customer had the money. It reaches
+                # the filter for the same reason and by the same call.
+                self.book.record_outcome(c.seq,
+                                         m.charge_amount_paise / 100.0, True)
+            return True, ("the backup checkout was paid; this cycle is "
+                          "collected")
+        if status != m.backup_status:
+            m.backup_status = status
+            self.store.put_mandate(m)
+        if status in ("expired", "cancelled"):
+            return True, ("the backup checkout closed unpaid; the fourth "
+                          "debit is not fired, so the mandate survives into "
+                          "the next cycle")
+        return True, ("a backup checkout is open; the fourth mandate debit "
+                      "waits for it to be paid or to close")
+
+    def _apply_intervention(self, m: Mandate, c: Customer, ref: MandateRef,
+                            diag, d: Decision, now_t: int, view: CaseView,
+                            attempts_used: int) -> bool:
+        """Execute what the diagnosis chose. True = go on and debit.
+
+        RETRY and NUDGE both continue to the debit; the difference between them
+        is that NUDGE also sends a reminder. ESCALATE continues unless the
+        decline is one that cannot be retried at all. STOP does not continue.
+
+        Every branch here EXECUTES. `record_non_money` is kept for STOP, which
+        is the one intervention with nothing to send.
+        """
+        kind = diag.intervention
+        if kind is InterventionKind.NUDGE:
+            # NOTHING IS SENT HERE, AND THAT IS NOT AN OMISSION. The reminder
+            # this intervention asks for has already gone out: it fires from
+            # the failed outcome, in `_ladder_after_outcome`, which is where
+            # `should_remind_after_fail` caps it at two per cycle. Sending a
+            # second one from the scheduling tick would message the customer
+            # about their bank balance twice for one decline, and would do it
+            # again on every tick until the cycle closed.
+            #
+            # `agent/loop.py` makes the same call in the same words: "Fail-path
+            # reminders already fire in dispatch; fall through to timing so
+            # attempts 1-3 still run."
+            return True
+
+        if kind is InterventionKind.ESCALATE:
+            self.gate.send_escalate(
+                ref, m.cycle, m.charge_amount_paise / 100.0, now_t,
+                diagnosis_id=diag.diagnosis_id,
+                brief=self._outreach(view, diag, "escalate"),
+                action_id=f"escalate_{ref.uid}_{m.cycle}")
+            # HANDING A RECOVERABLE FUNDS CASE TO A HUMAN MUST NOT STOP THE
+            # RETRIES. `escalate_halts_cycle` is the same predicate the
+            # simulation asks, and it halts only on a decline that a retry
+            # cannot fix.
+            if escalate_halts_cycle(self._last_code(m), diag.root_cause.value):
+                m.halted_cycle = m.cycle
+                self.store.put_mandate(m)
+                d.reason = ("the diagnosis layer escalated a decline that "
+                            "cannot be retried; queued for the merchant and "
+                            "held for this cycle")
+                return False
+            d.reason = "escalated to the merchant; the attempt continues"
+            return True
+
+        if kind is InterventionKind.STOP:
+            self.gate.record_non_money(ref, m.cycle, kind.value, now_t,
+                                       diagnosis_id=diag.diagnosis_id)
+            m.halted_cycle = m.cycle
+            self.store.put_mandate(m)
+            d.reason = "the diagnosis layer stopped this cycle"
+            return False
+
+        return True
+
+    def _abandon_intent(self, attempt: PaymentAttempt, detail: str) -> str:
+        """Close an intent that never left this process. Returns the new state.
+
+        `_schedule` writes the intent to disk BEFORE it calls the provider, so
+        a crash between the two leaves a row saying "we may have asked". Two
+        branches after that write return without asking at all: Stage 0
+        refusing the notification, and a pre-debit order the provider did not
+        create. In both, no request reached Razorpay -- the gate refuses before
+        it calls the executor, and `not pred.order_id` is the executor
+        reporting that it has no order.
+
+        A row left in INTENT is in `ATTEMPT_UNRESOLVED`, so the `open_now`
+        guard in `_decide` blocks every later tick on it, for the life of the
+        mandate. That guard is right and is not what changes here: it is what
+        stops a second debit while the outcome of a first is unknown. What
+        changes is that an attempt with no request behind it stops pretending
+        to be one.
+
+        `NOTIFICATION_FAILED` is the state the domain already defines for
+        this: the customer did not get the notice, a notice that failed cannot
+        be un-failed, and a fresh one needs a fresh order. It is terminal, so
+        `open_now` stops blocking; it is not in `ATTEMPT_PRESENTED`, so it
+        spends none of NPCI's four presentations.
+        """
+        verdict = advance(attempt.state, AttemptState.NOTIFICATION_FAILED)
+        self.store.record_transition(
+            "attempt", attempt.id, attempt.state.value,
+            AttemptState.NOTIFICATION_FAILED.value, verdict.value, "schedule",
+            detail)
+        if verdict is not Transition.APPLIED:
+            return attempt.state.value
+        attempt.state = AttemptState.NOTIFICATION_FAILED
+        attempt.resolved_at = int(time.time())
+        if not attempt.raw_reason:
+            attempt.raw_reason = "notification_not_issued"
+        self.store.put_attempt(attempt)
+        return attempt.state.value
 
     # -------------------------------------------------------------- tick B
     def _execute(self, m: Mandate, c: Customer, attempt: PaymentAttempt,
@@ -902,6 +1404,22 @@ class LiveService:
         d.attempt_id = attempt.id
         d.target_t = attempt.target_t
         d.attempt_state = attempt.state.value
+
+        # THE HOUR HAS COME AND THE LADDER HAS MOVED UNDER IT. A backup link
+        # can be issued between scheduling and charging -- the third decline
+        # resolves by webhook, which is exactly the window between the two
+        # ticks -- and this order was created before that happened. Checked
+        # here as well as in `_schedule` because the two run at different
+        # times, and a scheduled debit is not an authorised one.
+        if fourth_debit_blocked(m.backup_status):
+            self.gate.clear_pending(ref, m.cycle, now_t,
+                                    "held for the backup checkout")
+            self._abandon_intent(attempt,
+                                 "a backup checkout replaced this debit")
+            d.attempt_state = AttemptState.NOTIFICATION_FAILED.value
+            _hold, why = self._resolve_backup(m, ref, now_t)
+            d.reason = why
+            return self._record(d)
 
         # `notify_t` is READ, not recomputed. It is the hour the scheduler
         # actually notified at, and Stage 0's `pending` rule compares it
@@ -917,6 +1435,7 @@ class LiveService:
         #         executor only if every one of them permits.
         try:
             verdict = self.gate.submit(action)
+            d.gate_checks = self._gate_checks(attempt.id)
         except RazorpayError as e:
             # THE PROVIDER REFUSED THE REQUEST, WHICH IS NOT THE SAME AS
             # REFUSING THE PAYMENT. It is never evidence about the customer, so
@@ -932,6 +1451,11 @@ class LiveService:
             # `reconcile` resolves by asking the order what it holds.
             d.reason = f"the provider refused the request: {e}"
             d.gate_verdict = "ALLOWED"
+            # The five rules ran and permitted the action; the refusal came
+            # from the provider, after the gate. Recording them here is what
+            # keeps "Stage 0 allowed this" and "the debit did not land" from
+            # looking like the same event.
+            d.gate_checks = self._gate_checks(attempt.id)
             # RE-READ, BECAUSE THE EXECUTOR MAY HAVE MOVED THE ROW. It writes
             # SUBMITTING before the request leaves, so the row says whether a
             # debit reached the rail -- which decides whether this is an
@@ -994,10 +1518,19 @@ class LiveService:
         No balance, no salary, no payday, no posterior, no provider id -- the
         band is a coarse label and `PaydayUncertainty` drops the expected
         balance before it can be read here.
+
+        THE DECLINE HISTORY IS THIS CYCLE'S, AND ONLY THIS CYCLE'S. It was the
+        last ten attempts on the mandate, unfiltered, so a decline in August
+        was still in the view in September -- and `RuleBasedDiagnoser` reads
+        `n_recent_z9 >= 1` to choose NUDGE, so a fresh cycle opened already
+        believing it had just been declined. `agent/loop.py` clears
+        `decline_history` at rollover; this is the same rule, applied to a
+        history that lives in a table instead of a list.
         """
         history = tuple(a.outcome_code for a
-                        in reversed(self.store.attempts_for(m.id, limit=10))
-                        if a.outcome_code and a.outcome_code != "OK")
+                        in reversed(self.store.attempts_for(m.id, limit=50))
+                        if a.cycle == m.cycle and a.outcome_code
+                        and a.outcome_code != "OK")
         unc = self.book.uncertainty(c.seq)
         day_in_cycle = max(0, day - m.cycle_start_t // 24)
         return CaseView(
@@ -1025,6 +1558,17 @@ class LiveService:
         for d in range(last + 1, day + 1):
             self.book.advance_day(customer_seq, d)
         self._advanced[customer_seq] = day
+
+    def _gate_checks(self, action_id: str) -> list:
+        """What Stage 0's five rules said about `action_id`, or nothing.
+
+        The gate keeps one slot and tags it with what it adjudicated. A tag
+        that does not match means another mandate's tick overwrote it between
+        the submission and this read, and the honest answer is then an empty
+        list rather than somebody else's verdicts.
+        """
+        tag, checks = self.gate.last_checks
+        return [dict(c) for c in checks] if tag == action_id else []
 
     def _record(self, d: Decision) -> Decision:
         self.decisions.append(d)
@@ -1153,6 +1697,39 @@ class LiveService:
             return
         self.book.record_outcome(c.seq, a.amount_paise / 100.0,
                                  a.state is AttemptState.SUCCEEDED)
+        self._folded.add(a.id)
+        self._ladder_after_outcome(m, c, a)
+
+    def folded_in_session(self, attempt_id: str) -> bool:
+        """Did the filter in THIS process read this attempt's outcome?"""
+        return attempt_id in self._folded
+
+    def _ladder_after_outcome(self, m: Mandate, c: Customer,
+                              a: PaymentAttempt) -> None:
+        """Run the escalation ladder on a resolved attempt.
+
+        HERE, AND NOT IN `_schedule`, because the trigger is the OUTCOME and
+        the outcome arrives out of band -- a webhook, or a reconciliation poll,
+        both of which land in `apply_outcome`. Driving it from the next
+        scheduling tick instead would delay the reminder until the agent next
+        wanted to debit, which on a waiting mandate can be a week.
+
+        Only a funds decline moves the ladder. `should_remind_after_fail` and
+        `should_issue_backup_after_fail` are the same predicates the simulation
+        asks, and both answer False on a technical or terminal code.
+        """
+        if a.state is not AttemptState.FAILED:
+            return
+        used = self._attempts_this_cycle(m, self.store.attempts_for(m.id,
+                                                                    limit=50))
+        ref = self._ref(m, c)
+        view = self._case_view(m, c, used, self.now_t() // 24)
+        diag = self.diagnoser.diagnose(view)
+        if should_remind_after_fail(used, a.outcome_code, CAP):
+            self._send_reminder(m, ref, diag, self.now_t(), view)
+        if (should_issue_backup_after_fail(used, a.outcome_code, CAP)
+                and not m.backup_status):
+            self._issue_backup(m, ref, diag, self.now_t(), view)
 
     # ------------------------------------------------------------ webhooks
     def deliver_mock_webhooks(self) -> int:

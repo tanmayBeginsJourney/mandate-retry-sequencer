@@ -351,3 +351,159 @@ def render_compose(view, diag, purpose: str = "") -> tuple[str, str]:
         decline_history=(", ".join(view.decline_history) or "(none yet)"),
         rationale=diag.rationale,
         audience=audience)
+
+
+# ------------------------------------------------------------- explanation
+#: The Recovery Analyst. READ-ONLY, POST-HOC, OPERATOR-FACING.
+#:
+#: This prompt is handed a schedule, which the diagnoser prompt is not and must
+#: never be. The distinction is one sentence and the whole architecture rests
+#: on it: THE DIAGNOSIS CANNOT CHOOSE A TIME; THE EXPLANATION MAY DESCRIBE A
+#: TIME ALREADY CHOSEN BY THE SCHEDULER. By the moment this prompt runs,
+#: `timing.propose` has picked the hour, Stage 0 has ruled on it and the
+#: attempt row is on disk. Nothing this returns can move any of it -- the
+#: return type is `ports.Explanation`, which holds prose and provenance and has
+#: no field for an action.
+#:
+#: THE NO-NUMBERS RULE IS THE INTERESTING PART OF THIS PROMPT. Every figure the
+#: operator needs is rendered beside the prose from the decision itself. A
+#: number written here would be a SECOND copy of a fact, produced by a model,
+#: free to disagree with the first. `governance.no_invented_numbers` is the
+#: backstop; this paragraph is what keeps it from firing.
+EXPLAIN_PROMPT_ID = "glm-explain-v1"
+
+EXPLAIN_SYSTEM = """\
+You are the Recovery Analyst for an automated subscription-recovery agent \
+handling UPI AutoPay mandates in India. You explain decisions that have \
+ALREADY BEEN MADE, to the operator running the recovery console.
+
+YOU DECIDE NOTHING. Every choice in the case below was made before you were \
+called, by a different layer, and is already recorded. You are not being asked \
+what should happen. You are being asked what happened and why.
+
+WHO DECIDED WHAT, and you must not attribute a decision to the wrong layer:
+  The SCHEDULER chose WHEN. A belief filter estimates when the customer's \
+account is most likely to hold money and picks an hour inside NPCI's rules.
+  The DIAGNOSER chose WHAT. It named a root cause and picked one of four \
+interventions: RETRY, NUDGE, ESCALATE, STOP. It has no ability to name a time.
+  STAGE 0 decided WHETHER IT WAS ALLOWED. Five rules -- cap, peak, lead, \
+pending, represent -- each of which can refuse. All five are evaluated even \
+after one refuses.
+  RAZORPAY executed, or did not.
+
+THE SETTING. A mandate is a standing authorisation to debit one customer for \
+one merchant. A billing cycle is 30 days. NPCI permits at most four debit \
+attempts per mandate per cycle: one presentation and three retries. Exhausting \
+them without collecting kills the mandate and forfeits every future cycle, so \
+the last attempt is expensive. A debit must be preceded by a customer \
+notification at least 24 hours earlier, and may not land inside NPCI's peak \
+windows.
+
+WHAT THE STAGE 0 RULES MEAN:
+  cap        the four attempts for this cycle are spent.
+  peak       the target hour falls in an NPCI peak window.
+  lead       fewer than 24 hours between the notice and the debit.
+  pending    a notification is outstanding, or the one outstanding is for a \
+different target.
+  represent  a re-presentation with no fresh notice. Only a technical decline \
+may do that.
+
+WHAT THE RESPONSE CODES MEAN:
+  OK   collected.
+  Z9   insufficient funds. The commonest failure by far.
+  TECH a technical decline. May be re-presented under the same notification.
+  Z8, IE   a limit was hit or funds are blocked for a mandate. THE MONEY IS \
+THERE.
+  ZX, YE   inactive, dormant, blocked or frozen account. TERMINAL.
+  VD, VI, VF   mandate-level failures. TERMINAL; the merchant must \
+re-authorise.
+  U30  a catch-all. It names nothing. Treat it as genuinely ambiguous.
+
+RULES FOR WHAT YOU WRITE.
+
+1. DO NOT WRITE ANY NUMBER. Not an hour, not a day, not a count, not an \
+amount, not a date. The console already displays every figure beside your \
+text, and a second copy written by you can only disagree with the first. \
+Response codes are the one exception: "Z9", "U30", "Z8" are names, not \
+quantities, and you may write them.
+2. Describe the schedule in words instead. "The debit sits a full day after \
+the customer's notice, outside the peak window" is right. "The debit is at \
+hour 288" is not, and neither is "at 11:00".
+3. Do not recommend a different time, a different amount, or a different \
+action. You are not being asked. If you think the decision was wrong, say \
+what the evidence shows and stop.
+4. Do not disclose or infer the customer's financial state. No balance, no \
+salary, no payday, no "they cannot afford it". You have not been told any of \
+those and must not guess. "The account was not funded at the time of the \
+request" describes a transaction and is fine.
+5. Do not name a bank.
+6. Write two to four sentences of plain English for a colleague. No headings, \
+no bullet points, no restating the field names back.
+
+Return ONLY a JSON object with the single key "explanation"."""
+
+EXPLAIN_USER = """\
+WHAT THE MANDATE IS DOING
+mandate state            : {mandate_state}
+current attempt state    : {attempt_state}
+blocked because          : {blocked_because}
+billing cycle            : {cycle}
+day within billing cycle : {day_in_cycle} ({days_left_in_cycle} left of 30)
+attempts used this cycle : {attempts_used} of {attempts_cap}
+subscription amount      : Rs {amount:.0f}
+response codes, oldest first : {decline_history}
+insufficient-funds declines among them : {n_recent_z9}
+
+WHAT THE SCHEDULER CHOSE (already fixed; you are describing it, not setting it)
+current hour             : {now_t}
+customer notified at hour: {notify_t}
+debit targeted for hour  : {target_t}
+hours of notice given    : {lead_hours}
+target falls in an NPCI peak window : {target_is_peak}
+timing model's confidence about this customer : {uncertainty_band}
+
+WHAT THE DIAGNOSER CHOSE
+root cause    : {root_cause}
+intervention  : {intervention}
+decided by    : {diagnosis_source}
+
+WHAT STAGE 0 SAID
+overall : {gate_verdict}
+{gate_checks}
+
+Explain this recovery state to the operator. Remember: no numbers, and you are
+describing decisions that have already been made. Return the JSON object."""
+
+EXPLAIN_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["explanation"],
+    "properties": {
+        "explanation": {"type": "string", "maxLength": 700},
+    },
+}
+
+
+def render_explain(view) -> tuple[str, str]:
+    checks = "\n".join(
+        f"  {rule:<10s} {verdict}" + (f"  -- {detail}" if detail else "")
+        for rule, verdict, detail in view.gate_checks) or "  (not adjudicated)"
+    return EXPLAIN_SYSTEM, EXPLAIN_USER.format(
+        mandate_state=view.mandate_state,
+        attempt_state=view.attempt_state or "(no attempt yet)",
+        blocked_because=view.blocked_because or "(not blocked)",
+        cycle=view.cycle,
+        day_in_cycle=view.day_in_cycle,
+        days_left_in_cycle=view.days_left_in_cycle,
+        attempts_used=view.attempts_used, attempts_cap=view.attempts_cap,
+        amount=view.amount,
+        decline_history=(", ".join(view.decline_history) or "(none yet)"),
+        n_recent_z9=view.n_recent_z9,
+        now_t=view.now_t, notify_t=view.notify_t, target_t=view.target_t,
+        lead_hours=view.lead_hours,
+        target_is_peak=("yes" if view.target_is_peak else "no"),
+        uncertainty_band=view.uncertainty_band,
+        root_cause=view.root_cause, intervention=view.intervention,
+        diagnosis_source=view.diagnosis_source,
+        gate_verdict=view.gate_verdict or "(not adjudicated)",
+        gate_checks=checks)

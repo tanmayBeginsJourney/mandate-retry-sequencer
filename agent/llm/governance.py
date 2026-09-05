@@ -84,6 +84,47 @@ _INJECTION = [
 ]
 
 
+# NAMES THAT HAPPEN TO CARRY A DIGIT. Two kinds, and neither is a quantity:
+#
+#   * DECLINE CODES. "The last decline was Z9" names the provider's own
+#     response code, which the operator is already looking at.
+#   * "STAGE 0". The constraint layer's name. Found by the template's own
+#     gate on the first run: every explanation that says what Stage 0 did was
+#     being rejected for saying "0", including the deterministic template that
+#     is the REPLACEMENT for a rejected one. A checker that fails its own
+#     fallback is a checker that gets deleted.
+#
+# The exemption is a fixed list of names, not a pattern for "numbers in
+# context", because the second is unbounded and the first is auditable.
+_EXEMPT_TOKEN = re.compile(
+    r"\b(?:Z8|Z9|ZX|YE|VD|VI|VF|IE|U30|OK|TECH|Stage\s+0)\b", re.IGNORECASE)
+_NUMERIC_TOKEN = re.compile(r"\S*\d\S*")
+
+
+def no_invented_numbers(text: str) -> tuple[str, ...]:
+    """Numeric tokens in `text` that are not decline codes.
+
+    THIS IS FOR OPERATOR EXPLANATIONS AND IS NOT PART OF `check`. The two have
+    different audiences and different contracts: a merchant-facing reminder
+    says "a payment of Rs 550 could not be collected" and must, so folding a
+    numeric rule into `check` would fail `compose.py`'s own template.
+
+    WHY AN EXPLANATION MAY NOT WRITE A NUMBER. Every figure an operator needs
+    is already on the screen beside the prose, rendered from the decision
+    itself -- the hour, the attempt count, the cap, the amount, the five gate
+    verdicts. So a number in the narrative is never the only copy of a fact;
+    it is a SECOND copy, written by a model, that can disagree with the first.
+    An operator reading "the debit is set for hour 300" beside a field saying
+    288 has been handed a decision to make that nobody meant to give them.
+
+    The prompt states the rule, which is what makes this fire rarely. This is
+    the backstop, in the shape the rest of this file uses: structure first, a
+    lexical net behind it.
+    """
+    return tuple(m.group(0) for m in _NUMERIC_TOKEN.finditer(
+        _EXEMPT_TOKEN.sub("", text)))
+
+
 @dataclass(frozen=True)
 class GovernanceResult:
     ok: bool
@@ -91,6 +132,7 @@ class GovernanceResult:
     time_expressions: tuple[str, ...] = ()
     injection_echo: tuple[str, ...] = ()
     bank_disclosure: tuple[str, ...] = ()
+    invented_numbers: tuple[str, ...] = ()
 
     @property
     def reasons(self) -> tuple[str, ...]:
@@ -103,6 +145,8 @@ class GovernanceResult:
             out.append(f"echoes injected instruction text: {hit!r}")
         for hit in self.bank_disclosure:
             out.append(f"names the customer's bank to the merchant: {hit!r}")
+        for hit in self.invented_numbers:
+            out.append(f"states a figure the interface already shows: {hit!r}")
         return tuple(out)
 
 
@@ -135,3 +179,31 @@ def sanitise(text: str) -> tuple[str, GovernanceResult]:
     argue about whether the redaction was thorough. Replacing it does not."""
     res = check(text)
     return (text if res.ok else SAFE_FALLBACK), res
+
+
+def check_explanation(text: str) -> GovernanceResult:
+    """`check`, plus the numeric rule. THE CONTRACT FOR OPERATOR PROSE.
+
+    `check` is reused verbatim rather than forked. Three of its four nets mean
+    the same thing to an operator as to a merchant -- a model that INVENTS a
+    balance has disclosed one to whoever reads it, an echoed injection is an
+    echoed injection, and a bank name is still an inference about a person.
+
+    THE TIME NET IS KEPT TOO, AND THAT IS NOT A CONTRADICTION OF THE DESIGN.
+    `ExplainView` carries the schedule so the explainer can DESCRIBE the window
+    the scheduler chose. It does not follow that the prose may name an hour:
+    the hour is on the screen already, and a sentence like "retry at 11:00" is
+    a RECOMMENDATION whatever the layer that wrote it intended. Describing is
+    "the debit sits outside the peak window, a full day after the notice";
+    recommending is a clock face. The net separates them, and the numeric rule
+    catches the digits the word-shaped patterns miss.
+    """
+    base = check(text)
+    nums = no_invented_numbers(text)
+    return GovernanceResult(
+        ok=base.ok and not nums,
+        financial_state=base.financial_state,
+        time_expressions=base.time_expressions,
+        injection_echo=base.injection_echo,
+        bank_disclosure=base.bank_disclosure,
+        invented_numbers=nums)

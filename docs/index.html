@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UPI AutoPay Recovery Agent — interactive demo</title>
+<title>UPI AutoPay Recovery Agent — how it works and what it measures</title>
 <meta name="description" content="An agent that schedules retries for failed UPI AutoPay subscription debits by estimating the customer's balance and salary date. Interactive walkthrough, results, and limitations. All figures are from simulation.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -358,8 +358,9 @@ footer{padding:56px 0 90px}
     </div>
 
     <div class="cta-row">
-      <a class="cta" href="#story">Walk through one customer's month</a>
-      <a class="cta ghost" href="../">Read the code</a>
+      <a class="cta" href="demo.html">&#9654; Play one customer's month &mdash; 90 seconds</a>
+      <a class="cta ghost" href="#results">See the results</a>
+      <a class="cta ghost" href="https://github.com/tanmayBeginsJourney/mandate-retry-sequencer">Read the code</a>
     </div>
   </div>
 </header>
@@ -373,18 +374,18 @@ footer{padding:56px 0 90px}
       <div class="n">01</div>
       <div>
         <h2>One customer's billing cycle</h2>
-        <p>Customer <code id="uid">c12m1</code>, one of two subscriptions held by the same
+        <p>Customer <code id="uid">c275m0</code>, one of two subscriptions held by the same
         person, from a simulated population of 500. The month below is read out of the
-        audit log of an agent run.</p>
+        audit log of an agent run. <a href="demo.html">Watch the month play →</a></p>
       </div>
     </div>
 
     <ul class="beats">
-      <li><span class="w">Day 16</span><span>The ₹620 debit is due. The account holds <b>₹0</b>: the salary landed on day 3 and has been spent.</span></li>
-      <li><span class="w">Day 17</span><span>The agent has seen nothing yet this cycle, so it attempts. <b>Declined.</b> That decline is the measurement.</span></li>
-      <li><span class="w">Days 18–28</span><span>The balance estimate collapses and the agent holds, watching the odds of a later day stay far above today's.</span></li>
-      <li><span class="w">Day 29</span><span>It attempts again, a day early. Declined again.</span></li>
-      <li><span class="w">Day 33</span><span>The salary lands, the account jumps to <b>₹26,854</b>, and the debit collects.</span></li>
+      <li><span class="w">Day 26</span><span>The ₹1,110 debit is due. The account holds <b>₹0</b>: the salary landed on day 7 and has been spent.</span></li>
+      <li><span class="w">Day 27</span><span>The agent has seen nothing yet this cycle, so it attempts. <b>Declined.</b> That decline is the measurement.</span></li>
+      <li><span class="w">Days 27–36</span><span>The balance estimate collapses and the agent holds, watching the odds of a later day stay far above today's.</span></li>
+      <li><span class="w">Day 37</span><span>The salary lands and the account jumps to <b>₹40,824</b>. The agent issues the notice NPCI requires 24 hours ahead of a debit.</span></li>
+      <li><span class="w">Day 38</span><span>The debit collects. Two of the four attempts allowed in the cycle have been spent.</span></li>
       <li><span class="w">The baseline</span><span>Charges on the due date, then retries on the next three days. All four attempts hit the same empty account and the mandate reaches its legal cap.</span></li>
     </ul>
 
@@ -404,19 +405,20 @@ footer{padding:56px 0 90px}
         <svg class="chart wide" id="timeline" viewBox="0 0 920 366" role="img"
              aria-labelledby="tl-t tl-d">
           <title id="tl-t">One customer's billing cycle</title>
-          <desc id="tl-d">A balance that sits at zero from the due date on day 16 until the
-            salary lands on day 33 and the account jumps to ₹26,854, then decays back to zero
-            by day 45. Beneath it, a fixed retry schedule fires four attempts into the empty
-            days and collects nothing, while the agent spends two attempts learning that the
-            account is empty and collects on the third, after the salary arrives.</desc>
+          <desc id="tl-d">A balance that sits at zero from the due date on day 26 until the
+            salary lands on day 37 and the account jumps to ₹40,824, then decays back towards
+            zero by day 55. Beneath it, a fixed retry schedule fires four attempts into the
+            empty days and collects nothing, while the agent spends one attempt learning that
+            the account is empty, holds for ten days, and collects on the second after the
+            salary arrives.</desc>
         </svg>
       </div>
 
       <div class="ctlbar">
         <div class="ctl">
           <label for="c-day">Step through the month</label>
-          <input type="range" id="c-day" min="16" max="45" step="1" value="45">
-          <div class="ticks"><span>day 16</span><span>day 45</span></div>
+          <input type="range" id="c-day" min="26" max="55" step="1" value="55">
+          <div class="ticks"><span>day 26</span><span>day 55</span></div>
         </div>
         <div class="ctl" style="flex:0 0 auto">
           <span class="cl">&nbsp;</span>
@@ -451,17 +453,19 @@ footer{padding:56px 0 90px}
         <h3>The waiting decision</h3>
         <p class="small" style="margin-bottom:0">Each day the agent compares two numbers: the
         chance the debit clears tomorrow, and the best chance available on any remaining day of
-        the cycle. On day 16 it has seen nothing this cycle and rates those <b>92%</b> and
-        <b>97%</b>, so it attempts. After the decline they are <b>15%</b> and <b>96%</b>, and it
+        the cycle. On day 26 it has seen nothing this cycle and rates those <b>97%</b> and
+        <b>99%</b>, so it attempts. After the decline they are <b>16%</b> and <b>96%</b>, and it
         holds. Only four attempts are available for the whole cycle, so an attempt against an
         empty account is wasted.</p>
       </div>
       <div class="card">
-        <h3>Where the agent fails on this customer</h3>
-        <p class="small" style="margin-bottom:0">At ±10 or ±14 days of payday uncertainty the
-        agent misses this customer's cycle entirely: all three attempts land before the salary
-        and decline. Two other customers in the same population that it also fails to collect
-        from are named in <code>scripts/build_page_data.py</code>.</p>
+        <h3>Mandates the agent does not collect</h3>
+        <p class="small" style="margin-bottom:0">This customer collects at all six levels of
+        payday uncertainty tested. Two mandates in the same population are attempted at least
+        three times over the 120 days and never collect: <code>c385m4</code>, one of five
+        subscriptions charged against a ₹10,436 salary, and <code>c485m1</code>, ₹380 due on
+        day 9 against a day-3 payday. Both are named in
+        <code>scripts/build_page_data.py</code>.</p>
       </div>
     </div>
 
@@ -1066,9 +1070,13 @@ footer{padding:56px 0 90px}
       <div>
         <h2>Running against Razorpay</h2>
         <p>The same decision layers run against Razorpay's UPI AutoPay API instead of the
-        simulation. The scheduler, the belief filter, the diagnosis layer and the constraint gate
-        are the same objects, not copies: a test asserts it by object identity. What changes is
-        the executor underneath them, and the fact that state has to survive a crash.</p>
+        simulation. The scheduler, the belief filter, the diagnosis layer, the constraint gate
+        and the escalation ladder are the same objects, not copies: a test asserts it by object
+        identity, and a second test drives the ladder end to end against the mock rail — three
+        debits, two funding reminders, a Payment Link in place of the fourth debit. What changes
+        is the executor underneath them, and the fact that state has to survive a crash. Sharing
+        a rule is not sharing an answer: the two see different clocks and different customers,
+        and only the simulation has been measured.</p>
       </div>
     </div>
 
@@ -1185,12 +1193,14 @@ footer{padding:56px 0 90px}
         </tbody>
       </table>
     </div>
-    <p class="tiny" style="margin:12px 0 0">No live API key exists for this project. Razorpay
-    requires verified website details before live keys are issued. Everything stops at the
-    boundary where money would move.</p>
+    <p class="tiny" style="margin:12px 0 0">No <strong>live-mode</strong> API key was issued for
+    this project; Razorpay requires verified website details before live keys are generated.
+    Test-mode authentication against <code>api.razorpay.com</code> is demonstrated, with a
+    committed transcript. Everything past that boundary &mdash; an authorised mandate, and a debit
+    against it &mdash; is provisioning-dependent and is not claimed.</p>
 
     <h3 style="margin:34px 0 10px">What the offline suite establishes</h3>
-    <p class="small" style="max-width:62ch">Seven gate files, 225 checks, about four seconds,
+    <p class="small" style="max-width:62ch">Eleven gate files, 445 checks, about twenty seconds,
     against a mock rail written from Razorpay's published documentation. It establishes that the
     state machine and the failure handling behave as described. It establishes nothing about
     Razorpay, because Razorpay has never read one of these requests.</p>

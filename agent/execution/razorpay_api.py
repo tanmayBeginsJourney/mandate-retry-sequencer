@@ -86,8 +86,19 @@ MIN_AMOUNT_PAISE = 100
 #: `max_amount` on a UPI AutoPay mandate token, in paise. UPI's ceiling is a
 #: PROPERTY OF THE MERCHANT CATEGORY, not one number: 9999900 (Rs 99,999) for
 #: an ordinary MCC, 20000000 (Rs 2,00,000) for MCCs 6211, 6300, 7322, 6529 and
-#: 5960. The floor is 100 (Rs 1) in every category. [VERIFIED] razorpay.com
-#: UPI AutoPay create-authorisation-transaction, read 4 September 2026.
+#: 5960. The floor is 100 (Rs 1) in every category. [REPORTED] razorpay.com
+#: UPI AutoPay create-authorisation-transaction; the page did not resolve when
+#: the citation was re-checked on 5 September 2026, so the tag is downgraded
+#: rather than left asserting a source that cannot be opened.
+#:
+#: WHAT THE REACHABLE DOCUMENTATION SAYS. Razorpay's general recurring
+#: `max_amount` parameter table documents 500 to 100000000 paise, default
+#: 9999900. The UPI-specific narrowing encoded here -- and the floor of 100,
+#: which is BELOW that documented 500 -- is inferred from the UPI AutoPay
+#: material and is not confirmed against a currently-reachable page. The
+#: constant is left as it is: nothing in the demonstration or the gates depends
+#: on it, and widening or narrowing it changes what `start_registration` will
+#: accept. Confirm the range with Razorpay Support before a live mandate.
 #:
 #: THE WIDER RANGE THIS USED TO CARRY -- 500 to 100000000 -- IS EMANDATE'S, and
 #: a UPI mandate asking for it is rejected at the provider. Encoding the

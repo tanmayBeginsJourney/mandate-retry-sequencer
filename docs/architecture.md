@@ -348,6 +348,18 @@ no `token_id` exists for any request to reference. A successful `POST /v1/orders
 would not be proof of delivery in any case; only the
 `order.notification.delivered` event is.
 
+**One provider constraint is documented and not modelled.** Razorpay states that
+a subsequent UPI payment must not be created on the last day of the billing
+cycle [VERIFIED, UPI create-subsequent-payments, read 5 September 2026]. The
+simulator's scheduling window runs to the last day of the cycle inclusive, so the
+published measurements do not model that restriction; the live path bounds
+against it. `LiveService` refuses a proposal targeting `cycle_close - 1` and
+names the rule in the refusal, and `live/tests/test_ladder.py` W8 shows the
+scheduler proposing that day and the rail declining it. The simulator is not
+re-run for this, because the constraint is a property of the provider rather than
+of the policy, and re-running would retire every figure in this repository for a
+change that moves the last legal target by one day.
+
 A request-level rejection — bad credentials, malformed body — raises
 `RazorpayError` naming the HTTP status. It is never recorded as a customer
 decline, because no payment was created. Recording it as a decline would teach
@@ -626,10 +638,31 @@ settled.
 ### The operator console
 
 `live/console/` is a static page served by the same process, with no framework
-and no build step. It renders environment, mandate state, the decision chain,
-the payment lifecycle, the webhook timeline and the diagnosis. It decides
-nothing. Its content security policy permits no third-party origin, so the type
-is a system stack and there are no remote assets.
+and no build step. It decides nothing. Its content security policy permits no
+third-party origin, so the type is a system stack and there are no remote
+assets.
+
+It is composed around one object: the chain of authority behind the payment on
+screen, read down a single rule — the Razorpay event, the belief, the scheduler
+(*when*), the diagnosis (*what*), Stage 0 (*whether*), the provider, and the
+webhook that answered. Each stage names the layer that decided it, so the
+separation this document argues for is the page's structure rather than a
+caption on it. Above the chain sits the environment, the standing order and one
+sentence saying what happened; below it, the deliveries that arrived and the
+order's own record.
+
+Two properties are worth stating because they constrain what it may show. The
+page renders only fields `/api/state` and `/api/mandates/{id}` serve, and
+derives nothing the money path already computed — `attempts_used`,
+`gate_checks`, `p_now` and `uncertainty_band` are read, never recomputed, so no
+second copy of an NPCI or Stage 0 rule exists in a browser. And two records of
+one attempt are merged on `attempt_id`: NPCI's notice period makes scheduling
+and charging separate ticks, and each carries half the chain.
+
+`live/tests/test_console.py` holds both, along with the properties that keep
+the page from becoming a way to spend: no input outside its dialogs, no control
+naming a time or forcing an attempt, a `/decide` body that is a literal `{}`,
+and offline-only controls that are absent in live mode rather than disabled.
 
 ---
 

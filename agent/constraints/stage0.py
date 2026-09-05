@@ -49,6 +49,18 @@ class Stage0Gate:
         # only count, it would be the enforcer grading itself.
         self.refusals: dict[str, int] = {r: 0 for r, _ in ALL_RULES}
         self.allowed = 0
+        #: THE LAST ADJUDICATION'S FIVE ANSWERS, AND NOTHING READS IT TO
+        #: DECIDE ANYTHING. `submit` already writes one CONSTRAINT_CHECK row
+        #: per rule to the audit log, which is the record of record; this is
+        #: the same five kept in memory so an operator console can show them
+        #: without reading a JSONL file back inside a request.
+        #:
+        #: ONE SLOT, TAGGED WITH THE ACTION IT DESCRIBES. Two mandates can be
+        #: adjudicated concurrently, so a reader that finds a different
+        #: `action_id` here is looking at somebody else's verdicts and must
+        #: show none -- which is why the tag travels with them rather than
+        #: being remembered by the caller.
+        self.last_checks: tuple[str, tuple[dict, ...]] = ("", ())
 
     # ------------------------------------------------------- notification
     def issue_notification(self, ref: MandateRef, cycle: int,
@@ -208,6 +220,9 @@ class Stage0Gate:
         """
         verdicts: list[tuple[str, Refusal | None]] = [
             (name, fn(self.ledger, a)) for name, fn in ALL_RULES]
+        self.last_checks = (a.action_id, tuple(
+            {"rule": name, "verdict": "REFUSED" if r else "PASS",
+             "detail": r.detail if r else ""} for name, r in verdicts))
 
         for name, refusal in verdicts:
             self.log.emit(

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -97,6 +98,11 @@ CREATE TABLE IF NOT EXISTS mandates (
     cycle_days               INTEGER NOT NULL DEFAULT 30,
     cycle                    INTEGER NOT NULL DEFAULT 0,
     cycle_start_t            INTEGER NOT NULL DEFAULT 0,
+    -- The recovery ladder's per-cycle state. See `domain.Mandate`.
+    backup_vendor_id         TEXT NOT NULL DEFAULT '',
+    backup_status            TEXT NOT NULL DEFAULT '',
+    reminders_sent           INTEGER NOT NULL DEFAULT 0,
+    halted_cycle             INTEGER NOT NULL DEFAULT -1,
     created_at               INTEGER NOT NULL,
     updated_at               INTEGER NOT NULL
 );
@@ -268,6 +274,13 @@ class Store:
         # intended.
         self._db.execute("PRAGMA synchronous=FULL")
         self._db.executescript(SCHEMA)
+        # ADDITIVE MIGRATION, AND ONLY ADDITIVE. `CREATE TABLE IF NOT EXISTS`
+        # does nothing to a table that already exists, so a database written
+        # before a field was added has no column for it and every write fails
+        # on the assertion below. A column with a default can be added in
+        # place; anything else -- a rename, a type change, a drop -- is a
+        # migration a human writes, and this refuses to guess at one.
+        self._add_missing_columns()
         # The statements above are generated from the dataclasses, so a field
         # that has no column would fail at the first write with a message about
         # SQL rather than about the schema. Checked once, at open.
@@ -326,6 +339,30 @@ class Store:
     def _many(self, cls, sql: str, *args) -> list:
         return [_read(cls, r) for r in self._rows(sql, *args)]
 
+    def _add_missing_columns(self) -> None:
+        """Add columns the schema declares and this file does not have yet.
+
+        Read out of `SCHEMA` rather than out of the dataclass, so the column
+        type and default come from the one place that states them. A table the
+        script has just created has every column and this does nothing.
+        """
+        pattern = r"CREATE TABLE IF NOT EXISTS (\w+) \((.*?)\n\);"
+        for table, block in re.findall(pattern, SCHEMA, re.S):
+            have = {r["name"] for r in
+                    self._db.execute(f"PRAGMA table_info({table})")}
+            if not have:
+                continue
+            for line in block.splitlines():
+                line = line.strip().rstrip(",")
+                if not line or line.startswith("--"):
+                    continue
+                name = line.split()[0]
+                if name.upper() in ("PRIMARY", "UNIQUE", "FOREIGN", "CHECK"):
+                    continue
+                if name in have or "DEFAULT" not in line.upper():
+                    continue
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {line}")
+
     # ----------------------------------------------------------------- meta
     def meta_get(self, key: str, default: str = "") -> str:
         rows = self._rows("SELECT value FROM meta WHERE key=?", key)
@@ -342,6 +379,20 @@ class Store:
             db.execute("INSERT OR IGNORE INTO meta(key, value) VALUES(?,?)",
                        (key, value))
         return self.meta_get(key, value)
+
+    def meta_set(self, key: str, value: str) -> None:
+        """Write, overwriting whatever is there.
+
+        For settings that legitimately move -- the offline demonstration
+        clock's offset, which only ever goes forward. Anything that must be
+        decided once for the life of a database belongs in `meta_set_once`
+        instead; the two are separate methods so a caller has to say which it
+        means.
+        """
+        with self.tx() as db:
+            db.execute("INSERT INTO meta(key, value) VALUES(?,?) "
+                       "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                       (key, value))
 
     # -------------------------------------------------------------- identity
     #

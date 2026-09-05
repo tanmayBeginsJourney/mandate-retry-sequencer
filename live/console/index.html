@@ -3,176 +3,162 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recovery agent — operator console</title>
+<title>Recovery agent — AutoPay mandates</title>
 <meta name="robots" content="noindex">
+<!-- NO REMOTE ASSET. `api.py` serves this page under
+     `default-src 'none'; style-src 'self'` with no `font-src`, so a webfont
+     link would fail silently and the page would fall back with no error. The
+     type register comes from weight, scale and tracking on system stacks. -->
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#order">Skip to the selected mandate</a>
 
-<header class="bar" id="bar">
-  <div class="bar-in">
-    <div class="brand">
-      <span class="dot" id="live-dot" aria-hidden="true"></span>
-      <span class="brand-name">Recovery agent</span>
-      <span class="brand-sub">operator console</span>
-    </div>
-    <div class="bar-right">
-      <span class="env" id="env-chip" data-state="loading">
-        <span class="env-label">environment</span>
-        <strong id="env-value">…</strong>
-      </span>
-      <span class="env" id="debit-chip" data-state="loading">
-        <span class="env-label">real money</span>
-        <strong id="debit-value">…</strong>
-      </span>
-      <button class="btn ghost" id="reveal-toggle" type="button"
-              aria-pressed="false">Show full IDs</button>
-      <button class="btn ghost" id="refresh" type="button">Refresh</button>
-    </div>
-  </div>
-  <p class="bar-note" id="debit-reason"></p>
-</header>
+<!-- ===================================================================
+     THE ENVIRONMENT. A full-bleed ruled line, not a badge. Offline it is
+     paper-toned; live it turns the band solid and recolours the page. The
+     environment is the loudest thing here on purpose.
 
-<main id="main">
+     The clock control lives here, beside the clock it moves, and not in the
+     row of actions on a mandate: it moves the service's clock, not that
+     mandate's.
+     =================================================================== -->
+<div class="env" id="env" data-mode="loading">
+  <span class="env-state" id="env-state">CHECKING THE RAIL</span>
+  <span class="env-reason" id="env-reason"></span>
+  <span class="env-clock" id="env-clock"></span>
+  <button class="act quiet env-act" id="act-advance" type="button" hidden>Move the clock to the next decision</button>
+</div>
 
-  <!-- ------------------------------------------------------- status row -->
-  <section class="grid stats" aria-label="System status">
-    <article class="tile">
-      <h2>Active mandates</h2>
-      <p class="tile-value" id="stat-mandates">—</p>
-      <p class="tile-note" id="stat-mandates-note">of none registered</p>
-    </article>
-    <article class="tile">
-      <h2>Collected</h2>
-      <p class="tile-value" id="stat-collected">—</p>
-      <p class="tile-note" id="stat-collected-note">across all attempts</p>
-    </article>
-    <article class="tile">
-      <h2>Unresolved</h2>
-      <p class="tile-value" id="stat-unresolved">—</p>
-      <p class="tile-note" id="stat-unresolved-note">awaiting an answer</p>
-    </article>
-  </section>
+<div class="shell">
 
-  <div class="split">
-
-    <!-- ------------------------------------------------------- mandates -->
-    <section class="panel" aria-labelledby="h-mandates">
-      <div class="panel-head">
-        <h2 id="h-mandates">Mandates</h2>
-        <button class="btn small" id="new-mandate" type="button">New</button>
-      </div>
-      <ul class="mandates" id="mandate-list" aria-live="polite">
-        <li class="skeleton-row"><span class="sk sk-a"></span><span class="sk sk-b"></span></li>
-        <li class="skeleton-row"><span class="sk sk-a"></span><span class="sk sk-b"></span></li>
-      </ul>
-      <p class="empty" id="mandate-empty" hidden>
-        No mandate is registered yet. <button class="link" id="empty-new" type="button">Register one</button>
-        to see the decision chain run.
-      </p>
-    </section>
-
-    <!-- -------------------------------------------------------- detail -->
-    <section class="panel detail" aria-labelledby="h-detail">
-      <div class="panel-head">
-        <h2 id="h-detail">Mandate detail</h2>
-        <div class="actions" id="detail-actions" hidden>
-          <button class="btn small" id="act-authorize" type="button" hidden>Simulate customer authorisation</button>
-          <button class="btn small" id="act-decide" type="button">Run a decision tick</button>
-          <button class="btn small ghost" id="act-advance" type="button" hidden>Advance 12h</button>
-          <button class="btn small ghost" id="act-reconcile" type="button">Reconcile</button>
-          <button class="btn small danger" id="act-cancel" type="button">Cancel mandate</button>
-        </div>
-      </div>
-
-      <p class="empty" id="detail-empty">Select a mandate to see its state, its attempts and the decisions behind them.</p>
-
-      <div id="detail-body" hidden>
-        <dl class="facts" id="detail-facts"></dl>
-
-        <h3 class="sub">Payment lifecycle</h3>
-        <ol class="lifecycle" id="lifecycle" aria-label="Payment lifecycle"></ol>
-
-        <h3 class="sub">Attempts</h3>
-        <div class="tablewrap">
-          <table class="tbl" id="attempt-table">
-            <thead>
-              <tr><th>State</th><th>Amount</th><th>Target hour</th><th>Outcome</th>
-                  <th>Order</th><th>Payment</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p class="empty small" id="attempt-empty" hidden>No debit has been attempted for this mandate.</p>
-      </div>
-    </section>
-  </div>
-
-  <div class="split">
-    <!-- ------------------------------------------------------ decisions -->
-    <section class="panel" aria-labelledby="h-decisions">
-      <div class="panel-head">
-        <h2 id="h-decisions">Decision timeline</h2>
-      </div>
-      <p class="lead">
-        The scheduler chooses <em>when</em>. The diagnosis layer chooses
-        <em>what</em>. Stage&nbsp;0 decides <em>whether it is allowed</em>.
-        Every tick below shows all three.
-      </p>
-      <ol class="timeline" id="decision-list"></ol>
-      <p class="empty" id="decision-empty">No decision has run in this session.</p>
-    </section>
-
-    <!-- -------------------------------------------------------- webhooks -->
-    <section class="panel" aria-labelledby="h-events">
-      <div class="panel-head">
-        <h2 id="h-events">Webhook timeline</h2>
-      </div>
-      <p class="lead">
-        Razorpay delivers at least once and does not guarantee order. A
-        redelivered event is recorded and ignored; a late one cannot move a
-        payment backwards.
-      </p>
-      <ol class="events" id="event-list"></ol>
-      <p class="empty" id="event-empty">No webhook has been received.</p>
-    </section>
-  </div>
-
-  <!-- ----------------------------------------------------------- LLM -->
-  <section class="panel" aria-labelledby="h-llm">
-    <div class="panel-head">
-      <h2 id="h-llm">Diagnosis</h2>
-      <span class="badge muted" id="llm-source">—</span>
-    </div>
-    <p class="lead constraint">
-      The diagnosis layer names a root cause, picks an intervention and writes
-      the justification. It cannot choose a debit time, an amount or a mandate.
+  <!-- =================================================================
+       THE MANDATES. Navigation, and the only list on the first screen.
+       ================================================================= -->
+  <nav class="orders" aria-labelledby="orders-h">
+    <h2 id="orders-h">AutoPay mandates</h2>
+    <ul id="order-list"></ul>
+    <p class="orders-empty" id="orders-empty" hidden>
+      Nothing is registered.
+      <button class="link" id="empty-new" type="button">Set up a new AutoPay mandate</button>
+      to watch the chain run.
     </p>
-    <div class="llm" id="llm-body">
-      <p class="empty">No diagnosis has been produced yet.</p>
+    <div class="portfolio" id="portfolio" hidden>
+      <div><dt>Collected</dt><dd id="pf-collected">—</dd></div>
+      <div><dt>Attempts collected</dt><dd id="pf-attempts">—</dd></div>
+      <div><dt>Awaiting an answer</dt><dd id="pf-open">—</dd></div>
     </div>
-  </section>
+    <button class="link add" id="new-order" type="button">Set up a new AutoPay mandate</button>
+  </nav>
 
-</main>
+  <main id="order">
 
-<!-- ------------------------------------------------------------- dialog -->
+    <!-- ===============================================================
+         THE ANSWER. Which mandate, what happened, and the chain behind it.
+         =============================================================== -->
+    <header class="head">
+      <div class="head-top">
+        <p class="ident" id="ident">Select a mandate</p>
+        <div class="acts" id="acts" hidden>
+          <button class="act" id="act-authorize" type="button" hidden>Approve it, as the customer would</button>
+          <!-- The only control that can move money, alone on this row. Its
+               treatment changes with what the rail can actually do; see
+               `renderActions`. -->
+          <button class="act decide" id="act-decide" type="button">Ask the agent what to do now</button>
+        </div>
+      </div>
+
+      <h1 class="answer" id="answer">The recovery agent</h1>
+      <p class="because" id="because">
+        A UPI AutoPay mandate is debited once a cycle. When the account is
+        short the debit is declined — and this decides when to ask again, what
+        to do about it, and whether that is allowed.
+      </p>
+      <p class="blocked" id="blocked" hidden></p>
+    </header>
+
+    <!-- ===============================================================
+         THE SPINE. The defining object: one rule, seven authorities.
+         Razorpay → belief → scheduler WHEN → diagnosis WHAT →
+         Stage 0 WHETHER → provider → webhook.
+         =============================================================== -->
+    <section class="spine-wrap" aria-labelledby="spine-h">
+      <h2 id="spine-h" class="sec">The decision</h2>
+      <!-- A TICK THAT DESCRIBES A DIFFERENT MOMENT FROM THE ATTEMPT BELOW.
+           It gets its own block rather than being folded into the spine; see
+           `renderLatest`. -->
+      <div class="latest" id="latest" hidden>
+        <p class="latest-h" id="latest-h"></p>
+        <p class="latest-d" id="latest-d"></p>
+      </div>
+      <ol class="spine" id="spine"></ol>
+      <p class="spine-note" id="spine-note" hidden></p>
+    </section>
+
+    <!-- ===============================================================
+         WHAT ARRIVED. Below the fold on purpose. One block per attempt,
+         in the order the attempts happened; the raw deliveries are behind
+         a disclosure inside each block.
+         =============================================================== -->
+    <section class="events-wrap" aria-labelledby="events-h">
+      <div class="events-head">
+        <h2 id="events-h" class="sec">What arrived</h2>
+        <button class="act quiet" id="act-reconcile" type="button" hidden>Ask Razorpay how the unanswered debits ended</button>
+      </div>
+      <ol class="events" id="event-list" aria-live="polite"></ol>
+      <p class="none" id="events-none">Razorpay has sent nothing yet.</p>
+    </section>
+
+    <!-- ===============================================================
+         REFUSED. Deliveries that failed signature verification. NEVER
+         under "What arrived": nothing here is a delivery this service
+         accepted, and a forgery is refused the deduplication key on
+         purpose. See `domain.WebhookEvent`.
+         =============================================================== -->
+    <section class="refused-wrap" id="refused-wrap" aria-labelledby="refused-h" hidden>
+      <h2 id="refused-h" class="sec">Refused</h2>
+      <p class="refused-lede" id="refused-lede"></p>
+      <ol class="rejected" id="rejected-list"></ol>
+    </section>
+
+    <!-- ===============================================================
+         THE MANDATE ITSELF.
+         =============================================================== -->
+    <section class="facts-wrap" aria-labelledby="facts-h" id="facts-wrap" hidden>
+      <h2 id="facts-h" class="sec">The mandate</h2>
+      <dl class="facts" id="facts"></dl>
+      <details class="prov">
+        <summary>Provider record and state history</summary>
+        <dl class="facts thin" id="facts-provider"></dl>
+        <ol class="history" id="history"></ol>
+      </details>
+      <div class="danger-zone" id="danger-zone" hidden>
+        <button class="act quiet" id="reveal-toggle" type="button" aria-pressed="false">Show full identifiers</button>
+        <button class="act cancel" id="act-cancel" type="button">Cancel this mandate</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ==================================================================
+     DIALOGS
+     ================================================================== -->
 <dialog id="register-dialog" aria-labelledby="reg-title">
   <form method="dialog" id="register-form">
-    <h2 id="reg-title">Register a mandate</h2>
+    <h2 id="reg-title">Set up a new AutoPay mandate</h2>
     <p class="dialog-note" id="reg-note"></p>
 
     <label for="reg-name">Customer name</label>
-    <input id="reg-name" name="name" required autocomplete="off" value="Demo Customer">
+    <input id="reg-name" name="name" required autocomplete="off" value="Ananya Rao">
 
     <label for="reg-email">Email</label>
     <input id="reg-email" name="email" type="email" required autocomplete="off"
-           value="demo@example.com">
+           value="ananya@example.com">
 
     <label for="reg-contact">Contact</label>
     <input id="reg-contact" name="contact" required autocomplete="off"
-           value="+919000000000">
+           value="+919000000001">
 
     <div class="row">
       <div>
@@ -194,7 +180,7 @@
         <label for="reg-salary">Estimated monthly income</label>
         <input id="reg-salary" name="est_salary" type="number" min="0"
                step="1" required value="30000">
-        <p class="hint">Cold-start prior. An assumption, not a measurement.</p>
+        <p class="hint">Cold-start prior. An operator estimate, not a measurement.</p>
       </div>
       <div>
         <label for="reg-payday">Estimated payday (day of cycle)</label>
@@ -207,18 +193,19 @@
     <p class="form-error" id="reg-error" hidden></p>
 
     <div class="dialog-actions">
-      <button class="btn ghost" value="cancel" type="submit">Cancel</button>
-      <button class="btn" id="reg-submit" value="create" type="submit">Create</button>
+      <button class="act" value="cancel" type="submit">Cancel</button>
+      <button class="act solid" id="reg-submit" value="create" type="submit">Create</button>
     </div>
   </form>
 </dialog>
 
 <!-- The only control that can move real money. The dialog names the
-     environment, the mandate and the amount, because a confirmation that does
-     not say what is about to happen is a second click, not a decision. -->
+     environment, the mandate, the customer and the amount, because a
+     confirmation that does not say what is about to happen is a second click,
+     not a decision. -->
 <dialog id="debit-dialog" aria-labelledby="debit-title">
   <form method="dialog">
-    <h2 id="debit-title">Run a decision tick on the LIVE rail</h2>
+    <h2 id="debit-title">Run the chain on the LIVE rail</h2>
     <p class="dialog-note">
       This runs the scheduler, the diagnosis layer and Stage&nbsp;0. If all five
       rules permit and the hour has come, <strong>it submits a real UPI AutoPay
@@ -232,8 +219,8 @@
       <dt>Amount at risk</dt><dd id="debit-amount">—</dd>
     </dl>
     <div class="dialog-actions">
-      <button class="btn ghost" value="no" type="submit">Do not run it</button>
-      <button class="btn danger" value="yes" type="submit">Run it — money may move</button>
+      <button class="act" value="no" type="submit">Do not run it</button>
+      <button class="act danger" value="yes" type="submit">Run it — money may move</button>
     </div>
   </form>
 </dialog>
@@ -248,8 +235,8 @@
     <label for="token-input">Operator token</label>
     <input id="token-input" name="token" type="password" required autocomplete="off">
     <div class="dialog-actions">
-      <button class="btn ghost" value="no" type="submit">Cancel</button>
-      <button class="btn" value="yes" type="submit">Use this token</button>
+      <button class="act" value="no" type="submit">Cancel</button>
+      <button class="act solid" value="yes" type="submit">Use this token</button>
     </div>
   </form>
 </dialog>
@@ -258,12 +245,12 @@
   <form method="dialog">
     <h2 id="confirm-title">Cancel this mandate?</h2>
     <p class="dialog-note">
-      This deletes the token at Razorpay. The customer would have to authorise
-      a new mandate before any further debit. It cannot be undone.
+      This deletes the token at Razorpay. The customer would have to authorise a
+      new mandate in their UPI app before any further debit. It cannot be undone.
     </p>
     <div class="dialog-actions">
-      <button class="btn ghost" value="no" type="submit">Keep it</button>
-      <button class="btn danger" value="yes" type="submit">Cancel mandate</button>
+      <button class="act" value="no" type="submit">Keep it</button>
+      <button class="act danger" value="yes" type="submit">Cancel the mandate</button>
     </div>
   </form>
 </dialog>

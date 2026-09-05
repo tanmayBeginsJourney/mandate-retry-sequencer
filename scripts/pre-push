@@ -53,4 +53,17 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "pre-push: full suite passed."
+
+# --- the live rail's own gates ---------------------------------------------
+# Neither hook ran these, which is how a stale check count reached three
+# published documents without anything noticing. ~20s, offline, no key.
+echo "pre-push: running the live rail gates ($PYBIN -m live.tests.run_all)."
+$PYBIN -m live.tests.run_all
+if [ $? -ne 0 ]; then
+    echo "pre-push: a live gate failed. Push aborted."
+    echo "pre-push: fix the code. Do NOT loosen the test."
+    exit 1
+fi
+
+echo "pre-push: live gates passed."
 exit 0

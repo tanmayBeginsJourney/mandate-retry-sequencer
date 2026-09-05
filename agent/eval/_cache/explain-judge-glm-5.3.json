@@ -1,0 +1,850 @@
+{
+ "glm-5.3|glm-explain-judge-v1|03c81aab06960302": {
+  "cached_tokens": 960,
+  "completion_tokens": 202,
+  "parsed": {
+   "comment": "Nearly every sentence restates field values in prose (mandate status, Z9, peak refusal, mismatched notice, RETRY). It correctly identifies Stage 0 as the refusing layer but offers no causal insight beyond the verdicts the operator can already see, e.g. that the pending refusal arises because the scheduler's target precedes the existing notice's target, or that the peak refusal alone already blocks the attempt regardless of the pending mismatch. No numbers, no leakage, no action recommended.",
+   "explanatory_value": 2,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1119,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Nearly every sentence restates field values in prose (mandate status, Z9, peak refusal, mismatched notice, RETRY). It correctly identifies Stage 0 as the refusing layer but offers no causal insight beyond the verdicts the operator can already see, e.g. that the pending refusal arises because the scheduler's target precedes the existing notice's target, or that the peak refusal alone already blocks the attempt regardless of the pending mismatch. No numbers, no leakage, no action recommended.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|079a0529fb061589": {
+  "cached_tokens": 704,
+  "completion_tokens": 246,
+  "parsed": {
+   "comment": "Almost entirely a prose restatement of the table: the Z9 code, the retry choice, the medium confidence, and the off-peak placement are all visible fields. It asserts the debit was placed after the required notice, but Stage 0 has not adjudicated the lead rule, so that is a loose implication. No mechanism or causation is offered, no mention that Stage 0 is unadjudicated, and nothing tells the operator why a retry was picked or what it means for the money.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1036,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Almost entirely a prose restatement of the table: the Z9 code, the retry choice, the medium confidence, and the off-peak placement are all visible fields. It asserts the debit was placed after the required notice, but Stage 0 has not adjudicated the lead rule, so that is a loose implication. No mechanism or causation is offered, no mention that Stage 0 is unadjudicated, and nothing tells the operator why a retry was picked or what it means for the money.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|14183b0a0c93d6b0": {
+  "cached_tokens": 704,
+  "completion_tokens": 404,
+  "parsed": {
+   "comment": "Explains the causal chain rather than restating fields: why Z9 led the fallback diagnoser to a fresh retry rather than re-presentation, and why Stage 0 refused on two independent grounds, including the subtle mismatch between the outstanding notice's target and the debit's target. The closing note that the recovery remains intact given remaining attempts is supported by the cap verdict. One mild assumption is that the retry implies a 'new notice,' but this is a fair reading of the pending refusal. No numbers, no leakage, no recommendation.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1164,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains the causal chain rather than restating fields: why Z9 led the fallback diagnoser to a fresh retry rather than re-presentation, and why Stage 0 refused on two independent grounds, including the subtle mismatch between the outstanding notice's target and the debit's target. The closing note that the recovery remains intact given remaining attempts is supported by the cap verdict. One mild assumption is that the retry implies a 'new notice,' but this is a fair reading of the pending refusal. No numbers, no leakage, no recommendation.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|19c51d391db1d558": {
+  "cached_tokens": 960,
+  "completion_tokens": 213,
+  "parsed": {
+   "comment": "Gives real causal structure: the earlier funds decline explains the retry, the notice and off-peak timing explain Stage 0's pass, and it correctly frames the UNKNOWN/STOP as fallback caution rather than a rail outcome. Slightly loose in implying the notice and off-peak hour were the reasons for all five rule passes (cap and pending are about counts, not notice), but nothing contradicts the state and the operator learns why the collection succeeded despite the earlier decline.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1085,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Gives real causal structure: the earlier funds decline explains the retry, the notice and off-peak timing explain Stage 0's pass, and it correctly frames the UNKNOWN/STOP as fallback caution rather than a rail outcome. Slightly loose in implying the notice and off-peak hour were the reasons for all five rule passes (cap and pending are about counts, not notice), but nothing contradicts the state and the operator learns why the collection succeeded despite the earlier decline.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|19d1d100465a4a8b": {
+  "cached_tokens": 960,
+  "completion_tokens": 373,
+  "parsed": {
+   "comment": "The core causal story is right: deemed_transaction means the outcome is genuinely unknown, so automatic re-presentation is blocked to avoid a double charge, and reconciliation is the path forward -- a mechanism the table does not show. However, the claim that STOP 'costs none of the cycle's attempts' is not supported by the given state; the table shows attempts used but says nothing about how STOP is counted. The Stage 0 sentence correctly assigns responsibility and the two UNKNOWN sentences overlap somewhat, diluting value.",
+   "explanatory_value": 4,
+   "faithfulness": 3,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1112,
+  "text": "{\n  \"faithfulness\": 3,\n  \"explanatory_value\": 4,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"The core causal story is right: deemed_transaction means the outcome is genuinely unknown, so automatic re-presentation is blocked to avoid a double charge, and reconciliation is the path forward -- a mechanism the table does not show. However, the claim that STOP 'costs none of the cycle's attempts' is not supported by the given state; the table shows attempts used but says nothing about how STOP is counted. The Stage 0 sentence correctly assigns responsibility and the two UNKNOWN sentences overlap somewhat, diluting value.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|1ea2adccce88efd5": {
+  "cached_tokens": 960,
+  "completion_tokens": 369,
+  "parsed": {
+   "comment": "Correctly identifies Z9 as a timing-fixable failure and traces the causal chain: no scheduler window means no notice, no debit, no diagnosis. The claim that the scheduler 'scores the remaining days' is a reasonable but slightly loose inference from the wide-confidence marker. Mostly causal rather than restating; stays within compliance rules.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1056,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly identifies Z9 as a timing-fixable failure and traces the causal chain: no scheduler window means no notice, no debit, no diagnosis. The claim that the scheduler 'scores the remaining days' is a reasonable but slightly loose inference from the wide-confidence marker. Mostly causal rather than restating; stays within compliance rules.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|21c81e829c21e299": {
+  "cached_tokens": 704,
+  "completion_tokens": 458,
+  "parsed": {
+   "comment": "Strong causal account: it links the notification failure to the pending rule and to Stage 0 never being engaged, and correctly reads the prior decline as retryable rather than terminal. Slightly loose in claiming 'nothing has been attempted against the rail' \u2014 the earlier attempt did reach the rail and was declined. Naming the Z9 funding shortfall restates the code's own meaning but stays within what the table shows.",
+   "explanatory_value": 5,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1088,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 5, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Strong causal account: it links the notification failure to the pending rule and to Stage 0 never being engaged, and correctly reads the prior decline as retryable rather than terminal. Slightly loose in claiming 'nothing has been attempted against the rail' \u2014 the earlier attempt did reach the rail and was declined. Naming the Z9 funding shortfall restates the code's own meaning but stays within what the table shows.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|22602221f70d863f": {
+  "cached_tokens": 704,
+  "completion_tokens": 147,
+  "parsed": {
+   "comment": "Almost every sentence restates visible fields (mandate active, deemed_transaction, medium confidence, STOP, all rules pass). No causal link is drawn \u2014 it never explains why STOP was chosen despite Stage 0 allowing, nor what the unknown outcome means for the money (double-charge risk from retrying). Slight looseness: 'agent is working the current billing cycle' is vague but harmless; no misattribution or leakage.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1060,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Almost every sentence restates visible fields (mandate active, deemed_transaction, medium confidence, STOP, all rules pass). No causal link is drawn \u2014 it never explains why STOP was chosen despite Stage 0 allowing, nor what the unknown outcome means for the money (double-charge risk from retrying). Slight looseness: 'agent is working the current billing cycle' is vague but harmless; no misattribution or leakage.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|30a69a2047ec0960": {
+  "cached_tokens": 960,
+  "completion_tokens": 264,
+  "parsed": {
+   "comment": "Every claim is supported, but the explanation is almost entirely a prose rendering of the visible fields: mandate active, Z9 decline, notice given, no peak, all rules passed. It attributes scheduling to the timing model and the legality check to Stage 0 correctly, and adds no causal insight the operator lacks -- nothing about why the debit is pending rather than resolved, what the fallback diagnosis means, or what the mid-cycle position implies for remaining attempts. The medium-confidence detail is also just a restated field, not an explanation of how confidence affected placement.",
+   "explanatory_value": 2,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1053,
+  "text": "{\n  \"faithfulness\": 5,\n  \"explanatory_value\": 2,\n  \"operator_usefulness\": 2,\n  \"merely_restates\": true,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Every claim is supported, but the explanation is almost entirely a prose rendering of the visible fields: mandate active, Z9 decline, notice given, no peak, all rules passed. It attributes scheduling to the timing model and the legality check to Stage 0 correctly, and adds no causal insight the operator lacks -- nothing about why the debit is pending rather than resolved, what the fallback diagnosis means, or what the mid-cycle position implies for remaining attempts. The medium-confidence detail is also just a restated field, not an explanation of how confidence affected placement.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|30b35eb8b592ef17": {
+  "cached_tokens": 960,
+  "completion_tokens": 533,
+  "parsed": {
+   "comment": "Genuinely causal: it ties the spent cap to the refusal, correctly separates Stage 0 verdicts from the scheduler's slot and the diagnoser's fallback STOP, and notes the technical decline was re-presentable under the existing notice. Slight deductions: it writes out numbers ('four', 'one') despite the no-numbers rule, and 'every future cycle forfeited' is editorialising beyond the state; it also runs to four sentences rather than three. Layer attribution is nonetheless accurate throughout, and nothing leaks balance or bank information.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1155,
+  "text": "{\n  \"faithfulness\": 4,\n  \"explanatory_value\": 4,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Genuinely causal: it ties the spent cap to the refusal, correctly separates Stage 0 verdicts from the scheduler's slot and the diagnoser's fallback STOP, and notes the technical decline was re-presentable under the existing notice. Slight deductions: it writes out numbers ('four', 'one') despite the no-numbers rule, and 'every future cycle forfeited' is editorialising beyond the state; it also runs to four sentences rather than three. Layer attribution is nonetheless accurate throughout, and nothing leaks balance or bank information.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|34babfbf380e31ac": {
+  "cached_tokens": 704,
+  "completion_tokens": 149,
+  "parsed": {
+   "comment": "Both sentences restate table fields (mandate status, cycle in progress, the Z9 code) and add no mechanism. Notably it fails to address the interesting facts the table raises: no notice was ever issued, nothing is scheduled, and the diagnoser fell back with no diagnosis -- i.e., why the pipeline is idle after an insufficient-funds decline. Faithful but empty.",
+   "explanatory_value": 1,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 1,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1003,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 1, \"operator_usefulness\": 1, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Both sentences restate table fields (mandate status, cycle in progress, the Z9 code) and add no mechanism. Notably it fails to address the interesting facts the table raises: no notice was ever issued, nothing is scheduled, and the diagnoser fell back with no diagnosis -- i.e., why the pipeline is idle after an insufficient-funds decline. Faithful but empty.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|3fa49a56ed453317": {
+  "cached_tokens": 704,
+  "completion_tokens": 417,
+  "parsed": {
+   "comment": "Almost pure restatement: it walks through mandate status, the ZX code, the off-peak timing with notice, the diagnosis and the Stage 0 verdicts, all of which the table already shows. It never explains why STOP was chosen despite Stage 0 allowing the debit (i.e. that the terminal ZX account state makes any further attempt futile regardless of legality), which is the question this state raises. 'The account is closed' is stated more definitively than the ZX code warrants (frozen or dormant also possible), and 'after the required day of notice' is a lead-time PASS restated in words. No wrong layer is credited and no action or customer circumstances are leaked.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1059,
+  "text": "{\n  \"faithfulness\": 4,\n  \"explanatory_value\": 2,\n  \"operator_usefulness\": 2,\n  \"merely_restates\": true,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Almost pure restatement: it walks through mandate status, the ZX code, the off-peak timing with notice, the diagnosis and the Stage 0 verdicts, all of which the table already shows. It never explains why STOP was chosen despite Stage 0 allowing the debit (i.e. that the terminal ZX account state makes any further attempt futile regardless of legality), which is the question this state raises. 'The account is closed' is stated more definitively than the ZX code warrants (frozen or dormant also possible), and 'after the required day of notice' is a lead-time PASS restated in words. No wrong layer is credited and no action or customer circumstances are leaked.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|40a02e5b1ac8ef1a": {
+  "cached_tokens": 960,
+  "completion_tokens": 267,
+  "parsed": {
+   "comment": "Genuinely explains the causal chain: Z9 caused the notification-wait state, the fallback means no diagnosis, and Stage 0's non-adjudication is correctly attributed to it not having run yet. Correctly assigns the timing choice to the scheduler and the (absent) intervention to the diagnoser. It is four sentences rather than the required three, and the final sentence about remaining attempts is mild restatement, but no claim is unsupported.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1103,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Genuinely explains the causal chain: Z9 caused the notification-wait state, the fallback means no diagnosis, and Stage 0's non-adjudication is correctly attributed to it not having run yet. Correctly assigns the timing choice to the scheduler and the (absent) intervention to the diagnoser. It is four sentences rather than the required three, and the final sentence about remaining attempts is mild restatement, but no claim is unsupported.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|4f32ad0f941429b4": {
+  "cached_tokens": 960,
+  "completion_tokens": 322,
+  "parsed": {
+   "comment": "Explains the mechanism the table cannot: the absent provider token makes any debit impossible, so the idle diagnoser fallback and unadjudicated Stage 0 are consequences, not defects. Correctly attributes the fallback to the diagnoser and avoids crediting the scheduler with an action. The final sentence states a precondition rather than prescribing an operator action, and no customer financial details are implied.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1081,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains the mechanism the table cannot: the absent provider token makes any debit impossible, so the idle diagnoser fallback and unadjudicated Stage 0 are consequences, not defects. Correctly attributes the fallback to the diagnoser and avoids crediting the scheduler with an action. The final sentence states a precondition rather than prescribing an operator action, and no customer financial details are implied.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|56ac01676683fb3d": {
+  "cached_tokens": 960,
+  "completion_tokens": 186,
+  "parsed": {
+   "comment": "Every claim is supported, but the explanation is essentially the table in prose: it restates the mandate status, the OK outcome, the off-peak timing with notice, the narrow confidence, and the five Stage 0 verdicts without explaining any mechanism or causation. It does not tell the operator why the collection succeeded, what the narrow confidence meant for the timing choice, or what the unknown root cause with a fallback STOP implies now that the money has been collected.",
+   "explanatory_value": 2,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1051,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Every claim is supported, but the explanation is essentially the table in prose: it restates the mandate status, the OK outcome, the off-peak timing with notice, the narrow confidence, and the five Stage 0 verdicts without explaining any mechanism or causation. It does not tell the operator why the collection succeeded, what the narrow confidence meant for the timing choice, or what the unknown root cause with a fallback STOP implies now that the money has been collected.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|5766e9bcb76ce392": {
+  "cached_tokens": 960,
+  "completion_tokens": 276,
+  "parsed": {
+   "comment": "The central timing claim contradicts the state: the scheduler scheduled nothing and issued no notice, yet the explanation describes a targeted debit with zero lead time and predicts the lead and pending rules refusing. Stage 0 was never adjudicated, so predicting its verdicts is unsupported. The rest is a prose restatement of field values with no mechanism beyond the fabricated timing analysis.",
+   "explanatory_value": 3,
+   "faithfulness": 2,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1114,
+  "text": "{\"faithfulness\": 2, \"explanatory_value\": 3, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The central timing claim contradicts the state: the scheduler scheduled nothing and issued no notice, yet the explanation describes a targeted debit with zero lead time and predicts the lead and pending rules refusing. Stage 0 was never adjudicated, so predicting its verdicts is unsupported. The rest is a prose restatement of field values with no mechanism beyond the fabricated timing analysis.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|5e21662f2d67d9ee": {
+  "cached_tokens": 960,
+  "completion_tokens": 475,
+  "parsed": {
+   "comment": "Solid causal explanation: links the Z9 history to the diagnoser's retry, and correctly identifies the dual Stage-0 refusal (peak window plus notice/action hour mismatch). Slight looseness in framing the pending-rule failure as an unsatisfied 'lead time' when the lead rule itself passed -- the real problem is the outstanding notice pointing at a different target. The closing sentence describes what must change without recommending an action, hour, or amount, and interpreting Z9 as insufficient funds is reading the code, not leaking hidden balance data.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1141,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Solid causal explanation: links the Z9 history to the diagnoser's retry, and correctly identifies the dual Stage-0 refusal (peak window plus notice/action hour mismatch). Slight looseness in framing the pending-rule failure as an unsatisfied 'lead time' when the lead rule itself passed -- the real problem is the outstanding notice pointing at a different target. The closing sentence describes what must change without recommending an action, hour, or amount, and interpreting Z9 as insufficient funds is reading the code, not leaking hidden balance data.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|5ece3e14c4c18339": {
+  "cached_tokens": 960,
+  "completion_tokens": 145,
+  "parsed": {
+   "comment": "Explains why Z9 is retryable by timing, and correctly separates the diagnoser (action) from the scheduler (hour). Slightly thin on what the hour choice means for the money, but clean and causal.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1044,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains why Z9 is retryable by timing, and correctly separates the diagnoser (action) from the scheduler (hour). Slightly thin on what the hour choice means for the money, but clean and causal.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|6062b3ef2b8877b9": {
+  "cached_tokens": 960,
+  "completion_tokens": 152,
+  "parsed": {
+   "comment": "Accurate and correctly assigns decisions to layers (scheduler timing, Stage 0 legality, diagnoser fallback), but it is largely a prose restatement of the field values -- notice timing, peak-window pass, the five gates, the Z9 decline, active mandate. Little causal or interpretive content beyond what the table already shows; the operator learns nothing new, such as why the Z9 declined or what the unexercised attempts mean for the money.",
+   "explanatory_value": 3,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 3,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1112,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 3, \"operator_usefulness\": 3, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Accurate and correctly assigns decisions to layers (scheduler timing, Stage 0 legality, diagnoser fallback), but it is largely a prose restatement of the field values -- notice timing, peak-window pass, the five gates, the Z9 decline, active mandate. Little causal or interpretive content beyond what the table already shows; the operator learns nothing new, such as why the Z9 declined or what the unexercised attempts mean for the money.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|64ee30d1cd0caa04": {
+  "cached_tokens": 960,
+  "completion_tokens": 170,
+  "parsed": {
+   "comment": "Both sentences restate fields the operator can already see: the missing provider token and the empty decline history. It offers no causal story (e.g. that the PENDING mandate blocks any scheduling, so Stage 0 was never engaged and the fallback chose nothing), attributes nothing to any layer, and leaves the operator with nothing new. It is faithful but pure restatement.",
+   "explanatory_value": 1,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 1,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1011,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 1, \"operator_usefulness\": 1, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Both sentences restate fields the operator can already see: the missing provider token and the empty decline history. It offers no causal story (e.g. that the PENDING mandate blocks any scheduling, so Stage 0 was never engaged and the fallback chose nothing), attributes nothing to any layer, and leaves the operator with nothing new. It is faithful but pure restatement.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|65c6936cdcc465d0": {
+  "cached_tokens": 960,
+  "completion_tokens": 406,
+  "parsed": {
+   "comment": "The explanation decodes Z9 as a timing-addressable failure and correctly pins the scheduler as the layer that matters, which the table cannot say by itself. The claim that a failed notification is terminal for the attempt and requires a new order is a reasonable but not explicitly supported inference (Stage 0 was never adjudicated), hence the slight faithfulness deduction. It describes a consequence rather than prescribing an action, and describes the decline code rather than the customer's current balance.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1058,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The explanation decodes Z9 as a timing-addressable failure and correctly pins the scheduler as the layer that matters, which the table cannot say by itself. The claim that a failed notification is terminal for the attempt and requires a new order is a reasonable but not explicitly supported inference (Stage 0 was never adjudicated), hence the slight faithfulness deduction. It describes a consequence rather than prescribing an action, and describes the decline code rather than the customer's current balance.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|6bea110c8d979035": {
+  "cached_tokens": 960,
+  "completion_tokens": 196,
+  "parsed": {
+   "comment": "Correctly explains the causal chain: no scheduled debit and no notice meant Stage 0 had nothing to adjudicate, and the fallback diagnoser idled. Interprets the single Z9 as non-terminal with capacity remaining without naming numbers or recommending a specific action. Slight restatement in the first sentence, but the idle-between-attempts framing is genuine explanation.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1072,
+  "text": "{\n  \"faithfulness\": 5,\n  \"explanatory_value\": 4,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Correctly explains the causal chain: no scheduled debit and no notice meant Stage 0 had nothing to adjudicate, and the fallback diagnoser idled. Interprets the single Z9 as non-terminal with capacity remaining without naming numbers or recommending a specific action. Slight restatement in the first sentence, but the idle-between-attempts framing is genuine explanation.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|6c94afbb01594e7d": {
+  "cached_tokens": 960,
+  "completion_tokens": 700,
+  "parsed": {
+   "comment": "The explanation invents a pending-notice story: Stage 0 says NO notification is outstanding, yet it claims a notice exists under a different debit and that 'two concurrent notices' is what the rule prevents \u2014 the state contradicts this. It also asserts 'the scheduler is the layer that matters' when the operative blocker is the exhausted cap, making any hour irrelevant this cycle. The causal idea of holding the mandate back to survive into the next cycle is genuinely useful, and the layer attribution of the refusal is correct, but the fabricated pending-notice mechanism and the internally inconsistent emphasis make it misleading.",
+   "explanatory_value": 3,
+   "faithfulness": 2,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1168,
+  "text": "{\n  \"faithfulness\": 2,\n  \"explanatory_value\": 3,\n  \"operator_usefulness\": 2,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"The explanation invents a pending-notice story: Stage 0 says NO notification is outstanding, yet it claims a notice exists under a different debit and that 'two concurrent notices' is what the rule prevents \u2014 the state contradicts this. It also asserts 'the scheduler is the layer that matters' when the operative blocker is the exhausted cap, making any hour irrelevant this cycle. The causal idea of holding the mandate back to survive into the next cycle is genuinely useful, and the layer attribution of the refusal is correct, but the fabricated pending-notice mechanism and the internally inconsistent emphasis make it misleading.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|72b584a2315cc330": {
+  "cached_tokens": 960,
+  "completion_tokens": 297,
+  "parsed": {
+   "comment": "Correctly reads the single Z9 as a retryable funding decline rather than a mandate problem, and correctly explains the fallback diagnosis as the absence of any fresh outcome. The claim that the scheduler is 'holding a candidate hour' is a small overstatement -- the state shows nothing scheduled -- and 'plenty of attempts remain' edges toward restatement. Still gives the operator a real causal picture: decline type, why no action is pending, and that recovery is not blocked.",
+   "explanatory_value": 3,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1087,
+  "text": "{\n  \"faithfulness\": 4,\n  \"explanatory_value\": 3,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Correctly reads the single Z9 as a retryable funding decline rather than a mandate problem, and correctly explains the fallback diagnosis as the absence of any fresh outcome. The claim that the scheduler is 'holding a candidate hour' is a small overstatement -- the state shows nothing scheduled -- and 'plenty of attempts remain' edges toward restatement. Still gives the operator a real causal picture: decline type, why no action is pending, and that recovery is not blocked.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|72f278437c205394": {
+  "cached_tokens": 960,
+  "completion_tokens": 267,
+  "parsed": {
+   "comment": "Correctly explains the terminality of ZX (why retry is pointless), attributes the failure correctly to the provider rail while noting our own constraints passed, and explains the attempt-economics of STOP. The 'closer to death' phrasing is loose but supported by the attempt cap. No numbers, no recommendations, no leaks.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1073,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly explains the terminality of ZX (why retry is pointless), attributes the failure correctly to the provider rail while noting our own constraints passed, and explains the attempt-economics of STOP. The 'closer to death' phrasing is loose but supported by the attempt cap. No numbers, no recommendations, no leaks.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|746d34eb23f2c93c": {
+  "cached_tokens": 960,
+  "completion_tokens": 111,
+  "parsed": {
+   "comment": "Correctly identifies ZX as terminal, explains that the fallback diagnosis is corroborated by the code itself, and clarifies that Stage 0's pass shows the failure is account-state, not timing \u2014 genuine causal reasoning rather than restatement. No numbers, no layer misattribution, no recommendation or state leak.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1101,
+  "text": "{\"faithfulness\":5,\"explanatory_value\":5,\"operator_usefulness\":5,\"merely_restates\":false,\"misattributes\":false,\"recommends_action\":false,\"leaks_state\":false,\"comment\":\"Correctly identifies ZX as terminal, explains that the fallback diagnosis is corroborated by the code itself, and clarifies that Stage 0's pass shows the failure is account-state, not timing \u2014 genuine causal reasoning rather than restatement. No numbers, no layer misattribution, no recommendation or state leak.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|7cc9e7a8c434e329": {
+  "cached_tokens": 704,
+  "completion_tokens": 313,
+  "parsed": {
+   "comment": "Almost pure restatement of the table in prose: active mandate, last code, off-peak placement, wide confidence, STOP, cap spent. It asserts no causal mechanism (e.g., that repeated insufficient-funds declines drove the mandate-at-risk diagnosis, or that the cap is why nothing will be attempted). The claim that 'the outstanding notice does not match this debit' misreads the pending rule, which refused because no notification is outstanding -- a loose, unsupported phrasing. It also names a response code despite the no-numbers constraint. The operator learns nothing the table did not already show.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1107,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Almost pure restatement of the table in prose: active mandate, last code, off-peak placement, wide confidence, STOP, cap spent. It asserts no causal mechanism (e.g., that repeated insufficient-funds declines drove the mandate-at-risk diagnosis, or that the cap is why nothing will be attempted). The claim that 'the outstanding notice does not match this debit' misreads the pending rule, which refused because no notification is outstanding -- a loose, unsupported phrasing. It also names a response code despite the no-numbers constraint. The operator learns nothing the table did not already show.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|8d0e571a1e639852": {
+  "cached_tokens": 960,
+  "completion_tokens": 508,
+  "parsed": {
+   "comment": "The explanation gives genuine causal structure: cap exhaustion (not timing) is why the attempt was refused, the diagnoser's STOP follows from that, and it explicitly rules out the scheduler and peak/lead rules as causes. The pending-rule phrasing ('no fresh notice stands') matches the state's reason. 'Not funded at the time' restates the Z9 decline rather than asserting ongoing balance, so no leak. Only mild weakness is that the mandate-risk sentence is a thin restatement of the root-cause label.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1146,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The explanation gives genuine causal structure: cap exhaustion (not timing) is why the attempt was refused, the diagnoser's STOP follows from that, and it explicitly rules out the scheduler and peak/lead rules as causes. The pending-rule phrasing ('no fresh notice stands') matches the state's reason. 'Not funded at the time' restates the Z9 decline rather than asserting ongoing balance, so no leak. Only mild weakness is that the mandate-risk sentence is a thin restatement of the root-cause label.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|91f9571d0a58c6f6": {
+  "cached_tokens": 960,
+  "completion_tokens": 191,
+  "parsed": {
+   "comment": "Every claim is supported, but the whole text is a prose rendering of the visible fields. It never mentions that the diagnosis was a fallback with no intervention, that Stage 0 was not adjudicated, or why the attempt shows as a notification failure despite an active mandate -- the actual questions this state raises. The phrase 'required day of notice' is a loose gloss on the notice period, hence the faithfulness deduction.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1027,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Every claim is supported, but the whole text is a prose rendering of the visible fields. It never mentions that the diagnosis was a fallback with no intervention, that Stage 0 was not adjudicated, or why the attempt shows as a notification failure despite an active mandate -- the actual questions this state raises. The phrase 'required day of notice' is a loose gloss on the notice period, hence the faithfulness deduction.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|96f9ceb011b57ef9": {
+  "cached_tokens": 960,
+  "completion_tokens": 197,
+  "parsed": {
+   "comment": "Correctly identifies the notification failure as the causal blocker, explains that the lead/pending rules would refuse a debit without a delivered notice, and clarifies that the prior Z9 decline belongs to an earlier attempt rather than this tick -- all mechanisms the table does not itself spell out. No layer misattributed, no recommendation, no numbers, no leaked customer financial details.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1085,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly identifies the notification failure as the causal blocker, explains that the lead/pending rules would refuse a debit without a delivered notice, and clarifies that the prior Z9 decline belongs to an earlier attempt rather than this tick -- all mechanisms the table does not itself spell out. No layer misattributed, no recommendation, no numbers, no leaked customer financial details.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|99c656c307888c8d": {
+  "cached_tokens": 960,
+  "completion_tokens": 270,
+  "parsed": {
+   "comment": "Explains the causal chain: Z9 then deemed_transaction forced the fallback to OUTCOME_UNKNOWN and a halt because a retry risks double collection under an unconfirmed outcome; correctly credits the diagnoser with the stop and Stage 0 with procedural clearance, and distinguishes legal permission from prudence. The phrase 'account was not funded' restates the meaning of Z9 rather than adding unsupported detail. The tension it resolves -- allowed but unsafe -- is exactly the question the table raises.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1099,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains the causal chain: Z9 then deemed_transaction forced the fallback to OUTCOME_UNKNOWN and a halt because a retry risks double collection under an unconfirmed outcome; correctly credits the diagnoser with the stop and Stage 0 with procedural clearance, and distinguishes legal permission from prudence. The phrase 'account was not funded' restates the meaning of Z9 rather than adding unsupported detail. The tension it resolves -- allowed but unsafe -- is exactly the question the table raises.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|a5d3faca52354f8d": {
+  "cached_tokens": 960,
+  "completion_tokens": 436,
+  "parsed": {
+   "comment": "Explains causation well: Z9 is the recoverable decline a different hour can fix, the pending-refusal mechanism (a different outstanding notice) is correctly unpacked, and the layer-of-responsibility point (Stage 0 vs the diagnoser, which cannot express time) directly answers what the table raises. One loose phrasing: saying the peak-window refusal is one 'the rail refuses outright' slightly misplaces the refusal with the rail rather than Stage 0's policy rule, though Stage 0 is correctly named as the refusing layer. The unfunded-account remark merely restates the meaning of the code, not the customer's balance.",
+   "explanatory_value": 5,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1166,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 5, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains causation well: Z9 is the recoverable decline a different hour can fix, the pending-refusal mechanism (a different outstanding notice) is correctly unpacked, and the layer-of-responsibility point (Stage 0 vs the diagnoser, which cannot express time) directly answers what the table raises. One loose phrasing: saying the peak-window refusal is one 'the rail refuses outright' slightly misplaces the refusal with the rail rather than Stage 0's policy rule, though Stage 0 is correctly named as the refusing layer. The unfunded-account remark merely restates the meaning of the code, not the customer's balance.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|b48f8d8b885af331": {
+  "cached_tokens": 704,
+  "completion_tokens": 513,
+  "parsed": {
+   "comment": "Explains the causal chain well: prior declines are historical, the cycle reset means they cost nothing going forward, no notice means no target and nothing for Stage 0 to adjudicate, and the fallback diagnosis follows from there being nothing to diagnose. Correctly identifies the scheduler as the layer that must move next and frames the state as waiting rather than blocked. One mild looseness: reading 'medium confidence' as the scheduler 'still forming its view' is an interpretation the state only weakly supports. 'The money was simply not there' merely glosses the Z9 code the operator can already see, not an independent balance claim.",
+   "explanatory_value": 5,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1123,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains the causal chain well: prior declines are historical, the cycle reset means they cost nothing going forward, no notice means no target and nothing for Stage 0 to adjudicate, and the fallback diagnosis follows from there being nothing to diagnose. Correctly identifies the scheduler as the layer that must move next and frames the state as waiting rather than blocked. One mild looseness: reading 'medium confidence' as the scheduler 'still forming its view' is an interpretation the state only weakly supports. 'The money was simply not there' merely glosses the Z9 code the operator can already see, not an independent balance claim.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|b8e2c8027667c285": {
+  "cached_tokens": 960,
+  "completion_tokens": 275,
+  "parsed": {
+   "comment": "The explanation correctly reads the UNKNOWN attempt outcome as an ambiguous rail answer, explains why the diagnoser's fallback of no intervention makes sense (a retry risks a duplicate charge after a deemed result), and tells the operator the mandate and funds position are intact \u2014 the open question is confirming the outcome, not fixing a broken mandate. It infers rather than merely restates, and the causal reading of the diagnoser's abstention is supported by the design. No numbers, no recommendation, no state leakage.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1088,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The explanation correctly reads the UNKNOWN attempt outcome as an ambiguous rail answer, explains why the diagnoser's fallback of no intervention makes sense (a retry risks a duplicate charge after a deemed result), and tells the operator the mandate and funds position are intact \u2014 the open question is confirming the outcome, not fixing a broken mandate. It infers rather than merely restates, and the causal reading of the diagnoser's abstention is supported by the design. No numbers, no recommendation, no state leakage.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|bbb51d4c6ca25757": {
+  "cached_tokens": 960,
+  "completion_tokens": 572,
+  "parsed": {
+   "comment": "Correctly attributes the hour to the scheduler and the clearance to Stage 0, explains the fallback diagnosis as a consequence of the Z9 decline, and gives the key mechanism: why a fresh notice is needed for Z9 (versus bare re-presentation for technical declines) and that the represent rule clears the debit under the existing authorisation. The note that presentations remain in hand adds forward-looking value. 'Account was not funded' simply interprets the visible Z9 code rather than leaking new balance information. No numbers, no action recommended.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1125,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly attributes the hour to the scheduler and the clearance to Stage 0, explains the fallback diagnosis as a consequence of the Z9 decline, and gives the key mechanism: why a fresh notice is needed for Z9 (versus bare re-presentation for technical declines) and that the represent rule clears the debit under the existing authorisation. The note that presentations remain in hand adds forward-looking value. 'Account was not funded' simply interprets the visible Z9 code rather than leaking new balance information. No numbers, no action recommended.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|bc098b7e6a0517f4": {
+  "cached_tokens": 704,
+  "completion_tokens": 342,
+  "parsed": {
+   "comment": "Gives a genuine causal mechanism: the missing provider token makes the mandate unchargeable, which is why nothing was scheduled and Stage 0 was never reached. The claim that 'none will be' attempted is slightly stronger than the state supports, since the mandate is merely PENDING and could still be authorised; otherwise faithful and free of restatement, action recommendation, or state leakage.",
+   "explanatory_value": 5,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1029,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 5, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Gives a genuine causal mechanism: the missing provider token makes the mandate unchargeable, which is why nothing was scheduled and Stage 0 was never reached. The claim that 'none will be' attempted is slightly stronger than the state supports, since the mandate is merely PENDING and could still be authorised; otherwise faithful and free of restatement, action recommendation, or state leakage.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|bdf46e35d05721a6": {
+  "cached_tokens": 960,
+  "completion_tokens": 182,
+  "parsed": {
+   "comment": "Nothing here is wrong, but it is pure field restatement: it repeats the mandate status and the decline code the operator can already see. It never mentions that the scheduler chose not to schedule anything, that no notice was issued, that the diagnoser ran on fallback, or why no debit is pending. The state's central question -- why nothing is scheduled despite an active mandate and a fresh cycle -- is left unaddressed.",
+   "explanatory_value": 1,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 1,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1006,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 1, \"operator_usefulness\": 1, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Nothing here is wrong, but it is pure field restatement: it repeats the mandate status and the decline code the operator can already see. It never mentions that the scheduler chose not to schedule anything, that no notice was issued, that the diagnoser ran on fallback, or why no debit is pending. The state's central question -- why nothing is scheduled despite an active mandate and a fresh cycle -- is left unaddressed.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|bf8afa58cfaacc9b": {
+  "cached_tokens": 0,
+  "completion_tokens": 336,
+  "parsed": {
+   "comment": "Gives real causal content: ties Z9 to a fixable timing failure creditable to the scheduler, explains the UNKNOWN attempt as a provider non-answer that is never auto-retried and must be resolved by reconciliation, and clarifies that Stage 0's clean pass rules out our own constraints as the source of any problem. Slightly thin on the third sentence, which edges toward restating the Stage 0 verdict, and 'the layer that matters' is a mild judgment rather than an established fact.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1097,
+  "text": "{\n  \"faithfulness\": 5,\n  \"explanatory_value\": 4,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Gives real causal content: ties Z9 to a fixable timing failure creditable to the scheduler, explains the UNKNOWN attempt as a provider non-answer that is never auto-retried and must be resolved by reconciliation, and clarifies that Stage 0's clean pass rules out our own constraints as the source of any problem. Slightly thin on the third sentence, which edges toward restating the Stage 0 verdict, and 'the layer that matters' is a mild judgment rather than an established fact.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|c03fe4f1aab21ba0": {
+  "cached_tokens": 960,
+  "completion_tokens": 366,
+  "parsed": {
+   "comment": "The core story -- collection succeeded, so recovery is complete and STOP is the terminal wrap-up -- is right and useful. But it asserts an NPCI one-collection-per-cycle rule the state does not support (the table plainly allows several attempts per cycle), and the sentence about 'anything that went wrong afterwards came from the provider' is confusing and unsupported since nothing went wrong. It does not explain why the diagnoser fell back to an UNKNOWN root cause, which is the state's real oddity.",
+   "explanatory_value": 3,
+   "faithfulness": 3,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 3,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1067,
+  "text": "{\"faithfulness\": 3, \"explanatory_value\": 3, \"operator_usefulness\": 3, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The core story -- collection succeeded, so recovery is complete and STOP is the terminal wrap-up -- is right and useful. But it asserts an NPCI one-collection-per-cycle rule the state does not support (the table plainly allows several attempts per cycle), and the sentence about 'anything that went wrong afterwards came from the provider' is confusing and unsupported since nothing went wrong. It does not explain why the diagnoser fell back to an UNKNOWN root cause, which is the state's real oddity.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|c3b4050483aed8bd": {
+  "cached_tokens": 704,
+  "completion_tokens": 290,
+  "parsed": {
+   "comment": "Correctly frames the story: the earlier funds decline was recovered by the successful debit, the fallback STOP became moot once collection succeeded, and the scheduler/Stage 0 context is described with light causal links rather than bare restatement. The scheduler is correctly credited with timing and Stage 0 with legality. Minor quibble: writing 'one' and 'a full day' edges toward restating counts/notice, but no unsupported claims and nothing about the customer's ability to pay.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1103,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly frames the story: the earlier funds decline was recovered by the successful debit, the fallback STOP became moot once collection succeeded, and the scheduler/Stage 0 context is described with light causal links rather than bare restatement. The scheduler is correctly credited with timing and Stage 0 with legality. Minor quibble: writing 'one' and 'a full day' edges toward restating counts/notice, but no unsupported claims and nothing about the customer's ability to pay.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|c78db47c4437c934": {
+  "cached_tokens": 704,
+  "completion_tokens": 172,
+  "parsed": {
+   "comment": "Every claim matches the state, but the explanation is essentially a prose rendering of the table. It does not address the notable puzzle the state raises: the debit already succeeded, yet the diagnoser fell back to STOP with an unknown root cause -- the operator is left without any causal account of why a fallback halt followed a successful collection, or which layer is responsible for that oddity.",
+   "explanatory_value": 2,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 2,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1053,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 2, \"operator_usefulness\": 2, \"merely_restates\": true, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Every claim matches the state, but the explanation is essentially a prose rendering of the table. It does not address the notable puzzle the state raises: the debit already succeeded, yet the diagnoser fell back to STOP with an unknown root cause -- the operator is left without any causal account of why a fallback halt followed a successful collection, or which layer is responsible for that oddity.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|c7ea4f46cb7cc885": {
+  "cached_tokens": 960,
+  "completion_tokens": 267,
+  "parsed": {
+   "comment": "The cap-as-binding-reason analysis and the pending-rule mechanism (notice consumed by the failed attempt, TECH re-presentable but the latest decline is not) are genuine causal explanations the table alone does not spell out. However, the final sentence asserts that the mandate will lapse at cycle end and future cycles are forfeited \u2014 the state shows the mandate is still ACTIVE and a fallback STOP does not itself cancel future cycles, so this is an unsupported and confidently asserted outcome. The 'unless the merchant collects through another channel' clause edges toward advice but stays descriptive.",
+   "explanatory_value": 4,
+   "faithfulness": 3,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1156,
+  "text": "{\"faithfulness\": 3, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"The cap-as-binding-reason analysis and the pending-rule mechanism (notice consumed by the failed attempt, TECH re-presentable but the latest decline is not) are genuine causal explanations the table alone does not spell out. However, the final sentence asserts that the mandate will lapse at cycle end and future cycles are forfeited \u2014 the state shows the mandate is still ACTIVE and a fallback STOP does not itself cancel future cycles, so this is an unsupported and confidently asserted outcome. The 'unless the merchant collects through another channel' clause edges toward advice but stays descriptive.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|ca01bcee918394ad": {
+  "cached_tokens": 960,
+  "completion_tokens": 366,
+  "parsed": {
+   "comment": "The claim that NPCI allows only one collection per billing cycle is contradicted by the state (multiple attempts per cycle are permitted). The 'anything that went wrong afterwards came from the provider' sentence is confusing since the attempt SUCCEEDED. The STOP-by-fallback attribution is correct, and noting STOP consumes no attempt is mildly useful, but the central mechanism invoked is wrong.",
+   "explanatory_value": 2,
+   "faithfulness": 2,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 3,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1069,
+  "text": "{\n  \"faithfulness\": 2,\n  \"explanatory_value\": 2,\n  \"operator_usefulness\": 3,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"The claim that NPCI allows only one collection per billing cycle is contradicted by the state (multiple attempts per cycle are permitted). The 'anything that went wrong afterwards came from the provider' sentence is confusing since the attempt SUCCEEDED. The STOP-by-fallback attribution is correct, and noting STOP consumes no attempt is mildly useful, but the central mechanism invoked is wrong.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|ca261ab02fca61af": {
+  "cached_tokens": 960,
+  "completion_tokens": 193,
+  "parsed": {
+   "comment": "Correctly identifies the shift from a transient funds decline to a terminal account-state code, explains why STOP is the right diagnosis (no retry can succeed regardless of timing), and clarifies that Stage 0's allowance is about legality, not outcome -- the failure came from the bank post-execution. It answers the operator's real question: the money cannot be recovered under the existing mandate.",
+   "explanatory_value": 5,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1089,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly identifies the shift from a transient funds decline to a terminal account-state code, explains why STOP is the right diagnosis (no retry can succeed regardless of timing), and clarifies that Stage 0's allowance is about legality, not outcome -- the failure came from the bank post-execution. It answers the operator's real question: the money cannot be recovered under the existing mandate.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|cbc0fcafc0ca6499": {
+  "cached_tokens": 960,
+  "completion_tokens": 379,
+  "parsed": {
+   "comment": "Real causal chain: Z9 \u2192 fallback diagnoser \u2192 RETRY, and it correctly frames Stage 0's non-adjudication as the current gate on the money. One loose phrasing: asserting the retry 'satisfies the lead and timing constraints' amounts to pre-judging Stage 0 verdicts that are recorded as not adjudicated, though the underlying facts (notice lead, off-peak, cap headroom) are supported. No layer is credited with the wrong decision and no action is recommended.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1104,
+  "text": "{\n  \"faithfulness\": 4,\n  \"explanatory_value\": 4,\n  \"operator_usefulness\": 4,\n  \"merely_restates\": false,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"Real causal chain: Z9 \u2192 fallback diagnoser \u2192 RETRY, and it correctly frames Stage 0's non-adjudication as the current gate on the money. One loose phrasing: asserting the retry 'satisfies the lead and timing constraints' amounts to pre-judging Stage 0 verdicts that are recorded as not adjudicated, though the underlying facts (notice lead, off-peak, cap headroom) are supported. No layer is credited with the wrong decision and no action is recommended.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|d27c390ba03c446b": {
+  "cached_tokens": 960,
+  "completion_tokens": 236,
+  "parsed": {
+   "comment": "The claim that the debit is 'targeted at the same hour the customer was notified' is contradicted by the state, which shows nothing scheduled and no notice issued. Most of the rest is faithful restatement of visible fields (active mandate, Z9 decline, fallback diagnoser, no adjudication) with little causal analysis; the only value-added insight is framing this as an undecided, pre-adjudication state. It also exceeds the three-sentence limit.",
+   "explanatory_value": 3,
+   "faithfulness": 2,
+   "leaks_state": false,
+   "merely_restates": true,
+   "misattributes": false,
+   "operator_usefulness": 3,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1135,
+  "text": "{\n  \"faithfulness\": 2,\n  \"explanatory_value\": 3,\n  \"operator_usefulness\": 3,\n  \"merely_restates\": true,\n  \"misattributes\": false,\n  \"recommends_action\": false,\n  \"leaks_state\": false,\n  \"comment\": \"The claim that the debit is 'targeted at the same hour the customer was notified' is contradicted by the state, which shows nothing scheduled and no notice issued. Most of the rest is faithful restatement of visible fields (active mandate, Z9 decline, fallback diagnoser, no adjudication) with little causal analysis; the only value-added insight is framing this as an undecided, pre-adjudication state. It also exceeds the three-sentence limit.\"\n}"
+ },
+ "glm-5.3|glm-explain-judge-v1|d306105d10447ab7": {
+  "cached_tokens": 960,
+  "completion_tokens": 568,
+  "parsed": {
+   "comment": "Real causal content: ties the Z9 outcome to time-of-attempt as the fixable failure class and explains the cycle rollover restoring the attempt allowance. The 'drops any notice left outstanding' claim is loosely supported (no notice exists this cycle, and rollover's effect on prior notices is not shown in the state), costing a faithfulness point. 'Account was not funded' restates the Z9 code's meaning rather than asserting a new fact about the customer, so no state leak. No action, hour, or amount is recommended, and the scheduler is credited only as the relevant layer, not with a decision it did not make.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 3,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1045,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 4, \"operator_usefulness\": 3, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Real causal content: ties the Z9 outcome to time-of-attempt as the fixable failure class and explains the cycle rollover restoring the attempt allowance. The 'drops any notice left outstanding' claim is loosely supported (no notice exists this cycle, and rollover's effect on prior notices is not shown in the state), costing a faithfulness point. 'Account was not funded' restates the Z9 code's meaning rather than asserting a new fact about the customer, so no state leak. No action, hour, or amount is recommended, and the scheduler is credited only as the relevant layer, not with a decision it did not make.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|d44358ff3cafbf39": {
+  "cached_tokens": 960,
+  "completion_tokens": 292,
+  "parsed": {
+   "comment": "Correctly explains the causal story: the successful collection makes the fallback STOP a harmless halt rather than a defect, and the prior Z9 was transactional not a mandate fault, which is why the mandate remains active. It distinguishes layers correctly (diagnoser chose the stop, scheduler chose the timing, Stage 0 only permitted). 'The money is in' is a mild implication about funds but mirrors the SUCCEEDED outcome already shown. Slightly wordy on Stage 0, which edges toward restating the verdicts, but each is tied to a rule's meaning.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1100,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly explains the causal story: the successful collection makes the fallback STOP a harmless halt rather than a defect, and the prior Z9 was transactional not a mandate fault, which is why the mandate remains active. It distinguishes layers correctly (diagnoser chose the stop, scheduler chose the timing, Stage 0 only permitted). 'The money is in' is a mild implication about funds but mirrors the SUCCEEDED outcome already shown. Slightly wordy on Stage 0, which edges toward restating the verdicts, but each is tied to a rule's meaning.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|d81a288dd1df3487": {
+  "cached_tokens": 960,
+  "completion_tokens": 390,
+  "parsed": {
+   "comment": "Correctly reconstructs the causal sequence (first presentation declined for insufficient funds, retry cleared it) and correctly interprets the diagnoser's UNKNOWN/STOP as a fallback with nothing left to diagnose after success. The suggestion that the diagnosis is 'stale' is a hedged but not directly supported implication, costing one faithfulness point; 'the money is in' is slightly loose phrasing for a collected debit. Otherwise it explains rather than restates and answers the operator's real question: nothing further is owed this cycle.",
+   "explanatory_value": 4,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1076,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly reconstructs the causal sequence (first presentation declined for insufficient funds, retry cleared it) and correctly interprets the diagnoser's UNKNOWN/STOP as a fallback with nothing left to diagnose after success. The suggestion that the diagnosis is 'stale' is a hedged but not directly supported implication, costing one faithfulness point; 'the money is in' is slightly loose phrasing for a collected debit. Otherwise it explains rather than restates and answers the operator's real question: nothing further is owed this cycle.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|d9ee90783ba7274d": {
+  "cached_tokens": 960,
+  "completion_tokens": 447,
+  "parsed": {
+   "comment": "Solid causal chain: earlier Z9, later OK, recovery goal met, STOP justified. One real flaw: it reads 'narrow confidence' as the timing model having WEAK evidence, when narrow confidence means the opposite (a tight, well-resolved estimate). That is an unsupported implication about what the confidence value means, though it does not affect the outcome or the layer attribution. The phrase 'when this customer's account would be funded' gestures at funding but describes the model's task rather than disclosing balance or payday, so it does not rise to a leak.",
+   "explanatory_value": 4,
+   "faithfulness": 3,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1088,
+  "text": "{\"faithfulness\": 3, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Solid causal chain: earlier Z9, later OK, recovery goal met, STOP justified. One real flaw: it reads 'narrow confidence' as the timing model having WEAK evidence, when narrow confidence means the opposite (a tight, well-resolved estimate). That is an unsupported implication about what the confidence value means, though it does not affect the outcome or the layer attribution. The phrase 'when this customer's account would be funded' gestures at funding but describes the model's task rather than disclosing balance or payday, so it does not rise to a leak.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|daa3c10bb420b9d6": {
+  "cached_tokens": 960,
+  "completion_tokens": 316,
+  "parsed": {
+   "comment": "Explains the key mechanism well: the unknown outcome, why STOP follows, and that Stage 0's ALLOWED verdicts speak to legality not settlement -- a distinction the table cannot show. One loose phrasing: calling the earlier insufficient-funds decline 'resolved' and saying nothing reflects the customer's funding is a mild overstatement, since that decline was itself a funding signal; but it does not assert the customer's current balance.",
+   "explanatory_value": 5,
+   "faithfulness": 4,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 5,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1079,
+  "text": "{\"faithfulness\": 4, \"explanatory_value\": 5, \"operator_usefulness\": 5, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains the key mechanism well: the unknown outcome, why STOP follows, and that Stage 0's ALLOWED verdicts speak to legality not settlement -- a distinction the table cannot show. One loose phrasing: calling the earlier insufficient-funds decline 'resolved' and saying nothing reflects the customer's funding is a mild overstatement, since that decline was itself a funding signal; but it does not assert the customer's current balance.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|f2a376e365420d46": {
+  "cached_tokens": 960,
+  "completion_tokens": 237,
+  "parsed": {
+   "comment": "Correctly identifies the pending mandate as the blocking cause across all layers: with no provider token, the scheduler has nothing to time and Stage 0 nothing to adjudicate. It answers the operator's implicit question (why no attempt despite a fresh cycle and full attempt budget) by pointing to the upstream authorisation gap rather than any timing or funds issue. The claim that the customer must complete setup in their banking app is a mild extrapolation but consistent with the state and does not leak balance or bank details.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1053,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Correctly identifies the pending mandate as the blocking cause across all layers: with no provider token, the scheduler has nothing to time and Stage 0 nothing to adjudicate. It answers the operator's implicit question (why no attempt despite a fresh cycle and full attempt budget) by pointing to the upstream authorisation gap rather than any timing or funds issue. The claim that the customer must complete setup in their banking app is a mild extrapolation but consistent with the state and does not leak balance or bank details.\"}"
+ },
+ "glm-5.3|glm-explain-judge-v1|fc09f4cf2893b9bb": {
+  "cached_tokens": 960,
+  "completion_tokens": 182,
+  "parsed": {
+   "comment": "Explains why nothing is happening (cycle reset means no notice, no schedule, nothing to adjudicate) and correctly attributes the Z9 history to funds, not mandate failure. Slightly loose in asserting the codes belong to the 'previous cycle' rather than simply being the recorded history, but this is a reasonable reading of the state and nothing is contradicted.",
+   "explanatory_value": 4,
+   "faithfulness": 5,
+   "leaks_state": false,
+   "merely_restates": false,
+   "misattributes": false,
+   "operator_usefulness": 4,
+   "recommends_action": false
+  },
+  "prompt_tokens": 1080,
+  "text": "{\"faithfulness\": 5, \"explanatory_value\": 4, \"operator_usefulness\": 4, \"merely_restates\": false, \"misattributes\": false, \"recommends_action\": false, \"leaks_state\": false, \"comment\": \"Explains why nothing is happening (cycle reset means no notice, no schedule, nothing to adjudicate) and correctly attributes the Z9 history to funds, not mandate failure. Slightly loose in asserting the codes belong to the 'previous cycle' rather than simply being the recorded history, but this is a reasonable reading of the state and nothing is contradicted.\"}"
+ }
+}

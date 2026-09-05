@@ -1,4 +1,4 @@
-numpy==2.4.2          # the 25-gate suite and the agent need only this
+numpy==2.4.2          # the 27-gate suite and the agent need only this
 pyyaml==6.0.3         # agent/eval/ reads golden_cases.yaml
 lightgbm==4.6.0       # sim/ml_study.py, sim/ml_diagnose.py -- the ML baseline
 scikit-learn==1.8.0   # same

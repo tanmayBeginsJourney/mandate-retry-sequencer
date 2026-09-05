@@ -31,21 +31,20 @@ pre-canonical population with the mandate count fixed at five, so the customer
 it walked through did not exist in the world every aggregate on the page came
 from.
 
-THE HERO CUSTOMER IS CHOSEN, AND THE PAGE SAYS SO. `c12m1` holds two mandates.
-Its month is legible: the account is empty from the due date on day 16 until the
-salary lands on day 33, and the 620-rupee debit is the second of the customer's
-two subscriptions. The agent spends three of its four attempts on it and
-collects on the third at every payday uncertainty tested. It is not the average
-customer, and at the canonical population size it is a case the agent handles
-well -- two customers in the same population where the agent collects nothing
-are listed in `ALTERNATIVES` below so a sceptical reader can pull one instead.
+THE HERO CUSTOMER IS CHOSEN, AND THE PAGE SAYS SO. `c275m0` holds two mandates.
+Its month is legible: the 1,110-rupee debit falls due on day 26 against a
+balance that is zero every day from then until the salary lands on day 37. The
+agent attempts once on day 27, is declined, holds for ten days, and collects on
+day 38 -- two of its four presentations spent. The naive schedule Razorpay
+documents charges on days 26, 27, 28 and 29 and collects nothing. It is not the
+average customer, and it is a case the agent handles well; the mandates in the
+same population where the agent collects nothing are listed in `ALTERNATIVES`
+below so a sceptical reader can pull one instead.
 
-THAT DESCRIPTION CHANGED WHEN THE CANONICAL n DID. At n=100 this customer missed
-the cycle entirely from payday_err=10 upward, and the sentence above said so. The
-population is drawn sequentially, so customer 12 is the identical customer at
-both sizes -- what changed is the run: the technical-decline stream and the rail
-monitor are drawn over the whole population. A walkthrough read out of a run is
-a property of that run, not only of the customer.
+A WALKTHROUGH IS A PROPERTY OF A RUN, NOT ONLY OF A CUSTOMER. The
+technical-decline stream and the rail monitor are drawn over the whole
+population, so the same customer read out of a run at a different population
+size is a different month. Everything here runs the canonical world.
 
 Run:  py -3.12 scripts/build_page_data.py          # writes docs/data/scenarios.json
       py -3.12 scripts/build_page_data.py --check  # re-derive, diff, write nothing
@@ -81,7 +80,7 @@ RUN_SEED = 7
 # through has to come from the world every aggregate on the page comes from.
 N, K, DAYS = _canonical.N, 5, 120   # K is the fallback; the canonical world
                                     # draws each customer's count instead
-CI, MI = 12, 1                      # the hero customer and mandate
+CI, MI = 275, 0                     # the hero customer and mandate
 UID = f"c{CI}m{MI}"
 
 #: Canonical world settings, imported rather than copied. A second copy of a
@@ -105,21 +104,22 @@ SPEND = _canonical.SPEND
 #: page now states both.
 DET_POP_SEED, DET_N, DET_K, DET_SPEND = 700, 100, 5, 1.05
 
-#: Other customers in the same population whose month is worth looking at. Both
+#: Other mandates in the same population whose month is worth looking at. Both
 #: are cases where the agent collects nothing at `payday_err=7`, listed here so
 #: that "a good one was picked" is a checkable statement rather than an
 #: accusation.
-#: RE-DERIVED AT THE CANONICAL n. The previous two entries were chosen at
-#: n=100 and describe attempts that no longer happen: on the canonical run
-#: `c50m0` collects 3 of 10 and `c56m0` collects 4 of 5. The three below are
-#: every mandate in this population that the agent attempts at least three
-#: times and never collects, which is the property the entry is claiming.
+#:
+#: THE LIST IS EXHAUSTIVE, WHICH IS WHAT MAKES IT EVIDENCE. These are every
+#: mandate in population 710 that the agent attempts at least three times over
+#: the 120-day horizon and never collects -- two of 1,003. Re-derived against
+#: the run this script performs; a third entry, `c187m2`, was carried here
+#: describing "four attempts, none of them land" and does not hold: on this
+#: run it takes seven attempts and collects two of them.
 ALTERNATIVES = [
-    ("c385m4", "holds five mandates, Rs 3,220 due on day 1 -- twelve attempts "
-               "across the horizon, none of them land"),
+    ("c385m4", "holds five mandates, Rs 3,220 due on day 1 against a Rs 10,436 "
+               "salary -- twelve attempts across the horizon, none of them "
+               "land"),
     ("c485m1", "Rs 380 due on day 9 against a day-3 payday -- eleven attempts, "
-               "none of them land"),
-    ("c187m2", "holds six mandates, Rs 390 due on day 15 -- four attempts, "
                "none of them land"),
 ]
 

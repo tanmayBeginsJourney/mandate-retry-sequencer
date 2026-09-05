@@ -61,7 +61,7 @@ ALL_DOCS = PUBLIC + TECH
 #: The canonical walkthrough customer. `docs/data/scenarios.json` is generated
 #: by `scripts/build_page_data.py`; the page and this constant must agree with
 #: it, and the cross-check below reads all three rather than trusting any one.
-HERO_UID = "c12m1"
+HERO_UID = "c275m0"
 
 #: Documents this project no longer publishes. A reference to one of these is a
 #: broken trail, not a historical note, because the file is not in the tree.

@@ -1,0 +1,922 @@
+{
+ "glm-5.3-flash|glm-explain-v1|39705cf70e3dd39f": {
+  "cached_tokens": 832,
+  "completion_tokens": 145,
+  "parsed": null,
+  "prompt_tokens": 1114,
+  "text": "The recovery has already succeeded: after an initial decline for insufficient funds, the subsequent debit went through and the customer was collected, so no further action is needed this cycle. The scheduler's timing choices were sound \u2014 the notice was given a full day ahead of the debit, the target sat outside the peak window, and all five Stage 0 gates passed. The diagnoser had earlier flagged the root cause as unknown and issued a stop via its fallback path, but that decision was overtaken by the successful collection, which is the recorded final state."
+ },
+ "glm-5.3-flash|glm-explain-v1|39705cf70e3dd39f#d1": {
+  "cached_tokens": 1088,
+  "completion_tokens": 162,
+  "parsed": {
+   "explanation": "The recovery cycle is closed: the most recent debit went through and the mandate has collected successfully. The sequence shows the account was not funded at the time of the first request, and the later attempt under the same cycle cleared. Stage 0 found no obstruction \u2014 the cycle still had attempts available, the notice ran the full required day before the debit, the target sat outside NPCI's peak window, no notification was outstanding, and the re-presentation conditions were satisfied. The diagnoser recorded an unknown root cause and, running as a fallback, chose to stop further action, which is consistent with a completed collection leaving nothing to recover."
+  },
+  "prompt_tokens": 1114,
+  "text": "{\"explanation\": \"The recovery cycle is closed: the most recent debit went through and the mandate has collected successfully. The sequence shows the account was not funded at the time of the first request, and the later attempt under the same cycle cleared. Stage 0 found no obstruction \u2014 the cycle still had attempts available, the notice ran the full required day before the debit, the target sat outside NPCI's peak window, no notification was outstanding, and the re-presentation conditions were satisfied. The diagnoser recorded an unknown root cause and, running as a fallback, chose to stop further action, which is consistent with a completed collection leaving nothing to recover.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|39705cf70e3dd39f#d2": {
+  "cached_tokens": 1088,
+  "completion_tokens": 205,
+  "parsed": null,
+  "prompt_tokens": 1114,
+  "text": "The first attempt this cycle failed for insufficient funds, so a fresh notice was issued and the debit was re-presented a full day later, outside the peak window; this second attempt collected the money. Stage 0 passed every rule, since the cycle's attempt allowance was not spent, the notice lead time was met, and the re-presentation was properly notified. With the amount now recovered, the diagnoser could not name a specific root cause and its fallback logic chose STOP, which is the expected outcome \u2014 there is nothing left to recover this cycle and the mandate remains healthy."
+ },
+ "glm-5.3-flash|glm-explain-v1|7360bbbafe65bdc9": {
+  "cached_tokens": 832,
+  "completion_tokens": 198,
+  "parsed": null,
+  "prompt_tokens": 1115,
+  "text": "The mandate hit a terminal outcome on its second attempt: after an initial insufficient-funds decline, the debit was refused because the account itself is inactive or blocked, a code that cannot be recovered by retrying. The scheduler had timed the target debit a full day after the customer's notice and outside the peak window, and the diagnoser classified the root cause as the account being unavailable rather than unfunded. On that basis it chose STOP, and the fallback path confirmed that decision. Stage 0 found no rule against proceeding \u2014 the cap, peak, lead, pending and represent checks all passed \u2014 so the halt came from the terminal response code, not from any scheduling restriction, and the mandate will need the merchant to re-authorise if it is to continue."
+ },
+ "glm-5.3-flash|glm-explain-v1|7360bbbafe65bdc9#d1": {
+  "cached_tokens": 1088,
+  "completion_tokens": 139,
+  "parsed": {
+   "explanation": "The first attempt this cycle failed with insufficient funds, and the follow-up came back with a terminal account-status decline, meaning the account itself is inactive or blocked and no further debit attempts can succeed. The diagnoser classified the root cause as the account being unavailable and, via its fallback path, chose to stop rather than spend the remaining attempts on a mandate that cannot collect. The scheduled retry was fully compliant \u2014 the notice preceded the debit by a full day, outside the peak window, with all stage zero checks passing \u2014 so the stop is not a timing or compliance problem but a terminal response code driving the decision."
+  },
+  "prompt_tokens": 1115,
+  "text": "{\"explanation\": \"The first attempt this cycle failed with insufficient funds, and the follow-up came back with a terminal account-status decline, meaning the account itself is inactive or blocked and no further debit attempts can succeed. The diagnoser classified the root cause as the account being unavailable and, via its fallback path, chose to stop rather than spend the remaining attempts on a mandate that cannot collect. The scheduled retry was fully compliant \u2014 the notice preceded the debit by a full day, outside the peak window, with all stage zero checks passing \u2014 so the stop is not a timing or compliance problem but a terminal response code driving the decision.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|7360bbbafe65bdc9#d2": {
+  "cached_tokens": 1088,
+  "completion_tokens": 220,
+  "parsed": null,
+  "prompt_tokens": 1115,
+  "text": "The customer was notified a full day before the targeted debit, which sits outside the peak window, so the scheduling passed every Stage 0 gate including the cap, with two attempts still available this cycle. The first attempt failed for lack of funds in the account at the time, and the most recent attempt returned a terminal response code, ZX, meaning the account itself is inactive, blocked or frozen and no further debit on this mandate can succeed as things stand. The diagnoser therefore classified the root cause as the account being unavailable and, via its fallback path, chose to stop recovery rather than spend another attempt that a terminal code makes pointless. No timing rule blocked anything here; the halt rests entirely on the terminal nature of that last response."
+ },
+ "glm-5.3-flash|glm-explain-v1|87c143a4075a66d0": {
+  "cached_tokens": 0,
+  "completion_tokens": 179,
+  "parsed": null,
+  "prompt_tokens": 1101,
+  "text": "The mandate never completed authorisation, so there is no provider token to debit against and no attempt has been made. The diagnosis layer ran as a fallback without naming a root cause or selecting an intervention, and Stage 0 never adjudicated the case, meaning none of its rules were applied. This state cannot be resolved by retry scheduling; the mandate is sitting in a pre-authorised pending state awaiting authorisation before any recovery action is meaningful."
+ },
+ "glm-5.3-flash|glm-explain-v1|87c143a4075a66d0#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 156,
+  "parsed": {
+   "explanation": "Nothing has happened on this mandate yet: the customer was notified but the mandate was never authorised, so there is no provider token and no debit can be executed at all. The scheduler's chosen target sits well outside NPCI's peak window, but the timing is irrelevant while the mandate itself remains pending. The diagnoser produced no root cause or intervention, its decision came from a fallback path, and Stage 0 never adjudicated the request, so no rule verdicts were recorded and no attempt was charged against the cycle. As things stand the merchant needs the mandate re-authorised before any recovery attempt can proceed."
+  },
+  "prompt_tokens": 1101,
+  "text": "{\"explanation\":\"Nothing has happened on this mandate yet: the customer was notified but the mandate was never authorised, so there is no provider token and no debit can be executed at all. The scheduler's chosen target sits well outside NPCI's peak window, but the timing is irrelevant while the mandate itself remains pending. The diagnoser produced no root cause or intervention, its decision came from a fallback path, and Stage 0 never adjudicated the request, so no rule verdicts were recorded and no attempt was charged against the cycle. As things stand the merchant needs the mandate re-authorised before any recovery attempt can proceed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|87c143a4075a66d0#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 139,
+  "parsed": null,
+  "prompt_tokens": 1101,
+  "text": "The mandate never went live: it has no provider token because the customer never completed authorisation, so there is nothing for the recovery agent to act on. The diagnoser was invoked only through its fallback path and named no root cause and no intervention, and Stage 0 did not adjudicate the case at all \u2014 neither layer made a substantive decision here. No debit has been attempted in this cycle and no response codes have been returned. The recorded blocking reason points to the merchant needing to obtain a fresh authorisation before recovery can proceed."
+ },
+ "glm-5.3-flash|glm-explain-v1|9c93d5970204a668": {
+  "cached_tokens": 0,
+  "completion_tokens": 169,
+  "parsed": {
+   "explanation": "The first debit attempt this cycle failed with an insufficient-funds response, so the mandate is now waiting on a fresh customer notification before anything further can happen. The scheduler has already picked a new target that sits a full day after the customer's notice and falls outside the peak window, with medium timing confidence. No root cause or intervention has been recorded because the diagnoser fell back without deciding, and Stage 0 has not yet adjudicated the five rules, so nothing is currently blocked and Razorpay has not been asked to act. Plenty of the billing cycle remains and only one of the permitted attempts has been spent, so the mandate is intact."
+  },
+  "prompt_tokens": 1094,
+  "text": "{\"explanation\": \"The first debit attempt this cycle failed with an insufficient-funds response, so the mandate is now waiting on a fresh customer notification before anything further can happen. The scheduler has already picked a new target that sits a full day after the customer's notice and falls outside the peak window, with medium timing confidence. No root cause or intervention has been recorded because the diagnoser fell back without deciding, and Stage 0 has not yet adjudicated the five rules, so nothing is currently blocked and Razorpay has not been asked to act. Plenty of the billing cycle remains and only one of the permitted attempts has been spent, so the mandate is intact.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|9c93d5970204a668#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 163,
+  "parsed": {
+   "explanation": "The mandate is still in its first cycle with one attempt used, which was an insufficient-funds decline, and the customer has not yet been successfully notified for the next debit. The scheduler has picked a debit slot just past the notification floor, outside the peak window, with medium confidence in the timing model. The diagnoser returned no root cause or intervention, so this case is sitting with the fallback layer, and Stage 0 has not adjudicated anything yet, meaning the five permission rules have not been recorded as either clearing or refusing the planned attempt. Until notification succeeds and the adjudication completes, nothing further will execute against the mandate."
+  },
+  "prompt_tokens": 1094,
+  "text": "{\"explanation\": \"The mandate is still in its first cycle with one attempt used, which was an insufficient-funds decline, and the customer has not yet been successfully notified for the next debit. The scheduler has picked a debit slot just past the notification floor, outside the peak window, with medium confidence in the timing model. The diagnoser returned no root cause or intervention, so this case is sitting with the fallback layer, and Stage 0 has not adjudicated anything yet, meaning the five permission rules have not been recorded as either clearing or refusing the planned attempt. Until notification succeeds and the adjudication completes, nothing further will execute against the mandate.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|9c93d5970204a668#d2": {
+  "cached_tokens": 832,
+  "completion_tokens": 175,
+  "parsed": {
+   "explanation": "The mandate is still active early in its cycle, and the only debit attempt so far failed with an insufficient-funds decline, leaving retries available. The scheduler has served the customer a fresh notice and set the debit a full day later, outside NPCI's peak window, with medium confidence in the timing. The diagnoser fell back and did not name a root cause or intervention, and Stage 0 has not adjudicated the request, so nothing has been allowed or refused yet. The mandate currently sits in a notification-failed state awaiting that adjudication before Razorpay can execute."
+  },
+  "prompt_tokens": 1094,
+  "text": "{\"explanation\":\"The mandate is still active early in its cycle, and the only debit attempt so far failed with an insufficient-funds decline, leaving retries available. The scheduler has served the customer a fresh notice and set the debit a full day later, outside NPCI's peak window, with medium confidence in the timing. The diagnoser fell back and did not name a root cause or intervention, and Stage 0 has not adjudicated the request, so nothing has been allowed or refused yet. The mandate currently sits in a notification-failed state awaiting that adjudication before Razorpay can execute.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|afd24175eafd2559": {
+  "cached_tokens": 0,
+  "completion_tokens": 138,
+  "parsed": {
+   "explanation": "The mandate has been collected: after an initial decline for insufficient funds, the next debit attempt went through, so this cycle is settled well before it closes and only one of the available attempts has been spent. The timing model placed the debit a full day after the customer's notice, outside NPCI's peak window, and all Stage 0 checks passed, though the model's confidence about this customer was narrow. The diagnoser's fallback had flagged the cause as unknown and called for a stop, but that became moot once the collection succeeded; nothing is blocked and no further action is pending."
+  },
+  "prompt_tokens": 1112,
+  "text": "{\"explanation\": \"The mandate has been collected: after an initial decline for insufficient funds, the next debit attempt went through, so this cycle is settled well before it closes and only one of the available attempts has been spent. The timing model placed the debit a full day after the customer's notice, outside NPCI's peak window, and all Stage 0 checks passed, though the model's confidence about this customer was narrow. The diagnoser's fallback had flagged the cause as unknown and called for a stop, but that became moot once the collection succeeded; nothing is blocked and no further action is pending.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|afd24175eafd2559#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 159,
+  "parsed": {
+   "explanation": "The first attempt of this cycle was declined for insufficient funds, and the recovery agent then re-presented the debit and collected it, so the mandate is fully paid and nothing is blocked. The Scheduler had placed the debit a full day after the customer's notice, outside NPCI's peak window, and all Stage 0 rules passed, allowing the execution. The Diagnoser could not name a specific root cause \u2014 its fallback settled on unknown and chose to stop further intervention, which is consistent with the collection having already succeeded. No retries are needed this cycle, so the mandate proceeds intact."
+  },
+  "prompt_tokens": 1112,
+  "text": "{\"explanation\": \"The first attempt of this cycle was declined for insufficient funds, and the recovery agent then re-presented the debit and collected it, so the mandate is fully paid and nothing is blocked. The Scheduler had placed the debit a full day after the customer's notice, outside NPCI's peak window, and all Stage 0 rules passed, allowing the execution. The Diagnoser could not name a specific root cause \u2014 its fallback settled on unknown and chose to stop further intervention, which is consistent with the collection having already succeeded. No retries are needed this cycle, so the mandate proceeds intact.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|afd24175eafd2559#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 155,
+  "parsed": null,
+  "prompt_tokens": 1112,
+  "text": "The mandate has been collected: the first attempt was declined for insufficient funds, and the re-presentation went through, so this billing cycle is settled and the mandate remains active. The scheduler placed the debit a full day after the customer's notice, outside the peak window, and every Stage 0 rule passed, so the attempt was permitted and Razorpay completed it. The diagnoser recorded no specific root cause and, running on its fallback, chose STOP, which simply closes recovery since nothing further is owed on this cycle. No customer or bank details are implicated beyond what the response codes show."
+ },
+ "glm-5.3-flash|glm-explain-v1|b31e8bdba7d3e296": {
+  "cached_tokens": 832,
+  "completion_tokens": 210,
+  "parsed": null,
+  "prompt_tokens": 1116,
+  "text": "The scheduler placed this debit a full day after the customer's notice, outside the peak window, and Stage 0 passed it on all five rules. The earlier attempt was declined for insufficient funds, but the outcome came back as a deemed transaction rather than a clean confirmation, so the true state of that debit is genuinely ambiguous. With the result unknown, the diagnoser's fallback logic chose STOP rather than risking a duplicate collection or burning another attempt, and the mandate now sits idle with attempts still available."
+ },
+ "glm-5.3-flash|glm-explain-v1|b31e8bdba7d3e296#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 167,
+  "parsed": {
+   "explanation": "The cycle is mid-way with two attempts spent, both ending without collection \u2014 the earliest was an insufficient-funds decline, and the most recent returned a deemed-transaction outcome, meaning the request was never conclusively resolved. Because the outcome is unknown, the diagnoser's fallback classified it as OUTCOME_UNKNOWN and chose STOP rather than risk re-presenting or exhausting the remaining attempts against an unresolved request. Stage 0 cleared every rule \u2014 the cap is not reached, the target hour avoids the peak window, the customer received a full day's notice, no notification is outstanding, and any re-presentation would be permitted \u2014 so the stop is a judgement call on ambiguity, not a compliance refusal. The mandate remains active, and the remaining attempts are still available if recovery resumes later in this cycle."
+  },
+  "prompt_tokens": 1116,
+  "text": "{\"explanation\": \"The cycle is mid-way with two attempts spent, both ending without collection \u2014 the earliest was an insufficient-funds decline, and the most recent returned a deemed-transaction outcome, meaning the request was never conclusively resolved. Because the outcome is unknown, the diagnoser's fallback classified it as OUTCOME_UNKNOWN and chose STOP rather than risk re-presenting or exhausting the remaining attempts against an unresolved request. Stage 0 cleared every rule \u2014 the cap is not reached, the target hour avoids the peak window, the customer received a full day's notice, no notification is outstanding, and any re-presentation would be permitted \u2014 so the stop is a judgement call on ambiguity, not a compliance refusal. The mandate remains active, and the remaining attempts are still available if recovery resumes later in this cycle.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|b31e8bdba7d3e296#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 165,
+  "parsed": {
+   "explanation": "The latest debit was sent and the network returned a deemed-transaction outcome, meaning we do not know whether the money was collected or not, so the diagnoser named an unknown outcome and, having no clear signal to act on, the fallback chose STOP rather than risk a duplicate debit on top of a possibly successful one. The attempt state stays unknown until the outcome resolves. Stage 0 cleared the request on all five rules: the cycle still has attempts left, the debit sits a full day after the customer's notice, outside the peak window, with no notification conflicts, so it was an execution-timing question only, not a permission one."
+  },
+  "prompt_tokens": 1116,
+  "text": "{\"explanation\": \"The latest debit was sent and the network returned a deemed-transaction outcome, meaning we do not know whether the money was collected or not, so the diagnoser named an unknown outcome and, having no clear signal to act on, the fallback chose STOP rather than risk a duplicate debit on top of a possibly successful one. The attempt state stays unknown until the outcome resolves. Stage 0 cleared the request on all five rules: the cycle still has attempts left, the debit sits a full day after the customer's notice, outside the peak window, with no notification conflicts, so it was an execution-timing question only, not a permission one.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|b56caa48f47af563": {
+  "cached_tokens": 0,
+  "completion_tokens": 143,
+  "parsed": null,
+  "prompt_tokens": 1151,
+  "text": "The account was not funded at the time of the request, so the diagnosis recorded insufficient funds and the fallback path chose a retry as the intervention. Stage 0 refused the retry on two grounds: the target hour falls inside an NPCI peak window, and the customer's outstanding notification points to a later slot than the one this debit would use, so the pending rule also failed. The notice gap is long enough, the cap is not exhausted, and a fresh notification exists, so those checks passed; the debit simply has not gone out to the bank."
+ },
+ "glm-5.3-flash|glm-explain-v1|b56caa48f47af563#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 161,
+  "parsed": null,
+  "prompt_tokens": 1151,
+  "text": "The scheduler picked a debit slot that unfortunately falls inside NPCI's peak window, and the pending check also refused because the customer's outstanding notification points at a different target than the action the system tried to take. The diagnosis itself was a fallback call naming insufficient funds \u2014 the earlier attempt failed with Z9, meaning the account was not funded at the time of that request \u2014 and it chose a simple retry, which Stage 0 then blocked. The cycle is still early, attempts remain available, and nothing terminal has occurred; the mandate is simply waiting for a compliant slot and a matching notice before the retry can go out."
+ },
+ "glm-5.3-flash|glm-explain-v1|b56caa48f47af563#d2": {
+  "cached_tokens": 832,
+  "completion_tokens": 159,
+  "parsed": {
+   "explanation": "The first debit attempt this cycle came back as insufficient funds, and the diagnoser named that as the root cause and chose a retry, using its fallback path since the confidence in the timing model is only medium. Stage 0 refused the retry on two grounds: the targeted hour falls inside an NPCI peak window, and the notification currently outstanding points at a later target than the one this action would debit, so the pending rule also fails. The cap, lead-time and re-presentation rules all passed, and nothing has been executed; the mandate remains active with most of its attempt allowance intact."
+  },
+  "prompt_tokens": 1151,
+  "text": "{\"explanation\": \"The first debit attempt this cycle came back as insufficient funds, and the diagnoser named that as the root cause and chose a retry, using its fallback path since the confidence in the timing model is only medium. Stage 0 refused the retry on two grounds: the targeted hour falls inside an NPCI peak window, and the notification currently outstanding points at a later target than the one this action would debit, so the pending rule also fails. The cap, lead-time and re-presentation rules all passed, and nothing has been executed; the mandate remains active with most of its attempt allowance intact.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e34217cc0b3617e0": {
+  "cached_tokens": 832,
+  "completion_tokens": 141,
+  "parsed": {
+   "explanation": "All four attempts this cycle are spent \u2014 the earlier presentations came back as insufficient funds, with one technical decline in the middle that was retried and again declined for insufficient funds \u2014 so the cap rule refuses any further debit this cycle. The pending rule also refuses because no notification is currently outstanding for this mandate. The scheduler's proposed slot was otherwise clean: the notice met the full-day lead requirement and sat outside the peak window, and the technical-decline rule allowed re-presentation. With the mandate at risk of being killed and every future cycle forfeited, the diagnoser's fallback chose STOP, so nothing was sent to the processor and the debit did not execute."
+  },
+  "prompt_tokens": 1149,
+  "text": "{\"explanation\": \"All four attempts this cycle are spent \u2014 the earlier presentations came back as insufficient funds, with one technical decline in the middle that was retried and again declined for insufficient funds \u2014 so the cap rule refuses any further debit this cycle. The pending rule also refuses because no notification is currently outstanding for this mandate. The scheduler's proposed slot was otherwise clean: the notice met the full-day lead requirement and sat outside the peak window, and the technical-decline rule allowed re-presentation. With the mandate at risk of being killed and every future cycle forfeited, the diagnoser's fallback chose STOP, so nothing was sent to the processor and the debit did not execute.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e34217cc0b3617e0#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 183,
+  "parsed": null,
+  "prompt_tokens": 1149,
+  "text": "All attempts for this cycle have been spent, so the cap rule refuses any further debit, and with no fresh notification outstanding for this mandate the pending rule refuses as well; the peak, lead and represent checks all passed. The debit was placed a full day after the customer's notice and outside the peak window, per the scheduler's wide-confidence timing estimate. The recovery history shows mostly insufficient-funds declines, ending in one, with a technical decline in between that could have been re-presented but was not. The diagnoser named the mandate as at risk and stopped, by fallback, since nothing further can be attempted this cycle."
+ },
+ "glm-5.3-flash|glm-explain-v1|e34217cc0b3617e0#d2": {
+  "cached_tokens": 1088,
+  "completion_tokens": 123,
+  "parsed": {
+   "explanation": "All four debit attempts for this cycle have been spent, ending on another insufficient-funds decline after an earlier technical one, so the diagnosis is that the mandate is at risk and the fallback chose to stop. Stage 0 independently refused the requested debit on two grounds: the attempt cap for this cycle is exhausted and there is no notification currently outstanding for it. The timing itself was never the problem \u2014 the notice sat a full day ahead of the target, which falls outside the peak window, and the re-presentation rule was satisfied \u2014 so peak, lead and represent all passed."
+  },
+  "prompt_tokens": 1149,
+  "text": "{\"explanation\": \"All four debit attempts for this cycle have been spent, ending on another insufficient-funds decline after an earlier technical one, so the diagnosis is that the mandate is at risk and the fallback chose to stop. Stage 0 independently refused the requested debit on two grounds: the attempt cap for this cycle is exhausted and there is no notification currently outstanding for it. The timing itself was never the problem \u2014 the notice sat a full day ahead of the target, which falls outside the peak window, and the re-presentation rule was satisfied \u2014 so peak, lead and represent all passed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e5e3c15956690cea": {
+  "cached_tokens": 0,
+  "completion_tokens": 187,
+  "parsed": null,
+  "prompt_tokens": 1100,
+  "text": "The mandate is mid-cycle after a single debit attempt that failed with an insufficient-funds decline, so the diagnosis attributed the failure to the account not being funded at that moment and chose a retry as the intervention, decided by the fallback path rather than a specific model. The scheduler has placed the retry outside any NPCI peak window with exactly the required notice, the customer having been told a full day before the targeted debit. Stage 0 has not yet adjudicated the five refusal rules, so nothing has been blocked and Razorpay has not executed; the attempt currently sits as an order awaiting that check. No terminal or mandate-level codes have appeared, so the mandate itself remains healthy."
+ },
+ "glm-5.3-flash|glm-explain-v1|e5e3c15956690cea#d1": {
+  "cached_tokens": 1088,
+  "completion_tokens": 161,
+  "parsed": {
+   "explanation": "The first debit attempt this cycle came back as insufficient funds, so the diagnoser attributed the failure to the account not being funded at the time of the request and chose a retry as the intervention, arriving via its fallback path rather than a primary diagnosis. The scheduler placed the retry outside any peak window, and the customer's notification precedes the debit by a full day, so the notice lead time is satisfied and no rule flags this order as blocked. The mandate is currently sitting in order-created, awaiting execution, with most of the cycle's retry allowance still available."
+  },
+  "prompt_tokens": 1100,
+  "text": "{\"explanation\":\"The first debit attempt this cycle came back as insufficient funds, so the diagnoser attributed the failure to the account not being funded at the time of the request and chose a retry as the intervention, arriving via its fallback path rather than a primary diagnosis. The scheduler placed the retry outside any peak window, and the customer's notification precedes the debit by a full day, so the notice lead time is satisfied and no rule flags this order as blocked. The mandate is currently sitting in order-created, awaiting execution, with most of the cycle's retry allowance still available.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e5e3c15956690cea#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 198,
+  "parsed": {
+   "explanation": "The first debit attempt this cycle came back as a Z9, meaning the account was not funded at the time of the request, and the diagnoser named that as the root cause and chose a retry under its fallback path. The scheduler has placed the retry a full day after the customer's notice, which satisfies the minimum notice period, and the target hour sits outside NPCI's peak windows, so neither the lead nor the peak rule should be a concern. Stage 0 has not yet adjudicated this attempt, so the debit is currently sitting as an order awaiting that clearance, with plenty of the billing cycle and attempt budget still available."
+  },
+  "prompt_tokens": 1100,
+  "text": "{\"explanation\": \"The first debit attempt this cycle came back as a Z9, meaning the account was not funded at the time of the request, and the diagnoser named that as the root cause and chose a retry under its fallback path. The scheduler has placed the retry a full day after the customer's notice, which satisfies the minimum notice period, and the target hour sits outside NPCI's peak windows, so neither the lead nor the peak rule should be a concern. Stage 0 has not yet adjudicated this attempt, so the debit is currently sitting as an order awaiting that clearance, with plenty of the billing cycle and attempt budget still available.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e817275c12985020": {
+  "cached_tokens": 0,
+  "completion_tokens": 169,
+  "parsed": {
+   "explanation": "The scheduler picked a target slot that sits a full day after the customer's notice and falls outside NPCI's peak hours, with medium confidence in the timing model. Stage 0 cleared the debit on all five gates: the cycle still has attempts in hand, the lead time is met, no conflicting notification is outstanding, and this is not an unauthorised re-presentation. The diagnoser did not reach a named root cause or intervention and fell back, so no intervention has been applied yet. The only decline so far this cycle was an insufficient-funds response, and nothing about the mandate is currently blocked."
+  },
+  "prompt_tokens": 1109,
+  "text": "{\"explanation\":\"The scheduler picked a target slot that sits a full day after the customer's notice and falls outside NPCI's peak hours, with medium confidence in the timing model. Stage 0 cleared the debit on all five gates: the cycle still has attempts in hand, the lead time is met, no conflicting notification is outstanding, and this is not an unauthorised re-presentation. The diagnoser did not reach a named root cause or intervention and fell back, so no intervention has been applied yet. The only decline so far this cycle was an insufficient-funds response, and nothing about the mandate is currently blocked.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|e817275c12985020#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 207,
+  "parsed": null,
+  "prompt_tokens": 1109,
+  "text": "The debit is cleared to proceed: all five Stage 0 checks passed, with the customer's notice sitting exactly at the required minimum lead time and outside the peak window, so the scheduler's timing was accepted. Only one prior attempt outcome is on record, an insufficient-funds decline, while the attempt counter shows more attempts used than that, which is worth a glance but does not block anything. The diagnoser returned no root cause and no intervention, so the case is running on the fallback path rather than a named diagnosis. The mandate remains active with attempts still available in this cycle."
+ },
+ "glm-5.3-flash|glm-explain-v1|e817275c12985020#d2": {
+  "cached_tokens": 832,
+  "completion_tokens": 186,
+  "parsed": null,
+  "prompt_tokens": 1109,
+  "text": "The mandate is mid-cycle with two attempts spent, the only response so far being an insufficient-funds decline, and the remaining attempts are still available since the cap rule passed. Stage 0 cleared the attempt on all five rules: the notice ran the full required lead time, the target sat outside NPCI's peak window, no notification is outstanding or mismatched, and re-presentation was permitted. Note that the scheduler's target hour has already passed relative to the current hour, yet nothing is blocked and no fresh decision or diagnosis has been recorded \u2014 the diagnoser's root cause and intervention fields are empty with the decision attributed to fallback, so this state looks like it is waiting on the next decision layer rather than holding a live scheduled debit."
+ },
+ "glm-5.3-flash|glm-explain-v1|ed6db376dc0182e6": {
+  "cached_tokens": 832,
+  "completion_tokens": 234,
+  "parsed": {
+   "explanation": "The mandate enters a fresh cycle with all four attempts still available, and the two recorded declines are both insufficient-funds responses from the prior cycle, so the mandate itself remains healthy. The scheduler has targeted a debit outside any NPCI peak window, but the notice and the targeted debit fall at the same point in time, giving no lead time at all, so the lead rule would refuse and the pending rule would also be implicated because the notice cannot properly cover this target. The diagnoser produced no root cause or intervention, falling back instead, and Stage 0 has not yet adjudicated the request, so nothing has been sent to Razorpay and no attempt has been made."
+  },
+  "prompt_tokens": 1097,
+  "text": "{\"explanation\": \"The mandate enters a fresh cycle with all four attempts still available, and the two recorded declines are both insufficient-funds responses from the prior cycle, so the mandate itself remains healthy. The scheduler has targeted a debit outside any NPCI peak window, but the notice and the targeted debit fall at the same point in time, giving no lead time at all, so the lead rule would refuse and the pending rule would also be implicated because the notice cannot properly cover this target. The diagnoser produced no root cause or intervention, falling back instead, and Stage 0 has not yet adjudicated the request, so nothing has been sent to Razorpay and no attempt has been made.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|ed6db376dc0182e6#d1": {
+  "cached_tokens": 1088,
+  "completion_tokens": 213,
+  "parsed": {
+   "explanation": "This is a fresh billing cycle at its start: the mandate is active, no debit attempt has been made, and all four attempts for the cycle remain available. The two prior response codes were both insufficient-funds declines from earlier cycles, and the diagnosis layer did not produce a root cause or intervention, falling back instead. Stage 0 has not yet adjudicated this case, so nothing is currently blocked; the scheduler has set the target at the very start of the cycle with the notice tied to that same moment, meaning no meaningful notice lead time exists yet and the model's confidence in this customer's timing is only medium. In short, the case is waiting at the opening of the cycle rather than being refused or executed."
+  },
+  "prompt_tokens": 1097,
+  "text": "{\"explanation\":\"This is a fresh billing cycle at its start: the mandate is active, no debit attempt has been made, and all four attempts for the cycle remain available. The two prior response codes were both insufficient-funds declines from earlier cycles, and the diagnosis layer did not produce a root cause or intervention, falling back instead. Stage 0 has not yet adjudicated this case, so nothing is currently blocked; the scheduler has set the target at the very start of the cycle with the notice tied to that same moment, meaning no meaningful notice lead time exists yet and the model's confidence in this customer's timing is only medium. In short, the case is waiting at the opening of the cycle rather than being refused or executed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|ed6db376dc0182e6#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 196,
+  "parsed": null,
+  "prompt_tokens": 1097,
+  "text": "This mandate is entering a fresh billing cycle with no attempts yet made in it; the earlier insufficient-funds declines on record belong to previous cycles. The scheduler has fixed a debit target outside any NPCI peak window, but the customer notification shown carries no lead time before that target, which is exactly the kind of timing gap the Stage 0 lead and pending rules are there to catch. The diagnoser returned nothing and was resolved by fallback, so no root cause or intervention has been named for this cycle, and Stage 0 has not adjudicated the request at all. In short, the case is sitting unresolved at the very start of the cycle with a scheduler slot chosen, a fallback diagnosis, and no permission decision recorded."
+ },
+ "glm-5.3-flash|glm-explain-v1|f7a3ac7de6bb3621": {
+  "cached_tokens": 0,
+  "completion_tokens": 284,
+  "parsed": {
+   "explanation": "The mandate is active and mid-cycle, with a prior debit attempt that failed for insufficient funds (Z9), so the account was not funded at the time of that request. No new attempt has been made and nothing is blocked: the scheduler shows the debit targeted at the same hour the customer was notified, meaning effectively no notice period, though the target does not fall in a peak window and the timing model's confidence for this customer is wide. The diagnoser ran as a fallback and recorded neither a root cause nor an intervention, and Stage 0 has not adjudicated this case at all, so none of its rules were applied. In short, this state is a half-formed case: the system gathered the facts but no layer completed a decision, and the next recovery action is undetermined."
+  },
+  "prompt_tokens": 1094,
+  "text": "{\"explanation\": \"The mandate is active and mid-cycle, with a prior debit attempt that failed for insufficient funds (Z9), so the account was not funded at the time of that request. No new attempt has been made and nothing is blocked: the scheduler shows the debit targeted at the same hour the customer was notified, meaning effectively no notice period, though the target does not fall in a peak window and the timing model's confidence for this customer is wide. The diagnoser ran as a fallback and recorded neither a root cause nor an intervention, and Stage 0 has not adjudicated this case at all, so none of its rules were applied. In short, this state is a half-formed case: the system gathered the facts but no layer completed a decision, and the next recovery action is undetermined.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v1|f7a3ac7de6bb3621#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 216,
+  "parsed": null,
+  "prompt_tokens": 1094,
+  "text": "One debit attempt has been made this cycle and came back as Z9, an insufficient-funds decline, so the mandate remains active with retries still available. The scheduler has fixed a fresh target, but the customer's notice is recorded at the same moment as the debit target, giving no lead time at all, and the diagnosis layer fell back without naming a root cause or picking an intervention. Stage 0 has not adjudicated the case, so no rule has formally refused the attempt and nothing has been executed yet; the case is simply sitting unresolved with the timing and diagnosis both incomplete."
+ },
+ "glm-5.3-flash|glm-explain-v1|f7a3ac7de6bb3621#d2": {
+  "cached_tokens": 832,
+  "completion_tokens": 185,
+  "parsed": null,
+  "prompt_tokens": 1094,
+  "text": "The mandate has one failed attempt this cycle, a decline for insufficient funds, leaving the rest of the quota intact and the mandate still active. The scheduler's timing model, running at wide confidence, has placed the target debit at the same hour the customer was notified, which means no meaningful notice period is in front of it, though the target sits outside the peak window. The diagnoser did not reach a root cause or intervention \u2014 the entry was made by fallback \u2014 and Stage 0 has not adjudicated the case at all, so nothing has been allowed or refused yet and Razorpay has not been asked to execute."
+ },
+ "glm-5.3-flash|glm-explain-v2|39705cf70e3dd39f": {
+  "cached_tokens": 0,
+  "completion_tokens": 120,
+  "parsed": {
+   "explanation": "The latest presentation cleared, so the money is in and this cycle is recovered without needing another attempt. The earlier Z9 was an insufficient-funds decline on a transaction, not a mandate defect, which is why the mandate stays active and the diagnosis layer's fallback stop simply halts further action now that collection has succeeded. Stage 0 allowed the scheduled hour on every rule \u2014 ample notice, off-peak, attempts remaining, and notice in place \u2014 so nothing in the rail or the rules constrained the outcome; the scheduler's timing choice stands as the successful one."
+  },
+  "prompt_tokens": 1314,
+  "text": "{\"explanation\":\"The latest presentation cleared, so the money is in and this cycle is recovered without needing another attempt. The earlier Z9 was an insufficient-funds decline on a transaction, not a mandate defect, which is why the mandate stays active and the diagnosis layer's fallback stop simply halts further action now that collection has succeeded. Stage 0 allowed the scheduled hour on every rule \u2014 ample notice, off-peak, attempts remaining, and notice in place \u2014 so nothing in the rail or the rules constrained the outcome; the scheduler's timing choice stands as the successful one.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|39705cf70e3dd39f#d1": {
+  "cached_tokens": 1024,
+  "completion_tokens": 186,
+  "parsed": {
+   "explanation": "The latest presentation collected OK, which means the earlier Z9 \u2014 an insufficient-funds decline at the time of that request \u2014 was resolved by retrying at an hour when the account was funded, and the scheduler's timing choice cleared every Stage 0 gate, including peak and lead. Because the money is now in, this mandate is healthy with presentations still remaining in the cycle, so the fallback-diagnosed STOP is not supported by the evidence on screen: the diagnostic layer named UNKNOWN and halted, but a successful collection gives no cause to halt. Nothing about the mandate is broken or terminal, and no future recovery action is needed for this cycle unless a later debit declines."
+  },
+  "prompt_tokens": 1314,
+  "text": "{\"explanation\": \"The latest presentation collected OK, which means the earlier Z9 \u2014 an insufficient-funds decline at the time of that request \u2014 was resolved by retrying at an hour when the account was funded, and the scheduler's timing choice cleared every Stage 0 gate, including peak and lead. Because the money is now in, this mandate is healthy with presentations still remaining in the cycle, so the fallback-diagnosed STOP is not supported by the evidence on screen: the diagnostic layer named UNKNOWN and halted, but a successful collection gives no cause to halt. Nothing about the mandate is broken or terminal, and no future recovery action is needed for this cycle unless a later debit declines.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|39705cf70e3dd39f#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 93,
+  "parsed": {
+   "explanation": "The debit succeeded, so the recovery is complete and no money remains outstanding for this attempt. Because the collection went through, the Diagnoser's fallback STOP is simply the correct close-out of a paid cycle rather than a judgment about the customer. The earlier Z9 was an insufficient-funds decline on a prior presentation, and this retry succeeded once the scheduler's medium-confidence hour landed with a clean Stage 0 bill of health."
+  },
+  "prompt_tokens": 1314,
+  "text": "{\"explanation\":\"The debit succeeded, so the recovery is complete and no money remains outstanding for this attempt. Because the collection went through, the Diagnoser's fallback STOP is simply the correct close-out of a paid cycle rather than a judgment about the customer. The earlier Z9 was an insufficient-funds decline on a prior presentation, and this retry succeeded once the scheduler's medium-confidence hour landed with a clean Stage 0 bill of health.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|7360bbbafe65bdc9": {
+  "cached_tokens": 1024,
+  "completion_tokens": 142,
+  "parsed": {
+   "explanation": "The latest decline carries ZX, which means the account is frozen, dormant or closed, so no further attempt under this mandate can succeed and the Diagnoser's STOP is the only intervention consistent with that terminal code. Because the diagnosis came from the fallback path rather than a confident root-cause match, the code itself, not the model, is the reliable ground for halting recovery. Stage 0 cleared every gate, meaning the failure is not a timing or notice problem but a permanent account state, and continuing attempts would only spend the remaining cycle presentations for nothing."
+  },
+  "prompt_tokens": 1315,
+  "text": "{\"explanation\": \"The latest decline carries ZX, which means the account is frozen, dormant or closed, so no further attempt under this mandate can succeed and the Diagnoser's STOP is the only intervention consistent with that terminal code. Because the diagnosis came from the fallback path rather than a confident root-cause match, the code itself, not the model, is the reliable ground for halting recovery. Stage 0 cleared every gate, meaning the failure is not a timing or notice problem but a permanent account state, and continuing attempts would only spend the remaining cycle presentations for nothing.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|7360bbbafe65bdc9#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 125,
+  "parsed": null,
+  "prompt_tokens": 1315,
+  "text": "The latest decline returned ZX, which means the account is frozen, dormant or closed, so no further presentation on this mandate can ever collect regardless of timing or funding at earlier attempts. Because that code is terminal, the diagnoser's STOP halts the cycle rather than spending the remaining presentations on debits that cannot succeed. Stage 0's clean pass on all five rules only confirms the attempt was procedurally permitted; it does not soften the terminal nature of the failure, which leaves recovery with the merchant as the only path forward."
+ },
+ "glm-5.3-flash|glm-explain-v2|7360bbbafe65bdc9#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 141,
+  "parsed": {
+   "explanation": "The debit failed because the account was unavailable to the rail \u2014 the terminal code \u2014 not because of missing funds, so no retry on this mandate can ever succeed. The diagnoser's fallback still landed on STOP, which matches the evidence even though it flagged no specific rule. Stage 0 allowed the attempt on all five gates because timing and notice were clean; the failure sits entirely at the execution and account level, meaning this cycle's remaining attempts are moot and the mandate cannot be recovered without the customer restoring the account."
+  },
+  "prompt_tokens": 1315,
+  "text": "{\"explanation\":\"The debit failed because the account was unavailable to the rail \u2014 the terminal code \u2014 not because of missing funds, so no retry on this mandate can ever succeed. The diagnoser's fallback still landed on STOP, which matches the evidence even though it flagged no specific rule. Stage 0 allowed the attempt on all five gates because timing and notice were clean; the failure sits entirely at the execution and account level, meaning this cycle's remaining attempts are moot and the mandate cannot be recovered without the customer restoring the account.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|87c143a4075a66d0": {
+  "cached_tokens": 0,
+  "completion_tokens": 106,
+  "parsed": {
+   "explanation": "Nothing has been attempted on this mandate because the provider token was never created, which means the customer never completed authorisation and there is nothing for the rail to debit against. Because Stage 0 never adjudicated and the Diagnoser fell through to a fallback with no diagnosis or intervention, the recovery cycle is idle and the billing window is quietly running down. The money cannot move until the merchant obtains a fresh mandate authorisation; no scheduler timing or retry logic can substitute for that missing token."
+  },
+  "prompt_tokens": 1310,
+  "text": "{\"explanation\": \"Nothing has been attempted on this mandate because the provider token was never created, which means the customer never completed authorisation and there is nothing for the rail to debit against. Because Stage 0 never adjudicated and the Diagnoser fell through to a fallback with no diagnosis or intervention, the recovery cycle is idle and the billing window is quietly running down. The money cannot move until the merchant obtains a fresh mandate authorisation; no scheduler timing or retry logic can substitute for that missing token.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|87c143a4075a66d0#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 94,
+  "parsed": {
+   "explanation": "Because the customer never completed authorisation, there is no provider token, which means the mandate cannot be debited at all and nothing has been scheduled or diagnosed this tick. The scheduler has not fixed a target hour and no notice exists, so Stage 0 has nothing to adjudicate; this is an enrolment gap, not a recovery failure. The money can only move once the merchant obtains a fresh authorisation from the customer."
+  },
+  "prompt_tokens": 1310,
+  "text": "{\"explanation\": \"Because the customer never completed authorisation, there is no provider token, which means the mandate cannot be debited at all and nothing has been scheduled or diagnosed this tick. The scheduler has not fixed a target hour and no notice exists, so Stage 0 has nothing to adjudicate; this is an enrolment gap, not a recovery failure. The money can only move once the merchant obtains a fresh authorisation from the customer.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|87c143a4075a66d0#d2": {
+  "cached_tokens": 1024,
+  "completion_tokens": 145,
+  "parsed": {
+   "explanation": "The mandate was never authorised by the customer, so there is no provider token and the rail cannot debit the account at all \u2014 the state is terminal for this recovery agent, because only the merchant can re-authorise and restart collection. Since no token exists, no notice was issued, no debit was scheduled, and Stage 0 had nothing to adjudicate; the Diagnoser likewise had no transactional evidence to work from and fell back to a default. The money is not lost, but no retry, nudge, or timing choice by any layer here can succeed until a fresh mandate authorisation exists."
+  },
+  "prompt_tokens": 1310,
+  "text": "{\"explanation\": \"The mandate was never authorised by the customer, so there is no provider token and the rail cannot debit the account at all \u2014 the state is terminal for this recovery agent, because only the merchant can re-authorise and restart collection. Since no token exists, no notice was issued, no debit was scheduled, and Stage 0 had nothing to adjudicate; the Diagnoser likewise had no transactional evidence to work from and fell back to a default. The money is not lost, but no retry, nudge, or timing choice by any layer here can succeed until a fresh mandate authorisation exists.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|9c93d5970204a668": {
+  "cached_tokens": 0,
+  "completion_tokens": 145,
+  "parsed": {
+   "explanation": "The pre-debit notification itself failed, so no notice is outstanding and Stage 0 was never asked to adjudicate \u2014 the pending rule would refuse a debit without a live notice, which means the money has not moved and nothing has been attempted against the rail. The prior debit was declined Z9 (the account was not funded at the time of the request), which is a normal retryable failure, not a terminal one. Because the diagnoser returned no root cause and no intervention this tick, the recovery flow is idle pending a successful notice before the next target hour."
+  },
+  "prompt_tokens": 1301,
+  "text": "{\"explanation\": \"The pre-debit notification itself failed, so no notice is outstanding and Stage 0 was never asked to adjudicate \u2014 the pending rule would refuse a debit without a live notice, which means the money has not moved and nothing has been attempted against the rail. The prior debit was declined Z9 (the account was not funded at the time of the request), which is a normal retryable failure, not a terminal one. Because the diagnoser returned no root cause and no intervention this tick, the recovery flow is idle pending a successful notice before the next target hour.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|9c93d5970204a668#d1": {
+  "cached_tokens": 1024,
+  "completion_tokens": 153,
+  "parsed": null,
+  "prompt_tokens": 1301,
+  "text": "The cycle halted before any new debit could be attempted because the customer notice failed to send, which means the pre-debit notice requirement is unmet and nothing downstream could proceed. Because the notice never landed, Stage 0 was never asked to adjudicate and the diagnoser had nothing to diagnose, so a fallback path is holding the mandate in place. The lone earlier Z9 shows the account was not funded at the time of that request, but that tells us only about that transaction, not about the money now."
+ },
+ "glm-5.3-flash|glm-explain-v2|9c93d5970204a668#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 156,
+  "parsed": null,
+  "prompt_tokens": 1301,
+  "text": "The notification step itself failed, so no debit was attempted and Stage 0 never adjudicated anything \u2014 the cycle remains on a single Z9, an insufficient-funds decline that describes the account not being funded at that moment and leaves room to try again this cycle. Because the notice for the upcoming debit was issued and the lead-time and peak conditions are satisfied on the face of the state, the outstanding notice matches the target hour, so a fresh notice is not required for the next presentation. The fallback took over only because the diagnoser had no diagnosis to make on a notification failure, which means the money's path forward is intact but nothing was collected this tick."
+ },
+ "glm-5.3-flash|glm-explain-v2|afd24175eafd2559": {
+  "cached_tokens": 0,
+  "completion_tokens": 137,
+  "parsed": {
+   "explanation": "The mandate is now paid, because the earlier insufficient-funds decline was followed by a successful collection at the hour the scheduler selected, so the recovery goal is met and the cycle is secure. The scheduler's narrow confidence suggests the model had only weak evidence about when this customer's account would be funded, yet the chosen hour landed outside the peak windows with a full notice lead and Stage 0 cleared every rule. The diagnoser's stop is the sensible endpoint here, since there is nothing left to recover this cycle."
+  },
+  "prompt_tokens": 1312,
+  "text": "{\"explanation\":\"The mandate is now paid, because the earlier insufficient-funds decline was followed by a successful collection at the hour the scheduler selected, so the recovery goal is met and the cycle is secure. The scheduler's narrow confidence suggests the model had only weak evidence about when this customer's account would be funded, yet the chosen hour landed outside the peak windows with a full notice lead and Stage 0 cleared every rule. The diagnoser's stop is the sensible endpoint here, since there is nothing left to recover this cycle.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|afd24175eafd2559#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 140,
+  "parsed": {
+   "explanation": "The early Z9 was a plain insufficient-funds decline, so the scheduler placed the re-presentation at an hour its narrow-confidence model expects funding, and the full-day notice, off-peak slot, and single outstanding notice let every Stage 0 rule pass, which means the debit was allowed to proceed. It collected, so the cycle's money is in hand well before the cap could bite, and no re-presentation without fresh notice was needed because the new debit carried its own notice. The diagnoser's fallback STOP is moot for this cycle since OK closed it; because UNKNOWN names nothing specific, it would only matter if a later attempt were required."
+  },
+  "prompt_tokens": 1312,
+  "text": "{\"explanation\": \"The early Z9 was a plain insufficient-funds decline, so the scheduler placed the re-presentation at an hour its narrow-confidence model expects funding, and the full-day notice, off-peak slot, and single outstanding notice let every Stage 0 rule pass, which means the debit was allowed to proceed. It collected, so the cycle's money is in hand well before the cap could bite, and no re-presentation without fresh notice was needed because the new debit carried its own notice. The diagnoser's fallback STOP is moot for this cycle since OK closed it; because UNKNOWN names nothing specific, it would only matter if a later attempt were required.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|afd24175eafd2559#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 134,
+  "parsed": {
+   "explanation": "The collection succeeded because the notice lead time was met, the hour sat outside NPCI's peak windows, and the cycle still had presentations to spare, so Stage 0 allowed the debit and the rail returned OK \u2014 meaning the earlier Z9 insufficient-funds decline was recovered by a properly noticed re-presentation. No remaining failure needs the Diagnoser's attention, which is why its fallback STOP simply closes the cycle's recovery work rather than flagging a cause. The narrow confidence in the timing model suggests the chosen hour was a tighter estimate than usual, but since the money landed, that uncertainty had no consequence for the funds."
+  },
+  "prompt_tokens": 1312,
+  "text": "{\"explanation\": \"The collection succeeded because the notice lead time was met, the hour sat outside NPCI's peak windows, and the cycle still had presentations to spare, so Stage 0 allowed the debit and the rail returned OK \u2014 meaning the earlier Z9 insufficient-funds decline was recovered by a properly noticed re-presentation. No remaining failure needs the Diagnoser's attention, which is why its fallback STOP simply closes the cycle's recovery work rather than flagging a cause. The narrow confidence in the timing model suggests the chosen hour was a tighter estimate than usual, but since the money landed, that uncertainty had no consequence for the funds.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b31e8bdba7d3e296": {
+  "cached_tokens": 0,
+  "completion_tokens": 118,
+  "parsed": {
+   "explanation": "The first presentation failed with Z9 because the account was not funded at the time of the request; the second returned deemed_transaction, which means the outcome is genuinely unknown, so the diagnoser's fallback called OUTCOME_UNKNOWN and halted rather than risk a double charge. Stage 0 cleared every gate, so a retry is procedurally allowed, but since the rail never confirmed whether money moved, proceeding could collect twice on one cycle. The mandate stays active with presentations still available; the money's true state is simply unverified until the rail reconciles."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\": \"The first presentation failed with Z9 because the account was not funded at the time of the request; the second returned deemed_transaction, which means the outcome is genuinely unknown, so the diagnoser's fallback called OUTCOME_UNKNOWN and halted rather than risk a double charge. Stage 0 cleared every gate, so a retry is procedurally allowed, but since the rail never confirmed whether money moved, proceeding could collect twice on one cycle. The mandate stays active with presentations still available; the money's true state is simply unverified until the rail reconciles.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b31e8bdba7d3e296#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 127,
+  "parsed": {
+   "explanation": "The first debit failed on Z9 because the account was not funded at that moment, and the follow-up returned deemed_transaction, which means Razorpay never gave a definite answer, so the money may or may not have actually moved. Because the outcome is genuinely unknown rather than a clean decline, the diagnoser's fallback called it OUTCOME_UNKNOWN and chose STOP, since a retry under that ambiguity risks charging the customer twice. Stage 0 allowed the attempt on every rule, so the halt comes purely from the unknown-result safeguard, not from any cap, notice, timing or re-presentation barrier."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\": \"The first debit failed on Z9 because the account was not funded at that moment, and the follow-up returned deemed_transaction, which means Razorpay never gave a definite answer, so the money may or may not have actually moved. Because the outcome is genuinely unknown rather than a clean decline, the diagnoser's fallback called it OUTCOME_UNKNOWN and chose STOP, since a retry under that ambiguity risks charging the customer twice. Stage 0 allowed the attempt on every rule, so the halt comes purely from the unknown-result safeguard, not from any cap, notice, timing or re-presentation barrier.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b31e8bdba7d3e296#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 118,
+  "parsed": {
+   "explanation": "The first presentation failed on Z9, meaning the account was not funded at that moment, but the follow-up returned deemed_transaction, which makes the true outcome genuinely unknown rather than a clean decline. Because a re-run could charge the customer twice if the earlier debit actually settled, the diagnoser's fallback called the outcome unknown and chose STOP instead of risking a duplicate. Stage 0 passed all five checks and the scheduler's timing was compliant, so the halt is purely about ambiguity in the money's state, not about timing, notice, or attempt limits."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\":\"The first presentation failed on Z9, meaning the account was not funded at that moment, but the follow-up returned deemed_transaction, which makes the true outcome genuinely unknown rather than a clean decline. Because a re-run could charge the customer twice if the earlier debit actually settled, the diagnoser's fallback called the outcome unknown and chose STOP instead of risking a duplicate. Stage 0 passed all five checks and the scheduler's timing was compliant, so the halt is purely about ambiguity in the money's state, not about timing, notice, or attempt limits.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b56caa48f47af563": {
+  "cached_tokens": 0,
+  "completion_tokens": 161,
+  "parsed": {
+   "explanation": "The only real failure so far is Z9 \u2014 the account was not funded at the time of the request \u2014 and because that is an ordinary decline rather than a rail glitch, the fallback diagnoser picked a fresh RETRY with a new notice rather than a re-presentation under the old one. Stage 0 blocked the attempt on two independent grounds: the target hour sits inside an NPCI peak window, and the notice already outstanding points at a later hour than the debit does, so charging now would be answering a notice that doesn't match. The cycle still has presentations in hand, so the recovery is intact; the hour and the notice simply have to line up before the next debit is allowed."
+  },
+  "prompt_tokens": 1351,
+  "text": "{\"explanation\":\"The only real failure so far is Z9 \u2014 the account was not funded at the time of the request \u2014 and because that is an ordinary decline rather than a rail glitch, the fallback diagnoser picked a fresh RETRY with a new notice rather than a re-presentation under the old one. Stage 0 blocked the attempt on two independent grounds: the target hour sits inside an NPCI peak window, and the notice already outstanding points at a later hour than the debit does, so charging now would be answering a notice that doesn't match. The cycle still has presentations in hand, so the recovery is intact; the hour and the notice simply have to line up before the next debit is allowed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b56caa48f47af563#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 111,
+  "parsed": {
+   "explanation": "The first presentation failed on Z9, so the account was not funded at the time of the request, which is why the diagnoser picked a retry. Stage 0 refused on two independent grounds: the scheduler's target hour falls inside an NPCI peak window, and the outstanding notice is aimed at a different hour than this attempt, meaning a fresh notice must land before any debit can go through. The cap is not a constraint here, so the money can still be recovered once the scheduling and notice layers align."
+  },
+  "prompt_tokens": 1351,
+  "text": "{\"explanation\": \"The first presentation failed on Z9, so the account was not funded at the time of the request, which is why the diagnoser picked a retry. Stage 0 refused on two independent grounds: the scheduler's target hour falls inside an NPCI peak window, and the outstanding notice is aimed at a different hour than this attempt, meaning a fresh notice must land before any debit can go through. The cap is not a constraint here, so the money can still be recovered once the scheduling and notice layers align.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|b56caa48f47af563#d2": {
+  "cached_tokens": 1024,
+  "completion_tokens": 134,
+  "parsed": {
+   "explanation": "The first debit failed with Z9, meaning the account was not funded at the time of the request, so the diagnoser's fallback set a RETRY since insufficient funds is the commonest and most recoverable decline. Stage 0 refused the retry for two independent reasons: the targeted hour falls inside an NPCI peak window, and the outstanding customer notice points at a later hour than the one being targeted, so the notice does not cover this debit. Because a fresh notice matching the new target hour is required before any retry can proceed, no money moves yet, but the cycle still has presentations left and nothing here is terminal."
+  },
+  "prompt_tokens": 1351,
+  "text": "{\"explanation\": \"The first debit failed with Z9, meaning the account was not funded at the time of the request, so the diagnoser's fallback set a RETRY since insufficient funds is the commonest and most recoverable decline. Stage 0 refused the retry for two independent reasons: the targeted hour falls inside an NPCI peak window, and the outstanding customer notice points at a later hour than the one being targeted, so the notice does not cover this debit. Because a fresh notice matching the new target hour is required before any retry can proceed, no money moves yet, but the cycle still has presentations left and nothing here is terminal.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e34217cc0b3617e0": {
+  "cached_tokens": 0,
+  "completion_tokens": 141,
+  "parsed": {
+   "explanation": "The cap rule is the binding refusal here: every presentation allowed in this billing cycle has been spent, so Stage 0 cannot authorise another debit within this cycle regardless of the scheduler's timing or the notice already given. The pending refusal follows because the previous notice corresponds to an attempt that has already run, meaning nothing is outstanding; only a technical decline (the TECH code) could be re-presented under an existing notice, and the most recent attempt was a Z9 insufficient-funds failure, which cannot. Because the diagnoser's STOP came via fallback, this mandate will lapse at cycle end and all future cycles are forfeited unless the merchant collects through another channel."
+  },
+  "prompt_tokens": 1349,
+  "text": "{\"explanation\":\"The cap rule is the binding refusal here: every presentation allowed in this billing cycle has been spent, so Stage 0 cannot authorise another debit within this cycle regardless of the scheduler's timing or the notice already given. The pending refusal follows because the previous notice corresponds to an attempt that has already run, meaning nothing is outstanding; only a technical decline (the TECH code) could be re-presented under an existing notice, and the most recent attempt was a Z9 insufficient-funds failure, which cannot. Because the diagnoser's STOP came via fallback, this mandate will lapse at cycle end and all future cycles are forfeited unless the merchant collects through another channel.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e34217cc0b3617e0#d1": {
+  "cached_tokens": 1024,
+  "completion_tokens": 135,
+  "parsed": {
+   "explanation": "The cap rule is doing the refusing here: every presentation in this cycle is spent, so even though the hour clears the peak window and the notice lead is long enough, no further debit is permitted. The pending refusal is a bookkeeping consequence \u2014 because the cycle is exhausted, the earlier notice no longer applies to any live attempt \u2014 and does not mean a notice was forgotten. The diagnosis of repeated Z9 insufficient-funds declines means the mandate dies with the remaining cycles forfeited unless the merchant intervenes, since a technical decline was the only one that could have been re-presented and even that path is now closed by the cap."
+  },
+  "prompt_tokens": 1349,
+  "text": "{\"explanation\": \"The cap rule is doing the refusing here: every presentation in this cycle is spent, so even though the hour clears the peak window and the notice lead is long enough, no further debit is permitted. The pending refusal is a bookkeeping consequence \u2014 because the cycle is exhausted, the earlier notice no longer applies to any live attempt \u2014 and does not mean a notice was forgotten. The diagnosis of repeated Z9 insufficient-funds declines means the mandate dies with the remaining cycles forfeited unless the merchant intervenes, since a technical decline was the only one that could have been re-presented and even that path is now closed by the cap.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e34217cc0b3617e0#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 112,
+  "parsed": {
+   "explanation": "The cap refusal is the binding one: the cycle's four attempts are spent, and the last three declines were Z9 plus a TECH, so the account was not funded on nearly every presentation and the mandate dies with all future cycles forfeited. Stage 0 also refused on pending grounds because no fresh notice is outstanding for the target hour, meaning even a re-presentation could not lawfully proceed. The Diagnoser's fallback STOP correctly reflects that no intervention can recover this cycle, since exhaustion is terminal regardless of timing."
+  },
+  "prompt_tokens": 1349,
+  "text": "{\"explanation\":\"The cap refusal is the binding one: the cycle's four attempts are spent, and the last three declines were Z9 plus a TECH, so the account was not funded on nearly every presentation and the mandate dies with all future cycles forfeited. Stage 0 also refused on pending grounds because no fresh notice is outstanding for the target hour, meaning even a re-presentation could not lawfully proceed. The Diagnoser's fallback STOP correctly reflects that no intervention can recover this cycle, since exhaustion is terminal regardless of timing.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e5e3c15956690cea": {
+  "cached_tokens": 0,
+  "completion_tokens": 186,
+  "parsed": {
+   "explanation": "The first presentation failed with Z9, meaning the account was not funded at the time of the request, so the diagnoser's fallback logic routed this to a RETRY rather than a customer nudge or terminal stop. Because the fresh notice was issued a full day ahead of the new target and the target hour falls outside the peak windows, the re-debit satisfies the lead and timing constraints, and ample presentations remain in the cycle so the cap is nowhere near binding. Stage 0 has not yet adjudicated this attempt, which means the gate rules have not formally cleared or refused the debit, so the money cannot move until that check records its verdict."
+  },
+  "prompt_tokens": 1300,
+  "text": "{\"explanation\": \"The first presentation failed with Z9, meaning the account was not funded at the time of the request, so the diagnoser's fallback logic routed this to a RETRY rather than a customer nudge or terminal stop. Because the fresh notice was issued a full day ahead of the new target and the target hour falls outside the peak windows, the re-debit satisfies the lead and timing constraints, and ample presentations remain in the cycle so the cap is nowhere near binding. Stage 0 has not yet adjudicated this attempt, which means the gate rules have not formally cleared or refused the debit, so the money cannot move until that check records its verdict.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e5e3c15956690cea#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 194,
+  "parsed": null,
+  "prompt_tokens": 1300,
+  "text": "The earlier debit failed with Z9, meaning the account was not funded at the time of the request, so the diagnoser's fallback returned RETRY \u2014 a retryable failure, not a terminal one. A fresh notice has already gone out for the target hour and it falls outside NPCI's peak windows, so the scheduling prerequisites for a re-presentation are in place even though Stage 0 has not yet formally adjudicated this attempt. Because the target sits at the edge of the notice rule, the money is simply waiting on the debit firing as scheduled, with ample presentations still available this cycle."
+ },
+ "glm-5.3-flash|glm-explain-v2|e5e3c15956690cea#d2": {
+  "cached_tokens": 1024,
+  "completion_tokens": 191,
+  "parsed": null,
+  "prompt_tokens": 1300,
+  "text": "The first presentation failed with Z9, meaning the account was not funded at the time of the request \u2014 a transient condition, which is why the diagnoser's fallback chose a retry rather than escalation or termination. The scheduler placed the new debit outside NPCI's peak windows and the notice will have been in the customer's hands for a full day before it lands, so both the lead-time and peak constraints are satisfied and the remaining attempt budget leaves room for this re-presentation. Stage 0 has not yet adjudicated, so the retry is prepared but not yet cleared; until it runs, nothing has been refused and nothing has been approved."
+ },
+ "glm-5.3-flash|glm-explain-v2|e817275c12985020": {
+  "cached_tokens": 0,
+  "completion_tokens": 143,
+  "parsed": {
+   "explanation": "The only presentation so far failed on Z9, meaning the account was not funded at the time of the request, so the diagnosis fell back to simply letting the scheduler's chosen hour stand. Stage 0 cleared the debit on all five rules because the notice was issued a full day ahead, the target sits outside the peak windows, and no notice conflict or cap problem exists, which means the re-presentation is fully permitted under the existing authorisation. Because the decline was a plain insufficient-funds response and not a technical one, a fresh notice is properly in place rather than a bare re-presentation, and the cycle still has presentations in hand if this attempt does not collect."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\":\"The only presentation so far failed on Z9, meaning the account was not funded at the time of the request, so the diagnosis fell back to simply letting the scheduler's chosen hour stand. Stage 0 cleared the debit on all five rules because the notice was issued a full day ahead, the target sits outside the peak windows, and no notice conflict or cap problem exists, which means the re-presentation is fully permitted under the existing authorisation. Because the decline was a plain insufficient-funds response and not a technical one, a fresh notice is properly in place rather than a bare re-presentation, and the cycle still has presentations in hand if this attempt does not collect.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e817275c12985020#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 105,
+  "parsed": {
+   "explanation": "The single prior attempt failed with Z9, meaning the account was not funded at the time of that request, so the mandate remains alive with presentations still available in this cycle. Stage 0 passed all five rules because the notice given clears the lead time, the target hour sits outside the peak windows, and no attempt cap or pending-notice conflict applies. The diagnosis layer produced nothing this tick, which means no root cause or intervention was chosen and the system is running on its fallback path."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\":\"The single prior attempt failed with Z9, meaning the account was not funded at the time of that request, so the mandate remains alive with presentations still available in this cycle. Stage 0 passed all five rules because the notice given clears the lead time, the target hour sits outside the peak windows, and no attempt cap or pending-notice conflict applies. The diagnosis layer produced nothing this tick, which means no root cause or intervention was chosen and the system is running on its fallback path.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|e817275c12985020#d2": {
+  "cached_tokens": 1024,
+  "completion_tokens": 137,
+  "parsed": {
+   "explanation": "The earlier presentation failed with Z9 because the account was not funded at the time of the request, which is a transient decline and left the mandate alive. Because the fresh notice has stood for a full day, the target hour sits outside NPCI's peak windows, and re-presentation under the existing notice is permitted for a technical-class decline, all five Stage 0 rules pass and the debit may proceed. The scheduler's medium-confidence hour choice means the timing layer expects funds to be present this time, but the earlier Z9 shows this is not guaranteed."
+  },
+  "prompt_tokens": 1316,
+  "text": "{\"explanation\": \"The earlier presentation failed with Z9 because the account was not funded at the time of the request, which is a transient decline and left the mandate alive. Because the fresh notice has stood for a full day, the target hour sits outside NPCI's peak windows, and re-presentation under the existing notice is permitted for a technical-class decline, all five Stage 0 rules pass and the debit may proceed. The scheduler's medium-confidence hour choice means the timing layer expects funds to be present this time, but the earlier Z9 shows this is not guaranteed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|ed6db376dc0182e6": {
+  "cached_tokens": 0,
+  "completion_tokens": 319,
+  "parsed": {
+   "explanation": "The mandate enters a fresh billing cycle with the full allotment of attempts available, so the previous cycle's Z9 declines cost nothing permanent \u2014 the money was simply not there at the times of those requests, and those declines no longer count against this cycle. Because no notice has been issued and the scheduler has not yet fixed a target hour, Stage 0 has nothing to adjudicate and the Diagnoser fell back to no intervention, which means the next debit cannot lawfully occur until a notice runs for the required lead time. The timing model's medium confidence suggests the scheduler is still forming its view of when this account is most likely to be funded, so recovery is waiting on scheduling rather than blocked by any failure."
+  },
+  "prompt_tokens": 1306,
+  "text": "The mandate enters a fresh billing cycle with the full allotment of attempts available, so the previous cycle's Z9 declines cost nothing permanent \u2014 the money was simply not there at the times of those requests, and a new cycle means those declines no longer count. Because no notice has been issued and the scheduler has not yet fixed a target hour, Stage 0 has nothing to adjudicate and the Diagnoser fell back to no intervention, which means the next debit cannot lawfully occur until a notice runs for the required lead time. The medium confidence from the timing model indicates the scheduler is still forming its view of when this account is most likely to be funded, so the recovery is waiting on scheduling rather than blocked by any failure.\n\n{\"explanation\": \"The mandate enters a fresh billing cycle with the full allotment of attempts available, so the previous cycle's Z9 declines cost nothing permanent \u2014 the money was simply not there at the times of those requests, and those declines no longer count against this cycle. Because no notice has been issued and the scheduler has not yet fixed a target hour, Stage 0 has nothing to adjudicate and the Diagnoser fell back to no intervention, which means the next debit cannot lawfully occur until a notice runs for the required lead time. The timing model's medium confidence suggests the scheduler is still forming its view of when this account is most likely to be funded, so recovery is waiting on scheduling rather than blocked by any failure.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|ed6db376dc0182e6#d1": {
+  "cached_tokens": 1024,
+  "completion_tokens": 119,
+  "parsed": {
+   "explanation": "The mandate enters a fresh billing cycle with its full allotment of presentations intact, but both debits in the prior cycle failed on Z9, meaning the account was not funded at the time of each request. No notice has been issued and the scheduler has only fixed a candidate hour, so Stage 0 has nothing to adjudicate yet and the diagnoser has no open attempt to diagnose. Because the lead-time rule requires a customer notice at least a full day before any debit, nothing can move forward until a notice is issued for a valid target hour."
+  },
+  "prompt_tokens": 1306,
+  "text": "{\"explanation\": \"The mandate enters a fresh billing cycle with its full allotment of presentations intact, but both debits in the prior cycle failed on Z9, meaning the account was not funded at the time of each request. No notice has been issued and the scheduler has only fixed a candidate hour, so Stage 0 has nothing to adjudicate yet and the diagnoser has no open attempt to diagnose. Because the lead-time rule requires a customer notice at least a full day before any debit, nothing can move forward until a notice is issued for a valid target hour.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|ed6db376dc0182e6#d2": {
+  "cached_tokens": 1280,
+  "completion_tokens": 135,
+  "parsed": {
+   "explanation": "The two prior presentations both failed with Z9, meaning the account was not funded at the time of the request, but because insufficient funds is the commonest and most recoverable decline, the mandate remains alive with the full cycle still ahead. The scheduler's belief filter has fixed the next target hour at medium confidence and kept it outside the peak windows, yet no customer notice has been issued, and since a debit requires at least a day's notice, nothing can be presented until that notice goes out. The diagnoser has made no call this tick, so the money simply waits on the notice step before the cycle's attempts even begin."
+  },
+  "prompt_tokens": 1306,
+  "text": "{\"explanation\": \"The two prior presentations both failed with Z9, meaning the account was not funded at the time of the request, but because insufficient funds is the commonest and most recoverable decline, the mandate remains alive with the full cycle still ahead. The scheduler's belief filter has fixed the next target hour at medium confidence and kept it outside the peak windows, yet no customer notice has been issued, and since a debit requires at least a day's notice, nothing can be presented until that notice goes out. The diagnoser has made no call this tick, so the money simply waits on the notice step before the cycle's attempts even begin.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|f7a3ac7de6bb3621": {
+  "cached_tokens": 0,
+  "completion_tokens": 140,
+  "parsed": {
+   "explanation": "The single presentation so far failed with Z9, meaning the account was not funded at the time of the request, which is a retryable decline and not a mandate problem. Because no notice has been issued and no debit is scheduled, the scheduler is only holding a candidate hour and nothing has been adjudicated, so the diagnoiser's fallback reflects simply that there is no fresh outcome to act on. Plenty of attempts remain in this cycle, so the money is still recoverable once a notice is issued and the lead and pending rules can be satisfied."
+  },
+  "prompt_tokens": 1303,
+  "text": "{\"explanation\": \"The single presentation so far failed with Z9, meaning the account was not funded at the time of the request, which is a retryable decline and not a mandate problem. Because no notice has been issued and no debit is scheduled, the scheduler is only holding a candidate hour and nothing has been adjudicated, so the diagnoiser's fallback reflects simply that there is no fresh outcome to act on. Plenty of attempts remain in this cycle, so the money is still recoverable once a notice is issued and the lead and pending rules can be satisfied.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|f7a3ac7de6bb3621#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 155,
+  "parsed": {
+   "explanation": "Because the diagnoser fell back with no root cause and no intervention this tick, the scheduler has a target hour but no notice has been issued, so nothing was presented to Razorpay and Stage 0 had nothing to adjudicate. The single prior decline was Z9, meaning the account was not funded at the time of that request, which is recoverable rather than terminal. The mandate remains alive with presentations left in this cycle, so recovery resumes once a diagnosis produces a notice at least a day before the next debit."
+  },
+  "prompt_tokens": 1303,
+  "text": "{\"explanation\": \"Because the diagnoser fell back with no root cause and no intervention this tick, the scheduler has a target hour but no notice has been issued, so nothing was presented to Razorpay and Stage 0 had nothing to adjudicate. The single prior decline was Z9, meaning the account was not funded at the time of that request, which is recoverable rather than terminal. The mandate remains alive with presentations left in this cycle, so recovery resumes once a diagnosis produces a notice at least a day before the next debit.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v2|f7a3ac7de6bb3621#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 146,
+  "parsed": {
+   "explanation": "The single presentation this cycle failed with Z9, meaning the account was not funded at the time of the request, so the mandate remains active with presentations to spare. No notice has been issued and no debit has been targeted, which is why Stage 0 has nothing to adjudicate and the Diagnoser fell back without a root cause or intervention. Because the timing model's confidence is only wide, the scheduler has not yet fixed an hour it can stand behind, so the money is simply waiting for a notice-and-debit pair to be set."
+  },
+  "prompt_tokens": 1303,
+  "text": "{\"explanation\":\"The single presentation this cycle failed with Z9, meaning the account was not funded at the time of the request, so the mandate remains active with presentations to spare. No notice has been issued and no debit has been targeted, which is why Stage 0 has nothing to adjudicate and the Diagnoser fell back without a root cause or intervention. Because the timing model's confidence is only wide, the scheduler has not yet fixed an hour it can stand behind, so the money is simply waiting for a notice-and-debit pair to be set.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|39705cf70e3dd39f": {
+  "cached_tokens": 0,
+  "completion_tokens": 121,
+  "parsed": {
+   "explanation": "The retry collected: after an earlier insufficient-funds decline, the re-presentation reached the rail and came back OK, so the money is in for this cycle. Stage 0 allowed the attempt on every rule because a fresh notice was issued and the hour fell outside the peak windows, which is what let a non-technical decline be presented again. The diagnosis of UNKNOWN with a STOP is the fallback layer's caution rather than a rail verdict, since the collected response itself names the outcome."
+  },
+  "prompt_tokens": 2371,
+  "text": "{\"explanation\": \"The retry collected: after an earlier insufficient-funds decline, the re-presentation reached the rail and came back OK, so the money is in for this cycle. Stage 0 allowed the attempt on every rule because a fresh notice was issued and the hour fell outside the peak windows, which is what let a non-technical decline be presented again. The diagnosis of UNKNOWN with a STOP is the fallback layer's caution rather than a rail verdict, since the collected response itself names the outcome.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|39705cf70e3dd39f#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 102,
+  "parsed": {
+   "explanation": "The first presentation was refused for insufficient funds, but the re-presentation after the fresh notice went through and the rail returned OK, so the money is collected and this cycle is closed. Stage 0 allowed the attempt on every rule, which is why the re-presentation could proceed under the new notice. The diagnoster's stop is now harmless bookkeeping: since the debit succeeded, there is nothing left for any intervention to recover."
+  },
+  "prompt_tokens": 2371,
+  "text": "{\"explanation\": \"The first presentation was refused for insufficient funds, but the re-presentation after the fresh notice went through and the rail returned OK, so the money is collected and this cycle is closed. Stage 0 allowed the attempt on every rule, which is why the re-presentation could proceed under the new notice. The diagnoster's stop is now harmless bookkeeping: since the debit succeeded, there is nothing left for any intervention to recover.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|39705cf70e3dd39f#d2": {
+  "cached_tokens": 2112,
+  "completion_tokens": 119,
+  "parsed": {
+   "explanation": "The money is collected: the second presentation cleared after the earlier one failed for lack of funds, so the scheduler's timing model found the account funded on this attempt where it had not been before. Stage 0 allowed the presentation and the rail answered OK, which means the diagnosis of UNKNOWN with a STOP is moot \u2014 nothing remains to recover this cycle. Because the mandate survived rather than exhausting its attempts, every future cycle is preserved."
+  },
+  "prompt_tokens": 2371,
+  "text": "{\"explanation\": \"The money is collected: the second presentation cleared after the earlier one failed for lack of funds, so the scheduler's timing model found the account funded on this attempt where it had not been before. Stage 0 allowed the presentation and the rail answered OK, which means the diagnosis of UNKNOWN with a STOP is moot \u2014 nothing remains to recover this cycle. Because the mandate survived rather than exhausting its attempts, every future cycle is preserved.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|7360bbbafe65bdc9": {
+  "cached_tokens": 0,
+  "completion_tokens": 132,
+  "parsed": {
+   "explanation": "The first refusal was Z9, but the latest is ZX, which means the account itself is frozen, dormant or closed rather than merely unfunded at the time of the request. Because that decline is terminal, no retry under any notice or hour can succeed, so the diagnoser stopped rather than spending the remaining cycle attempts. Stage 0 allowed the presentation on its rules; the failure came from the bank's response afterwards, and only the merchant reaching the customer for fresh authorisation can change this outcome."
+  },
+  "prompt_tokens": 2372,
+  "text": "{\"explanation\": \"The first refusal was Z9, but the latest is ZX, which means the account itself is frozen, dormant or closed rather than merely unfunded at the time of the request. Because that decline is terminal, no retry under any notice or hour can succeed, so the diagnoser stopped rather than spending the remaining cycle attempts. Stage 0 allowed the presentation on its rules; the failure came from the bank's response afterwards, and only the merchant reaching the customer for fresh authorisation can change this outcome.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|7360bbbafe65bdc9#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 108,
+  "parsed": {
+   "explanation": "The latest refusal came back as ZX, which means the account is frozen, dormant or closed, and that is terminal: no retry on this mandate can ever succeed. Stage 0 had allowed the presentation on its rules, so the refusal originated with the bank after the debit reached the rail, and the diagnoser stopped the cycle because further attempts would only burn what remains. This ends recovery for the cycle, and unless the account situation resolves, the remaining attempts in this billing cycle are effectively forfeit."
+  },
+  "prompt_tokens": 2372,
+  "text": "{\"explanation\": \"The latest refusal came back as ZX, which means the account is frozen, dormant or closed, and that is terminal: no retry on this mandate can ever succeed. Stage 0 had allowed the presentation on its rules, so the refusal originated with the bank after the debit reached the rail, and the diagnoser stopped the cycle because further attempts would only burn what remains. This ends recovery for the cycle, and unless the account situation resolves, the remaining attempts in this billing cycle are effectively forfeit.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|7360bbbafe65bdc9#d2": {
+  "cached_tokens": 2112,
+  "completion_tokens": 89,
+  "parsed": {
+   "explanation": "The latest decline came back as ZX, which means the account itself is unavailable rather than merely unfunded, so no retry could ever collect. That is why the diagnoser stopped the cycle even though Stage 0 had allowed the presentation and one attempt remains in it. Because the condition is terminal, the mandate will die at the end of this cycle unless the customer reactivates the account on their own."
+  },
+  "prompt_tokens": 2372,
+  "text": "{\"explanation\": \"The latest decline came back as ZX, which means the account itself is unavailable rather than merely unfunded, so no retry could ever collect. That is why the diagnoser stopped the cycle even though Stage 0 had allowed the presentation and one attempt remains in it. Because the condition is terminal, the mandate will die at the end of this cycle unless the customer reactivates the account on their own.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|87c143a4075a66d0": {
+  "cached_tokens": 0,
+  "completion_tokens": 78,
+  "parsed": {
+   "explanation": "No debit has been attempted or scheduled because the mandate is still pending at the provider: without a completed authorisation token there is nothing for the scheduler or Stage 0 to act on. Since the mandate was never authorised, recovery cannot proceed until the customer completes the mandate setup in their banking app, and no amount of retries or notices would change that."
+  },
+  "prompt_tokens": 2367,
+  "text": "{\"explanation\": \"No debit has been attempted or scheduled because the mandate is still pending at the provider: without a completed authorisation token there is nothing for the scheduler or Stage 0 to act on. Since the mandate was never authorised, recovery cannot proceed until the customer completes the mandate setup in their banking app, and no amount of retries or notices would change that.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|87c143a4075a66d0#d1": {
+  "cached_tokens": 2112,
+  "completion_tokens": 68,
+  "parsed": {
+   "explanation": "Nothing was attempted because the mandate never completed authorisation, so there is no provider token to debit with and no scheduled window exists. Since a mandate only becomes chargeable once the customer authorises it, recovery cannot proceed until that happens; no scheduler, diagnosis, or Stage 0 ruling applies yet."
+  },
+  "prompt_tokens": 2367,
+  "text": "{\"explanation\": \"Nothing was attempted because the mandate never completed authorisation, so there is no provider token to debit with and no scheduled window exists. Since a mandate only becomes chargeable once the customer authorises it, recovery cannot proceed until that happens; no scheduler, diagnosis, or Stage 0 ruling applies yet.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|87c143a4075a66d0#d2": {
+  "cached_tokens": 2304,
+  "completion_tokens": 70,
+  "parsed": {
+   "explanation": "Nothing has been attempted because the mandate never completed authorisation, so there is no provider token to debit with and the scheduler has no window to fill. Recovery cannot proceed until the customer authorises the mandate; this will not clear on its own, and the full cycle's attempts remain unspent but unusable."
+  },
+  "prompt_tokens": 2367,
+  "text": "{\"explanation\": \"Nothing has been attempted because the mandate never completed authorisation, so there is no provider token to debit with and the scheduler has no window to fill. Recovery cannot proceed until the customer authorises the mandate; this will not clear on its own, and the full cycle's attempts remain unspent but unusable.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|9c93d5970204a668": {
+  "cached_tokens": 0,
+  "completion_tokens": 141,
+  "parsed": {
+   "explanation": "The recovery flow stopped before any rail call: the customer notification could not be delivered, and because a debit legally requires a notice at least a day ahead, no presentation was submitted and neither the diagnoser nor Stage 0 ever adjudicated this tick. The earlier Z9 belongs to the prior failed attempt, not to this one, which never reached the bank. So the cycle still has presentations in hand; the blockage is purely the notification channel, since without a delivered notice any further debit would be refused at Stage 0's lead and pending rules."
+  },
+  "prompt_tokens": 2358,
+  "text": "{\"explanation\": \"The recovery flow stopped before any rail call: the customer notification could not be delivered, and because a debit legally requires a notice at least a day ahead, no presentation was submitted and neither the diagnoser nor Stage 0 ever adjudicated this tick. The earlier Z9 belongs to the prior failed attempt, not to this one, which never reached the bank. So the cycle still has presentations in hand; the blockage is purely the notification channel, since without a delivered notice any further debit would be refused at Stage 0's lead and pending rules.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|9c93d5970204a668#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 110,
+  "parsed": {
+   "explanation": "The advance notice for the next presentation failed to reach the customer, so the pipeline stopped before any debit was made and nothing reached the rail for the bank to answer. Because a valid notice is a precondition for any debit, no diagnosis or Stage 0 verdict exists this tick: those layers only run on a debit outcome, and there is none yet. The earlier decline that used one attempt was a simple underfunded account at the time of the request, which leaves presentations in hand once a notice actually lands."
+  },
+  "prompt_tokens": 2358,
+  "text": "{\"explanation\": \"The advance notice for the next presentation failed to reach the customer, so the pipeline stopped before any debit was made and nothing reached the rail for the bank to answer. Because a valid notice is a precondition for any debit, no diagnosis or Stage 0 verdict exists this tick: those layers only run on a debit outcome, and there is none yet. The earlier decline that used one attempt was a simple underfunded account at the time of the request, which leaves presentations in hand once a notice actually lands.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|9c93d5970204a668#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 116,
+  "parsed": {
+   "explanation": "The notification step failed before any debit was requested, so the attempt never reached the rail and there is no response code to diagnose yet, which is why the diagnoser has produced no root cause this tick. Because the notice did not go out, Stage 0 could not adjudicate the attempt, since a debit requires a customer notice at least a full day ahead and that precondition is now in doubt. The single cycle decline so far remains the earlier Z9 insufficient-funds result, and the money has not been touched by the failed notification."
+  },
+  "prompt_tokens": 2358,
+  "text": "{\"explanation\": \"The notification step failed before any debit was requested, so the attempt never reached the rail and there is no response code to diagnose yet, which is why the diagnoser has produced no root cause this tick. Because the notice did not go out, Stage 0 could not adjudicate the attempt, since a debit requires a customer notice at least a full day ahead and that precondition is now in doubt. The single cycle decline so far remains the earlier Z9 insufficient-funds result, and the money has not been touched by the failed notification.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|afd24175eafd2559": {
+  "cached_tokens": 0,
+  "completion_tokens": 113,
+  "parsed": {
+   "explanation": "The money is in: the second presentation cleared after the first was refused for lack of funds, so the cycle's debt is settled and nothing further is owed this billing period. Stage 0 allowed the attempt and the rail confirmed it with OK, meaning the notice and timing the scheduler chose were both valid. The UNKNOWN diagnosis and STOP decision below appear to be a stale reading of the earlier decline, since a successful collection has no root cause left to diagnose."
+  },
+  "prompt_tokens": 2369,
+  "text": "{\"explanation\": \"The money is in: the second presentation cleared after the first was refused for lack of funds, so the cycle's debt is settled and nothing further is owed this billing period. Stage 0 allowed the attempt and the rail confirmed it with OK, meaning the notice and timing the scheduler chose were both valid. The UNKNOWN diagnosis and STOP decision below appear to be a stale reading of the earlier decline, since a successful collection has no root cause left to diagnose.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|afd24175eafd2559#d1": {
+  "cached_tokens": 2368,
+  "completion_tokens": 92,
+  "parsed": {
+   "explanation": "The first presentation failed for lack of funds, and the second went through and collected, so the money is in and this cycle is settled. Stage 0 allowed the re-presentation because a fresh notice had been issued ahead of the retry, which is why every rule passed. The diagnoser's fallback has stopped the flow since there is nothing left to recover; the prior decline is closed history rather than an open problem."
+  },
+  "prompt_tokens": 2369,
+  "text": "{\"explanation\": \"The first presentation failed for lack of funds, and the second went through and collected, so the money is in and this cycle is settled. Stage 0 allowed the re-presentation because a fresh notice had been issued ahead of the retry, which is why every rule passed. The diagnoser's fallback has stopped the flow since there is nothing left to recover; the prior decline is closed history rather than an open problem.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|afd24175eafd2559#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 126,
+  "parsed": {
+   "explanation": "The money is in: after an earlier Z9 insufficient-funds decline, this presentation reached the rail and came back OK, so the cycle's debt is cleared and nothing remains to recover. Because the collection already happened, the diagnoser stopped the recovery flow since a further debit would risk a duplicate charge on an obligation that no longer exists. Stage 0 had allowed the attempt, so the success is cleanly attributable to the rail rather than to any exception path."
+  },
+  "prompt_tokens": 2369,
+  "text": "{\"explanation\": \"The money is in: after an earlier Z9 insufficient-funds decline, this presentation reached the rail and came back OK, so the cycle's debt is cleared and nothing remains to recover. Because the collection already happened, the diagnoser stopped the recovery flow since a further debit would risk a duplicate charge on an obligation that no longer exists. Stage 0 had allowed the attempt, so the success is cleanly attributable to the rail rather than to any exception path.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b31e8bdba7d3e296": {
+  "cached_tokens": 0,
+  "completion_tokens": 98,
+  "parsed": {
+   "explanation": "The latest attempt returned a deemed transaction, which means the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a clean decline. The diagnoser stopped the process for that reason, since a retry could collect twice on the same mandate while Stage 0's pass verdicts only say the attempt was permitted, not that it settled. Nothing here reflects the customer's funding; the earlier Z9 is a separate, resolved presentation."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"The latest attempt returned a deemed transaction, which means the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a clean decline. The diagnoser stopped the process for that reason, since a retry could collect twice on the same mandate while Stage 0's pass verdicts only say the attempt was permitted, not that it settled. Nothing here reflects the customer's funding; the earlier Z9 is a separate, resolved presentation.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b31e8bdba7d3e296#d1": {
+  "cached_tokens": 1024,
+  "completion_tokens": 102,
+  "parsed": {
+   "explanation": "The first presentation failed for lack of funds at the time of the request, but the latest attempt returned deemed_transaction, meaning the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a decline. Because a retry against an unresolved debit could charge the customer twice, the diagnoser stopped all further action on this cycle. Stage 0 allowed the attempt to go out; the uncertainty comes from the provider's non-answer, not from any gating rule."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"The first presentation failed for lack of funds at the time of the request, but the latest attempt returned deemed_transaction, meaning the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a decline. Because a retry against an unresolved debit could charge the customer twice, the diagnoser stopped all further action on this cycle. Stage 0 allowed the attempt to go out; the uncertainty comes from the provider's non-answer, not from any gating rule.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b31e8bdba7d3e296#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 84,
+  "parsed": {
+   "explanation": "The latest debit produced deemed_transaction, which means the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a decline. Because a re-presentation against that ambiguity could collect twice, the diagnoser stopped instead of retrying, even though Stage 0 had allowed the attempt. No money position can be stated until the provider's true result is reconciled."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"The latest debit produced deemed_transaction, which means the rail never confirmed whether the money moved, so the outcome is genuinely unknown rather than a decline. Because a re-presentation against that ambiguity could collect twice, the diagnoser stopped instead of retrying, even though Stage 0 had allowed the attempt. No money position can be stated until the provider's true result is reconciled.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b56caa48f47af563": {
+  "cached_tokens": 0,
+  "completion_tokens": 125,
+  "parsed": {
+   "explanation": "The earlier failure was Z9, the account was not funded at the time of the request, so the diagnoser called for a retry rather than anything terminal. Stage 0 refused the attempt on two grounds at once: the target hour sits inside an NPCI peak window, and the outstanding customer notice points at a later hour than the one the action would hit, which means the mandatory lead time is not satisfied for this debit. The money has not been at risk so far; the mandate simply cannot be debited again until a fresh notice lines up with a non-peak window."
+  },
+  "prompt_tokens": 2408,
+  "text": "{\"explanation\": \"The earlier failure was Z9, the account was not funded at the time of the request, so the diagnoser called for a retry rather than anything terminal. Stage 0 refused the attempt on two grounds at once: the target hour sits inside an NPCI peak window, and the outstanding customer notice points at a later hour than the one the action would hit, which means the mandatory lead time is not satisfied for this debit. The money has not been at risk so far; the mandate simply cannot be debited again until a fresh notice lines up with a non-peak window.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b56caa48f47af563#d1": {
+  "cached_tokens": 2112,
+  "completion_tokens": 105,
+  "parsed": {
+   "explanation": "The earlier decline was Z9, the account simply not being funded at the time of the request, so the diagnoser called for a retry. Stage 0 refused on two independent grounds: the targeted hour falls inside an NPCI peak window, and the notice currently outstanding is for a later hour than the one this debit would use. Because the attempt was never sent to the rail, the money is untouched and the retry can only proceed once the targeting lines up with a valid notice."
+  },
+  "prompt_tokens": 2408,
+  "text": "{\"explanation\": \"The earlier decline was Z9, the account simply not being funded at the time of the request, so the diagnoser called for a retry. Stage 0 refused on two independent grounds: the targeted hour falls inside an NPCI peak window, and the notice currently outstanding is for a later hour than the one this debit would use. Because the attempt was never sent to the rail, the money is untouched and the retry can only proceed once the targeting lines up with a valid notice.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|b56caa48f47af563#d2": {
+  "cached_tokens": 2368,
+  "completion_tokens": 150,
+  "parsed": {
+   "explanation": "The prior failure was Z9, the account was simply not funded at the time of the request, so the diagnoser read it as a soft decline and set a retry. Stage 0 refused the attempt on two grounds at once: the targeted hour falls inside an NPCI peak window, and the notice currently outstanding was issued for a different debit hour than the one being attempted, which means the notification does not cover this presentation. No money has moved and the customer has not been validly noticed for this target, so the retry cannot go out until those gate conditions are satisfied."
+  },
+  "prompt_tokens": 2408,
+  "text": "{\"explanation\": \"The prior failure was Z9, the account was simply not funded at the time of the request, so the diagnoser read it as a soft decline and set a retry. Stage 0 refused the attempt on two grounds at once: the targeted hour falls inside an NPCI peak window, and the notice currently outstanding was issued for a different debit hour than the one being attempted, which means the notification does not cover this presentation. No money has moved and the customer has not been validly noticed for this target, so the retry cannot go out until those gate conditions are satisfied.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e34217cc0b3617e0": {
+  "cached_tokens": 0,
+  "completion_tokens": 132,
+  "parsed": {
+   "explanation": "The last presentation failed on Z9, the account was not funded at the time of the request, and the cycle's attempts are now exhausted, which is why Stage 0's cap rule refused and the pending rule refused alongside it since no fresh notice stands. Because the cap was spent, the diagnoser stopped rather than scheduling anything further; exhausting the cycle without collecting puts the whole mandate and its future cycles at risk. The scheduler's timing was never the obstacle \u2014 the debit sat outside the peak windows with a full day of notice \u2014 so the failure is about the money not being there, not about when we asked."
+  },
+  "prompt_tokens": 2406,
+  "text": "{\"explanation\": \"The last presentation failed on Z9, the account was not funded at the time of the request, and the cycle's attempts are now exhausted, which is why Stage 0's cap rule refused and the pending rule refused alongside it since no fresh notice stands. Because the cap was spent, the diagnoser stopped rather than scheduling anything further; exhausting the cycle without collecting puts the whole mandate and its future cycles at risk. The scheduler's timing was never the obstacle \u2014 the debit sat outside the peak windows with a full day of notice \u2014 so the failure is about the money not being there, not about when we asked.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e34217cc0b3617e0#d1": {
+  "cached_tokens": 2112,
+  "completion_tokens": 102,
+  "parsed": null,
+  "prompt_tokens": 2406,
+  "text": "The final presentation was again declined for lack of funds, which spent the cycle's allowance and is why Stage 0 refused on the cap; the timing and notice were sound, so scheduling was not the problem. Because the allowance is spent without a collection, the mandate dies and every future cycle it covered is forfeited. The diagnoser stopped rather than nudging, since no intervention can reopen a cycle whose attempts are gone."
+ },
+ "glm-5.3-flash|glm-explain-v3|e34217cc0b3617e0#d2": {
+  "cached_tokens": 2368,
+  "completion_tokens": 107,
+  "parsed": {
+   "explanation": "The cycle's attempts are spent, so Stage 0 refused on the cap before anything reached the rail; the pending rule also refused because no fresh notice stands for a next debit, which cannot happen anyway while the cap holds. Three insufficient-funds declines and a rail glitch drove the diagnosis to mandate-at-risk, and the STOP intervention follows because further presentations are barred this cycle. Unless something outside this console revives the mandate, the remaining days of the cycle and every future cycle are forfeit."
+  },
+  "prompt_tokens": 2406,
+  "text": "{\"explanation\": \"The cycle's attempts are spent, so Stage 0 refused on the cap before anything reached the rail; the pending rule also refused because no fresh notice stands for a next debit, which cannot happen anyway while the cap holds. Three insufficient-funds declines and a rail glitch drove the diagnosis to mandate-at-risk, and the STOP intervention follows because further presentations are barred this cycle. Unless something outside this console revives the mandate, the remaining days of the cycle and every future cycle are forfeit.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e5e3c15956690cea": {
+  "cached_tokens": 0,
+  "completion_tokens": 145,
+  "parsed": null,
+  "prompt_tokens": 2357,
+  "text": "The earlier debit was refused for insufficient funds, and the diagnoser's fallback chose a retry, with the scheduler timing a new window that carries a full day's notice and sits outside the peak windows. The customer notice is still in the future, so Stage 0 has not yet adjudicated the pending and lead rules, which is why the overall verdict is blank. The attempt has been created and is holding until the target hour arrives, and nothing has been collected this cycle yet."
+ },
+ "glm-5.3-flash|glm-explain-v3|e5e3c15956690cea#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 127,
+  "parsed": {
+   "explanation": "The earlier decline was Z9, so the account was simply not funded at the time of the request, and the diagnoser has set a retry on that basis. A fresh notice has been issued ahead of the new target hour and sits outside the peak windows, so the pending rule should be satisfied when Stage 0 adjudicates at execution. The attempt is currently created but not yet submitted, which means the rail has not answered and the money is unchanged until it does."
+  },
+  "prompt_tokens": 2357,
+  "text": "{\"explanation\": \"The earlier decline was Z9, so the account was simply not funded at the time of the request, and the diagnoser has set a retry on that basis. A fresh notice has been issued ahead of the new target hour and sits outside the peak windows, so the pending rule should be satisfied when Stage 0 adjudicates at execution. The attempt is currently created but not yet submitted, which means the rail has not answered and the money is unchanged until it does.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e5e3c15956690cea#d2": {
+  "cached_tokens": 2112,
+  "completion_tokens": 164,
+  "parsed": null,
+  "prompt_tokens": 2357,
+  "text": "The earlier decline was Z9, the account simply not being funded at that moment, so the diagnoser called for a retry and the scheduler placed it at an hour when this customer's model expects funds, outside the peak windows and with the full day of notice the customer will receive beforehand. Stage 0 has not adjudicated anything yet because the attempt has only been created at the provider, not presented, so the gate will rule at presentation time. Nothing has been collected or refused at the rail this tick, which means the money is still uncollected and one presentation remains open."
+ },
+ "glm-5.3-flash|glm-explain-v3|e817275c12985020": {
+  "cached_tokens": 0,
+  "completion_tokens": 124,
+  "parsed": {
+   "explanation": "The debit went out under a valid, freshly notified presentation that Stage 0 fully permitted, but the rail returned an ambiguous answer, so the true outcome is genuinely unknown rather than a clean success or decline. Because an ambiguous result may have actually collected the money, the diagnoser has withheld any root cause and intervention, since a blind retry here risks charging the customer twice. Nothing about the funds or the mandate is broken on the evidence; the state simply cannot be resolved until the outcome is confirmed."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"The debit went out under a valid, freshly notified presentation that Stage 0 fully permitted, but the rail returned an ambiguous answer, so the true outcome is genuinely unknown rather than a clean success or decline. Because an ambiguous result may have actually collected the money, the diagnoser has withheld any root cause and intervention, since a blind retry here risks charging the customer twice. Nothing about the funds or the mandate is broken on the evidence; the state simply cannot be resolved until the outcome is confirmed.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e817275c12985020#d1": {
+  "cached_tokens": 2112,
+  "completion_tokens": 150,
+  "parsed": {
+   "explanation": "Stage 0 allowed the attempt and the debit went out on a valid notice, but the rail's answer could not be resolved into a clear success or decline, which is why the attempt sits at UNKNOWN. Because the outcome is genuinely ambiguous, the diagnoser made no call this tick: a blind retry could collect twice if the debit actually landed. The cycle still has presentations in hand, so the safe path is confirmation of the true result before anything further is sent."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"Stage 0 allowed the attempt and the debit went out on a valid notice, but the rail's answer could not be resolved into a clear success or decline, which is why the attempt sits at UNKNOWN. Because the outcome is genuinely ambiguous, the diagnoser made no call this tick: a blind retry could collect twice if the debit actually landed. The cycle still has presentations in hand, so the safe path is confirmation of the true result before anything further is sent.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|e817275c12985020#d2": {
+  "cached_tokens": 2368,
+  "completion_tokens": 134,
+  "parsed": {
+   "explanation": "The latest presentation has no definitive answer from the rail, so the outcome of this attempt is genuinely unknown and the diagnoser has withheld both a root cause and an intervention while that ambiguity stands. Stage 0 cleared the attempt \u2014 the mandate was blocked by none of its rules \u2014 which means the uncertainty lies with the provider's response, not with our eligibility to debit. Because an unclear attempt could still have taken the money, pushing again before the rail resolves it would risk a double charge."
+  },
+  "prompt_tokens": 2373,
+  "text": "{\"explanation\": \"The latest presentation has no definitive answer from the rail, so the outcome of this attempt is genuinely unknown and the diagnoser has withheld both a root cause and an intervention while that ambiguity stands. Stage 0 cleared the attempt \u2014 the mandate was blocked by none of its rules \u2014 which means the uncertainty lies with the provider's response, not with our eligibility to debit. Because an unclear attempt could still have taken the money, pushing again before the rail resolves it would risk a double charge.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|ed6db376dc0182e6": {
+  "cached_tokens": 2112,
+  "completion_tokens": 109,
+  "parsed": {
+   "explanation": "The previous cycle ended with the money still not there, and the declines were Z9, an ordinary insufficient-funds failure rather than anything terminal about the mandate. Because a new billing cycle has just begun, no notice has been issued and nothing is scheduled yet, so Stage 0 had nothing to adjudicate and the diagnoser had no open attempt to judge. The mandate itself remains alive and collectible; the loss risk lies only in the customer's account not holding funds at the moment of each request."
+  },
+  "prompt_tokens": 2363,
+  "text": "{\"explanation\": \"The previous cycle ended with the money still not there, and the declines were Z9, an ordinary insufficient-funds failure rather than anything terminal about the mandate. Because a new billing cycle has just begun, no notice has been issued and nothing is scheduled yet, so Stage 0 had nothing to adjudicate and the diagnoser had no open attempt to judge. The mandate itself remains alive and collectible; the loss risk lies only in the customer's account not holding funds at the moment of each request.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|ed6db376dc0182e6#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 126,
+  "parsed": null,
+  "prompt_tokens": 2363,
+  "text": "This is the first tick of a fresh billing cycle, so the earlier declines belong to a closed cycle and no attempts have been spent yet \u2014 but nothing has been scheduled because the scheduler has not been run and no diagnosis has been made. Since no notice is outstanding and no debit is targeted, Stage 0 had nothing to adjudicate, which means the money has not been asked for at all in this cycle. The mandate itself survived the previous cycle's failed attempts, so the recovery window here is still fully open."
+ },
+ "glm-5.3-flash|glm-explain-v3|ed6db376dc0182e6#d2": {
+  "cached_tokens": 0,
+  "completion_tokens": 96,
+  "parsed": {
+   "explanation": "A fresh billing cycle has opened, which resets the attempt allowance, so the two earlier Z9 declines belong to prior cycles and cost nothing going forward. Because this is a new cycle, no notice has been issued and nothing is scheduled yet, which means there was no presentation for Stage 0 to adjudicate and no diagnosis this tick. The money is still uncollected, but the mandate itself remains alive with its full attempt allowance intact."
+  },
+  "prompt_tokens": 2363,
+  "text": "{\"explanation\": \"A fresh billing cycle has opened, which resets the attempt allowance, so the two earlier Z9 declines belong to prior cycles and cost nothing going forward. Because this is a new cycle, no notice has been issued and nothing is scheduled yet, which means there was no presentation for Stage 0 to adjudicate and no diagnosis this tick. The money is still uncollected, but the mandate itself remains alive with its full attempt allowance intact.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|f7a3ac7de6bb3621": {
+  "cached_tokens": 0,
+  "completion_tokens": 128,
+  "parsed": {
+   "explanation": "Nothing is being attempted this tick: with no debit targeted and no notice outstanding, Stage 0 had nothing to adjudicate and the diagnoser produced no verdict. The single decline so far was Z9, an ordinary unfunded account at the time of the request, so the mandate is intact and there is still room to schedule another presentation later in the cycle. Because no diagnosis was made, there is nothing here to explain an intervention \u2014 the recovery loop is simply idle between attempts."
+  },
+  "prompt_tokens": 2360,
+  "text": "{\"explanation\": \"Nothing is being attempted this tick: with no debit targeted and no notice outstanding, Stage 0 had nothing to adjudicate and the diagnoser produced no verdict. The single decline so far was Z9, an ordinary unfunded account at the time of the request, so the mandate is intact and there is still room to schedule another presentation later in the cycle. Because no diagnosis was made, there is nothing here to explain an intervention \u2014 the recovery loop is simply idle between attempts.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|f7a3ac7de6bb3621#d1": {
+  "cached_tokens": 0,
+  "completion_tokens": 138,
+  "parsed": {
+   "explanation": "The earlier failure was a plain insufficient-funds decline, and because no attempt is currently open there is no diagnosis or intervention this tick \u2014 the diagnoser only acts when a presentation exists to judge. Nothing is scheduled and no notice has been issued, so Stage 0 was never asked whether a debit is allowed; since no notice can precede a target that does not yet exist, the next attempt must wait for the scheduler to pick an hour and trigger a fresh notification. The mandate itself is unharmed, with presentations still available before the cycle's cap is reached."
+  },
+  "prompt_tokens": 2360,
+  "text": "{\"explanation\": \"The earlier failure was a plain insufficient-funds decline, and because no attempt is currently open there is no diagnosis or intervention this tick \u2014 the diagnoser only acts when a presentation exists to judge. Nothing is scheduled and no notice has been issued, so Stage 0 was never asked whether a debit is allowed; since no notice can precede a target that does not yet exist, the next attempt must wait for the scheduler to pick an hour and trigger a fresh notification. The mandate itself is unharmed, with presentations still available before the cycle's cap is reached.\"}"
+ },
+ "glm-5.3-flash|glm-explain-v3|f7a3ac7de6bb3621#d2": {
+  "cached_tokens": 2112,
+  "completion_tokens": 140,
+  "parsed": {
+   "explanation": "Nothing is in flight this tick: the scheduler has issued no notice and no debit target, so Stage 0 had nothing to adjudicate and the diagnoser had no fresh decline to interpret. The only recorded outcome in this cycle is the earlier Z9 insufficient-funds refusal, which is recoverable in principle because the account was simply not funded at the time of that request. Recovery is dormant purely for timing reasons \u2014 once a new notice is placed with enough lead and outside a peak window, the remaining presentations in this cycle can still be used."
+  },
+  "prompt_tokens": 2360,
+  "text": "{\"explanation\": \"Nothing is in flight this tick: the scheduler has issued no notice and no debit target, so Stage 0 had nothing to adjudicate and the diagnoser had no fresh decline to interpret. The only recorded outcome in this cycle is the earlier Z9 insufficient-funds refusal, which is recoverable in principle because the account was simply not funded at the time of that request. Recovery is dormant purely for timing reasons \u2014 once a new notice is placed with enough lead and outside a peak window, the remaining presentations in this cycle can still be used.\"}"
+ }
+}

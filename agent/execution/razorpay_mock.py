@@ -320,6 +320,74 @@ class MockRazorpayApi:
                          "order_id": order_id, "token_status": st,
                          "payment": payment})
 
+    def adopt_token(self, *, token_id: str, customer_id: str,
+                    max_amount_paise: int, expire_at: int = 0,
+                    status: str = "confirmed", email: str = "",
+                    contact: str = "") -> dict:
+        """Re-declare a token this mock issued in an EARLIER PROCESS.
+
+        Provider state lives in this object's dictionaries, so it dies with the
+        process. A durable caller -- one that wrote `rzp_token_id` to a
+        database -- restarts holding a token id the mock has never heard of,
+        and every later call answers "Token does not exist" while the caller's
+        own record says the mandate is confirmed and chargeable. Real
+        Razorpay remembers its tokens across our restarts; this is the smallest
+        thing that makes the mock do the same.
+
+        NOT A RAZORPAY ENDPOINT, and named so it cannot be mistaken for one.
+        The caller passes plain values -- there is nothing importable from
+        `live/` here, and there must not be: this package is a leaf.
+
+        An id already present is left alone. A restart must not overwrite a
+        token whose status has moved on inside this process.
+        """
+        if not token_id or not customer_id:
+            raise ValueError("adopt_token needs both a token id and a "
+                             "customer id")
+        now = self._clock()
+        self._customers.setdefault(
+            customer_id, {"id": customer_id, "entity": "customer", "name": "",
+                          "email": email, "contact": contact,
+                          "created_at": now})
+        token = self._tokens.get(token_id)
+        if token is None:
+            token = {"id": token_id, "entity": "token",
+                     "token": token_id[-14:], "method": "upi",
+                     "vpa": {"username": "mock", "handle": "okmock"},
+                     "recurring": True,
+                     "recurring_details": {"status": status,
+                                           "failure_reason": None},
+                     "max_amount": int(max_amount_paise),
+                     "expired_at": int(expire_at) or now + 10 * 365 * 24 * 3600,
+                     "created_at": now, "customer_id": customer_id}
+            self._tokens[token_id] = token
+        return dict(token)
+
+    def adopt_order(self, *, order_id: str, receipt: str, amount_paise: int,
+                    token_id: str, payment_after: int = 0,
+                    status: str = "created", payment_id: str = "") -> dict:
+        """Re-declare an order this mock created in an EARLIER PROCESS.
+
+        The companion to `adopt_token`, and needed for the same reason. A
+        pre-debit order outstanding when the process dies leaves a durable row
+        carrying its `order_id`; without this the debit that follows is
+        refused with "Order does not exist", which the executor cannot
+        distinguish from a request that was sent and lost, so the attempt ends
+        UNKNOWN and waits for a reconciliation the mock cannot answer either.
+
+        NOT A RAZORPAY ENDPOINT. An order already present is left alone.
+        """
+        if not order_id or not receipt:
+            raise ValueError("adopt_order needs both an order id and a receipt")
+        if order_id in self._orders:
+            return {"id": order_id}
+        self._orders[order_id] = _Order(
+            id=order_id, receipt=receipt, amount=int(amount_paise),
+            token_id=token_id, payment_after=int(payment_after),
+            status=status, payment_id=payment_id)
+        self._receipts.setdefault(receipt, order_id)
+        return {"id": order_id, "receipt": receipt, "status": status}
+
     def set_token_status(self, token_id: str, status: str) -> ApiResponse:
         """The customer pausing, resuming or revoking the mandate later."""
         tok = self._tokens.get(token_id)
