@@ -306,8 +306,19 @@ class Api:
         # payload -- the body an unauthenticated sender posted is kept for a
         # signature dispute and is not console material.
         snap["rejected_events"] = self.svc.store.recent_rejected(10)
+        # ENOUGH HISTORY THAT THE SPINE SURVIVES A DEMONSTRATION. One attempt
+        # is described by TWO ticks -- the scheduling one carries the hour and
+        # the probabilities behind it, the charging one carries Stage 0's five
+        # verdicts -- and `console/app.js:ownDecision` merges them on
+        # `attempt_id`. A window of ten covered barely three clicks with three
+        # mandates registered, so the scheduler, diagnosis and Stage 0 rows of
+        # a debit submitted minutes earlier fell back to "not recorded in this
+        # session". `LiveService._record` already keeps 200; this serves the
+        # newest 60 of them, which is a few hundred lines of JSON and no new
+        # state. The fallback is still correct and still reachable -- it is
+        # what an actual restart produces.
         snap["decisions"] = [d.as_dict() for d
-                             in reversed(self.svc.decisions[-10:])]
+                             in reversed(self.svc.decisions[-60:])]
         return snap
 
     @staticmethod

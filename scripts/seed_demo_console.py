@@ -79,7 +79,7 @@ PEOPLE = [
     dict(name="Meera Iyer", email="meera.iyer@example.in",
          contact="+919812000001", charge_paise=189900, est_salary=52000.0,
          est_payday=2,
-         want="declined once, reminded, and the second debit already notified"),
+         want="declined once on funds, funding reminder sent, holding"),
     dict(name="Kavya Menon", email="kavya.menon@example.in",
          contact="+919812000003", charge_paise=249900, est_salary=61000.0,
          est_payday=2,
