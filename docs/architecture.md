@@ -191,6 +191,12 @@ nudge, escalate, stop — and writes the human-readable justification attached t
 every money action. It also writes merchant-facing copy for escalations.
 Reminder and backup-link text use templates.
 
+The layer has two implementations behind one port. `agent/llm/fallback.py` is
+the deterministic rule engine; `agent/llm/model_diagnoser.py` is a language
+model overlaying it. **The batch runs can select either, and the live service
+constructs the rule engine** — see [the live service](#the-live-service). This
+section is about what the overlay is permitted to reach when it is selected.
+
 **The language model cannot decide when to debit.** This is enforced by
 construction, not by review:
 
@@ -739,9 +745,10 @@ source gives a rate for either, so the world draws neither state.
 | Check | What it holds |
 |---|---|
 | `sim/gate.py --tier full` | 27 mutation and statistical gates over the simulation. Four are red on a clean checkout with written reasons — [results.md](results.md#gate-status) |
-| `agent/tests/test_layer_isolation.py` | the import graph: seven rules, each with a mutant that must trip it |
+| `agent/tests/test_layer_isolation.py` | the import graph: nine rules, each with a mutant that must trip it |
 | `agent/tests/test_parity_vs_harness.py` | the agent reproduces the simulation harness bit-exactly in degenerate mode |
 | `agent/tests/test_stage0_enforces.py` | Stage 0 refuses, and the auditor catches illegal actions injected below the gate |
+| `live/tests/run_all.py` | eleven gate files over the live service — configuration, both state machines, webhooks, the lifecycle across eight crash boundaries, the safety boundaries, simulation/live parity, the HTTP surface over a real socket, one gate per money-path defect, what survives a restart, the escalation ladder, and the console's contract. Every one runs offline and none can move money |
 | `sim/verify_doc_contract.py` | the constants and the decision rule stated in this document match the code, and `ports.Diagnosis` still carries no temporal field |
 | `sim/verify_docs.py` | no retracted claim is live in a document |
 | `sim/verify_claims.py` | the current-state claims in the public documents do not contradict each other, and every published headline equals `sim/canonical_result.json` — the canonical run's own record of itself |

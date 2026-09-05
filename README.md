@@ -183,8 +183,7 @@ Debit timing is a numerical inference from censored observations with a hard
 legality boundary, and a language model on that path would make every money
 action unreproducible. On the four registered cases the routed path actually
 sees, the rule engine scores 4/4 and the model 2/4, so the model does not
-currently beat the rules on its own path either. Every money figure in this
-repository is produced with the deterministic path.
+currently beat the rules on its own path either.
 
 ## What is implemented
 
@@ -351,8 +350,11 @@ RECOVERY_MAX_DEBIT_PAISE=300000 py -3.12 -m live.server
 ```
 
 The seeder builds a demonstration database at `live/data/recovery.db`: three
-customers, three mandates, one collected, one declined and holding, one with a
-pre-debit notice outstanding. It refuses to run unless `RECOVERY_MODE` is
+customers, three mandates, at three points on the escalation ladder — one
+collected on its first presentation, one declined on funds with a funding
+reminder sent, and one that has spent three presentations and has a Payment
+Link standing where the fourth mandate debit would have gone. It refuses to run
+unless `RECOVERY_MODE` is
 offline, and it writes no row directly — every attempt, transition and webhook
 in the database it produces was written by the code that would write it in
 production, driven through `decide`. `live/data/` is gitignored, so there is no

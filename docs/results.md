@@ -1022,7 +1022,7 @@ seeds; if that mutant stops tripping, `T9` reports vacuous.
 
 ### The import-graph gates
 
-`py -3.12 agent/tests/test_layer_isolation.py` enforces seven rules about which
+`py -3.12 agent/tests/test_layer_isolation.py` enforces nine rules about which
 layer may import which, each with a named mutant that must trip it. It runs in
 the pre-commit hook.
 
@@ -1035,6 +1035,8 @@ the pre-commit hook.
 | `I4` | the timing layer may not import the narrative layer |
 | `I5` | `ports.py` is the shared vocabulary and depends on no layer |
 | `I6` | the execution layer is a leaf and may not reach back up into the layers deciding on its behalf |
+| `L1` | in `live/` only `service.py` may hold an executor, so no HTTP route can charge a mandate without the gate |
+| `L2` | the decision core must not depend on the service that wraps it: nothing under `agent/` imports `live/`, so the simulation does not need a database to run |
 
 `I2` was previously specified over every file under `agent/`, including
 `agent/execution/` itself, and carried a central list of exempt test files. It
