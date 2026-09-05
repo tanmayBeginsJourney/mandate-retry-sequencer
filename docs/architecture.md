@@ -348,6 +348,18 @@ no `token_id` exists for any request to reference. A successful `POST /v1/orders
 would not be proof of delivery in any case; only the
 `order.notification.delivered` event is.
 
+**One provider constraint is documented and not modelled.** Razorpay states that
+a subsequent UPI payment must not be created on the last day of the billing
+cycle [VERIFIED, UPI create-subsequent-payments, read 5 September 2026]. The
+simulator's scheduling window runs to the last day of the cycle inclusive, so the
+published measurements do not model that restriction; the live path bounds
+against it. `LiveService` refuses a proposal targeting `cycle_close - 1` and
+names the rule in the refusal, and `live/tests/test_ladder.py` W8 shows the
+scheduler proposing that day and the rail declining it. The simulator is not
+re-run for this, because the constraint is a property of the provider rather than
+of the policy, and re-running would retire every figure in this repository for a
+change that moves the last legal target by one day.
+
 A request-level rejection — bad credentials, malformed body — raises
 `RazorpayError` naming the HTTP status. It is never recorded as a customer
 decline, because no payment was created. Recording it as a decline would teach

@@ -705,6 +705,13 @@ and the +0.068 it carries is theirs. Every full-mode row below it contains the
 same +0.068. The second row turns the workflows off as well and is bit-identical
 to degenerate in all ten populations.
 
+**No backup checkout is ever paid in this world.** `SimExecutor.backup_pay_p`
+is 0.0 and nothing raises it, so every Payment Link the agent issues expires
+unpaid. The whole +0.068 is therefore mandate survival — the fourth debit not
+fired, the mandate alive into its next billing cycle — and none of it is money
+the link collected. A customer response rate for a checkout link is not
+measured here and would be an invented constant.
+
 **`ESCALATE` and `STOP` are worth exactly 0.000 against the row that isolates
 them** — identical collection, identical rupees, identical survival to the
 every-action-off arm. That is the one claim in this family that has survived
@@ -846,30 +853,35 @@ accepts these request bodies, because Razorpay has never read one.
 | Webhook signature verification against a payload Razorpay signed | **not observed** |
 | A recurring charge on an authorised mandate | implemented; **never submitted** |
 
-No live API key exists for this project. Razorpay's current documentation
-requires verified website details before live keys can be generated, and the
-verification takes up to three working days. Everything below therefore stops at
-the boundary where money would move.
+No **live-mode** API key was issued for this project; Razorpay requires
+verified website details before live keys are generated. Test-mode
+authentication against `api.razorpay.com` is demonstrated, with a committed
+transcript. Everything past that boundary — an authorised mandate, and a debit
+against it — is provisioning-dependent and is not claimed.
 
 ### The offline gates
 
-`py -3.12 -m live.tests.run_all` — seven gate files, 225 checks, about four
+`py -3.12 -m live.tests.run_all` — eleven gate files, 445 checks, about twenty
 seconds. Each file runs in its own process. None needs a key, opens a socket to
 Razorpay, or can move money.
 
 | Gate file | Checks | What it establishes |
 |---|---|---|
-| `test_config` | 22 | The mode switch fails closed in both directions. Live mode with a missing credential raises rather than demoting to the mock; the debit flag in offline mode raises rather than being ignored; only the literal word `yes` enables real debits; no secret appears in what the console is shown |
+| `test_config` | 24 | The mode switch fails closed in both directions. Live mode with a missing credential raises rather than demoting to the mock; the debit flag in offline mode raises rather than being ignored; only the literal word `yes` enables real debits; no secret appears in what the console is shown |
 | `test_state_machine` | 22 | Every ordered pair of attempt states, exhaustively. No transition walks backwards, terminal states are final, two different terminals are recorded as a conflict rather than resolved, and a deemed transaction reads as unknown rather than failed |
-| `test_webhooks` | 32 | Signature over raw bytes; a re-serialised body fails, which is why the verifier takes bytes. A duplicate delivery adds no row. A late `payment.authorized` cannot displace a `payment.captured`. A forged signature is rejected **and recorded**. An unhandled event type is acknowledged rather than 4xx'd |
-| `test_flow` | 51 | The lifecycle end to end, and eight crash boundaries: a lost response stays unknown and blocks a second debit; an order lost to a crash is recovered by its receipt rather than created twice; a request the provider took but never acknowledged is recorded `UNKNOWN`, refused a second time by the provider, and resolved to `SUCCEEDED` by reconciliation with the money counted once; an accepted-but-uninterpreted webhook is replayed at startup and replaying it again is a no-op |
+| `test_webhooks` | 33 | Signature over raw bytes; a re-serialised body fails, which is why the verifier takes bytes. A duplicate delivery adds no row. A late `payment.authorized` cannot displace a `payment.captured`. A forged signature is rejected **and recorded**. An unhandled event type is acknowledged rather than 4xx'd |
+| `test_flow` | 65 | The lifecycle end to end, and eight crash boundaries: a lost response stays unknown and blocks a second debit; an order lost to a crash is recovered by its receipt rather than created twice; a request the provider took but never acknowledged is recorded `UNKNOWN`, refused a second time by the provider, and resolved to `SUCCEEDED` by reconciliation with the money counted once; an accepted-but-uninterpreted webhook is replayed at startup and replaying it again is a no-op |
 | `test_safety` | 41 | `Diagnosis` has no temporal, monetary or identity field. A prompt injection in the merchant note produces a diagnosis and nothing else. Stage 0 refuses a peak-hour debit with zero provider calls. The service is handed a provider client rather than scavenging one from the environment. The demonstration clock cannot move in live mode |
 | `test_parity` | 15 | The live service and the batch run reach the **same objects** — `timing.propose`, `BeliefBook`, `Stage0Gate` — checked by identity. `live/service.py` defines no decision function of its own, and nothing under `agent/` imports `live/` |
-| `test_api` | 42 | The served surface over a real socket: content security policy, path traversal, body limits, the header names Razorpay sends, that a `POST /decide` carrying an amount, an hour and a token takes none of the three, that the webhook route is exempt from the operator token while every other route is not, and that loading the console makes no provider call and creates no attempt |
+| `test_api` | 46 | The served surface over a real socket: content security policy, path traversal, body limits, the header names Razorpay sends, that a `POST /decide` carrying an amount, an hour and a token takes none of the three, that the webhook route is exempt from the operator token while every other route is not, and that loading the console makes no provider call and creates no attempt |
+| `test_regressions` | 109 | One gate per money-path defect found in this project's own work, each paired with a mutant that restores the defect and trips the gate. A gate that no mutant can trip is not evidence |
+| `test_restart` | 31 | The demonstration clock, the provider tokens and the unsent attempts survive a process restart. An attempt that never left the process ends `NOTIFICATION_FAILED` rather than wedging the mandate, and a Payment Link paid after a restart is still read back rather than reported uncollected |
+| `test_ladder` | 32 | The escalation ladder end to end: two funding reminders, a Payment Link in place of the fourth mandate debit, and the fourth debit held while it is open. Also that the live rail refuses a debit on the last day of the billing cycle, which Razorpay rejects for UPI and the simulator's window does not model |
+| `test_console` | 27 | The operator page renders the decision contract — the seven-row authority spine, every Stage 0 verdict, the environment band — and spends no NPCI presentation to do it |
 
-The import-graph gates in `agent/tests/test_layer_isolation.py` gained two rules
-for the new package and now run **nine named mutants, nine tripped**, over 87
-files under `agent/` and 18 under `live/`, with zero violations.
+The import-graph gates in `agent/tests/test_layer_isolation.py` run **nine named
+mutants, nine tripped**, over 92 files under `agent/` and 22 under `live/`, with
+zero violations.
 
 ### The Razorpay contract, re-verified independently
 
@@ -889,7 +901,7 @@ verbatim, one was **corrected**, and three facts were **added**.
 | `POST /payments/create/recurring` answers with identifiers and **no payment status** — no `status`, no `error_reason` | [VERIFIED]. This is the single most load-bearing claim in the executor. **CORRECTED** on the count: two current pages disagree on how many identifiers come back. The UPI create-subsequent-payments page shows `razorpay_payment_id` alone; the partner-auth page shows `razorpay_payment_id`, `razorpay_order_id` and `razorpay_signature`. "And nothing else" was the narrower page read as the whole contract. They agree on the part the executor depends on, which is that neither carries a payment status |
 | No idempotency header is documented for the recurring charge | [VERIFIED] — idempotency is documented for RazorpayX payouts (`X-Payout-Idempotency`) and for refunds, and for nothing on this path |
 | `receipt` is unique per account and a second create with the same value is rejected | [VERIFIED] — "has to be unique", maximum 40 characters |
-| `token.max_amount` accepts 500–100,000,000 paise, default 9,999,900 | **RETRACTED.** That is the eMandate range, and a UPI AutoPay mandate asking for it is rejected at the provider. UPI's own range is 100 paise (Rs 1) to 9,999,900 (Rs 99,999) for an ordinary merchant category, and to 20,000,000 (Rs 2,00,000) for MCCs 6211, 6300, 7322, 6529 and 5960. [VERIFIED] against the UPI AutoPay authorisation reference. The code carries the ordinary-category range |
+| `token.max_amount` accepts 500–100,000,000 paise, default 9,999,900 | **RETRACTED.** That is the eMandate range, and a UPI AutoPay mandate asking for it is rejected at the provider. UPI's own range is 100 paise (Rs 1) to 9,999,900 (Rs 99,999) for an ordinary merchant category, and to 20,000,000 (Rs 2,00,000) for MCCs 6211, 6300, 7322, 6529 and 5960. [REPORTED] against the UPI AutoPay authorisation reference, which did not resolve when the citation was re-checked on 5 September 2026. The reachable general recurring `max_amount` table documents 500–100,000,000, default 9,999,900; the UPI-specific narrowing, and the floor of 100 below that documented 500, are inferred. The code carries the ordinary-category range unchanged |
 | `token.frequency` for UPI AutoPay is one of `daily`, `weekly`, `fortnightly`, `bimonthly`, `monthly`, `quarterly`, `half_yearly`, `yearly`, `as_presented` | [VERIFIED] against the same page. Registration defaults to `as_presented`: the amount and the day are chosen per cycle by the scheduler, and `monthly` would tell the customer's bank to expect a fixed schedule this system does not keep. **The page lists the value and does not define its semantics**, and whether an account may use it is an account-level entitlement — the one registration field that needs confirming with Razorpay Support before a live mandate is created |
 | `payment_capture` is a documented field of the order request | **SPLIT.** It appears in the create-subsequent-payments order body [VERIFIED] and is sent there. It does **not** appear in the create-order reference or on the UPI AutoPay authorisation page, and is no longer sent on the authorisation order |
 | The minimum mandate amount across every merchant category is Rs 1 | [VERIFIED] |
@@ -1282,6 +1294,22 @@ give the `pop_spend` region. `[REPORTED]` "75% of Indians have no emergency
 fund", which fixes the carry-over buffer's median at sigma 1.0. `[REPORTED]` The
 published UPI AutoPay ticket range of 149–2,499 rupees with a 15,000 regulatory
 cap, which the amount clip retains.
+
+**Razorpay documentation read for this project.** Every `[VERIFIED]` Razorpay
+claim above and in [The Razorpay contract](#the-razorpay-contract-re-verified-independently)
+was read from one of these pages, all reachable on 5 September 2026:
+
+- S2S recurring payments — the on-demand statement and the full registration
+  sequence: <https://razorpay.com/docs/payments/payment-gateway/s2s-integration/recurring-payments/>
+- UPI AutoPay overview — the ₹15,000 UPI-PIN rule:
+  <https://razorpay.com/docs/payments/payment-gateway/s2s-integration/recurring-payments/upi/>
+- UPI create subsequent payments — the `notification` object, the no-retry
+  statement, the last-day-of-cycle rule and the `{"razorpay_payment_id": ...}`
+  response: <https://razorpay.com/docs/api/payments/recurring-payments/upi/create-subsequent-payments/>
+- Recurring payments APIs for UPI:
+  <https://razorpay.com/docs/payments/recurring-payments/upi/apis/>
+- Recurring payments webhooks:
+  <https://razorpay.com/docs/api/payments/recurring-payments/webhooks/>
 
 **Razorpay's API surface.** `[VERIFIED]` 110 published
 `payments_error_reasons`, committed verbatim. `[VERIFIED]` The documented

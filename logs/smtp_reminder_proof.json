@@ -16,7 +16,7 @@
     "smtp_code": null,
     "status": "smtp_sent",
     "subject": "[Recovery Agent] SMTP funding reminder integration test",
-    "to": "tanmaymohan12@gmail.com",
+    "to": "<redacted — the maintainer's own inbox>",
     "user_set": true
   },
   "state": "PASS",
