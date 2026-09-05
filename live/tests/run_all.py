@@ -39,6 +39,10 @@ GATES = [
      "the served surface, over a real socket"),
     ("regressions", "live.tests.test_regressions",
      "one gate per money-path defect, each with a mutant"),
+    ("restart", "live.tests.test_restart",
+     "the clock, the tokens and the unsent attempts survive a restart"),
+    ("ladder", "live.tests.test_ladder",
+     "reminders, the Payment Link and the held fourth debit"),
     ("console", "live.tests.test_console",
      "the operator page renders the contract and spends nothing"),
 ]

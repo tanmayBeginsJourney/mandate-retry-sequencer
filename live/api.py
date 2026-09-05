@@ -37,6 +37,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from live.config import LiveConfig
+from live.domain import ATTEMPT_UNRESOLVED
 from live.service import LiveError, LiveService
 from live.webhooks import (EVENT_ID_HEADER, MAX_BODY_BYTES, SIGNATURE_HEADER,
                            WebhookRejected)
@@ -243,7 +244,15 @@ class Api:
             if path == "/api/demo/advance":
                 # OFFLINE ONLY -- `advance_clock` refuses in live mode. It lets
                 # a demonstration watch a scheduler that reasons in days.
-                hours = int(body.get("hours") or 6)
+                #
+                # WITH NO `hours` THE SERVICE PICKS THE STEP. It knows the next
+                # hour at which a tick would do something different -- a
+                # scheduled debit's target, or the day boundary the belief
+                # advances at -- and a fixed step spends clicks on hours whose
+                # answer is already on screen. A caller that names `hours` gets
+                # exactly that many; the console names none.
+                hours = (int(body["hours"]) if body.get("hours")
+                         else self.svc.next_decision_hour())
                 offset = self.svc.advance_clock(hours)
                 decisions = []
                 for m in self.svc.store.mandates():
@@ -309,10 +318,22 @@ class Api:
 
     def _mandate(self, m) -> dict:
         c = self.svc.store.customer(m.customer_id)
+        attempts = self.svc.store.attempts_for(m.id, limit=50)
         return {
             "id": m.id, "state": m.state.value, "token_status": m.token_status,
             "chargeable": m.chargeable,
-            "blocked_because": m.refusal_reason(),
+            # WITH THIS MANDATE'S ATTEMPTS, so an attempt recorded and never
+            # sent is reported. A mandate carrying one cannot be charged --
+            # `_decide`'s `open_now` guard refuses every tick on it -- and
+            # `blocked_because` must never be empty on a mandate that cannot
+            # actually be charged.
+            "blocked_because": m.refusal_reason(attempts),
+            # HOW MANY OF THIS MANDATE'S DEBITS ARE STILL IN FLIGHT. The list
+            # payload otherwise carries no attempt state at all, so the console
+            # cannot tell a settled mandate from one awaiting an outcome
+            # without fetching every detail page.
+            "unresolved_attempts": sum(1 for a in attempts
+                                       if a.state in ATTEMPT_UNRESOLVED),
             "customer_id": m.customer_id,
             "customer_name": c.name if c else "",
             "uid": f"c{c.seq}m{m.index_no}" if c else "",
@@ -325,6 +346,14 @@ class Api:
             "frequency": m.frequency, "expire_at": m.expire_at,
             "cycle": m.cycle, "cycle_days": m.cycle_days,
             "cycle_start_t": m.cycle_start_t,
+            # THE RECOVERY LADDER'S STATE. Durable, per-cycle, and the only
+            # way an operator can see that a Payment Link is standing in for
+            # the fourth mandate debit. `backup_vendor_id` is a `plink_` id
+            # and is shortened by `redact` like every other provider id.
+            "backup_status": m.backup_status,
+            "backup_vendor_id": m.backup_vendor_id,
+            "reminders_sent": m.reminders_sent,
+            "halted_cycle": m.halted_cycle,
             "est_salary": m.est_salary, "est_payday": m.est_payday,
             "created_at": m.created_at, "updated_at": m.updated_at,
         }
@@ -343,6 +372,16 @@ class Api:
             "order_id": a.order_id, "payment_id": a.payment_id,
             "receipt": a.receipt, "outcome_code": a.outcome_code,
             "raw_reason": a.raw_reason, "target_t": a.target_t,
+            # THE HOUR THE SCHEDULER ACTUALLY NOTIFIED AT, served rather than
+            # derived. `target_t - 24` is not it -- the peak-hour rule pushes a
+            # target past the first legal slot -- and the console must not
+            # reconstruct an NPCI figure it can be handed.
+            "notify_t": a.notify_t,
+            # WHETHER THE BELIEF IN THIS PROCESS HAS READ THIS OUTCOME, which
+            # `state` does not answer. The attempt row is durable and the
+            # filter is not, so a restarted service serves resolved attempts it
+            # has never folded in.
+            "folded_in_session": self.svc.folded_in_session(a.id),
             "payment_after": a.payment_after, "submitted_at": a.submitted_at,
             "resolved_at": a.resolved_at, "conflicted": a.conflicted,
             "cycle": a.cycle, "created_at": a.created_at,

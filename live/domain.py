@@ -238,6 +238,30 @@ class Mandate:
     cycle_days: int = 30
     cycle: int = 0
     cycle_start_t: int = 0
+    #: THE RECOVERY LADDER'S STATE FOR THE CURRENT CYCLE. All four reset at
+    #: rollover, because the ladder is a per-cycle escalation: a link issued
+    #: for August must not block September's first debit.
+    #:
+    #: `agent/recovery.py` is the authority on what these mean and when they
+    #: change; this is where they survive a restart. In the simulation the
+    #: same four live on `MandateRuntime` and die with the process, which is
+    #: the only difference between the two.
+    #:
+    #: The Payment Link that replaces the fourth mandate debit.
+    backup_vendor_id: str = ""
+    #: "" | issued | paid | expired | cancelled. `fourth_debit_blocked` reads
+    #: it, and every value but "" holds the fourth debit: issued means wait,
+    #: paid means charging again would take the money twice, and closed unpaid
+    #: means this cycle is forfeited so the mandate survives into the next.
+    backup_status: str = ""
+    #: Funding reminders sent this cycle. Counted, not capped here --
+    #: `should_remind_after_fail` decides.
+    reminders_sent: int = 0
+    #: The cycle number this mandate was halted in, or -1. Set when the
+    #: diagnosis layer chooses STOP, or ESCALATE on a decline that cannot be
+    #: retried. Compared against `cycle` rather than cleared, so a rollover
+    #: releases it without a second write.
+    halted_cycle: int = -1
     created_at: int = field(default_factory=lambda: int(time.time()))
     updated_at: int = field(default_factory=lambda: int(time.time()))
 
@@ -245,8 +269,23 @@ class Mandate:
     def chargeable(self) -> bool:
         return self.state is MandateState.ACTIVE and bool(self.rzp_token_id)
 
-    def refusal_reason(self) -> str:
-        """Why this mandate cannot be charged, or "" if it can."""
+    def refusal_reason(self, attempts=()) -> str:
+        """Why this mandate cannot be charged, or "" if it can.
+
+        `attempts` is optional and is this mandate's attempt rows. Passing them
+        is what lets this answer the question a caller is actually asking:
+        "may a debit be submitted for this mandate now?" A row still in INTENT
+        is one the process recorded and never sent, and it blocks every later
+        tick -- INTENT is in `ATTEMPT_UNRESOLVED`, and the money path refuses
+        to submit while the outcome of a previous debit is unknown. Without
+        this the mandate reported ACTIVE, chargeable, and no reason at all,
+        while every tick refused. `live/service.py:_abandon_intent` is what
+        stops such a row being created; this is what makes one visible if it
+        ever is.
+
+        The default is empty, so `LiveService._blocked` -- which asks before it
+        has read the attempts -- keeps exactly the answer it had.
+        """
         if not self.rzp_token_id:
             return "no provider token: the mandate was never authorised"
         if self.state is not MandateState.ACTIVE:
@@ -254,6 +293,10 @@ class Mandate:
                     f"{MandateState.ACTIVE.value} may be charged")
         if self.expire_at and self.expire_at <= int(time.time()):
             return "mandate token has passed its expiry"
+        for a in attempts:
+            if a.state is AttemptState.INTENT:
+                return (f"attempt {a.id} was recorded and never sent; no "
+                        f"further debit may be submitted until it is resolved")
         return ""
 
 

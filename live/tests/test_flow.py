@@ -98,12 +98,15 @@ def main() -> int:
          not missing, str(missing))
     # The mock's extra methods are the things a real payment API has no
     # endpoint for: a customer approving a mandate on their phone, the rail
-    # settling a payment, a customer pausing a token, and the queue standing in
-    # for Razorpay's webhook sender. Pinning the list means a new one has to be
-    # justified rather than appearing.
+    # settling a payment, a customer pausing a token, the queue standing in
+    # for Razorpay's webhook sender, and the two `adopt_` methods -- the mock
+    # being told about a token and an order it created in an earlier process,
+    # which Razorpay needs no endpoint for because it never forgot. Pinning the
+    # list means a new one has to be justified rather than appearing.
     extra = sorted(_public(MockRazorpayApi) - _public(RazorpayApi))
     r.ok("F1b  the mock adds only what a real API has no endpoint for",
-         extra == ["authorize", "drain_webhooks", "set_token_status", "settle"],
+         extra == ["adopt_order", "adopt_token", "authorize",
+                   "drain_webhooks", "set_token_status", "settle"],
          str(extra))
 
     # ------------------------------------------------------------------ F2
