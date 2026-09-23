@@ -486,15 +486,6 @@ value of pooling and the compute-bound sample size are stated in full in
 | `scripts/` | Page data, constraint-layer proof, Razorpay connectivity ladder, test-mode workflow proof, sweeps, git hooks |
 | `logs/` | Committed transcripts for every figure quoted above |
 
-## License · Citation
-
-Apache License 2.0 — see [LICENSE](LICENSE). Apache-2.0 rather than MIT because
-this is a payments-adjacent scheduling algorithm with a novel decision rule: the
-explicit patent grant matters to a merchant or aggregator evaluating adoption,
-and the attribution mechanism suits a research artifact. It is compatible with
-every dependency here (NumPy BSD-3, PyYAML MIT, LightGBM MIT, scikit-learn
-BSD-3).
-
 ```
 Tanmay Mohan, "UPI AutoPay Recovery Agent: scheduling mandate retries from a
 Bayesian belief over balance and payday", 2026.
